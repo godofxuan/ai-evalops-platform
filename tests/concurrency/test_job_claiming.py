@@ -9,14 +9,17 @@ from sqlalchemy import delete, func, select
 
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
+from app.domain.evaluation import EvaluationResult, TargetResult, TokenUsage
 from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
+from app.jobs.results import SQLAlchemyResultCommitter
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.orm_models import (
     APIKey,
     Artifact,
     AuditEvent,
+    CaseResult,
     Dataset,
     DatasetVersion,
     EvaluationJob,
@@ -109,6 +112,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     target_type="mock",
                     target_config_json={"type": "mock"},
                     target_config_hash="c" * 64,
+                    evaluator_type="execution",
                     evaluator_config_json={"type": "execution"},
                     evaluator_config_hash="d" * 64,
                     target_version="v1",
@@ -177,9 +181,39 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 worker_id="stale-worker",
                 expected_version=receipt.version,
             )
+
+        committer = SQLAlchemyResultCommitter(session_factory, clock=clock)
+        target_result = TargetResult(
+            answer="answer",
+            citations=(),
+            sources=(),
+            trace={},
+            token_usage=TokenUsage(input_tokens=3, output_tokens=1),
+            latency_ms=10,
+        )
+        evaluation_result = EvaluationResult(metrics={"execution_success": True})
+        await committer.commit_success(
+            claim=first,
+            lease_version=receipt.version,
+            target_result=target_result,
+            evaluation_result=evaluation_result,
+        )
+        with pytest.raises(LeaseLostError):
+            await committer.commit_success(
+                claim=first,
+                lease_version=receipt.version,
+                target_result=target_result,
+                evaluation_result=evaluation_result,
+            )
+        async with session_factory() as session:
+            result_count = await session.scalar(
+                select(func.count(CaseResult.id)).where(CaseResult.job_id == first.job_id)
+            )
+        assert result_count == 1
     finally:
         async with session_factory.begin() as session:
             await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id))
+            await session.execute(delete(CaseResult).where(CaseResult.run_id == run_id))
             await session.execute(delete(JobAttempt).where(JobAttempt.job_id.in_(job_ids)))
             await session.execute(delete(EvaluationJob).where(EvaluationJob.run_id == run_id))
             await session.execute(delete(EvaluationRun).where(EvaluationRun.id == run_id))

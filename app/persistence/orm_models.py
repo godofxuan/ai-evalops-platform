@@ -295,6 +295,7 @@ class EvaluationRun(Base):
     target_type: Mapped[str] = mapped_column(String(64), nullable=False)
     target_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     target_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator_type: Mapped[str] = mapped_column(String(64), nullable=False)
     evaluator_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     evaluator_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     target_version: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -412,6 +413,52 @@ class JobAttempt(Base):
     upstream_status_code: Mapped[int | None] = mapped_column()
     latency_ms: Mapped[int | None] = mapped_column()
     trace_id: Mapped[str | None] = mapped_column(String(64))
+
+
+class CaseResult(Base):
+    __tablename__ = "case_results"
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_case_results_job_id"),
+        UniqueConstraint(
+            "run_id",
+            "case_id",
+            name="uq_case_results_run_id_case_id",
+        ),
+        CheckConstraint(
+            "input_tokens IS NULL OR input_tokens >= 0",
+            name="input_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "output_tokens IS NULL OR output_tokens >= 0",
+            name="output_tokens_nonnegative",
+        ),
+        CheckConstraint("latency_ms >= 0", name="latency_ms_nonnegative"),
+        Index("ix_case_results_run_id_case_id", "run_id", "case_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    case_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    answer_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column()
+    output_tokens: Mapped[int | None] = mapped_column()
+    latency_ms: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
 
 
 class AuditEvent(Base):

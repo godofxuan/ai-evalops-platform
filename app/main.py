@@ -13,6 +13,7 @@ from app.api.errors import (
     handle_duplicate_dataset_version,
     handle_idempotency_conflict,
     handle_invalid_evaluator_configuration,
+    handle_invalid_target_configuration,
     handle_request_validation_error,
     handle_run_not_found,
 )
@@ -42,6 +43,7 @@ from app.runs.repository import SQLAlchemyRunRepository
 from app.runs.service import (
     IdempotencyConflictError,
     InvalidEvaluatorConfigurationError,
+    InvalidTargetConfigurationError,
     RunDatasetVersionNotFoundError,
     RunNotFoundError,
     SQLAlchemyRunService,
@@ -129,6 +131,10 @@ def create_app(
     application.add_exception_handler(
         InvalidEvaluatorConfigurationError,
         handle_invalid_evaluator_configuration,
+    )
+    application.add_exception_handler(
+        InvalidTargetConfigurationError,
+        handle_invalid_target_configuration,
     )
     application.add_exception_handler(RunNotFoundError, handle_run_not_found)
     application.add_exception_handler(

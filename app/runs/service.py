@@ -4,9 +4,11 @@ from uuid import UUID
 from app.artifacts.storage import ArtifactStore
 from app.auth.principals import Principal
 from app.datasets.validation import validate_jsonl
+from app.evaluators.base import UnsupportedEvaluatorError, build_evaluator
 from app.runs.idempotency import canonical_request_hash
 from app.runs.repository import NewRun, RunRepository, RunSnapshot
 from app.runs.schemas import RunCreate, RunRead
+from app.targets.base import InvalidTargetConfiguration, build_target
 
 
 class RunService(Protocol):
@@ -44,6 +46,10 @@ class InvalidEvaluatorConfigurationError(ValueError):
     """Evaluator configuration cannot be converted into Job policy."""
 
 
+class InvalidTargetConfigurationError(ValueError):
+    """Target type or configuration is invalid or unsafe."""
+
+
 class IdempotencyConflictError(Exception):
     """The same key was already committed for a different canonical request."""
 
@@ -76,6 +82,7 @@ class SQLAlchemyRunService:
                 raise IdempotencyConflictError
             return _to_run_read(existing)
 
+        _validate_components(request)
         max_attempts = _max_attempts(request)
         source = await self._repository.get_dataset_version_source(
             tenant_id=principal.tenant_id,
@@ -101,6 +108,7 @@ class SQLAlchemyRunService:
                 target_type=request.target.type,
                 target_config=target_config,
                 target_config_hash=canonical_request_hash(target_config),
+                evaluator_type=request.evaluator.type,
                 evaluator_config=evaluator_config,
                 evaluator_config_hash=canonical_request_hash(evaluator_config),
                 target_version=request.target.version,
@@ -134,6 +142,17 @@ def _max_attempts(request: RunCreate) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10:
         raise InvalidEvaluatorConfigurationError
     return value
+
+
+def _validate_components(request: RunCreate) -> None:
+    try:
+        build_target(request.target.type, request.target.config)
+    except InvalidTargetConfiguration as error:
+        raise InvalidTargetConfigurationError from error
+    try:
+        build_evaluator(request.evaluator.type, request.evaluator.config)
+    except UnsupportedEvaluatorError as error:
+        raise InvalidEvaluatorConfigurationError from error
 
 
 def _to_run_read(snapshot: RunSnapshot) -> RunRead:

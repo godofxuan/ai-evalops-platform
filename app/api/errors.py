@@ -13,6 +13,7 @@ from app.datasets.validation import DatasetValidationError
 from app.runs.service import (
     IdempotencyConflictError,
     InvalidEvaluatorConfigurationError,
+    InvalidTargetConfigurationError,
     RunDatasetVersionNotFoundError,
     RunNotFoundError,
 )
@@ -178,6 +179,23 @@ async def handle_invalid_evaluator_configuration(
             "error": {
                 "code": "invalid_evaluator_config",
                 "message": "Evaluator configuration is invalid.",
+            }
+        },
+    )
+
+
+async def handle_invalid_target_configuration(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, InvalidTargetConfigurationError):
+        raise exception
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "invalid_target_config",
+                "message": "Target configuration is invalid.",
             }
         },
     )

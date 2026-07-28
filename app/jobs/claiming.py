@@ -39,6 +39,7 @@ class ClaimedJob:
     target_type: str
     target_config: dict[str, Any]
     target_version: str
+    evaluator_type: str
     evaluator_config: dict[str, Any]
     evaluator_version: str
 
@@ -204,6 +205,7 @@ class SQLAlchemyJobClaimer:
                         target_type=run.target_type,
                         target_config=dict(run.target_config_json),
                         target_version=run.target_version,
+                        evaluator_type=run.evaluator_type,
                         evaluator_config=dict(run.evaluator_config_json),
                         evaluator_version=run.evaluator_version,
                     )

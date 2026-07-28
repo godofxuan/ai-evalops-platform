@@ -36,6 +36,7 @@ class NewRun:
     target_type: str
     target_config: dict[str, Any]
     target_config_hash: str
+    evaluator_type: str
     evaluator_config: dict[str, Any]
     evaluator_config_hash: str
     target_version: str
@@ -181,6 +182,7 @@ class SQLAlchemyRunRepository:
             target_type=new_run.target_type,
             target_config_json=new_run.target_config,
             target_config_hash=new_run.target_config_hash,
+            evaluator_type=new_run.evaluator_type,
             evaluator_config_json=new_run.evaluator_config,
             evaluator_config_hash=new_run.evaluator_config_hash,
             target_version=new_run.target_version,

@@ -10,6 +10,7 @@ from app.runs.schemas import RunCreate, RunRead
 from app.runs.service import (
     IdempotencyConflictError,
     InvalidEvaluatorConfigurationError,
+    InvalidTargetConfigurationError,
     RunNotFoundError,
 )
 
@@ -239,5 +240,42 @@ async def test_create_run_maps_invalid_evaluator_configuration_to_422() -> None:
         "error": {
             "code": "invalid_evaluator_config",
             "message": "Evaluator configuration is invalid.",
+        }
+    }
+
+
+class InvalidTargetRunService(RecordingRunService):
+    async def create_run(
+        self,
+        *,
+        principal: Principal,
+        idempotency_key: str,
+        request: RunCreate,
+    ) -> RunRead:
+        raise InvalidTargetConfigurationError
+
+
+async def test_create_run_maps_invalid_target_configuration_to_422() -> None:
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.run_service = InvalidTargetRunService()
+    transport = ASGITransport(app=application, raise_app_exceptions=False)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/runs",
+            headers={"Idempotency-Key": "invalid-target"},
+            json={
+                "dataset_version_id": "00000000-0000-0000-0000-000000000401",
+                "target": {"type": "mock"},
+                "evaluator": {"type": "basic_answer"},
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "invalid_target_config",
+            "message": "Target configuration is invalid.",
         }
     }

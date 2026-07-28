@@ -5,6 +5,7 @@ from app.persistence.orm_models import (
     Artifact,
     AuditEvent,
     Base,
+    CaseResult,
     Dataset,
     DatasetVersion,
     EvaluationJob,
@@ -26,11 +27,12 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
-def test_orm_metadata_has_only_tables_introduced_through_phase_3() -> None:
+def test_orm_metadata_has_only_tables_introduced_through_phase_4() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
         "artifacts",
         "audit_events",
+        "case_results",
         "dataset_versions",
         "datasets",
         "evaluation_jobs",
@@ -81,6 +83,7 @@ def test_artifact_metadata_is_tenant_owned_while_storage_path_can_be_shared() ->
 
 def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> None:
     assert "dataset_hash" in EvaluationRun.__table__.columns
+    assert "evaluator_type" in EvaluationRun.__table__.columns
     assert frozenset({"tenant_id", "idempotency_key"}) in unique_column_sets(
         EvaluationRun.__table__
     )
@@ -91,6 +94,14 @@ def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> No
     assert frozenset({"run_id", "case_id"}) in unique_column_sets(EvaluationJob.__table__)
     assert foreign_key_targets(EvaluationJob.__table__, "run_id") == {"evaluation_runs.id"}
     assert "case_payload_json" in EvaluationJob.__table__.columns
+
+
+def test_case_result_is_unique_per_job_and_run_case() -> None:
+    assert frozenset({"job_id"}) in unique_column_sets(CaseResult.__table__)
+    assert frozenset({"run_id", "case_id"}) in unique_column_sets(CaseResult.__table__)
+    assert foreign_key_targets(CaseResult.__table__, "job_id") == {"evaluation_jobs.id"}
+    assert foreign_key_targets(CaseResult.__table__, "run_id") == {"evaluation_runs.id"}
+    assert "metrics_json" in CaseResult.__table__.columns
 
 
 def test_attempt_and_audit_metadata_preserve_execution_history() -> None:

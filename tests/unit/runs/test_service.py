@@ -17,6 +17,7 @@ from app.runs.schemas import RunCreate
 from app.runs.service import (
     IdempotencyConflictError,
     InvalidEvaluatorConfigurationError,
+    InvalidTargetConfigurationError,
     SQLAlchemyRunService,
 )
 
@@ -314,5 +315,37 @@ async def test_create_run_rejects_invalid_max_attempts_before_dataset_io() -> No
         await service.create_run(
             principal=PRINCIPAL,
             idempotency_key="invalid-attempts",
+            request=request,
+        )
+
+
+async def test_create_run_rejects_unsupported_target_before_dataset_io() -> None:
+    request = make_run_request()
+    request.target.type = "not_supported"
+    service = SQLAlchemyRunService(
+        repository=NewRequestRepositoryThatMustNotLoadSource(),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+    )
+
+    with pytest.raises(InvalidTargetConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL,
+            idempotency_key="invalid-target",
+            request=request,
+        )
+
+
+async def test_create_run_rejects_unsupported_evaluator_before_dataset_io() -> None:
+    request = make_run_request()
+    request.evaluator.type = "not_supported"
+    service = SQLAlchemyRunService(
+        repository=NewRequestRepositoryThatMustNotLoadSource(),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+    )
+
+    with pytest.raises(InvalidEvaluatorConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL,
+            idempotency_key="invalid-evaluator",
             request=request,
         )
