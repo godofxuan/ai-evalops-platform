@@ -2,17 +2,37 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
+from app.api.errors import (
+    APIError,
+    handle_api_error,
+    handle_dataset_name_conflict,
+    handle_dataset_not_found,
+    handle_dataset_validation_error,
+    handle_duplicate_dataset_version,
+    handle_request_validation_error,
+)
 from app.api.middleware import RequestContextMiddleware
+from app.api.routes_datasets import router as datasets_router
 from app.api.routes_health import router as health_router
+from app.artifacts.storage import LocalArtifactStore
+from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
 from app.core.logging import configure_logging, get_logger
+from app.datasets.service import (
+    DatasetNameConflictError,
+    DatasetNotFoundError,
+    DuplicateDatasetVersionError,
+    SQLAlchemyDatasetService,
+)
+from app.datasets.validation import DatasetValidationError, JSONLValidationLimits
 from app.health.service import (
     NotConfiguredReadinessProbe,
     ReadinessProbe,
     build_infrastructure_readiness_probe,
 )
-from app.persistence.database import create_database_engine
+from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
 
 
@@ -33,8 +53,22 @@ def create_app(
 
         runtime_settings.artifact_root.mkdir(parents=True, exist_ok=True)
         engine = create_database_engine(runtime_settings)
+        session_factory = create_session_factory(engine)
         redis_client = create_redis_client(runtime_settings)
+        artifact_store = LocalArtifactStore(runtime_settings.artifact_root)
         application.state.database_engine = engine
+        application.state.session_factory = session_factory
+        application.state.api_key_lookup = SQLAlchemyAPIKeyLookup(session_factory)
+        application.state.artifact_store = artifact_store
+        application.state.dataset_service = SQLAlchemyDatasetService(
+            session_factory=session_factory,
+            artifact_store=artifact_store,
+            validation_limits=JSONLValidationLimits(
+                max_file_bytes=runtime_settings.dataset_max_file_bytes,
+                max_cases=runtime_settings.dataset_max_cases,
+                max_line_bytes=runtime_settings.dataset_max_line_bytes,
+            ),
+        )
         application.state.redis_client = redis_client
         application.state.readiness_probe = build_infrastructure_readiness_probe(
             settings=runtime_settings,
@@ -56,7 +90,28 @@ def create_app(
     )
     application.state.settings = runtime_settings
     application.state.readiness_probe = readiness_probe or NotConfiguredReadinessProbe()
+    application.state.api_key_lookup = None
+    application.state.dataset_service = None
     application.include_router(health_router)
+    application.include_router(datasets_router)
+    application.add_exception_handler(APIError, handle_api_error)
+    application.add_exception_handler(DatasetNotFoundError, handle_dataset_not_found)
+    application.add_exception_handler(
+        DatasetNameConflictError,
+        handle_dataset_name_conflict,
+    )
+    application.add_exception_handler(
+        DuplicateDatasetVersionError,
+        handle_duplicate_dataset_version,
+    )
+    application.add_exception_handler(
+        DatasetValidationError,
+        handle_dataset_validation_error,
+    )
+    application.add_exception_handler(
+        RequestValidationError,
+        handle_request_validation_error,
+    )
     application.add_middleware(RequestContextMiddleware)
     return application
 

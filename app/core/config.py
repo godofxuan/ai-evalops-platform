@@ -24,3 +24,14 @@ class Settings(BaseSettings):
     artifact_root: Path = Path("data/artifacts")
     alembic_config_path: Path = Path("alembic.ini")
     readiness_timeout_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
+    dataset_max_file_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        gt=0,
+        le=100 * 1024 * 1024,
+    )
+    dataset_max_cases: int = Field(default=10_000, gt=0, le=100_000)
+    dataset_max_line_bytes: int = Field(
+        default=1024 * 1024,
+        gt=0,
+        le=10 * 1024 * 1024,
+    )

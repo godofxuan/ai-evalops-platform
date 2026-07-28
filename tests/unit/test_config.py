@@ -20,3 +20,15 @@ def test_settings_load_prefixed_environment_without_exposing_secret_urls(
     assert settings.artifact_root == tmp_path
     assert "database-secret" not in repr(settings)
     assert "redis-secret" not in repr(settings)
+
+
+def test_settings_expose_bounded_dataset_upload_limits(monkeypatch) -> None:
+    monkeypatch.setenv("EVALOPS_DATASET_MAX_FILE_BYTES", "2048")
+    monkeypatch.setenv("EVALOPS_DATASET_MAX_CASES", "12")
+    monkeypatch.setenv("EVALOPS_DATASET_MAX_LINE_BYTES", "512")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.dataset_max_file_bytes == 2048
+    assert settings.dataset_max_cases == 12
+    assert settings.dataset_max_line_bytes == 512
