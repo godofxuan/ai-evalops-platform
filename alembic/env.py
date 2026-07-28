@@ -1,4 +1,3 @@
-from asyncio import run
 from logging.config import fileConfig
 
 from sqlalchemy import Connection
@@ -7,12 +6,14 @@ from sqlalchemy.pool import NullPool
 
 from alembic import context
 from app.core.config import Settings
+from app.core.event_loop import run_with_psycopg_compatible_event_loop
+from app.persistence.orm_models import Base
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def get_database_url() -> str:
@@ -56,4 +57,4 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run(run_migrations_online())
+    run_with_psycopg_compatible_event_loop(run_migrations_online())

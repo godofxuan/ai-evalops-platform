@@ -1,0 +1,9 @@
+from dataclasses import dataclass
+from uuid import UUID
+
+
+@dataclass(frozen=True, slots=True)
+class Principal:
+    tenant_id: UUID
+    api_key_id: UUID
+    key_prefix: str
