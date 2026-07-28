@@ -370,3 +370,89 @@ Python 与配置
 - `16211c7 chore: add phase 1 runtime and operator tooling`
 - 最终 README/日志提交：以本阶段完成后的最新 `git log` 为准
 - 未 push
+
+## 2026-07-29 — Phase 2：Run 与幂等（完成）
+
+### 基本信息
+
+- 起始 SHA：`9a8234073a61e81928d0c6b2c684d55a4d547d53`
+- 目标：创建可复现 Evaluation Run、canonical request hash、Idempotency-Key、每 case 一个 Job，以及 tenant-scoped Run 查询
+- 新授权：用户明确要求连续完成全部剩余阶段，因此不再在每个 Phase 停止；仍逐阶段记录和提交
+
+### 问题与根因
+
+- 客户端/代理可能重复提交，若每次都创建 Run，会重复初始化 Jobs 和未来费用。
+- 单纯“先查再插”存在并发竞态。
+- Dataset Version 只保存原始 JSONL artifact，Worker 后续若逐 Job 扫描整文件会产生平方级重复工作。
+
+### 设计
+
+- Pydantic 验证后的请求做 canonical JSON + SHA-256。
+- 幂等作用域当前为 `(tenant_id, evaluation-runs endpoint, idempotency_key)`；endpoint 由独立表隐式提供。
+- 首次 SELECT 只做快速 replay；数据库唯一约束提供最终并发保护。
+- 同 key 同 hash 返回原 Run；同 key 不同 hash 返回固定 409。
+- Run 和全部 Jobs 在同一短事务提交；artifact 读取/JSONL 解析在事务外。
+- Job 保存不可变 case payload JSON snapshot，仍保留 dataset artifact/hash 作为审计来源。
+
+### 关键失败与修正
+
+- Run 路由缺失：POST header 测试先得到 404。
+- `RunCreate strict=True` 拒绝正常 JSON UUID 字符串：放宽外层 UUID 解析，保留 extra forbid 和组件 strict。
+- ORM 首版遗漏原始字段清单中的 `dataset_hash`：回读要求后先加 RED 再补列。
+- Artifact 没有安全读取接口：增加只按 64 位 canonical SHA 派生路径、读取后重算摘要。
+- ValidatedJSONL 只有计数：增加已验证 case tuple，避免二次解析。
+- replay 与 conflict 分支依次从显式未实现转为 GREEN。
+- 并发 winner 返回后最初没有再次比较 hash：测试得到 `DID NOT RAISE`，增加第二次比较。
+- 无效 max_attempts 最初先读取 dataset：调整为幂等快速路径后、I/O 前校验。
+- 409、404、invalid evaluator 最初分别表现为 500/未处理异常：增加稳定 HTTP 映射。
+- Ruff 最终发现 3 个纯 import 排序问题，自动安全修复后通过。
+
+### 数据库
+
+- 新增 `evaluation_runs`：
+  - tenant、dataset version/hash、request hash；
+  - target/evaluator config/hash/version；
+  - idempotency key；
+  -聚合计数、时间、created_by 和 optimistic version。
+- 新增 `evaluation_jobs`：
+  - run/case 唯一；
+  - case payload snapshot；
+  - queued/running/retry/terminal 状态字段；
+  - attempt、lease、heartbeat、错误、取消和 version；
+  - Phase 3 领取与 lease 所需索引。
+- Alembic head：`20260729_0003`；offline PostgreSQL DDL 通过。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| Phase 2 目标测试 | 45 passed |
+| 全仓非集成回归 | 87 passed，3 deselected |
+| PostgreSQL 并发合同 | 1 skipped；本机无 migrated real PostgreSQL |
+| Ruff | All checks passed |
+| mypy app | 38 source files，无问题 |
+| Alembic | head/offline SQL 通过 |
+
+### 能够与不能证明
+
+能够证明：
+
+- object key 顺序不影响 request hash；
+- replay 不读取 artifact、不重新创建 Jobs；
+- 同 key 不同请求冲突；
+- repository SQL 包含 tenant 边界；
+- Run/Jobs 事务结构和数据库约束存在；
+- Run HTTP create/get 与稳定错误合同成立。
+
+不能证明：
+
+- 本机真实 PostgreSQL 并发请求只创建一个 Run；
+- Worker 已领取或执行 Job；
+- exactly-once 或不重复计费；
+- API 响应丢失的真实网络实验。
+
+### 提交
+
+- `79b09d4 feat(run): implement idempotent run creation`
+- 文档提交：以本阶段完成后的最新 `git log` 为准
+- 未 push
