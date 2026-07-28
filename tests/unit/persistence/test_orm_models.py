@@ -3,11 +3,13 @@ from sqlalchemy import Table, UniqueConstraint
 from app.persistence.orm_models import (
     APIKey,
     Artifact,
+    AuditEvent,
     Base,
     Dataset,
     DatasetVersion,
     EvaluationJob,
     EvaluationRun,
+    JobAttempt,
 )
 
 
@@ -24,14 +26,16 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
-def test_orm_metadata_has_only_tables_introduced_through_phase_2() -> None:
+def test_orm_metadata_has_only_tables_introduced_through_phase_3() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
         "artifacts",
+        "audit_events",
         "dataset_versions",
         "datasets",
         "evaluation_jobs",
         "evaluation_runs",
+        "job_attempts",
         "tenants",
     }
 
@@ -87,3 +91,12 @@ def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> No
     assert frozenset({"run_id", "case_id"}) in unique_column_sets(EvaluationJob.__table__)
     assert foreign_key_targets(EvaluationJob.__table__, "run_id") == {"evaluation_runs.id"}
     assert "case_payload_json" in EvaluationJob.__table__.columns
+
+
+def test_attempt_and_audit_metadata_preserve_execution_history() -> None:
+    assert frozenset({"job_id", "attempt_number"}) in unique_column_sets(JobAttempt.__table__)
+    assert foreign_key_targets(JobAttempt.__table__, "job_id") == {"evaluation_jobs.id"}
+    assert foreign_key_targets(AuditEvent.__table__, "tenant_id") == {"tenants.id"}
+    assert {"actor_id", "action", "resource_type", "resource_id", "metadata_json"} <= set(
+        AuditEvent.__table__.columns.keys()
+    )

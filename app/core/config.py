@@ -35,3 +35,6 @@ class Settings(BaseSettings):
         gt=0,
         le=10 * 1024 * 1024,
     )
+    worker_lease_seconds: int = Field(default=30, ge=5, le=3_600)
+    worker_heartbeat_seconds: int = Field(default=10, ge=1, le=1_200)
+    worker_claim_batch_size: int = Field(default=1, ge=1, le=100)

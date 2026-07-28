@@ -33,3 +33,10 @@ class JobStatus(StrEnum):
     FAILED = "failed"
     CANCELLING = "cancelling"
     CANCELLED = "cancelled"
+
+
+class AttemptOutcome(StrEnum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    LEASE_EXPIRED = "lease_expired"

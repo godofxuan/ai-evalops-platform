@@ -19,7 +19,14 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.domain.enums import APIKeyStatus, ArtifactType, JobStatus, RunStatus, TenantStatus
+from app.domain.enums import (
+    APIKeyStatus,
+    ArtifactType,
+    AttemptOutcome,
+    JobStatus,
+    RunStatus,
+    TenantStatus,
+)
 
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -60,6 +67,13 @@ run_status_enum = Enum(
 job_status_enum = Enum(
     JobStatus,
     name="job_status",
+    native_enum=False,
+    create_constraint=True,
+    values_callable=lambda members: [member.value for member in members],
+)
+attempt_outcome_enum = Enum(
+    AttemptOutcome,
+    name="attempt_outcome",
     native_enum=False,
     create_constraint=True,
     values_callable=lambda members: [member.value for member in members],
@@ -366,3 +380,64 @@ class EvaluationJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+
+
+class JobAttempt(Base):
+    __tablename__ = "job_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "job_id",
+            "attempt_number",
+            name="uq_job_attempts_job_id_attempt_number",
+        ),
+        CheckConstraint("attempt_number > 0", name="attempt_number_positive"),
+        CheckConstraint("latency_ms IS NULL OR latency_ms >= 0", name="latency_ms_nonnegative"),
+        Index("ix_job_attempts_job_id_started_at", "job_id", "started_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt_number: Mapped[int] = mapped_column(nullable=False)
+    worker_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    outcome: Mapped[AttemptOutcome | None] = mapped_column(attempt_outcome_enum)
+    retryable: Mapped[bool | None] = mapped_column()
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(String(1_000))
+    upstream_status_code: Mapped[int | None] = mapped_column()
+    latency_ms: Mapped[int | None] = mapped_column()
+    trace_id: Mapped[str | None] = mapped_column(String(64))
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_tenant_id_created_at", "tenant_id", "created_at"),
+        Index(
+            "ix_audit_events_resource_type_resource_id",
+            "resource_type",
+            "resource_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    resource_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
