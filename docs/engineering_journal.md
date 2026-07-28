@@ -456,3 +456,60 @@ Python 与配置
 - `79b09d4 feat(run): implement idempotent run creation`
 - 文档提交：以本阶段完成后的最新 `git log` 为准
 - 未 push
+
+## 2026-07-29 — Phase 3：Worker 领取、租约与心跳（完成）
+
+### 基本信息
+
+- 起始 SHA：`ffff1e4`
+- 实现提交：`e712f8a`
+- 目标：显式 Run/Job 状态机、PostgreSQL `SKIP LOCKED` 领取、lease、heartbeat、
+  JobAttempt 与审计事件。
+
+### 问题与根因
+
+- 只有状态枚举和 lease 字段，没有集中转换规则，各 service 未来可能写出非法状态。
+- 没有领取事务时，多个 Worker 会读到同一个 queued Job。
+- 只写 owner 而不写 expiry/version，旧 Worker 可在失去执行权后继续覆盖新世代。
+- 没有 Attempt 和审计表时，重试历史、错误分类、操作者和转换原因不可追踪。
+
+### 设计与修改
+
+- 新增纯函数显式状态机，强制 reason/actor。
+- PostgreSQL 候选查询采用 `FOR UPDATE OF evaluation_jobs SKIP LOCKED`，固定优先级与
+  创建时间顺序。
+- 领取、状态改变、lease、version、Attempt、审计和首次 Run 启动在短事务内提交。
+- 网络/模型执行明确放在事务之外。
+- 心跳使用 owner + expected version + running + live expiry 的条件更新，并返回新 version。
+- 新增 migration `20260729_0004`、真实 PostgreSQL 并发合同、状态与租约设计文档。
+
+### 关键失败与修正
+
+- Job/Run/clock/jobs 模块均由导入失败开始，证明 RED 来自能力缺失。
+- 状态表驱动扩展分别出现 10 和 9 个失败，随后只补需求允许边。
+- ORM 导入 `AuditEvent` 失败后补表和约束。
+- Ruff 首轮发现 4 个未使用导入，删除后通过。
+- 真实 PostgreSQL 并发测试因本机没有服务而 skip；未改用 SQLite，也未把 skip 写成通过。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| Phase 3 目标测试 | 45 passed，1 skipped |
+| 非集成全量回归 | 127 passed，4 deselected |
+| Ruff | All checks passed |
+| mypy app | 45 source files，无问题 |
+| Alembic | 唯一 head `20260729_0004`，offline SQL 通过 |
+| 真实 PostgreSQL 并发 | 本机 skipped |
+
+### 未解决与方案取舍
+
+- 真实行锁行为仍需 CI/Compose 证据。
+- Worker 尚未调用 Target/Evaluator；Reaper、retry、cancel 尚未实现。
+- 没采用 Celery、Redis 锁、SQLite 或长事务；原因分别是隐藏核心机制、事实源错误、
+  语义不等价和持锁风险。
+- 当前不声称 exactly-once、生产级或已通过安全认证。
+
+完整命令、RED/GREEN 过程、学习点和面试追问见
+`docs/phase_3_execution_log.md`、`docs/03_state_machines.md` 与
+`docs/05_worker_lease_contract.md`。

@@ -1,6 +1,7 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库完成 **Phase 0 工程底座** 与 **Phase 1 身份和数据集**；Run、Job 和任务执行仍未实现。
+多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–3：工程底座、身份与不可变
+数据集、幂等 Run 创建，以及 PostgreSQL Job 领取、租约和心跳协议。
 
 ## 业务问题
 
@@ -52,7 +53,16 @@ Phase 2 已建立：
 - `POST /api/v1/runs` 与 `GET /api/v1/runs/{run_id}`；
 - Phase 2 Alembic migration 与真实 PostgreSQL 并发测试合同。
 
-Worker 和 Reaper 当前仍只维持进程生命周期，并明确记录 `capability=lifecycle_only`。Jobs 已能初始化，但它们尚不会领取或回收任务。
+Phase 3 已建立：
+
+- Run/Job 显式状态机和强制 reason/actor；
+- `FOR UPDATE OF evaluation_jobs SKIP LOCKED` 并发领取；
+- 短事务内状态、lease、version、Attempt 与审计写入；
+- owner/version/live-expiry 保护的心跳条件更新；
+- 10 Worker 真实 PostgreSQL 并发测试合同。
+
+Worker CLI 尚未进入完整执行循环，Reaper 仍只维持进程生命周期；Phase 4–5 将分别接入
+Target/Evaluator 执行和 lease 回收。
 
 ## 架构骨架
 
@@ -224,38 +234,52 @@ Phase 2 migration 新增：
 - `evaluation_runs`（`tenant_id + idempotency_key` 唯一）；
 - `evaluation_jobs`（`run_id + case_id` 唯一，保存不可变 case payload snapshot）。
 
+Phase 3 migration 新增：
+
+- `job_attempts`（`job_id + attempt_number` 唯一）；
+- `audit_events`（tenant-owned 状态转换审计）。
+
 物理 artifact 可按 SHA-256 跨 tenant 复用，但数据库元数据保留 tenant 所有权。所有已实现的 dataset/version 查询同时过滤服务端 tenant 与资源 ID；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
 
-Run/Job 状态枚举和持久化字段已经存在，显式合法转换状态机将在 Phase 3 实现。
+Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
+[状态机合同](docs/03_state_machines.md)。
 
 ## Worker、崩溃恢复与幂等
 
-- Worker 当前不领取任务；
+- Worker 领取组件已实现，但 CLI 尚未执行 Target/Evaluator；
 - Reaper 当前不扫描 lease；
-- `SKIP LOCKED`、lease、heartbeat、retry、crash recovery 和 cooperative cancellation 均未实现；
+- `SKIP LOCKED`、lease 和 heartbeat 已实现；
+- retry classification、crash recovery 和 cooperative cancellation 尚未实现；
 - Run 创建已使用 canonical request hash、Idempotency-Key 和 PostgreSQL 唯一约束；
 - 相同 key/请求返回同一 Run，不同请求返回 409；
 - 真实 PostgreSQL 并发合同存在，但本机因无数据库而 skipped。
 
-因此当前仓库能证明幂等代码/数据库合同，但不能证明本机真实并发成功，也不能证明 at-least-once 执行或崩溃恢复。
+因此当前仓库能证明幂等与租约的代码/SQL 合同，但本机无 PostgreSQL，不能证明真实行锁并发
+成功；Target 执行和 Reaper 尚未接通，也不能证明完整 at-least-once 执行或崩溃恢复。
 
 ## 实验结果
 
-Phase 0–2 的本地命令、RED/GREEN 证据和环境限制分别记录在 [Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)和 [Phase 2 日志](docs/phase_2_execution_log.md)。幂等细节见 [Run 幂等合同](docs/04_idempotency_contract.md)，阶段汇总见 [工程日志](docs/engineering_journal.md)。
+Phase 0–3 的本地命令、RED/GREEN 证据和环境限制分别记录在
+[Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)、
+[Phase 2 日志](docs/phase_2_execution_log.md)和
+[Phase 3 日志](docs/phase_3_execution_log.md)。幂等细节见
+[Run 幂等合同](docs/04_idempotency_contract.md)，领取细节见
+[Worker 租约合同](docs/05_worker_lease_contract.md)，阶段汇总见
+[工程日志](docs/engineering_journal.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
-2026-07-29 Phase 2 本机阶段结果：
+2026-07-29 Phase 3 本机阶段结果：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
 | lock | `uv lock --check` 通过；48 packages |
-| format / lint | Phase 2 文件已格式化；All checks passed |
-| mypy | app 38 files，无问题 |
-| pytest 非集成 | 87 passed，3 deselected |
-| Phase 2 PostgreSQL integration | 1 skipped；本机无 migrated real PostgreSQL |
-| Alembic | 唯一 head `20260729_0003` 与 offline PostgreSQL SQL 通过 |
+| format / lint | Phase 3 文件已格式化；All checks passed |
+| mypy | app 45 files，无问题 |
+| pytest 非集成 | 127 passed，4 deselected |
+| Phase 3 PostgreSQL concurrency | 1 skipped；本机无 migrated real PostgreSQL |
+| Alembic | 唯一 head `20260729_0004` 与 offline PostgreSQL SQL 通过 |
 | Compose YAML / CI YAML | PyYAML 静态解析通过 |
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
