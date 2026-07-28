@@ -61,8 +61,16 @@ Phase 3 已建立：
 - owner/version/live-expiry 保护的心跳条件更新；
 - 10 Worker 真实 PostgreSQL 并发测试合同。
 
-Worker CLI 尚未进入完整执行循环，Reaper 仍只维持进程生命周期；Phase 4–5 将分别接入
-Target/Evaluator 执行和 lease 回收。
+Phase 4 已建立：
+
+- deterministic MockTarget 与受 HTTPS/allowlist/DNS 策略约束的 HTTPRAGTarget；
+- ExecutionEvaluator 与明确标为 lexical 的 BasicAnswerEvaluator；
+- Worker 的 claim → Target → Evaluator → result 成功流水线；
+- lease owner/version/expiry fencing 的 CaseResult 提交；
+- Job/Attempt/Result/Audit/Run counter 同事务更新。
+
+Worker CLI 尚未进入完整容错循环，Reaper 仍只维持进程生命周期；Phase 5 将接入执行期心跳、
+失败分类、重试、回收与取消。
 
 ## 架构骨架
 
@@ -83,7 +91,7 @@ FastAPI API
      +---- readiness ---- PostgreSQL / Redis / artifact directory / Alembic
      +---- structured JSON logs + request_id + tenant context
 
-Worker process ---- lifecycle only
+Worker components ---- claim → Target → Evaluator → fenced result
 Reaper process ---- lifecycle only
 ```
 
@@ -239,6 +247,11 @@ Phase 3 migration 新增：
 - `job_attempts`（`job_id + attempt_number` 唯一）；
 - `audit_events`（tenant-owned 状态转换审计）。
 
+Phase 4 migration 新增：
+
+- `evaluation_runs.evaluator_type`；
+- `case_results`（Job 唯一且 Run/case 唯一）。
+
 物理 artifact 可按 SHA-256 跨 tenant 复用，但数据库元数据保留 tenant 所有权。所有已实现的 dataset/version 查询同时过滤服务端 tenant 与资源 ID；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
 
 Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
@@ -246,40 +259,43 @@ Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则
 
 ## Worker、崩溃恢复与幂等
 
-- Worker 领取组件已实现，但 CLI 尚未执行 Target/Evaluator；
+- Worker 成功执行组件已实现，但 CLI 尚未进入完整容错循环；
 - Reaper 当前不扫描 lease；
 - `SKIP LOCKED`、lease 和 heartbeat 已实现；
-- retry classification、crash recovery 和 cooperative cancellation 尚未实现；
+- retry classification、crash recovery、执行期 heartbeat 和 cooperative cancellation 尚未实现；
 - Run 创建已使用 canonical request hash、Idempotency-Key 和 PostgreSQL 唯一约束；
 - 相同 key/请求返回同一 Run，不同请求返回 409；
 - 真实 PostgreSQL 并发合同存在，但本机因无数据库而 skipped。
 
 因此当前仓库能证明幂等与租约的代码/SQL 合同，但本机无 PostgreSQL，不能证明真实行锁并发
-成功；Target 执行和 Reaper 尚未接通，也不能证明完整 at-least-once 执行或崩溃恢复。
+成功；成功流水线已有代码合同，但 Reaper/重试尚未接通，也不能证明完整 at-least-once
+执行或崩溃恢复。
 
 ## 实验结果
 
-Phase 0–3 的本地命令、RED/GREEN 证据和环境限制分别记录在
+Phase 0–4 的本地命令、RED/GREEN 证据和环境限制分别记录在
 [Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)、
 [Phase 2 日志](docs/phase_2_execution_log.md)和
-[Phase 3 日志](docs/phase_3_execution_log.md)。幂等细节见
+[Phase 3 日志](docs/phase_3_execution_log.md)和
+[Phase 4 日志](docs/phase_4_execution_log.md)。幂等细节见
 [Run 幂等合同](docs/04_idempotency_contract.md)，领取细节见
 [Worker 租约合同](docs/05_worker_lease_contract.md)，阶段汇总见
 [工程日志](docs/engineering_journal.md)。
+Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
-2026-07-29 Phase 3 本机阶段结果：
+2026-07-29 Phase 4 本机阶段结果：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
 | lock | `uv lock --check` 通过；48 packages |
-| format / lint | Phase 3 文件已格式化；All checks passed |
-| mypy | app 45 files，无问题 |
-| pytest 非集成 | 127 passed，4 deselected |
-| Phase 3 PostgreSQL concurrency | 1 skipped；本机无 migrated real PostgreSQL |
-| Alembic | 唯一 head `20260729_0004` 与 offline PostgreSQL SQL 通过 |
+| format / lint | Phase 4 文件已格式化；All checks passed |
+| mypy | app 57 files，无问题 |
+| pytest 非集成 | 145 passed，4 deselected |
+| Phase 4 PostgreSQL result race | 1 skipped；本机无 migrated real PostgreSQL |
+| Alembic | 唯一 head `20260729_0005` 与 offline PostgreSQL SQL 通过 |
 | Compose YAML / CI YAML | PyYAML 静态解析通过 |
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
@@ -290,13 +306,13 @@ Phase 0–3 的本地命令、RED/GREEN 证据和环境限制分别记录在
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
 - 本地 artifact storage 不适合多 API 主机共享，尚无 artifact GC；
 - JSONL 第一版有界读入内存，不是流式 parser；
-- Run 目前只有 create/get；case 结果、取消、SSE 与比较尚未实现；
-- 没有任务队列、Worker 业务、Reaper 业务或取消；
-- 没有 Target/Evaluator；
+- Run API 目前只有 create/get；case 结果查询、取消、SSE 与比较尚未实现；
+- Worker 成功组件未接入容错 CLI；没有 Reaper 业务或取消；
+- HTTP SSRF 检查仍有 DNS check/connect TOCTOU，需要部署级 egress 控制；
 - 没有 SSE、运行比较、人工评审、Prometheus 指标或 OpenTelemetry trace；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
-## 面试展示路径（Phase 2）
+## 面试展示路径（Phase 4）
 
 1. 解释 API Key 为什么只保存版本化 scrypt hash，以及 unknown prefix 为什么执行 dummy hash；
 2. 展示 Principal 如何从服务端 tenant 关联派生，请求体 `tenant_id` 如何被拒绝；
@@ -308,3 +324,7 @@ Phase 0–3 的本地命令、RED/GREEN 证据和环境限制分别记录在
 8. 说明 Worker/Reaper、任务执行与崩溃恢复为何仍严格留在后续阶段。
 9. 展示 canonical request hash 为什么忽略 object key 顺序但保留数组顺序。
 10. 展示首次幂等查询、数据库唯一约束和冲突后 hash 复核如何共同处理并发。
+11. 展示 `SKIP LOCKED` 领取、owner/version 心跳 fencing 与短事务边界。
+12. 展示 Target 成功后为何仍需再次校验 lease 才能写唯一 CaseResult。
+13. 解释 `lexical_*` 指标为什么不能称为语义准确率。
+14. 说明 HTTP allowlist/DNS 检查能防什么，以及 DNS 重绑定残余风险。

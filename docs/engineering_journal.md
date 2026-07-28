@@ -513,3 +513,61 @@ Python 与配置
 完整命令、RED/GREEN 过程、学习点和面试追问见
 `docs/phase_3_execution_log.md`、`docs/03_state_machines.md` 与
 `docs/05_worker_lease_contract.md`。
+
+## 2026-07-29 — Phase 4：Target、Evaluator 与 CaseResult（完成）
+
+### 基本信息
+
+- 起始 SHA：`133a635`
+- 实现提交：`e1ac1e2`
+- 目标：可复现 Mock、受约束 HTTP RAG adapter、两类自动 evaluator、Worker 成功链和
+  lease-fenced 最终结果。
+
+### 问题与根因
+
+- Job 领取后没有可执行的 Target/Evaluator 合同。
+- 外部请求不能持有数据库锁，但事务外执行后 lease 可能已经过期。
+- 仅靠 CaseResult 唯一约束不能阻止旧 Worker 改 Job/Attempt。
+- HTTP Target 引入 SSRF、认证持久化和敏感响应泄露风险。
+- 原 Run 模型没有 evaluator type，Worker 不能从版本或任意 JSON 稳定选择实现。
+- 词法启发式若命名为“准确率”，会产生不受证据支持的评测结论。
+
+### 设计与修改
+
+- 新增 evaluation domain DTO、Target/Evaluator protocols 与 factory。
+- MockTarget 由配置/metadata 确定性驱动；测试用 fake sleeper。
+- HTTPRAGTarget 采用 HTTPS、精确 hostname allowlist、相对 endpoint、DNS 公网检查和
+  环境变量认证引用。
+- ExecutionEvaluator 记录运行事实；BasicAnswerEvaluator 只输出 `lexical_*` 指标。
+- Result committer 在同一短事务检查 lease fencing、完成 Job/Attempt、写唯一 CaseResult、
+  审计和 Run 成功计数。
+- 新增显式 `evaluator_type` 和 migration `20260729_0005`。
+- Run 创建在 artifact I/O 前验证 supported component 与安全配置。
+
+### 关键失败与修正
+
+- 首轮 7 组测试均因模块/CaseResult 缺失而 RED。
+- 首次实现后 19 passed、1 failed：测试替身属性覆盖同名 `claim()` 方法；重命名后 20 passed。
+- 组件输入补测因 `InvalidTargetConfigurationError` 缺失而 RED；加入 service/API 稳定 422。
+- Ruff 首轮 6 项为两个长行和四个不必要 `getattr`；机械修正后通过。
+- 真实 PostgreSQL 唯一结果与旧 lease 提交合同本机 skip，未用 SQLite 替代。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| Phase 4 目标 | 20 passed，1 skipped |
+| 非集成全量回归 | 145 passed，4 deselected |
+| Ruff | All checks passed |
+| mypy app | 57 source files，无问题 |
+| Alembic | head `20260729_0005`，offline SQL 通过 |
+| 真实 PostgreSQL result race | 本机 skipped |
+
+### 未解决与方案取舍
+
+- 执行期间的持续心跳、失败持久化、retry、Reaper 和 cancel 属于 Phase 5。
+- SSRF 仍有 DNS check/connect TOCTOU，需 egress proxy 或固定地址 transport 进一步收紧。
+- 没采用 LLM judge、任意 URL、明文认证配置或长数据库事务。
+- 当前不声称 semantic accuracy、exactly-once、生产级或安全认证。
+
+完整过程见 `docs/phase_4_execution_log.md` 与 `docs/09_evaluation_semantics.md`。
