@@ -1,7 +1,7 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–3：工程底座、身份与不可变
-数据集、幂等 Run 创建，以及 PostgreSQL Job 领取、租约和心跳协议。
+多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–5：工程底座、身份与不可变
+数据集、幂等 Run、租约领取、自动评测，以及重试、回收和协作式取消。
 
 ## 业务问题
 
@@ -69,8 +69,14 @@ Phase 4 已建立：
 - lease owner/version/expiry fencing 的 CaseResult 提交；
 - Job/Attempt/Result/Audit/Run counter 同事务更新。
 
-Worker CLI 尚未进入完整容错循环，Reaper 仍只维持进程生命周期；Phase 5 将接入执行期心跳、
-失败分类、重试、回收与取消。
+Phase 5 已建立：
+
+- transient/permanent/cancelled 失败分类与有界指数退避；
+- 执行 Target 期间的周期 heartbeat 与 cooperative cancellation；
+- lease-fenced 失败提交和 Reaper 过期租约回收；
+- queued/retry_wait 直接取消、running 转 cancelling 的幂等取消 API；
+- 基于数据库真实 Job 状态重算的 Run counter/status 聚合；
+- 可直接运行的 Worker/Reaper CLI 循环。
 
 ## 架构骨架
 
@@ -91,8 +97,8 @@ FastAPI API
      +---- readiness ---- PostgreSQL / Redis / artifact directory / Alembic
      +---- structured JSON logs + request_id + tenant context
 
-Worker components ---- claim → Target → Evaluator → fenced result
-Reaper process ---- lifecycle only
+Worker ---- claim → heartbeat → Target → Evaluator → fenced result/failure
+Reaper ---- expired lease → retry_wait / failed / cancelled
 ```
 
 PostgreSQL 将是后续领域状态的最终事实来源。Redis 只承担可丢失的实时能力，不能决定最终 Run/Job 结果。
@@ -165,7 +171,7 @@ docker compose -f deploy/compose.yaml up --build --wait
 curl http://127.0.0.1:8000/health/ready
 ```
 
-Compose 会启动 PostgreSQL、Redis、一次性 migration、API、Worker 骨架和 Reaper 骨架。默认开发端口只绑定到 `127.0.0.1`。
+Compose 会启动 PostgreSQL、Redis、一次性 migration、API、Worker 和 Reaper。默认开发端口只绑定到 `127.0.0.1`。
 
 停止并删除开发数据卷：
 
@@ -259,43 +265,45 @@ Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则
 
 ## Worker、崩溃恢复与幂等
 
-- Worker 成功执行组件已实现，但 CLI 尚未进入完整容错循环；
-- Reaper 当前不扫描 lease；
-- `SKIP LOCKED`、lease 和 heartbeat 已实现；
-- retry classification、crash recovery、执行期 heartbeat 和 cooperative cancellation 尚未实现；
+- Worker CLI 已运行 claim、执行期 heartbeat、Target、Evaluator 与 fenced commit 循环；
+- Reaper 使用 `SKIP LOCKED` 小批量扫描并回收过期 lease；
+- transient failure 使用带 jitter 的有界指数退避，permanent failure 不重试；
+- cooperative cancellation 由 heartbeat 观察，陈旧 Worker 不能提交结果或失败；
 - Run 创建已使用 canonical request hash、Idempotency-Key 和 PostgreSQL 唯一约束；
 - 相同 key/请求返回同一 Run，不同请求返回 409；
 - 真实 PostgreSQL 并发合同存在，但本机因无数据库而 skipped。
 
 因此当前仓库能证明幂等与租约的代码/SQL 合同，但本机无 PostgreSQL，不能证明真实行锁并发
-成功；成功流水线已有代码合同，但 Reaper/重试尚未接通，也不能证明完整 at-least-once
-执行或崩溃恢复。
+成功；成功、失败、重试、Reaper 与取消已有代码合同，但本机仍不能给出真实服务下
+at-least-once 执行和崩溃恢复的实验结论。
 
 ## 实验结果
 
-Phase 0–4 的本地命令、RED/GREEN 证据和环境限制分别记录在
+Phase 0–5 的本地命令、RED/GREEN 证据和环境限制分别记录在
 [Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)、
 [Phase 2 日志](docs/phase_2_execution_log.md)和
 [Phase 3 日志](docs/phase_3_execution_log.md)和
-[Phase 4 日志](docs/phase_4_execution_log.md)。幂等细节见
+[Phase 4 日志](docs/phase_4_execution_log.md)和
+[Phase 5 日志](docs/phase_5_execution_log.md)。幂等细节见
 [Run 幂等合同](docs/04_idempotency_contract.md)，领取细节见
 [Worker 租约合同](docs/05_worker_lease_contract.md)，阶段汇总见
 [工程日志](docs/engineering_journal.md)。
 Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)。
+重试、回收和取消语义见 [恢复合同](docs/06_retry_and_cancellation.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
-2026-07-29 Phase 4 本机阶段结果：
+2026-07-29 Phase 5 本机阶段结果：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
-| lock | `uv lock --check` 通过；48 packages |
-| format / lint | Phase 4 文件已格式化；All checks passed |
-| mypy | app 57 files，无问题 |
-| pytest 非集成 | 145 passed，4 deselected |
-| Phase 4 PostgreSQL result race | 1 skipped；本机无 migrated real PostgreSQL |
-| Alembic | 唯一 head `20260729_0005` 与 offline PostgreSQL SQL 通过 |
+| lock | `uv lock --check` 通过 |
+| format / lint | Phase 5 文件已格式化；All checks passed |
+| mypy | app 65 files，无问题 |
+| pytest 非集成 | 181 passed，4 deselected |
+| Phase 5 PostgreSQL recovery/cancel | 2 skipped；本机无 migrated real PostgreSQL |
+| Alembic | 无 schema 变更；唯一 head 仍为 `20260729_0005`，offline PostgreSQL SQL 通过 |
 | Compose YAML / CI YAML | PyYAML 静态解析通过 |
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
@@ -306,13 +314,13 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
 - 本地 artifact storage 不适合多 API 主机共享，尚无 artifact GC；
 - JSONL 第一版有界读入内存，不是流式 parser；
-- Run API 目前只有 create/get；case 结果查询、取消、SSE 与比较尚未实现；
-- Worker 成功组件未接入容错 CLI；没有 Reaper 业务或取消；
+- Run API 目前有 create/get/cancel；case 结果查询、SSE 与比较尚未实现；
+- Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
 - HTTP SSRF 检查仍有 DNS check/connect TOCTOU，需要部署级 egress 控制；
 - 没有 SSE、运行比较、人工评审、Prometheus 指标或 OpenTelemetry trace；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
-## 面试展示路径（Phase 4）
+## 面试展示路径（Phase 5）
 
 1. 解释 API Key 为什么只保存版本化 scrypt hash，以及 unknown prefix 为什么执行 dummy hash；
 2. 展示 Principal 如何从服务端 tenant 关联派生，请求体 `tenant_id` 如何被拒绝；
@@ -321,10 +329,13 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 5. 展示 artifact 的 SHA 路径、临时文件、fsync、发布前摘要确认、硬链接原子发布与物理去重；
 6. 展示 dataset 行锁如何串行化 version 分配，以及为何验证/落盘不放进长数据库事务；
 7. 展示真实 PostgreSQL 集成合同与“本机 skip 不算通过”的证据；
-8. 说明 Worker/Reaper、任务执行与崩溃恢复为何仍严格留在后续阶段。
+8. 展示 Worker/Reaper 如何共享 lease fencing、锁顺序和数据库最终事实来源。
 9. 展示 canonical request hash 为什么忽略 object key 顺序但保留数组顺序。
 10. 展示首次幂等查询、数据库唯一约束和冲突后 hash 复核如何共同处理并发。
 11. 展示 `SKIP LOCKED` 领取、owner/version 心跳 fencing 与短事务边界。
 12. 展示 Target 成功后为何仍需再次校验 lease 才能写唯一 CaseResult。
 13. 解释 `lexical_*` 指标为什么不能称为语义准确率。
 14. 说明 HTTP allowlist/DNS 检查能防什么，以及 DNS 重绑定残余风险。
+15. 解释失败分类、指数退避+jitter，以及未知内部错误为何只保存安全摘要。
+16. 展示取消如何从 running 进入 cancelling，并由 heartbeat 驱动协作式停止。
+17. 展示 Reaper 如何把过期 Attempt 标成 `lease_expired`，再决定重试、失败或取消。

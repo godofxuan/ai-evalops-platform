@@ -571,3 +571,60 @@ Python 与配置
 - 当前不声称 semantic accuracy、exactly-once、生产级或安全认证。
 
 完整过程见 `docs/phase_4_execution_log.md` 与 `docs/09_evaluation_semantics.md`。
+
+## 2026-07-29 — Phase 5：重试、Reaper 与取消（完成）
+
+### 基本信息
+
+- 起始 SHA：`e328933`
+- 实现提交：`b7f3de5`
+- 目标：失败路径、backoff+jitter、执行期 heartbeat、lease recovery、统一 Run 聚合、
+  cooperative cancellation 和 operational CLI。
+
+### 问题与根因
+
+- Phase 4 的异常会让 Job 留在 running，没有 Attempt 完成或重试安排。
+- Target 执行可能超过 lease，需要持续 heartbeat 并传递最新 fencing version。
+- Worker 崩溃后没有 Reaper，Job 永久占用。
+- Run counter 自增不能在所有并发/崩溃路径保持一致。
+- 取消没有数据库事务和 Worker 安全检查点。
+
+### 设计与修改
+
+- 显式 `FailureClassification` 与可注入 RandomSource 的指数退避+jitter。
+- 成功/失败使用相同 lease fencing；失败事务决定 retry_wait/failed/cancelled。
+- Heartbeat runner 在 coroutine 执行期间更新版本并观察取消。
+- Reaper 使用 expired 条件、Job `SKIP LOCKED`、Attempt lease_expired 和统一审计。
+- Run 聚合在 Run lock 下重新 group-by Job 状态并覆盖 counters。
+- tenant-scoped cancellation API；queued/retry_wait 直接终止，running 协作取消。
+- Worker/Reaper CLI 接入真实循环、`--once` 与安全日志。
+
+### 关键失败与修正
+
+- 五个策略/回收模块全部从导入 RED 开始。
+- heartbeat 合同扩展到 cancelling 后，一条旧断言失败；更新为新协作取消合同。
+- 第二组 failure module 从导入 RED 开始。
+- 测试期间识别到 running cancel 若递增 lease version 会让当前 Worker 无法读取取消，故把
+  version 明确解释为 lease generation；取消信号不换代。
+- mypy 发现 backoff 表达式 Any，改用 `math.pow` 固定 float。
+- Ruff 发现 try/except/pass 风格，改用 suppress。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| 非集成全量 | 181 passed，4 deselected |
+| 真实 PostgreSQL 合同 | 2 skipped |
+| Ruff | All checks passed |
+| mypy app | 65 source files，无问题 |
+| Alembic | Phase 5 无 schema 变更，head 保持 `20260729_0005` |
+| Docker/Compose | 未运行；本机无 docker |
+
+### 未解决与方案取舍
+
+- 没有用 tenacity/Celery/Redis delayed queue 隐藏 retry 与事实状态。
+- PostgreSQL 短暂故障目前由循环捕获并继续，但没有独立指数退避/circuit breaker。
+- 真正的多 Reaper、取消/完成 race 和 crash takeover 要等 CI/Compose 证据。
+- 不承诺 exactly-once、远端请求撤销、零重复费用或生产级。
+
+完整过程见 `docs/phase_5_execution_log.md` 与 `docs/06_retry_and_cancellation.md`。
