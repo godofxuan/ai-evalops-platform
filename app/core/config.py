@@ -1,0 +1,26 @@
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="EVALOPS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    environment: Literal["development", "test", "production"] = "development"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    database_url: SecretStr = Field(
+        default_factory=lambda: SecretStr(
+            "postgresql+psycopg://evalops:evalops@localhost:5432/evalops"
+        )
+    )
+    redis_url: SecretStr = Field(default_factory=lambda: SecretStr("redis://localhost:6379/0"))
+    artifact_root: Path = Path("data/artifacts")
+    alembic_config_path: Path = Path("alembic.ini")
+    readiness_timeout_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
