@@ -1,0 +1,98 @@
+x-app-environment: &app-environment
+  EVALOPS_ENVIRONMENT: development
+  EVALOPS_LOG_LEVEL: INFO
+  EVALOPS_DATABASE_URL: postgresql+psycopg://evalops:${EVALOPS_POSTGRES_PASSWORD:-evalops}@postgres:5432/evalops
+  EVALOPS_REDIS_URL: redis://redis:6379/0
+  EVALOPS_ARTIFACT_ROOT: /data/artifacts
+  EVALOPS_ALEMBIC_CONFIG_PATH: /app/alembic.ini
+  EVALOPS_READINESS_TIMEOUT_SECONDS: "2.0"
+
+x-app-service: &app-service
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: ai-evalops-platform:phase0
+  environment: *app-environment
+  volumes:
+    - artifact_data:/data/artifacts
+
+x-ready-dependencies: &ready-dependencies
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  migrate:
+    condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:18.4-alpine3.24
+    environment:
+      POSTGRES_DB: evalops
+      POSTGRES_USER: evalops
+      POSTGRES_PASSWORD: ${EVALOPS_POSTGRES_PASSWORD:-evalops}
+    ports:
+      - "127.0.0.1:${EVALOPS_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evalops -d evalops"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:8.8.1-alpine3.23
+    command: ["redis-server", "--appendonly", "yes", "--loglevel", "warning"]
+    ports:
+      - "127.0.0.1:${EVALOPS_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *app-service
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app-service
+    command:
+      ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:${EVALOPS_API_PORT:-8000}:8000"
+    depends_on: *ready-dependencies
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/ready', timeout=2).read()",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  worker:
+    <<: *app-service
+    command: ["python", "-m", "app.cli", "worker"]
+    depends_on: *ready-dependencies
+
+  reaper:
+    <<: *app-service
+    command: ["python", "-m", "app.cli", "reaper"]
+    depends_on: *ready-dependencies
+
+volumes:
+  artifact_data:
+  postgres_data:
+  redis_data:

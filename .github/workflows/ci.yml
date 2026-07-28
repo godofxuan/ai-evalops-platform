@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.4-alpine3.24
+        env:
+          POSTGRES_DB: evalops
+          POSTGRES_USER: evalops
+          POSTGRES_PASSWORD: evalops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U evalops -d evalops"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:8.8.1-alpine3.23
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      EVALOPS_ENVIRONMENT: test
+      EVALOPS_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
+      EVALOPS_REDIS_URL: redis://127.0.0.1:6379/0
+      EVALOPS_ARTIFACT_ROOT: ${{ runner.temp }}/evalops-artifacts
+      EVALOPS_ALEMBIC_CONFIG_PATH: alembic.ini
+      EVALOPS_RUN_INTEGRATION: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync locked dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Check lock file
+        run: uv lock --check
+
+      - name: Check formatting
+        run: uv run --no-sync ruff format --check .
+
+      - name: Lint
+        run: uv run --no-sync ruff check .
+
+      - name: Type check
+        run: uv run --no-sync mypy app
+
+      - name: Run tests without external services
+        run: uv run --no-sync pytest -m "not integration"
+
+      - name: Prepare artifact directory
+        run: mkdir -p "$EVALOPS_ARTIFACT_ROOT"
+
+      - name: Apply migrations
+        run: uv run --no-sync alembic upgrade head
+
+      - name: Run real PostgreSQL and Redis integration tests
+        run: uv run --no-sync pytest -m integration
+
+      - name: Run controlled concurrency tests when introduced
+        if: ${{ hashFiles('tests/concurrency/**/*.py') != '' }}
+        run: uv run --no-sync pytest tests/concurrency
+
+      - name: Build application image
+        run: docker build --tag ai-evalops-platform:ci .
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Start the complete Phase 0 topology
+        run: docker compose -f deploy/compose.yaml up --build --wait --wait-timeout 180
+
+      - name: Verify readiness through the published API port
+        run: curl --fail --silent --show-error http://127.0.0.1:8000/health/ready
+
+      - name: Preserve Compose diagnostics
+        if: always()
+        run: docker compose -f deploy/compose.yaml ps && docker compose -f deploy/compose.yaml logs --no-color
+
+      - name: Stop Compose topology
+        if: always()
+        run: docker compose -f deploy/compose.yaml down --volumes
