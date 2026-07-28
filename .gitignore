@@ -1,0 +1,34 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.python-version
+.venv/
+
+# Local Codex/bootstrap tooling (not part of the product)
+.codex-tools/
+.codex-python/
+.uv-cache/
+
+# Test, type-check, and lint caches
+.coverage
+htmlcov/
+.pytest_cache/
+.pytest-tmp/
+.mypy_cache/
+.ruff_cache/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts are content-addressed and must not be committed.
+data/artifacts/*
+!data/artifacts/.gitkeep
