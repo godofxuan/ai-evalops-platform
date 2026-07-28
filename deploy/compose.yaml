@@ -18,6 +18,8 @@ x-app-environment: &app-environment
   EVALOPS_RETRY_BASE_DELAY_SECONDS: "1.0"
   EVALOPS_RETRY_MAX_DELAY_SECONDS: "60.0"
   EVALOPS_RETRY_JITTER_RATIO: "0.2"
+  EVALOPS_SSE_HEARTBEAT_SECONDS: "15.0"
+  EVALOPS_SSE_FALLBACK_POLL_SECONDS: "2.0"
 
 x-app-service: &app-service
   build:

@@ -1,7 +1,7 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–5：工程底座、身份与不可变
-数据集、幂等 Run、租约领取、自动评测，以及重试、回收和协作式取消。
+多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–6：工程底座、身份与不可变
+数据集、幂等 Run、租约领取、自动评测、恢复取消，以及实时事件和 SSE。
 
 ## 业务问题
 
@@ -78,6 +78,14 @@ Phase 5 已建立：
 - 基于数据库真实 Job 状态重算的 Run counter/status 聚合；
 - 可直接运行的 Worker/Reaper CLI 循环。
 
+Phase 6 已建立：
+
+- tenant/run scoped Redis Pub/Sub 实时事件；
+- 鉴权后先读取 PostgreSQL snapshot 的 SSE；
+- heartbeat、跨 tenant 消息复核与客户端断开清理；
+- Redis publish 故障不影响 Worker durable path；
+- Redis subscriber 故障转 PostgreSQL polling。
+
 ## 架构骨架
 
 ```text
@@ -101,7 +109,8 @@ Worker ---- claim → heartbeat → Target → Evaluator → fenced result/failu
 Reaper ---- expired lease → retry_wait / failed / cancelled
 ```
 
-PostgreSQL 将是后续领域状态的最终事实来源。Redis 只承担可丢失的实时能力，不能决定最终 Run/Job 结果。
+PostgreSQL 是领域状态的最终事实来源。Redis 只承担可丢失的实时通知，不能决定最终
+Run/Job 结果。SSE 重连首先读取 PostgreSQL，而不是假设 Pub/Sub 可以回放。
 
 更详细的阶段边界见 [项目范围](docs/00_project_scope.md)、[架构说明](docs/01_architecture.md)、[Phase 1 领域模型](docs/02_domain_model.md)和[安全边界](docs/08_security_boundaries.md)。
 
@@ -263,6 +272,8 @@ Phase 4 migration 新增：
 Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
 [状态机合同](docs/03_state_machines.md)。
 
+实时事件和故障降级合同见 [SSE 合同](docs/07_realtime_events.md)。
+
 ## Worker、崩溃恢复与幂等
 
 - Worker CLI 已运行 claim、执行期 heartbeat、Target、Evaluator 与 fenced commit 循环；
@@ -279,12 +290,13 @@ at-least-once 执行和崩溃恢复的实验结论。
 
 ## 实验结果
 
-Phase 0–5 的本地命令、RED/GREEN 证据和环境限制分别记录在
+Phase 0–6 的本地命令、RED/GREEN 证据和环境限制分别记录在
 [Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)、
 [Phase 2 日志](docs/phase_2_execution_log.md)和
 [Phase 3 日志](docs/phase_3_execution_log.md)和
 [Phase 4 日志](docs/phase_4_execution_log.md)和
-[Phase 5 日志](docs/phase_5_execution_log.md)。幂等细节见
+[Phase 5 日志](docs/phase_5_execution_log.md)和
+[Phase 6 日志](docs/phase_6_execution_log.md)。幂等细节见
 [Run 幂等合同](docs/04_idempotency_contract.md)，领取细节见
 [Worker 租约合同](docs/05_worker_lease_contract.md)，阶段汇总见
 [工程日志](docs/engineering_journal.md)。
@@ -293,17 +305,17 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
-2026-07-29 Phase 5 本机阶段结果：
+2026-07-29 Phase 6 本机阶段结果：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
 | lock | `uv lock --check` 通过 |
-| format / lint | Phase 5 文件已格式化；All checks passed |
-| mypy | app 65 files，无问题 |
-| pytest 非集成 | 181 passed，4 deselected |
-| Phase 5 PostgreSQL recovery/cancel | 2 skipped；本机无 migrated real PostgreSQL |
-| Alembic | 无 schema 变更；唯一 head 仍为 `20260729_0005`，offline PostgreSQL SQL 通过 |
+| format / lint | Phase 6 文件已格式化；All checks passed |
+| mypy | app 71 files，无问题 |
+| pytest 非集成 | 191 passed，5 deselected |
+| Phase 6 Redis Pub/Sub | 1 skipped；本机未启用真实 Redis |
+| Alembic | 无 schema 变更；唯一 head 仍为 `20260729_0005` |
 | Compose YAML / CI YAML | PyYAML 静态解析通过 |
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
@@ -314,13 +326,14 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
 - 本地 artifact storage 不适合多 API 主机共享，尚无 artifact GC；
 - JSONL 第一版有界读入内存，不是流式 parser；
-- Run API 目前有 create/get/cancel；case 结果查询、SSE 与比较尚未实现；
+- Run API 目前有 create/get/cancel/SSE；case 结果查询与比较尚未实现；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
 - HTTP SSRF 检查仍有 DNS check/connect TOCTOU，需要部署级 egress 控制；
-- 没有 SSE、运行比较、人工评审、Prometheus 指标或 OpenTelemetry trace；
+- 没有运行比较、人工评审、Prometheus 指标或 OpenTelemetry trace；
+- SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
-## 面试展示路径（Phase 5）
+## 面试展示路径（Phase 6）
 
 1. 解释 API Key 为什么只保存版本化 scrypt hash，以及 unknown prefix 为什么执行 dummy hash；
 2. 展示 Principal 如何从服务端 tenant 关联派生，请求体 `tenant_id` 如何被拒绝；
@@ -339,3 +352,6 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 15. 解释失败分类、指数退避+jitter，以及未知内部错误为何只保存安全摘要。
 16. 展示取消如何从 running 进入 cancelling，并由 heartbeat 驱动协作式停止。
 17. 展示 Reaper 如何把过期 Attempt 标成 `lease_expired`，再决定重试、失败或取消。
+18. 解释为什么 PostgreSQL snapshot 必须先于 Redis 订阅，以及断线窗口意味着什么。
+19. 展示 Redis publish 失败为何不会改变已提交 Job，并如何退化为 PostgreSQL polling。
+20. 展示 heartbeat 后结果提交必须使用最新 lease version 的回归测试。

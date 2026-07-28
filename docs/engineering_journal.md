@@ -628,3 +628,47 @@ Python 与配置
 - 不承诺 exactly-once、远端请求撤销、零重复费用或生产级。
 
 完整过程见 `docs/phase_5_execution_log.md` 与 `docs/06_retry_and_cancellation.md`。
+
+## 2026-07-29 — Phase 6：Redis 实时事件与 SSE（完成）
+
+### 基本信息
+
+- 起始 SHA：`a130779`
+- 实现提交：`1293836`
+- 目标：PostgreSQL snapshot-first SSE、best-effort Redis Pub/Sub、断线资源清理与故障降级。
+
+### 判断与实现
+
+- Redis Pub/Sub 是 at-most-once，因此只作为通知层，不能成为 Run/Job 最终事实来源。
+- SSE 在 response start 前做 tenant-scoped Run 查询，首帧固定为 snapshot。
+- tenant/run 精确频道之外，subscriber 还复核消息 payload 内的 tenant/run。
+- PubSub 每客户端独立创建，生成器关闭时 unsubscribe/aclose。
+- Redis 订阅失败转为 PostgreSQL 周期快照；publish 失败不影响已提交的 Worker/Reaper/cancel。
+- Worker/Reaper 只在数据库事务完成后发布状态通知。
+
+### 过程中发现的问题
+
+- 首轮 4 个测试模块因 `app.events` 不存在而 RED。
+- 首次 GREEN 为 10 passed、1 failed：测试事件 UUID 每次重建不同，固定 fixture ID 后通过。
+- 回归测试发现成功 Worker 在 heartbeat 后仍传初始 lease version；改为 LeaseRunner 返回的
+  最新 version，避免合法结果被 fencing 拒绝。
+- Ruff/mypy 分别发现兼容参数、import、空 except、变量窄化和 redis stub 问题，均做局部修正。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| 非集成全量 | 191 passed，5 deselected |
+| 真实 Redis 合同 | 1 skipped |
+| Ruff | All checks passed |
+| mypy app | 71 source files，无问题 |
+| Alembic | 无 schema 变化；head `20260729_0005` |
+
+### 未解决与取舍
+
+- Pub/Sub 不支持历史重放，Last-Event-ID 不能恢复丢失通知；每次重连以 snapshot 重置。
+- fallback 会增加 PostgreSQL 查询负载，尚未做大量 SSE 连接容量测试。
+- 真实 Redis、多 API 节点、代理缓冲和断线风暴需要可用 Docker/CI 环境验证。
+- 不声称 exactly-once event delivery 或生产级。
+
+完整过程见 `docs/phase_6_execution_log.md` 与 `docs/07_realtime_events.md`。
