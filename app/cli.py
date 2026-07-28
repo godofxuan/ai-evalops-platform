@@ -4,6 +4,7 @@ import signal
 from collections.abc import Sequence
 
 from app.core.config import Settings
+from app.core.event_loop import run_with_psycopg_compatible_event_loop
 from app.core.logging import configure_logging, get_logger
 
 
@@ -47,7 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    asyncio.run(_run_lifecycle(arguments.role))
+    run_with_psycopg_compatible_event_loop(_run_lifecycle(arguments.role))
     return 0
 
 

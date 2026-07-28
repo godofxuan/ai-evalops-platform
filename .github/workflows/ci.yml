@@ -93,7 +93,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Start the complete Phase 0 topology
+      - name: Start the complete current topology
         run: docker compose -f deploy/compose.yaml up --build --wait --wait-timeout 180
 
       - name: Verify readiness through the published API port
