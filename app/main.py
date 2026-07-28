@@ -11,11 +11,15 @@ from app.api.errors import (
     handle_dataset_not_found,
     handle_dataset_validation_error,
     handle_duplicate_dataset_version,
+    handle_idempotency_conflict,
+    handle_invalid_evaluator_configuration,
     handle_request_validation_error,
+    handle_run_not_found,
 )
 from app.api.middleware import RequestContextMiddleware
 from app.api.routes_datasets import router as datasets_router
 from app.api.routes_health import router as health_router
+from app.api.routes_runs import router as runs_router
 from app.artifacts.storage import LocalArtifactStore
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
@@ -34,6 +38,14 @@ from app.health.service import (
 )
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
+from app.runs.repository import SQLAlchemyRunRepository
+from app.runs.service import (
+    IdempotencyConflictError,
+    InvalidEvaluatorConfigurationError,
+    RunDatasetVersionNotFoundError,
+    RunNotFoundError,
+    SQLAlchemyRunService,
+)
 
 
 def create_app(
@@ -69,6 +81,10 @@ def create_app(
                 max_line_bytes=runtime_settings.dataset_max_line_bytes,
             ),
         )
+        application.state.run_service = SQLAlchemyRunService(
+            repository=SQLAlchemyRunRepository(session_factory),
+            artifact_store=artifact_store,
+        )
         application.state.redis_client = redis_client
         application.state.readiness_probe = build_infrastructure_readiness_probe(
             settings=runtime_settings,
@@ -92,8 +108,10 @@ def create_app(
     application.state.readiness_probe = readiness_probe or NotConfiguredReadinessProbe()
     application.state.api_key_lookup = None
     application.state.dataset_service = None
+    application.state.run_service = None
     application.include_router(health_router)
     application.include_router(datasets_router)
+    application.include_router(runs_router)
     application.add_exception_handler(APIError, handle_api_error)
     application.add_exception_handler(DatasetNotFoundError, handle_dataset_not_found)
     application.add_exception_handler(
@@ -103,6 +121,19 @@ def create_app(
     application.add_exception_handler(
         DuplicateDatasetVersionError,
         handle_duplicate_dataset_version,
+    )
+    application.add_exception_handler(
+        IdempotencyConflictError,
+        handle_idempotency_conflict,
+    )
+    application.add_exception_handler(
+        InvalidEvaluatorConfigurationError,
+        handle_invalid_evaluator_configuration,
+    )
+    application.add_exception_handler(RunNotFoundError, handle_run_not_found)
+    application.add_exception_handler(
+        RunDatasetVersionNotFoundError,
+        handle_run_not_found,
     )
     application.add_exception_handler(
         DatasetValidationError,

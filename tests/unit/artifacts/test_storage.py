@@ -116,3 +116,13 @@ async def test_put_bytes_rejects_symlinked_digest_directory(
         await store.put_bytes(content)
 
     assert await asyncio.to_thread(list_files, tmp_path) == []
+
+
+async def test_get_bytes_reads_and_verifies_content_by_server_digest(tmp_path: Path) -> None:
+    store = LocalArtifactStore(tmp_path)
+    content = b'{"case_id":"case-1"}\n'
+    stored = await store.put_bytes(content)
+
+    loaded = await store.get_bytes(stored.sha256)
+
+    assert loaded == content

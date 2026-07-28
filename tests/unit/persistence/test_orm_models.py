@@ -1,6 +1,14 @@
 from sqlalchemy import Table, UniqueConstraint
 
-from app.persistence.orm_models import APIKey, Artifact, Base, Dataset, DatasetVersion
+from app.persistence.orm_models import (
+    APIKey,
+    Artifact,
+    Base,
+    Dataset,
+    DatasetVersion,
+    EvaluationJob,
+    EvaluationRun,
+)
 
 
 def unique_column_sets(table: Table) -> set[frozenset[str]]:
@@ -16,12 +24,14 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
-def test_phase_1_orm_metadata_has_only_the_planned_domain_tables() -> None:
+def test_orm_metadata_has_only_tables_introduced_through_phase_2() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
         "artifacts",
         "dataset_versions",
         "datasets",
+        "evaluation_jobs",
+        "evaluation_runs",
         "tenants",
     }
 
@@ -63,3 +73,17 @@ def test_artifact_metadata_is_tenant_owned_while_storage_path_can_be_shared() ->
         Artifact.__table__
     )
     assert frozenset({"storage_path"}) not in unique_column_sets(Artifact.__table__)
+
+
+def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> None:
+    assert "dataset_hash" in EvaluationRun.__table__.columns
+    assert frozenset({"tenant_id", "idempotency_key"}) in unique_column_sets(
+        EvaluationRun.__table__
+    )
+    assert foreign_key_targets(EvaluationRun.__table__, "tenant_id") == {"tenants.id"}
+    assert foreign_key_targets(EvaluationRun.__table__, "dataset_version_id") == {
+        "dataset_versions.id"
+    }
+    assert frozenset({"run_id", "case_id"}) in unique_column_sets(EvaluationJob.__table__)
+    assert foreign_key_targets(EvaluationJob.__table__, "run_id") == {"evaluation_runs.id"}
+    assert "case_payload_json" in EvaluationJob.__table__.columns

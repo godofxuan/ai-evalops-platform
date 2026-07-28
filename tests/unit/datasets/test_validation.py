@@ -36,6 +36,8 @@ def test_validate_jsonl_accepts_required_fields_and_preserves_content() -> None:
     assert validated.sha256 == hashlib.sha256(content).hexdigest()
     assert validated.size_bytes == len(content)
     assert validated.case_count == 2
+    assert tuple(case.case_id for case in validated.cases) == ("case-1", "case-2")
+    assert validated.cases[0].model_dump()["custom_field"] == ["extra", 1]
 
 
 def test_validate_jsonl_rejects_file_larger_than_limit() -> None:

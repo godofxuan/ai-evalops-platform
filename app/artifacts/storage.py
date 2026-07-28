@@ -23,6 +23,9 @@ class ArtifactStore(Protocol):
     async def put_bytes(self, content: bytes) -> StoredArtifact:
         """Persist bytes under a server-derived content address."""
 
+    async def get_bytes(self, sha256: str) -> bytes:
+        """Read verified bytes using a server-validated content digest."""
+
 
 class LocalArtifactStore:
     def __init__(self, root: Path) -> None:
@@ -30,6 +33,9 @@ class LocalArtifactStore:
 
     async def put_bytes(self, content: bytes) -> StoredArtifact:
         return await asyncio.to_thread(self._put_bytes_sync, content)
+
+    async def get_bytes(self, sha256: str) -> bytes:
+        return await asyncio.to_thread(self._get_bytes_sync, sha256)
 
     def _put_bytes_sync(self, content: bytes) -> StoredArtifact:
         digest = hashlib.sha256(content).hexdigest()
@@ -94,6 +100,22 @@ class LocalArtifactStore:
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
+
+    def _get_bytes_sync(self, sha256: str) -> bytes:
+        if len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256):
+            raise ArtifactIntegrityError("artifact digest is not canonical")
+        digest_directory = self._root / sha256[:2]
+        if digest_directory.is_symlink():
+            raise ArtifactIntegrityError(
+                f"artifact digest directory must not be a symlink: {sha256[:2]}"
+            )
+        path = digest_directory / sha256
+        if path.is_symlink() or not path.is_file():
+            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
+        content = path.read_bytes()
+        if hashlib.sha256(content).hexdigest() != sha256:
+            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
+        return content
 
     @staticmethod
     def _assert_artifact_file(

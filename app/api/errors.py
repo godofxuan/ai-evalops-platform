@@ -10,6 +10,12 @@ from app.datasets.service import (
     DuplicateDatasetVersionError,
 )
 from app.datasets.validation import DatasetValidationError
+from app.runs.service import (
+    IdempotencyConflictError,
+    InvalidEvaluatorConfigurationError,
+    RunDatasetVersionNotFoundError,
+    RunNotFoundError,
+)
 
 
 @dataclass(slots=True)
@@ -118,6 +124,60 @@ async def handle_duplicate_dataset_version(
             "error": {
                 "code": "dataset_version_exists",
                 "message": "This dataset content already has a version.",
+            }
+        },
+    )
+
+
+async def handle_idempotency_conflict(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, IdempotencyConflictError):
+        raise exception
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "idempotency_conflict",
+                "message": "This idempotency key was used for a different request.",
+            }
+        },
+    )
+
+
+async def handle_run_not_found(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(
+        exception,
+        (RunNotFoundError, RunDatasetVersionNotFoundError),
+    ):
+        raise exception
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "resource_not_found",
+                "message": "The requested resource was not found.",
+            }
+        },
+    )
+
+
+async def handle_invalid_evaluator_configuration(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, InvalidEvaluatorConfigurationError):
+        raise exception
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "invalid_evaluator_config",
+                "message": "Evaluator configuration is invalid.",
             }
         },
     )

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -15,9 +16,10 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.domain.enums import APIKeyStatus, ArtifactType, TenantStatus
+from app.domain.enums import APIKeyStatus, ArtifactType, JobStatus, RunStatus, TenantStatus
 
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -44,6 +46,20 @@ api_key_status_enum = Enum(
 artifact_type_enum = Enum(
     ArtifactType,
     name="artifact_type",
+    native_enum=False,
+    create_constraint=True,
+    values_callable=lambda members: [member.value for member in members],
+)
+run_status_enum = Enum(
+    RunStatus,
+    name="run_status",
+    native_enum=False,
+    create_constraint=True,
+    values_callable=lambda members: [member.value for member in members],
+)
+job_status_enum = Enum(
+    JobStatus,
+    name="job_status",
     native_enum=False,
     create_constraint=True,
     values_callable=lambda members: [member.value for member in members],
@@ -223,3 +239,130 @@ class DatasetVersion(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "idempotency_key",
+            name="uq_evaluation_runs_tenant_id_idempotency_key",
+        ),
+        CheckConstraint("total_jobs >= 0", name="total_jobs_nonnegative"),
+        CheckConstraint("succeeded_jobs >= 0", name="succeeded_jobs_nonnegative"),
+        CheckConstraint("failed_jobs >= 0", name="failed_jobs_nonnegative"),
+        CheckConstraint("cancelled_jobs >= 0", name="cancelled_jobs_nonnegative"),
+        CheckConstraint(
+            "succeeded_jobs + failed_jobs + cancelled_jobs <= total_jobs",
+            name="terminal_counts_within_total",
+        ),
+        CheckConstraint("version > 0", name="version_positive"),
+        Index(
+            "ix_evaluation_runs_tenant_id_status_created_at", "tenant_id", "status", "created_at"
+        ),
+        Index("ix_evaluation_runs_dataset_version_id", "dataset_version_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    dataset_version_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("dataset_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    dataset_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    target_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    evaluator_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    evaluator_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_commit: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[RunStatus] = mapped_column(
+        run_status_enum,
+        nullable=False,
+        default=RunStatus.QUEUED,
+        server_default=RunStatus.QUEUED.value,
+    )
+    total_jobs: Mapped[int] = mapped_column(nullable=False)
+    succeeded_jobs: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    failed_jobs: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    cancelled_jobs: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("api_keys.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+
+
+class EvaluationJob(Base):
+    __tablename__ = "evaluation_jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "case_id",
+            name="uq_evaluation_jobs_run_id_case_id",
+        ),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        CheckConstraint("max_attempts > 0", name="max_attempts_positive"),
+        CheckConstraint("version > 0", name="version_positive"),
+        Index(
+            "ix_evaluation_jobs_claim_candidates",
+            "status",
+            "next_attempt_at",
+            "priority",
+            "created_at",
+        ),
+        Index("ix_evaluation_jobs_lease_expires_at", "lease_expires_at"),
+        Index("ix_evaluation_jobs_run_id_status", "run_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    case_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    case_payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[JobStatus] = mapped_column(
+        job_status_enum,
+        nullable=False,
+        default=JobStatus.QUEUED,
+        server_default=JobStatus.QUEUED.value,
+    )
+    priority: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    attempt_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(nullable=False)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(100))
+    last_error_message: Mapped[str | None] = mapped_column(String(1_000))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")

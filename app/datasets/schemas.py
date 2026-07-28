@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class DatasetCase(BaseModel):
     model_config = ConfigDict(extra="allow", strict=True)
 
-    case_id: str
+    case_id: str = Field(max_length=200)
     question: str
     expected_answer: Any
     metadata: dict[str, Any]

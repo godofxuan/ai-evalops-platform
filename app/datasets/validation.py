@@ -23,6 +23,7 @@ class ValidatedJSONL:
     sha256: str
     size_bytes: int
     case_count: int
+    cases: tuple[DatasetCase, ...]
 
 
 class DatasetValidationError(ValueError):
@@ -84,6 +85,7 @@ def validate_jsonl(
                 line_number=line_number,
             ) from None
     case_ids: set[str] = set()
+    parsed_cases: list[DatasetCase] = []
     for line_number, decoded_line in enumerate(decoded_lines, start=1):
         try:
             record = json.loads(decoded_line)
@@ -114,10 +116,12 @@ def validate_jsonl(
                 line_number=line_number,
             )
         case_ids.add(dataset_case.case_id)
+        parsed_cases.append(dataset_case)
 
     return ValidatedJSONL(
         content=content,
         sha256=hashlib.sha256(content).hexdigest(),
         size_bytes=len(content),
         case_count=case_count,
+        cases=tuple(parsed_cases),
     )
