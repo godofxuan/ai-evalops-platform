@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import Select, select
 
 from app.core.clock import Clock, SystemClock
-from app.domain.enums import AttemptOutcome, JobStatus
+from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.job_state_machine import JobTransition, transition_job
 from app.jobs.claiming import ClaimedJob
 from app.jobs.heartbeat import LeaseLostError
@@ -29,6 +29,7 @@ class FailureCommitReceipt:
     retryable: bool
     error_code: str
     next_attempt_at: datetime | None
+    run_status: RunStatus
 
 
 def build_owned_job_for_failure_statement(
@@ -163,7 +164,7 @@ class SQLAlchemyFailureCommitter:
             attempt.error_message = failure.safe_message[:1_000]
             attempt.upstream_status_code = failure.upstream_status_code
             await session.flush()
-            await aggregate_run_in_session(
+            aggregation = await aggregate_run_in_session(
                 session,
                 run_id=run.id,
                 now=now,
@@ -176,6 +177,7 @@ class SQLAlchemyFailureCommitter:
             retryable=decision.should_retry,
             error_code=failure.error_code,
             next_attempt_at=next_attempt_at,
+            run_status=aggregation.status,
         )
 
 

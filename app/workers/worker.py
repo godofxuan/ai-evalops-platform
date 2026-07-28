@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable, Coroutine, Mapping
+from datetime import UTC, datetime
 from typing import Any, Protocol, TypeVar
 
 from app.domain.evaluation import (
@@ -9,7 +10,11 @@ from app.domain.evaluation import (
     TargetResult,
 )
 from app.evaluators.base import Evaluator, build_evaluator
+from app.events.models import EventType, ProgressEvent
+from app.events.publisher import EventPublisher
 from app.jobs.claiming import ClaimedJob
+from app.jobs.failures import FailureCommitReceipt
+from app.jobs.results import ResultCommitReceipt
 from app.targets.base import EvaluationTarget, TargetTimeoutError, build_target
 from app.workers.lease_runner import LeaseOperationError
 
@@ -31,7 +36,7 @@ class ResultCommitter(Protocol):
         lease_version: int,
         target_result: TargetResult,
         evaluation_result: EvaluationResult,
-    ) -> object:
+    ) -> ResultCommitReceipt:
         """Persist an owned successful result."""
 
 
@@ -42,7 +47,7 @@ class FailureCommitter(Protocol):
         claim: ClaimedJob,
         lease_version: int,
         error: BaseException,
-    ) -> object:
+    ) -> FailureCommitReceipt:
         """Persist a retry, permanent failure, or cooperative cancellation."""
 
 
@@ -71,6 +76,7 @@ class EvaluationWorker:
         lease_runner: LeaseRunner,
         target_factory: TargetFactory = build_target,
         evaluator_factory: EvaluatorFactory = build_evaluator,
+        event_publisher: EventPublisher | None = None,
     ) -> None:
         self._claimer = claimer
         self._result_committer = result_committer
@@ -78,12 +84,29 @@ class EvaluationWorker:
         self._lease_runner = lease_runner
         self._target_factory = target_factory
         self._evaluator_factory = evaluator_factory
+        self._event_publisher = event_publisher
 
     async def process_one(self, *, worker_id: str) -> bool:
         claims = await self._claimer.claim(worker_id=worker_id, limit=1)
         if not claims:
             return False
         claim = claims[0]
+        if claim.run_started:
+            await self._publish(
+                claim,
+                event_type=EventType.RUN_STARTED,
+                payload={"status": "running"},
+            )
+        await self._publish(
+            claim,
+            event_type=EventType.JOB_PROGRESS,
+            payload={
+                "job_id": str(claim.job_id),
+                "case_id": claim.case_id,
+                "attempt_number": claim.attempt_number,
+                "status": "running",
+            },
+        )
         case = EvaluationCase.from_payload(claim.case_payload)
         context = ExecutionContext(
             run_id=claim.run_id,
@@ -117,26 +140,97 @@ class EvaluationWorker:
                 attempt_number=claim.attempt_number,
             )
         except LeaseOperationError as error:
-            await self._failure_committer.commit_failure(
+            failure_receipt = await self._failure_committer.commit_failure(
                 claim=claim,
                 lease_version=error.lease_version,
                 error=error.error,
             )
+            await self._publish_failure(claim, failure_receipt)
             return True
         except Exception as error:
-            await self._failure_committer.commit_failure(
+            failure_receipt = await self._failure_committer.commit_failure(
                 claim=claim,
                 lease_version=lease_version,
                 error=error,
             )
+            await self._publish_failure(claim, failure_receipt)
             return True
-        await self._result_committer.commit_success(
+        result_receipt = await self._result_committer.commit_success(
             claim=claim,
-            lease_version=claim.version,
+            lease_version=lease_version,
             target_result=target_result,
             evaluation_result=evaluation_result,
         )
+        await self._publish(
+            claim,
+            event_type=EventType.JOB_PROGRESS,
+            payload={
+                "job_id": str(claim.job_id),
+                "case_id": claim.case_id,
+                "attempt_number": claim.attempt_number,
+                "status": "succeeded",
+            },
+        )
+        await self._publish_completed(
+            claim,
+            getattr(result_receipt, "run_status", None),
+        )
         return True
+
+    async def _publish_failure(
+        self,
+        claim: ClaimedJob,
+        receipt: FailureCommitReceipt,
+    ) -> None:
+        if self._event_publisher is None:
+            return
+        retryable = receipt.retryable
+        await self._publish(
+            claim,
+            event_type=EventType.JOB_RETRIED if retryable else EventType.JOB_FAILED,
+            payload={
+                "job_id": str(claim.job_id),
+                "case_id": claim.case_id,
+                "attempt_number": claim.attempt_number,
+                "status": receipt.status.value,
+            },
+        )
+        await self._publish_completed(claim, receipt.run_status)
+
+    async def _publish_completed(
+        self,
+        claim: ClaimedJob,
+        run_status: object,
+    ) -> None:
+        value = getattr(run_status, "value", "")
+        if value not in {"succeeded", "partially_succeeded", "failed", "cancelled"}:
+            return
+        await self._publish(
+            claim,
+            event_type=EventType.RUN_COMPLETED,
+            payload={"status": value},
+        )
+
+    async def _publish(
+        self,
+        claim: ClaimedJob,
+        *,
+        event_type: EventType,
+        payload: dict[str, str | int],
+    ) -> None:
+        if self._event_publisher is None:
+            return
+        event = ProgressEvent(
+            event_type=event_type,
+            run_id=claim.run_id,
+            tenant_id=claim.tenant_id,
+            timestamp=datetime.now(UTC),
+            payload=payload,
+        )
+        try:
+            await self._event_publisher.publish(event)
+        except Exception:
+            return
 
 
 async def _execute_with_timeout(

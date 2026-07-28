@@ -9,6 +9,7 @@ from app.domain.evaluation import (
     TargetResult,
     TokenUsage,
 )
+from app.events.models import EventType, ProgressEvent
 from app.jobs.claiming import ClaimedJob
 from app.targets.base import TargetHTTPError
 from app.workers.worker import EvaluationWorker
@@ -92,6 +93,18 @@ class PassThroughLeaseRunner:
     ) -> tuple[TargetResult, int]:
         del context
         return await cast(Any, operation), claim.version
+
+
+class RenewingLeaseRunner(PassThroughLeaseRunner):
+    async def run(
+        self,
+        *,
+        claim: ClaimedJob,
+        context: ExecutionContext,
+        operation: object,
+    ) -> tuple[TargetResult, int]:
+        del context
+        return await cast(Any, operation), claim.version + 3
 
 
 async def test_worker_executes_target_evaluator_and_result_commit_pipeline() -> None:
@@ -187,3 +200,79 @@ async def test_worker_persists_target_failure_instead_of_losing_claim() -> None:
     assert await worker.process_one(worker_id="worker-1") is True
     assert isinstance(failure_committer.failure, TargetHTTPError)
     assert result_committer.committed is False
+
+
+async def test_worker_commits_with_latest_heartbeat_lease_version() -> None:
+    claimed_job = ClaimedJob(
+        job_id=JOB_ID,
+        run_id=RUN_ID,
+        tenant_id=TENANT_ID,
+        case_id="case-1",
+        case_payload={"case_id": "case-1", "question": "q", "metadata": {}},
+        attempt_id=ATTEMPT_ID,
+        attempt_number=1,
+        worker_id="worker-1",
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=30),
+        version=2,
+        target_type="mock",
+        target_config={},
+        target_version="v1",
+        evaluator_type="execution",
+        evaluator_config={},
+        evaluator_version="v1",
+    )
+
+    class LatestVersionCommitter:
+        async def commit_success(self, **kwargs: object) -> None:
+            assert kwargs["lease_version"] == 5
+
+    worker = EvaluationWorker(
+        claimer=SingleClaimer(claimed_job),
+        target_factory=lambda _kind, _config: RecordingTarget(),
+        evaluator_factory=lambda _kind, _config: RecordingEvaluator(),
+        result_committer=LatestVersionCommitter(),
+        failure_committer=RecordingFailureCommitter(),
+        lease_runner=RenewingLeaseRunner(),
+    )
+
+    assert await worker.process_one(worker_id="worker-1") is True
+
+
+async def test_progress_publisher_failure_does_not_fail_completed_job() -> None:
+    claimed_job = ClaimedJob(
+        job_id=JOB_ID,
+        run_id=RUN_ID,
+        tenant_id=TENANT_ID,
+        case_id="case-1",
+        case_payload={"case_id": "case-1", "question": "q", "metadata": {}},
+        attempt_id=ATTEMPT_ID,
+        attempt_number=1,
+        worker_id="worker-1",
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=30),
+        version=2,
+        target_type="mock",
+        target_config={},
+        target_version="v1",
+        evaluator_type="execution",
+        evaluator_config={},
+        evaluator_version="v1",
+    )
+
+    class BrokenPublisher:
+        async def publish(self, event: ProgressEvent) -> bool:
+            assert event.event_type in {EventType.JOB_PROGRESS}
+            raise ConnectionError("redis unavailable")
+
+    committer = RecordingCommitter()
+    worker = EvaluationWorker(
+        claimer=SingleClaimer(claimed_job),
+        target_factory=lambda _kind, _config: RecordingTarget(),
+        evaluator_factory=lambda _kind, _config: RecordingEvaluator(),
+        result_committer=committer,
+        failure_committer=RecordingFailureCommitter(),
+        lease_runner=PassThroughLeaseRunner(),
+        event_publisher=BrokenPublisher(),
+    )
+
+    assert await worker.process_one(worker_id="worker-1") is True
+    assert committer.committed is True

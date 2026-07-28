@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     retry_base_delay_seconds: float = Field(default=1.0, gt=0, le=300)
     retry_max_delay_seconds: float = Field(default=60.0, gt=0, le=3_600)
     retry_jitter_ratio: float = Field(default=0.2, ge=0, le=1)
+    sse_heartbeat_seconds: float = Field(default=15.0, gt=0, le=300)
+    sse_fallback_poll_seconds: float = Field(default=2.0, gt=0, le=300)
 
     @model_validator(mode="after")
     def validate_worker_timing(self) -> "Settings":

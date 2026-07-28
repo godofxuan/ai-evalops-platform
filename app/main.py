@@ -19,6 +19,7 @@ from app.api.errors import (
 )
 from app.api.middleware import RequestContextMiddleware
 from app.api.routes_datasets import router as datasets_router
+from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
 from app.api.routes_runs import router as runs_router
 from app.artifacts.storage import LocalArtifactStore
@@ -32,6 +33,9 @@ from app.datasets.service import (
     SQLAlchemyDatasetService,
 )
 from app.datasets.validation import DatasetValidationError, JSONLValidationLimits
+from app.events.publisher import RedisEventPublisher
+from app.events.sse import RunEventStream
+from app.events.subscriber import RedisEventSubscriber
 from app.health.service import (
     NotConfiguredReadinessProbe,
     ReadinessProbe,
@@ -88,6 +92,15 @@ def create_app(
             repository=SQLAlchemyRunRepository(session_factory),
             artifact_store=artifact_store,
         )
+        application.state.event_publisher = RedisEventPublisher(redis_client)
+        application.state.run_event_stream = RunEventStream(
+            run_service=application.state.run_service,
+            subscriber=RedisEventSubscriber(
+                redis_client,
+                poll_timeout_seconds=runtime_settings.sse_heartbeat_seconds,
+            ),
+            fallback_poll_seconds=runtime_settings.sse_fallback_poll_seconds,
+        )
         application.state.cancellation_service = SQLAlchemyCancellationService(session_factory)
         application.state.redis_client = redis_client
         application.state.readiness_probe = build_infrastructure_readiness_probe(
@@ -113,10 +126,13 @@ def create_app(
     application.state.api_key_lookup = None
     application.state.dataset_service = None
     application.state.run_service = None
+    application.state.event_publisher = None
+    application.state.run_event_stream = None
     application.state.cancellation_service = None
     application.include_router(health_router)
     application.include_router(datasets_router)
     application.include_router(runs_router)
+    application.include_router(events_router)
     application.add_exception_handler(APIError, handle_api_error)
     application.add_exception_handler(DatasetNotFoundError, handle_dataset_not_found)
     application.add_exception_handler(

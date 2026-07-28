@@ -6,7 +6,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import Clock, SystemClock
-from app.domain.enums import AttemptOutcome, JobStatus
+from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult
 from app.domain.job_state_machine import transition_job
 from app.jobs.claiming import ClaimedJob
@@ -35,6 +35,7 @@ class ResultCommitReceipt:
     result_id: UUID
     job_id: UUID
     job_version: int
+    run_status: RunStatus
 
 
 def build_owned_job_for_completion_statement(
@@ -170,7 +171,7 @@ class SQLAlchemyResultCommitter:
                     )
                 )
                 await session.flush()
-                await aggregate_run_in_session(
+                aggregation = await aggregate_run_in_session(
                     session,
                     run_id=run.id,
                     now=now,
@@ -187,6 +188,7 @@ class SQLAlchemyResultCommitter:
             result_id=result_id,
             job_id=claim.job_id,
             job_version=next_version,
+            run_status=aggregation.status,
         )
 
 

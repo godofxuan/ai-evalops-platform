@@ -42,6 +42,7 @@ class ClaimedJob:
     evaluator_type: str
     evaluator_config: dict[str, Any]
     evaluator_version: str
+    run_started: bool = False
 
 
 def validate_claim_request(*, worker_id: str, limit: int) -> None:
@@ -103,6 +104,7 @@ class SQLAlchemyJobClaimer:
                 await session.execute(build_claim_candidates_statement(now=now, limit=limit))
             ).all()
             for job, run in rows:
+                run_started_now = False
                 if job.status is JobStatus.RETRY_WAIT:
                     retry_due = transition_job(
                         JobStatus.RETRY_WAIT,
@@ -175,6 +177,7 @@ class SQLAlchemyJobClaimer:
                         )
                     ).scalar_one_or_none()
                     if updated_run_id is not None:
+                        run_started_now = True
                         session.add(
                             AuditEvent(
                                 tenant_id=run.tenant_id,
@@ -208,6 +211,7 @@ class SQLAlchemyJobClaimer:
                         evaluator_type=run.evaluator_type,
                         evaluator_config=dict(run.evaluator_config_json),
                         evaluator_version=run.evaluator_version,
+                        run_started=run_started_now,
                     )
                 )
         return tuple(claims)

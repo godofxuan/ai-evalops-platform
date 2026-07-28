@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -42,10 +42,13 @@ def build_expired_job_statement(
 @dataclass(frozen=True, slots=True)
 class ReapedJob:
     job_id: UUID
+    run_id: UUID
+    tenant_id: UUID
     previous_worker: str | None
     action: str
     status: JobStatus
     next_attempt_at: datetime | None
+    run_status: RunStatus | None = None
 
 
 class SQLAlchemyJobReaper:
@@ -161,6 +164,8 @@ class SQLAlchemyJobReaper:
                 reaped.append(
                     ReapedJob(
                         job_id=job.id,
+                        run_id=run.id,
+                        tenant_id=run.tenant_id,
                         previous_worker=previous_worker,
                         action=action,
                         status=target_status,
@@ -168,14 +173,16 @@ class SQLAlchemyJobReaper:
                     )
                 )
             await session.flush()
+            run_statuses: dict[UUID, RunStatus] = {}
             for run_id in sorted(touched_run_ids, key=str):
-                await aggregate_run_in_session(
+                aggregation = await aggregate_run_in_session(
                     session,
                     run_id=run_id,
                     now=now,
                     actor=self._reaper_id,
                 )
-        return tuple(reaped)
+                run_statuses[run_id] = aggregation.status
+        return tuple(replace(item, run_status=run_statuses[item.run_id]) for item in reaped)
 
 
 def _reaper_transitions(
