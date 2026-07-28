@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Header, Request, status
 
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
+from app.jobs.cancellation import CancellationService
 from app.runs.schemas import RunCreate, RunRead
 from app.runs.service import RunService
 
@@ -47,3 +48,19 @@ async def get_run(
     if service is None:
         raise RuntimeError("run service is not configured")
     return await service.get_run(principal=principal, run_id=run_id)
+
+
+@router.post(
+    "/{run_id}/cancel",
+    response_model=RunRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def cancel_run(
+    run_id: UUID,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> RunRead:
+    service = cast(CancellationService | None, request.app.state.cancellation_service)
+    if service is None:
+        raise RuntimeError("cancellation service is not configured")
+    return await service.cancel_run(principal=principal, run_id=run_id)

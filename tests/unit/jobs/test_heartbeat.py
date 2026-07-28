@@ -35,11 +35,14 @@ def test_heartbeat_is_a_versioned_owner_guarded_conditional_update() -> None:
     )
 
     assert "UPDATE evaluation_jobs SET" in sql
-    assert "evaluation_jobs.status = 'running'" in sql
+    assert "evaluation_jobs.status IN ('running', 'cancelling')" in sql
     assert "evaluation_jobs.lease_owner = 'worker-1'" in sql
     assert "evaluation_jobs.version = 7" in sql
     assert "evaluation_jobs.lease_expires_at >" in sql
-    assert "RETURNING evaluation_jobs.version, evaluation_jobs.lease_expires_at" in sql
+    assert (
+        "RETURNING evaluation_jobs.version, evaluation_jobs.lease_expires_at, "
+        "evaluation_jobs.cancel_requested_at" in sql
+    )
 
 
 @pytest.mark.parametrize(

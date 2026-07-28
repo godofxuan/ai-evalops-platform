@@ -155,6 +155,20 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                 assert own_get.status_code == 200
                 assert cross_get.status_code == 404
 
+                cancelled = await client.post(
+                    f"/api/v1/runs/{run_id}/cancel",
+                    headers=headers_a,
+                )
+                replayed_cancel = await client.post(
+                    f"/api/v1/runs/{run_id}/cancel",
+                    headers=headers_a,
+                )
+                assert cancelled.status_code == 202
+                assert cancelled.json()["status"] == "cancelled"
+                assert cancelled.json()["cancelled_jobs"] == 2
+                assert replayed_cancel.status_code == 202
+                assert replayed_cancel.json()["status"] == "cancelled"
+
             async with session_factory() as session:
                 run_count = await session.scalar(
                     select(func.count(EvaluationRun.id)).where(
@@ -163,9 +177,7 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                     )
                 )
                 job_count = await session.scalar(
-                    select(func.count(EvaluationJob.id)).where(
-                        EvaluationJob.run_id == run_id
-                    )
+                    select(func.count(EvaluationJob.id)).where(EvaluationJob.run_id == run_id)
                 )
                 case_ids = (
                     (
@@ -187,9 +199,7 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                     await session.execute(
                         delete(EvaluationJob).where(EvaluationJob.run_id == run_id)
                     )
-                    await session.execute(
-                        delete(EvaluationRun).where(EvaluationRun.id == run_id)
-                    )
+                    await session.execute(delete(EvaluationRun).where(EvaluationRun.id == run_id))
                 if dataset_id is not None:
                     await session.execute(
                         delete(DatasetVersion).where(DatasetVersion.dataset_id == dataset_id)

@@ -279,3 +279,44 @@ async def test_create_run_maps_invalid_target_configuration_to_422() -> None:
             "message": "Target configuration is invalid.",
         }
     }
+
+
+class RecordingCancellationService:
+    def __init__(self) -> None:
+        self.called_with: tuple[Principal, UUID] | None = None
+
+    async def cancel_run(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+    ) -> RunRead:
+        self.called_with = (principal, run_id)
+        return RunRead(
+            id=run_id,
+            dataset_version_id=UUID("00000000-0000-0000-0000-000000000401"),
+            status="cancelling",
+            total_jobs=2,
+            succeeded_jobs=0,
+            failed_jobs=0,
+            cancelled_jobs=1,
+            created_at=datetime(2026, 7, 29, 12, 0, tzinfo=UTC),
+            started_at=datetime(2026, 7, 29, 12, 1, tzinfo=UTC),
+            finished_at=None,
+        )
+
+
+async def test_cancel_run_uses_server_principal_and_returns_current_snapshot() -> None:
+    run_id = UUID("00000000-0000-0000-0000-000000000601")
+    service = RecordingCancellationService()
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.cancellation_service = service
+    transport = ASGITransport(app=application)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/api/v1/runs/{run_id}/cancel")
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "cancelling"
+    assert service.called_with == (PRINCIPAL, run_id)

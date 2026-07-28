@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from app.core.config import Settings
 
 
@@ -32,3 +35,12 @@ def test_settings_expose_bounded_dataset_upload_limits(monkeypatch) -> None:
     assert settings.dataset_max_file_bytes == 2048
     assert settings.dataset_max_cases == 12
     assert settings.dataset_max_line_bytes == 512
+
+
+def test_worker_heartbeat_must_be_shorter_than_lease() -> None:
+    with pytest.raises(ValidationError, match="heartbeat interval"):
+        Settings(
+            _env_file=None,
+            worker_lease_seconds=10,
+            worker_heartbeat_seconds=10,
+        )

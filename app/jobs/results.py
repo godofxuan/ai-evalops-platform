@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, select, update
+from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import Clock, SystemClock
@@ -19,6 +19,7 @@ from app.persistence.orm_models import (
     EvaluationRun,
     JobAttempt,
 )
+from app.runs.aggregation import aggregate_run_in_session
 
 
 class AttemptNotActiveError(RuntimeError):
@@ -168,16 +169,13 @@ class SQLAlchemyResultCommitter:
                         },
                     )
                 )
-                await session.execute(
-                    update(EvaluationRun)
-                    .where(EvaluationRun.id == run.id)
-                    .values(
-                        succeeded_jobs=EvaluationRun.succeeded_jobs + 1,
-                        version=EvaluationRun.version + 1,
-                    )
-                    .execution_options(synchronize_session=False)
-                )
                 await session.flush()
+                await aggregate_run_in_session(
+                    session,
+                    run_id=run.id,
+                    now=now,
+                    actor=claim.worker_id,
+                )
         except IntegrityError as error:
             if _constraint_name(error) in {
                 "uq_case_results_job_id",

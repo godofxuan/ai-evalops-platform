@@ -37,6 +37,7 @@ from app.health.service import (
     ReadinessProbe,
     build_infrastructure_readiness_probe,
 )
+from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
 from app.runs.repository import SQLAlchemyRunRepository
@@ -87,6 +88,7 @@ def create_app(
             repository=SQLAlchemyRunRepository(session_factory),
             artifact_store=artifact_store,
         )
+        application.state.cancellation_service = SQLAlchemyCancellationService(session_factory)
         application.state.redis_client = redis_client
         application.state.readiness_probe = build_infrastructure_readiness_probe(
             settings=runtime_settings,
@@ -111,6 +113,7 @@ def create_app(
     application.state.api_key_lookup = None
     application.state.dataset_service = None
     application.state.run_service = None
+    application.state.cancellation_service = None
     application.include_router(health_router)
     application.include_router(datasets_router)
     application.include_router(runs_router)

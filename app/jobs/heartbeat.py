@@ -24,6 +24,7 @@ class HeartbeatReceipt:
     worker_id: str
     version: int
     lease_expires_at: datetime
+    cancellation_requested: bool
 
 
 def validate_heartbeat_request(
@@ -52,7 +53,7 @@ def build_heartbeat_statement(
         update(EvaluationJob)
         .where(
             EvaluationJob.id == job_id,
-            EvaluationJob.status == JobStatus.RUNNING,
+            EvaluationJob.status.in_((JobStatus.RUNNING, JobStatus.CANCELLING)),
             EvaluationJob.lease_owner == worker_id,
             EvaluationJob.version == expected_version,
             EvaluationJob.lease_expires_at.is_not(None),
@@ -63,7 +64,11 @@ def build_heartbeat_statement(
             lease_expires_at=now + lease_duration,
             version=EvaluationJob.version + 1,
         )
-        .returning(EvaluationJob.version, EvaluationJob.lease_expires_at)
+        .returning(
+            EvaluationJob.version,
+            EvaluationJob.lease_expires_at,
+            EvaluationJob.cancel_requested_at,
+        )
     )
 
 
@@ -113,4 +118,5 @@ class SQLAlchemyHeartbeatService:
             worker_id=worker_id,
             version=row[0],
             lease_expires_at=row[1],
+            cancellation_requested=row[2] is not None,
         )

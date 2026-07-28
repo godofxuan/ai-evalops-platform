@@ -8,12 +8,14 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
 from app.core.config import Settings
-from app.domain.enums import ArtifactType, JobStatus, RunStatus
+from app.domain.enums import ArtifactType, AttemptOutcome, JobStatus, RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult, TokenUsage
 from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
+from app.jobs.reaper import SQLAlchemyJobReaper
 from app.jobs.results import SQLAlchemyResultCommitter
+from app.jobs.retry_policy import RetryPolicy
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.orm_models import (
     APIKey,
@@ -35,6 +37,11 @@ class FixedClock:
 
     def now(self) -> datetime:
         return self._value
+
+
+class FixedRandom:
+    def random(self) -> float:
+        return 0.5
 
 
 @pytest.mark.integration
@@ -210,6 +217,51 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 select(func.count(CaseResult.id)).where(CaseResult.job_id == first.job_id)
             )
         assert result_count == 1
+
+        expired_at = now + timedelta(seconds=31)
+        retry_policy = RetryPolicy(
+            base_delay_seconds=1,
+            max_delay_seconds=60,
+            jitter_ratio=0,
+            random_source=FixedRandom(),
+        )
+        reaper_a = SQLAlchemyJobReaper(
+            session_factory,
+            retry_policy=retry_policy,
+            clock=FixedClock(expired_at),
+            reaper_id="reaper-a",
+        )
+        reaper_b = SQLAlchemyJobReaper(
+            session_factory,
+            retry_policy=retry_policy,
+            clock=FixedClock(expired_at),
+            reaper_id="reaper-b",
+        )
+        reaped_batches = await asyncio.gather(
+            reaper_a.reap(limit=20),
+            reaper_b.reap(limit=20),
+        )
+        reaped = tuple(item for batch in reaped_batches for item in batch)
+        assert len(reaped) == 19
+        assert len({item.job_id for item in reaped}) == 19
+        assert all(item.status is JobStatus.RETRY_WAIT for item in reaped)
+        async with session_factory() as session:
+            retry_wait_count = await session.scalar(
+                select(func.count(EvaluationJob.id)).where(
+                    EvaluationJob.run_id == run_id,
+                    EvaluationJob.status == JobStatus.RETRY_WAIT,
+                )
+            )
+            expired_attempt_count = await session.scalar(
+                select(func.count(JobAttempt.id))
+                .join(EvaluationJob)
+                .where(
+                    EvaluationJob.run_id == run_id,
+                    JobAttempt.outcome == AttemptOutcome.LEASE_EXPIRED,
+                )
+            )
+        assert retry_wait_count == 19
+        assert expired_attempt_count == 19
     finally:
         async with session_factory.begin() as session:
             await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id))

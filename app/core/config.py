@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,3 +38,17 @@ class Settings(BaseSettings):
     worker_lease_seconds: int = Field(default=30, ge=5, le=3_600)
     worker_heartbeat_seconds: int = Field(default=10, ge=1, le=1_200)
     worker_claim_batch_size: int = Field(default=1, ge=1, le=100)
+    worker_poll_seconds: float = Field(default=0.5, gt=0, le=60)
+    reaper_interval_seconds: float = Field(default=5.0, gt=0, le=300)
+    reaper_batch_size: int = Field(default=100, ge=1, le=1_000)
+    retry_base_delay_seconds: float = Field(default=1.0, gt=0, le=300)
+    retry_max_delay_seconds: float = Field(default=60.0, gt=0, le=3_600)
+    retry_jitter_ratio: float = Field(default=0.2, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_worker_timing(self) -> "Settings":
+        if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
+            raise ValueError("worker heartbeat interval must be shorter than lease")
+        if self.retry_base_delay_seconds > self.retry_max_delay_seconds:
+            raise ValueError("retry base delay must not exceed maximum delay")
+        return self
