@@ -1,6 +1,6 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库只完成 **Phase 0 工程底座**，尚未实现租户、数据集、Run、Job 或任务执行。
+多租户异步 AI 评测与任务编排平台。当前仓库完成 **Phase 0 工程底座** 与 **Phase 1 身份和数据集**；Run、Job 和任务执行仍未实现。
 
 ## 业务问题
 
@@ -31,7 +31,18 @@ Phase 0 已建立：
 - 单元/API/真实服务集成测试合同；
 - 非 root Docker 镜像、完整 Compose 拓扑和 CI 基础。
 
-Worker 和 Reaper 在 Phase 0 只维持进程生命周期，并明确记录 `capability=lifecycle_only`。它们不会领取或回收任务。
+Phase 1 已建立：
+
+- tenant 与只显示一次的 scrypt API Key；
+- revoked、expired、disabled tenant 和认证并发状态复核；
+- Principal 服务端派生与统一 401；
+- tenant-scoped Dataset create/get；
+- 有界 UTF-8 JSONL 校验与不可变 Dataset Version；
+- tenant-owned artifact 元数据与 SHA-256 内容寻址物理存储；
+- 原子发布、物理去重、落盘摘要确认和临时文件清理；
+- Phase 1 Alembic migration、运维脚本与真实 PostgreSQL 集成测试合同。
+
+Worker 和 Reaper 当前仍只维持进程生命周期，并明确记录 `capability=lifecycle_only`。它们不会领取或回收任务。
 
 ## 架构骨架
 
@@ -39,12 +50,18 @@ Worker 和 Reaper 在 Phase 0 只维持进程生命周期，并明确记录 `cap
 Client
   |
   v
-FastAPI API ---- readiness ---- PostgreSQL
-     |               +-------- Redis
-     |               +-------- artifact directory
-     |               +-------- Alembic revision
+FastAPI API
      |
-     +---- structured JSON logs + request_id
+     +---- Bearer API Key ---- tenant Principal
+     |                              |
+     |                              +---- Dataset / immutable version ---- PostgreSQL
+     |                                                       |
+     |                                                       +---- artifact metadata
+     |                                                               |
+     |                                                               +---- SHA-256 local storage
+     |
+     +---- readiness ---- PostgreSQL / Redis / artifact directory / Alembic
+     +---- structured JSON logs + request_id + tenant context
 
 Worker process ---- lifecycle only
 Reaper process ---- lifecycle only
@@ -52,7 +69,7 @@ Reaper process ---- lifecycle only
 
 PostgreSQL 将是后续领域状态的最终事实来源。Redis 只承担可丢失的实时能力，不能决定最终 Run/Job 结果。
 
-更详细的阶段边界见 [项目范围](docs/00_project_scope.md) 和 [架构说明](docs/01_architecture.md)。
+更详细的阶段边界见 [项目范围](docs/00_project_scope.md)、[架构说明](docs/01_architecture.md)、[Phase 1 领域模型](docs/02_domain_model.md)和[安全边界](docs/08_security_boundaries.md)。
 
 ## 快速启动
 
@@ -65,10 +82,13 @@ uv python install 3.12
 uv sync --locked --all-groups
 cp .env.example .env
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload \
+  --loop app.core.event_loop:create_psycopg_compatible_event_loop
 ```
 
 上述 Alembic 和 readiness 命令要求 `.env` 指向真实 PostgreSQL/Redis。只访问 liveness 不会主动连接外部服务：
+
+Uvicorn 显式使用项目的 Selector loop factory，是因为 psycopg async 在 Windows 不兼容系统默认的 Proactor loop。Alembic、CLI、运维脚本和 async pytest 也使用同一合同，避免“测试能跑、真实入口不能连接”的差异。
 
 ```bash
 curl http://127.0.0.1:8000/health/live
@@ -79,6 +99,36 @@ curl http://127.0.0.1:8000/health/live
 ```json
 {"status":"alive"}
 ```
+
+创建开发 tenant/API Key（明文只在成功提交后显示一次）：
+
+```bash
+uv run python -m scripts.create_dev_api_key \
+  --tenant-slug demo \
+  --tenant-name "Demo tenant" \
+  --key-name local
+```
+
+撤销时只传安全前缀，不要把完整密钥放入命令历史：
+
+```bash
+uv run python -m scripts.revoke_api_key evk_001122334455
+```
+
+用返回的密钥创建 dataset 并上传 version：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/datasets \
+  -H "Authorization: Bearer $EVALOPS_DEMO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"rag-regression","description":"Regression cases"}'
+
+curl -X POST http://127.0.0.1:8000/api/v1/datasets/<dataset-id>/versions \
+  -H "Authorization: Bearer $EVALOPS_DEMO_API_KEY" \
+  -F "file=@cases.jsonl;type=application/x-ndjson"
+```
+
+不要把真实 API Key 写入 `.env.example`、源码、日志或 shell 脚本。上面的环境变量名只是调用示例。
 
 ### Docker Compose
 
@@ -121,6 +171,8 @@ docker compose -f deploy/compose.yaml down --volumes
 
 数据库和 Redis URL 使用 Pydantic `SecretStr`，日志处理器还会对 `api_key`、`authorization`、`database_url`、`redis_url`、`password`、`secret`、`token` 等字段递归脱敏。脱敏依赖正确字段命名，不能识别被错误放入普通文本字段的任意秘密。
 
+Dataset 默认限制为 10 MiB 文件、10,000 个 case、1 MiB 单行，可分别通过 `EVALOPS_DATASET_MAX_FILE_BYTES`、`EVALOPS_DATASET_MAX_CASES` 和 `EVALOPS_DATASET_MAX_LINE_BYTES` 下调或在受控范围内调整。
+
 ## 测试与质量命令
 
 ```bash
@@ -128,6 +180,7 @@ uv lock --check
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy app
+uv run mypy scripts
 uv run pytest -m "not integration"
 ```
 
@@ -148,9 +201,17 @@ uv run pytest -m integration
 
 ## 数据模型与状态机
 
-Phase 0 只有 Alembic revision 基线，没有领域表。tenant、API Key、dataset、Run、Job、attempt、result 等表会在相应阶段通过行为合同和测试加入。
+Phase 1 migration 创建五张领域表：
 
-Run/Job 显式状态机尚未实现。`app/domain/job_state_machine.py` 是用户后续亲自实现的学习模块，Phase 0 没有提前创建或填充它。
+- `tenants`；
+- `api_keys`（只含 prefix 与 scrypt hash，不含明文）；
+- `datasets`；
+- `artifacts`（tenant-owned 元数据）；
+- `dataset_versions`（`dataset_id + version` 和 `dataset_id + sha256` 唯一）。
+
+物理 artifact 可按 SHA-256 跨 tenant 复用，但数据库元数据保留 tenant 所有权。所有已实现的 dataset/version 查询同时过滤服务端 tenant 与资源 ID；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
+
+Run/Job 显式状态机尚未实现。`app/domain/job_state_machine.py` 是用户后续亲自实现的学习模块，当前没有提前创建或填充它。
 
 ## Worker、崩溃恢复与幂等
 
@@ -163,40 +224,46 @@ Run/Job 显式状态机尚未实现。`app/domain/job_state_machine.py` 是用�
 
 ## 实验结果
 
-Phase 0 的本地命令、RED/GREEN 证据和环境限制记录在 [逐步执行日志](docs/phase_0_execution_log.md)。阶段汇总见 [工程日志](docs/engineering_journal.md)。
+Phase 0 与 Phase 1 的本地命令、RED/GREEN 证据和环境限制分别记录在 [Phase 0 日志](docs/phase_0_execution_log.md) 和 [Phase 1 日志](docs/phase_1_execution_log.md)。阶段汇总见 [工程日志](docs/engineering_journal.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
-2026-07-28 本机结果：
+2026-07-29 Phase 1 本机最终结果：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
-| lock / format / lint / mypy | 全部通过 |
-| pytest | 9 passed，1 integration skipped |
-| Alembic | head 与 offline SQL 生成通过 |
-| 独立 Uvicorn liveness | HTTP 200，含 request ID |
-| 无依赖时 readiness | HTTP 503，稳定错误码，无连接串 |
-| Compose YAML / CI YAML | 静态解析通过 |
-| Docker build / Compose up | 未运行；本机无 `docker` 命令 |
+| lock | `uv lock --check` 通过；48 packages |
+| format / lint | 64 files already formatted；All checks passed |
+| mypy | app 32 files、scripts 3 files，均无问题 |
+| pytest 非集成 | 71 passed，2 deselected |
+| pytest 全量 | 71 passed，2 integration skipped |
+| Alembic | 唯一 head 与 offline PostgreSQL SQL 通过；online `current` 因本机 PostgreSQL 连接超时而未通过 |
+| 独立 Uvicorn smoke | liveness HTTP 200、UUID `x-request-id`、四条 Phase 1 OpenAPI 路由 |
+| readiness | 单元/API 合同通过；真实 PostgreSQL/Redis integration skipped |
+| Compose YAML / CI YAML | PyYAML 静态解析通过 |
+| Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
 
 ## 当前限制
 
-- 没有身份认证和多租户隔离；
-- 没有数据集上传或 immutable version；
+- tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
+- API Key 认证尚无限流/容量验证，不声称抵御 DoS；
+- 本地 artifact storage 不适合多 API 主机共享，尚无 artifact GC；
+- JSONL 第一版有界读入内存，不是流式 parser；
 - 没有 Run/Job API；
 - 没有任务队列、Worker 业务、Reaper 业务或取消；
 - 没有 Target/Evaluator；
 - 没有 SSE、运行比较、人工评审、Prometheus 指标或 OpenTelemetry trace；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
-## 面试展示路径（Phase 0）
+## 面试展示路径（Phase 1）
 
-1. 解释 liveness 与 readiness 为什么必须分开；
-2. 展示 readiness 如何并发探测四个依赖、限制超时并隐藏异常细节；
-3. 展示 lifespan 如何创建和关闭异步客户端；
-4. 展示为什么 Alembic 只有空基线而没有提前创建领域表；
-5. 展示 JSON 日志、request ID 和脱敏边界；
-6. 展示真实 PostgreSQL/Redis 集成测试与“本机跳过不算通过”的证据；
-7. 说明 Worker/Reaper 为什么只是诚实的生命周期骨架。
+1. 解释 API Key 为什么只保存版本化 scrypt hash，以及 unknown prefix 为什么执行 dummy hash；
+2. 展示 Principal 如何从服务端 tenant 关联派生，请求体 `tenant_id` 如何被拒绝；
+3. 展示 dataset/version SQL 如何强制 tenant 条件，并让跨 tenant 与不存在共享 404；
+4. 展示 JSONL 的有界读取、逐行错误定位、case ID 唯一和敏感内容不回显；
+5. 展示 artifact 的 SHA 路径、临时文件、fsync、发布前摘要确认、硬链接原子发布与物理去重；
+6. 展示 dataset 行锁如何串行化 version 分配，以及为何验证/落盘不放进长数据库事务；
+7. 展示真实 PostgreSQL 集成合同与“本机 skip 不算通过”的证据；
+8. 说明 Run/Job、Worker/Reaper、幂等与崩溃恢复为何仍严格留在后续阶段。
