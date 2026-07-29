@@ -78,14 +78,32 @@ jobs:
       - name: Apply migrations
         run: uv run --no-sync alembic upgrade head
 
-      - name: Run real PostgreSQL and Redis integration tests
-        run: uv run --no-sync pytest -m integration
+      - name: Integration - concurrent job claiming and lease fencing
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest tests/concurrency/test_job_claiming.py
 
-      - name: Run controlled concurrency tests when introduced
-        if: ${{ hashFiles('tests/concurrency/**/*.py') != '' }}
-        run: uv run --no-sync pytest tests/concurrency
+      - name: Integration - blinded human review
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest tests/integration/test_human_reviews.py
+
+      - name: Integration - tenant identity and immutable datasets
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest tests/integration/test_identity_and_datasets.py
+
+      - name: Integration - readiness dependencies
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest tests/integration/test_readiness.py
+
+      - name: Integration - Redis event isolation
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest tests/integration/test_redis_events.py
+
+      - name: Integration - Run idempotency and tenant boundary
+        if: ${{ !cancelled() }}
+        run: uv run --no-sync pytest tests/integration/test_run_idempotency.py
 
       - name: Build application image
+        if: ${{ !cancelled() }}
         run: docker build --tag ai-evalops-platform:ci .
 
   compose-smoke:
@@ -94,8 +112,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Build the complete current topology
+        run: docker compose -f deploy/compose.yaml build
+
       - name: Start the complete current topology
-        run: docker compose -f deploy/compose.yaml up --build --wait --wait-timeout 180
+        run: docker compose -f deploy/compose.yaml up --detach --wait --wait-timeout 180
 
       - name: Verify readiness through the published API port
         run: curl --fail --silent --show-error http://127.0.0.1:8000/health/ready
