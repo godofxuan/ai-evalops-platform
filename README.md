@@ -1,7 +1,7 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–7：工程底座、身份与不可变
-数据集、幂等 Run、租约领取、自动评测、恢复取消、实时事件，以及结果分析和比较。
+多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–8：工程底座、身份与不可变
+数据集、异步评测与恢复、实时事件、结果比较，以及双人盲评和分歧裁决。
 
 ## 业务问题
 
@@ -93,6 +93,15 @@ Phase 7 已建立：
 - RunMetric 持久化与 Run GET 指标摘要；
 - metrics、failure cases、summary report JSON artifact；
 - 同 Dataset Version 比较与跨版本 intersection warning/diff。
+
+Phase 8 已建立：
+
+- 默认关闭、服务端派生的 human reviewer credential 权限；
+- deterministic sample 与不含 machine metric 的 blind packet；
+- 两个不同 reviewer 的 immutable submission；
+- Task row lock 保护的 agreed/disputed 转换；
+- 第三 reviewer adjudication；
+- agreement、Cohen’s kappa 与 human review packet artifact。
 
 ## 架构骨架
 
@@ -280,6 +289,13 @@ Phase 7 migration 新增：
 - `artifacts.run_id` 与报告类型；
 - `run_metrics`（`run_id + metric_name` 唯一）。
 
+Phase 8 migration 新增：
+
+- `api_keys.can_review`（默认 false）；
+- `human_review_tasks`；
+- `human_review_submissions`；
+- `human_review_adjudications`。
+
 物理 artifact 可按 SHA-256 跨 tenant 复用，但数据库元数据保留 tenant 所有权。所有已实现的 dataset/version 查询同时过滤服务端 tenant 与资源 ID；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
 
 Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
@@ -287,6 +303,7 @@ Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则
 
 实时事件和故障降级合同见 [SSE 合同](docs/07_realtime_events.md)。
 结果、指标和比较语义见 [结果分析合同](docs/10_results_metrics_and_comparison.md)。
+人工评审信任和盲化边界见 [人工评审合同](docs/11_human_review.md)。
 
 ## Worker、崩溃恢复与幂等
 
@@ -304,14 +321,15 @@ at-least-once 执行和崩溃恢复的实验结论。
 
 ## 实验结果
 
-Phase 0–7 的本地命令、RED/GREEN 证据和环境限制分别记录在
+Phase 0–8 的本地命令、RED/GREEN 证据和环境限制分别记录在
 [Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)、
 [Phase 2 日志](docs/phase_2_execution_log.md)和
 [Phase 3 日志](docs/phase_3_execution_log.md)和
 [Phase 4 日志](docs/phase_4_execution_log.md)和
 [Phase 5 日志](docs/phase_5_execution_log.md)和
 [Phase 6 日志](docs/phase_6_execution_log.md)和
-[Phase 7 日志](docs/phase_7_execution_log.md)。幂等细节见
+[Phase 7 日志](docs/phase_7_execution_log.md)和
+[Phase 8 日志](docs/phase_8_execution_log.md)。幂等细节见
 [Run 幂等合同](docs/04_idempotency_contract.md)，领取细节见
 [Worker 租约合同](docs/05_worker_lease_contract.md)，阶段汇总见
 [工程日志](docs/engineering_journal.md)。
@@ -320,17 +338,17 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
-2026-07-29 Phase 7 本机阶段结果：
+2026-07-29 Phase 8 本机阶段结果：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
 | lock | `uv lock --check` 通过 |
-| format / lint | Phase 7 文件已格式化；All checks passed |
-| mypy | app 78 files，无问题 |
-| pytest 非集成 | 201 passed，5 deselected |
-| Phase 7 PostgreSQL 扩展合同 | 1 skipped；本机未启用 migrated PostgreSQL |
-| Alembic | 唯一 head `20260729_0006`；offline PostgreSQL SQL 通过 |
+| format / lint | Phase 8 文件已格式化；All checks passed |
+| mypy | app 86 files，无问题 |
+| pytest 非集成 | 210 passed，6 deselected |
+| Phase 8 PostgreSQL review contract | 1 skipped；本机未启用 migrated PostgreSQL |
+| Alembic | 唯一 head `20260729_0007`；offline PostgreSQL SQL 通过 |
 | Compose YAML / CI YAML | PyYAML 静态解析通过 |
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
@@ -344,13 +362,15 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
 - HTTP SSRF 检查仍有 DNS check/connect TOCTOU，需要部署级 egress 控制；
-- 没有人工评审、Prometheus 指标或 OpenTelemetry trace；
+- 没有 Prometheus 指标或 OpenTelemetry trace；
+- can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
+- review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；
 - 任意 JSONB metric 排序没有表达式索引，尚无大 Run query plan/容量证据；
 - artifact content store 尚无 orphan GC；
 - SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
-## 面试展示路径（Phase 7）
+## 面试展示路径（Phase 8）
 
 1. 解释 API Key 为什么只保存版本化 scrypt hash，以及 unknown prefix 为什么执行 dummy hash；
 2. 展示 Principal 如何从服务端 tenant 关联派生，请求体 `tenant_id` 如何被拒绝；
@@ -376,3 +396,7 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 22. 展示 bool/NaN 为什么不能进入自动指标，p95 采用哪种插值定义。
 23. 展示跨 Dataset Version 比较为何只对 case_id 交集做 diff。
 24. 展示 Alembic `op.f` 如何避免 naming convention 重写已有约束名。
+25. 解释 can_review 能防什么，以及为什么不能声称它证明了“操作者一定是真人”。
+26. 展示 candidate SQL、own-submission join 和 packet artifact 的三层盲化。
+27. 展示为什么 task/reviewer unique 仍需要 Task `FOR UPDATE`。
+28. 解释 observed/expected agreement、kappa 和单类别分母为零。

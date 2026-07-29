@@ -717,3 +717,48 @@ Python 与配置
 
 完整过程见 `docs/phase_7_execution_log.md` 与
 `docs/10_results_metrics_and_comparison.md`。
+
+## 2026-07-29 — Phase 8：双人盲评与分歧裁决（完成）
+
+### 基本信息
+
+- 起始 SHA：`e944c53`
+- 实现提交：`c487f78`
+- 目标：reviewer credential、blinded Task、immutable double submission、third adjudication、
+  agreement 和 Cohen’s kappa。
+
+### 设计与修改
+
+- APIKey.can_review 默认 false，从数据库认证记录派生。
+- Task packet 不选 machine metrics；Reviewer 查询只 join 自己的 Submission。
+- Task `FOR UPDATE` 串行化不同 reviewer 的并发提交。
+- 两份完整 labels 相同/不同决定 agreed/disputed。
+- adjudicator 必须是第三个 reviewer key，原 submission 不修改。
+- human_review_packet content-addressed artifact 也只含盲化 packet。
+- kappa 分母为零时返回 null。
+
+### 关键问题
+
+- unique(task, reviewer) 不足以限制三个不同 reviewer；加入 Task row lock。
+- SQLAlchemy outer join/JSONB stubs 需要局部运行时收窄，未关闭 strict mypy。
+- 初版只有 artifact type 没有生成路径；补 RED serializer 和 production metadata。
+- can_review 是管理员信任边界，不是自然人技术证明。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| 非集成全量 | 210 passed，6 deselected |
+| 真实 PostgreSQL review contract | 1 skipped |
+| Ruff | All checks passed |
+| mypy app+scripts | app 86 source files，无问题 |
+| Alembic | head `20260729_0007`，offline SQL 通过 |
+
+### 未解决
+
+- 没有真人身份认证、reviewer 培训或 inter-rater 质量流程。
+- deterministic sample 会先读入全部成功候选，大 Run 需要数据库级 sampling。
+- Task 和 packet artifact 是可重试两步，不是跨数据库/文件系统原子事务。
+- 真实并发合同本机 skipped，不声称生产级。
+
+完整过程见 `docs/phase_8_execution_log.md` 与 `docs/11_human_review.md`。
