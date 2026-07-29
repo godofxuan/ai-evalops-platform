@@ -246,6 +246,43 @@ async def test_create_run_replays_same_request_without_recreating_jobs() -> None
     assert replayed.total_jobs == 2
 
 
+async def test_get_run_returns_persisted_metric_summary() -> None:
+    snapshot = RunSnapshot(
+        id=RUN_ID,
+        dataset_version_id=DATASET_VERSION_ID,
+        request_hash="a" * 64,
+        status=RunStatus.SUCCEEDED,
+        total_jobs=2,
+        succeeded_jobs=2,
+        failed_jobs=0,
+        cancelled_jobs=0,
+        created_at=datetime(2026, 7, 29, 13, 0, tzinfo=UTC),
+        started_at=datetime(2026, 7, 29, 13, 1, tzinfo=UTC),
+        finished_at=datetime(2026, 7, 29, 13, 2, tzinfo=UTC),
+        metrics={"success_rate": 1.0, "latency.p95_ms": 42.0},
+    )
+
+    class MetricsRunRepository(ReplayRunRepository):
+        async def get_run(
+            self,
+            *,
+            tenant_id: UUID,
+            run_id: UUID,
+        ) -> RunSnapshot:
+            assert tenant_id == TENANT_ID
+            assert run_id == RUN_ID
+            return snapshot
+
+    service = SQLAlchemyRunService(
+        repository=MetricsRunRepository(snapshot),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+    )
+
+    result = await service.get_run(principal=PRINCIPAL, run_id=RUN_ID)
+
+    assert result.metrics == {"success_rate": 1.0, "latency.p95_ms": 42.0}
+
+
 async def test_create_run_rejects_same_key_with_different_request() -> None:
     snapshot = RunSnapshot(
         id=RUN_ID,

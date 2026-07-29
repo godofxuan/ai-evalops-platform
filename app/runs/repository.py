@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
@@ -15,6 +15,7 @@ from app.persistence.orm_models import (
     DatasetVersion,
     EvaluationJob,
     EvaluationRun,
+    RunMetric,
 )
 
 
@@ -59,6 +60,7 @@ class RunSnapshot:
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    metrics: dict[str, Any] = field(default_factory=dict)
 
 
 class RunRepository(Protocol):
@@ -238,10 +240,29 @@ class SQLAlchemyRunRepository:
             run = (
                 await session.execute(build_get_run_statement(tenant_id, run_id))
             ).scalar_one_or_none()
-        return None if run is None else _snapshot(run)
+            if run is None:
+                return None
+            metric_rows = (
+                await session.execute(
+                    select(
+                        RunMetric.metric_name,
+                        RunMetric.metric_value,
+                        RunMetric.metric_json,
+                    ).where(RunMetric.run_id == run_id)
+                )
+            ).all()
+        metrics = {
+            name: value if value is not None else dict(details)
+            for name, value, details in metric_rows
+        }
+        return _snapshot(run, metrics=metrics)
 
 
-def _snapshot(run: EvaluationRun) -> RunSnapshot:
+def _snapshot(
+    run: EvaluationRun,
+    *,
+    metrics: dict[str, Any] | None = None,
+) -> RunSnapshot:
     return RunSnapshot(
         id=run.id,
         dataset_version_id=run.dataset_version_id,
@@ -254,6 +275,7 @@ def _snapshot(run: EvaluationRun) -> RunSnapshot:
         created_at=run.created_at,
         started_at=run.started_at,
         finished_at=run.finished_at,
+        metrics={} if metrics is None else metrics,
     )
 
 

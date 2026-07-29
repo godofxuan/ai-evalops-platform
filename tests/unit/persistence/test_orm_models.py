@@ -11,6 +11,7 @@ from app.persistence.orm_models import (
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
+    RunMetric,
 )
 
 
@@ -27,7 +28,7 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
-def test_orm_metadata_has_only_tables_introduced_through_phase_4() -> None:
+def test_orm_metadata_has_tables_introduced_through_phase_7() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
         "artifacts",
@@ -38,6 +39,7 @@ def test_orm_metadata_has_only_tables_introduced_through_phase_4() -> None:
         "evaluation_jobs",
         "evaluation_runs",
         "job_attempts",
+        "run_metrics",
         "tenants",
     }
 
@@ -72,13 +74,21 @@ def test_artifact_metadata_is_tenant_owned_while_storage_path_can_be_shared() ->
         "media_type",
         "byte_size",
         "storage_path",
+        "run_id",
     } <= columns
     assert "size_bytes" not in columns
     assert foreign_key_targets(Artifact.__table__, "tenant_id") == {"tenants.id"}
+    assert foreign_key_targets(Artifact.__table__, "run_id") == {"evaluation_runs.id"}
     assert frozenset({"tenant_id", "artifact_type", "sha256"}) in unique_column_sets(
         Artifact.__table__
     )
     assert frozenset({"storage_path"}) not in unique_column_sets(Artifact.__table__)
+
+
+def test_run_metrics_are_unique_per_run_and_metric_name() -> None:
+    assert frozenset({"run_id", "metric_name"}) in unique_column_sets(RunMetric.__table__)
+    assert foreign_key_targets(RunMetric.__table__, "run_id") == {"evaluation_runs.id"}
+    assert {"metric_value", "metric_json", "created_at"} <= set(RunMetric.__table__.columns.keys())
 
 
 def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> None:

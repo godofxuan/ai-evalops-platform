@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     MetaData,
@@ -187,6 +188,7 @@ class Artifact(Base):
         ),
         CheckConstraint("byte_size >= 0", name="byte_size_nonnegative"),
         Index("ix_artifacts_tenant_id_created_at", "tenant_id", "created_at"),
+        Index("ix_artifacts_run_id_artifact_type", "run_id", "artifact_type"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -194,6 +196,10 @@ class Artifact(Base):
         Uuid,
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    run_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
     )
     artifact_type: Mapped[ArtifactType] = mapped_column(
         artifact_type_enum,
@@ -454,6 +460,37 @@ class CaseResult(Base):
     input_tokens: Mapped[int | None] = mapped_column()
     output_tokens: Mapped[int | None] = mapped_column()
     latency_ms: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class RunMetric(Base):
+    __tablename__ = "run_metrics"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "metric_name",
+            name="uq_run_metrics_run_id_metric_name",
+        ),
+        Index("ix_run_metrics_run_id_created_at", "run_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    metric_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    metric_value: Mapped[float | None] = mapped_column(Float)
+    metric_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

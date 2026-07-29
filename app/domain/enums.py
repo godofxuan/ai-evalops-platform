@@ -13,6 +13,9 @@ class APIKeyStatus(StrEnum):
 
 class ArtifactType(StrEnum):
     DATASET_SOURCE = "dataset_source"
+    RUN_METRICS = "run_metrics"
+    FAILURE_CASES = "failure_cases"
+    SUMMARY_REPORT = "summary_report"
 
 
 class RunStatus(StrEnum):

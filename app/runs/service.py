@@ -167,4 +167,5 @@ def _to_run_read(snapshot: RunSnapshot) -> RunRead:
         created_at=snapshot.created_at,
         started_at=snapshot.started_at,
         finished_at=snapshot.finished_at,
+        metrics=snapshot.metrics,
     )

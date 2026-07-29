@@ -21,6 +21,7 @@ from app.api.middleware import RequestContextMiddleware
 from app.api.routes_datasets import router as datasets_router
 from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
+from app.api.routes_results import router as results_router
 from app.api.routes_runs import router as runs_router
 from app.artifacts.storage import LocalArtifactStore
 from app.auth.repository import SQLAlchemyAPIKeyLookup
@@ -44,6 +45,7 @@ from app.health.service import (
 from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
+from app.results.service import SQLAlchemyResultService
 from app.runs.repository import SQLAlchemyRunRepository
 from app.runs.service import (
     IdempotencyConflictError,
@@ -102,6 +104,10 @@ def create_app(
             fallback_poll_seconds=runtime_settings.sse_fallback_poll_seconds,
         )
         application.state.cancellation_service = SQLAlchemyCancellationService(session_factory)
+        application.state.result_service = SQLAlchemyResultService(
+            session_factory,
+            artifact_store=artifact_store,
+        )
         application.state.redis_client = redis_client
         application.state.readiness_probe = build_infrastructure_readiness_probe(
             settings=runtime_settings,
@@ -126,11 +132,13 @@ def create_app(
     application.state.api_key_lookup = None
     application.state.dataset_service = None
     application.state.run_service = None
+    application.state.result_service = None
     application.state.event_publisher = None
     application.state.run_event_stream = None
     application.state.cancellation_service = None
     application.include_router(health_router)
     application.include_router(datasets_router)
+    application.include_router(results_router)
     application.include_router(runs_router)
     application.include_router(events_router)
     application.add_exception_handler(APIError, handle_api_error)

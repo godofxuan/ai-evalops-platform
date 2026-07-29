@@ -169,6 +169,65 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                 assert replayed_cancel.status_code == 202
                 assert replayed_cancel.json()["status"] == "cancelled"
 
+                case_page = await client.get(
+                    f"/api/v1/runs/{run_id}/cases",
+                    headers=headers_a,
+                    params={"limit": 1, "sort": "case_id"},
+                )
+                cross_case_page = await client.get(
+                    f"/api/v1/runs/{run_id}/cases",
+                    headers=headers_b,
+                )
+                assert case_page.status_code == 200
+                assert len(case_page.json()["items"]) == 1
+                assert case_page.json()["next_cursor"] is not None
+                assert cross_case_page.status_code == 404
+                second_case_page = await client.get(
+                    f"/api/v1/runs/{run_id}/cases",
+                    headers=headers_a,
+                    params={
+                        "limit": 1,
+                        "sort": "case_id",
+                        "cursor": case_page.json()["next_cursor"],
+                    },
+                )
+                assert second_case_page.status_code == 200
+                assert (
+                    second_case_page.json()["items"][0]["case_id"]
+                    != (case_page.json()["items"][0]["case_id"])
+                )
+
+                metrics = await client.get(
+                    f"/api/v1/runs/{run_id}/metrics",
+                    headers=headers_a,
+                )
+                assert metrics.status_code == 200
+                assert metrics.json()["completion_rate"] == 1.0
+                assert metrics.json()["cancellation_rate"] == 1.0
+
+                artifacts = await client.post(
+                    f"/api/v1/runs/{run_id}/artifacts",
+                    headers=headers_a,
+                )
+                assert artifacts.status_code == 201
+                assert {item["artifact_type"] for item in artifacts.json()} == {
+                    "run_metrics",
+                    "failure_cases",
+                    "summary_report",
+                }
+
+                comparison = await client.get(
+                    "/api/v1/runs/compare",
+                    headers=headers_a,
+                    params={
+                        "left_run_id": str(run_id),
+                        "right_run_id": str(run_id),
+                    },
+                )
+                assert comparison.status_code == 200
+                assert comparison.json()["warning"] is None
+                assert comparison.json()["intersection_count"] == 2
+
             async with session_factory() as session:
                 run_count = await session.scalar(
                     select(func.count(EvaluationRun.id)).where(
