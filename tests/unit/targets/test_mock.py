@@ -93,3 +93,24 @@ async def test_mock_target_observes_preexisting_cancellation() -> None:
             ),
             execution_context,
         )
+
+
+async def test_mock_target_profile_selects_per_run_case_behavior() -> None:
+    case = EvaluationCase(
+        case_id="comparison-case",
+        question="private comparison input",
+        expected_answer="right answer",
+        metadata={
+            "mock_profiles": {
+                "left": {"answer": "left answer"},
+                "right": {"answer": "right answer"},
+            }
+        },
+    )
+    execution_context = context()
+
+    left = await MockTarget({"profile": "left"}).execute_case(case, execution_context)
+    right = await MockTarget({"profile": "right"}).execute_case(case, execution_context)
+
+    assert left.answer == "left answer"
+    assert right.answer == "right answer"

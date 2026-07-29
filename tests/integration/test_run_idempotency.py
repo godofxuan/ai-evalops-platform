@@ -121,14 +121,16 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                     },
                 }
 
-                first, second = await asyncio.gather(
-                    client.post("/api/v1/runs", headers=headers_a, json=payload),
-                    client.post("/api/v1/runs", headers=headers_a, json=payload),
+                concurrent_responses = await asyncio.gather(
+                    *(
+                        client.post("/api/v1/runs", headers=headers_a, json=payload)
+                        for _ in range(20)
+                    )
                 )
-                assert first.status_code == 202
-                assert second.status_code == 202
-                assert first.json()["id"] == second.json()["id"]
-                run_id = UUID(first.json()["id"])
+                assert {response.status_code for response in concurrent_responses} == {202}
+                run_ids = {response.json()["id"] for response in concurrent_responses}
+                assert len(run_ids) == 1
+                run_id = UUID(run_ids.pop())
 
                 conflict = await client.post(
                     "/api/v1/runs",

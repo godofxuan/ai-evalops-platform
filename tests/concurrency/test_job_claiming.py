@@ -66,7 +66,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
     version_id = uuid4()
     api_key_id = uuid4()
     artifact_id = uuid4()
-    job_ids = tuple(uuid4() for _ in range(20))
+    job_ids = tuple(uuid4() for _ in range(100))
     try:
         async with session_factory.begin() as session:
             session.add(
@@ -105,7 +105,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     version=1,
                     schema_version="1",
                     sha256="a" * 64,
-                    case_count=20,
+                    case_count=100,
                 )
             )
             session.add(
@@ -125,7 +125,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     target_version="v1",
                     evaluator_version="v1",
                     status=RunStatus.QUEUED,
-                    total_jobs=20,
+                    total_jobs=100,
                     created_by=api_key_id,
                 )
             )
@@ -149,12 +149,12 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             clock=clock,
         )
         batches = await asyncio.gather(
-            *(claimer.claim(worker_id=f"worker-{index}", limit=3) for index in range(10))
+            *(claimer.claim(worker_id=f"worker-{index}", limit=20) for index in range(10))
         )
         claims = tuple(claim for batch in batches for claim in batch)
 
-        assert len(claims) == 20
-        assert len({claim.job_id for claim in claims}) == 20
+        assert len(claims) == 100
+        assert len({claim.job_id for claim in claims}) == 100
         async with session_factory() as session:
             attempt_count = await session.scalar(
                 select(func.count(JobAttempt.id))
@@ -238,12 +238,12 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             reaper_id="reaper-b",
         )
         reaped_batches = await asyncio.gather(
-            reaper_a.reap(limit=20),
-            reaper_b.reap(limit=20),
+            reaper_a.reap(limit=100),
+            reaper_b.reap(limit=100),
         )
         reaped = tuple(item for batch in reaped_batches for item in batch)
-        assert len(reaped) == 19
-        assert len({item.job_id for item in reaped}) == 19
+        assert len(reaped) == 99
+        assert len({item.job_id for item in reaped}) == 99
         assert all(item.status is JobStatus.RETRY_WAIT for item in reaped)
         async with session_factory() as session:
             retry_wait_count = await session.scalar(
@@ -260,8 +260,8 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     JobAttempt.outcome == AttemptOutcome.LEASE_EXPIRED,
                 )
             )
-        assert retry_wait_count == 19
-        assert expired_attempt_count == 19
+        assert retry_wait_count == 99
+        assert expired_attempt_count == 99
     finally:
         async with session_factory.begin() as session:
             await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id))

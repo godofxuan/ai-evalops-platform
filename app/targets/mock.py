@@ -34,6 +34,12 @@ class MockTargetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     fixed_delay_ms: int = Field(default=0, ge=0, le=300_000)
+    profile: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
     outcome: Literal[
         "success",
         "timeout",
@@ -104,13 +110,23 @@ class MockTarget:
         )
 
     def _case_config(self, case: EvaluationCase) -> MockTargetConfig:
+        config = self._config.model_dump()
+        profiles = case.metadata.get("mock_profiles")
+        if profiles is not None:
+            if not isinstance(profiles, dict):
+                raise InvalidTargetConfiguration("case metadata.mock_profiles must be an object")
+            selected = profiles.get(self._config.profile) if self._config.profile else None
+            if selected is not None:
+                if not isinstance(selected, dict):
+                    raise InvalidTargetConfiguration("selected case mock profile must be an object")
+                config.update(selected)
         override = case.metadata.get("mock")
-        if override is None:
-            return self._config
-        if not isinstance(override, dict):
-            raise InvalidTargetConfiguration("case metadata.mock must be an object")
+        if override is not None:
+            if not isinstance(override, dict):
+                raise InvalidTargetConfiguration("case metadata.mock must be an object")
+            config.update(override)
         try:
-            return MockTargetConfig.model_validate(self._config.model_dump() | dict(override))
+            return MockTargetConfig.model_validate(config)
         except ValidationError as error:
             raise InvalidTargetConfiguration("invalid case mock configuration") from error
 
