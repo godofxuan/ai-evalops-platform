@@ -762,3 +762,88 @@ Python 与配置
 - 真实并发合同本机 skipped，不声称生产级。
 
 完整过程见 `docs/phase_8_execution_log.md` 与 `docs/11_human_review.md`。
+
+## 2026-07-29 — Phase 9：可观测性、故障/负载实验与项目材料（完成实现，真实容量实验受阻）
+
+### 基本信息
+
+- 起始 SHA：`51a9ac4`
+- 可观测性提交：`5af65ca`
+- 实验工具提交：`36b2baf`
+- 失败证据保留修复：`80ed75e`
+- 目标：低基数 metrics、业务 traces、failure injection、真实并发规模合同、
+  500-case 扩容脚本和最终展示材料。
+
+### 问题与根因
+
+1. API 完成后 Worker/Reaper 跨进程执行，单一 access log 无法定位 claim、Target、
+   Evaluator、result 或 lease recovery。
+2. tenant/run/job ID 若直接做 Prometheus label 会导致无界 time series。
+3. 进程内 Worker counter 不能代表全局数据库当前状态。
+4. 为 SSE 增加 Gauge/trace 的外层 async generator 两次破坏 close 传播，说明可观测
+   包装本身也会造成资源泄漏。
+5. 同一 Dataset 的原 MockTarget metadata 无法为左右 Run 生成四类 comparison diff。
+6. 本机没有 Docker/PostgreSQL/Redis，不能产生真实负载和容器故障数字。
+
+### 设计与修改
+
+- 每个 API/Worker/Reaper 进程持有独立 Prometheus registry；
+- API `/metrics`，Worker 9101，Reaper 9102；
+- API durable Gauge 从 PostgreSQL filtered aggregate 刷新；
+- 指标只使用 method/route/status 有界标签，领域 ID 进入日志/trace；
+- 手工 OpenTelemetry span 覆盖 API、Run、claim、Target、Evaluator、result/failure、
+  progress、Reaper 和 SSE；
+- API 延续 W3C traceparent，Worker/Reaper 以领域 ID 做跨进程关联；
+- 日志增加问题/答案/evidence/trace 脱敏；
+- 使用 `aclosing` 保证 SSE 断连关闭底层 subscriber；
+- 抽出可单测 Worker iteration，数据库短暂异常记录后继续 loop；
+- MockTarget 增加有界 profile，仅用于 deterministic 比较实验；
+- 幂等集成合同提高到 20 并发请求；claim 合同提高到 10 Worker/100 Jobs/2 Reaper；
+- load/concurrency/failure/comparison 脚本从环境变量读取密钥，结果拒绝覆盖。
+
+### 修改文件
+
+- 核心：`app/core/telemetry.py`、`app/observability/*`、API middleware/metrics route、
+  Worker runtime/pipeline、Redis publisher、SSE、Run service；
+- 配置：`pyproject.toml`、`uv.lock`、`.env.example`、Dockerfile、Compose；
+- 实验：`scripts/experiment_support.py` 与四个 Phase 9 runner；
+- 测试：API/core/observability/failure-injection，以及增强后的 integration/concurrency；
+- 文档：observability、fault matrix、results/blockers、architecture、interview、resume、
+  execution log、README。
+
+### RED 证据与修复
+
+- RED-1：缺少 `app.observability` 和 OpenTelemetry，4 个 collection error；
+- GREEN-1：13 passed/2 failed；修正真实 stdout 捕获和 SSE 内层关闭；
+- GREEN-2：15 passed；
+- RED/GREEN durable/Worker：发现 Enum 大小写测试错误和第二层 generator close 泄漏；
+- RED/GREEN profile：extra field 失败后实现 strict profile；
+- RED/GREEN runtime：缺少单轮故障边界后抽出 helper；
+- strict mypy 发现 SpanProcessor 公开导出位置，按 1.44.0 API 修正。
+
+### 验证结果
+
+| 检查 | 结果 |
+|---|---|
+| Ruff | All checks passed |
+| mypy app scripts | 96 source files，无问题 |
+| 非集成全量 | 230 passed，6 deselected |
+| 真实服务合同 | 6 skipped |
+| lock | 60 packages，check 通过 |
+| Alembic | 单一 head `20260729_0007`，offline SQL 通过 |
+| Docker/Compose | CommandNotFound |
+| 500-case/1,2,4,8 Worker | NOT-RUN |
+
+### 未解决与取舍
+
+- API 到 Worker 没有持久化 parent trace context，不是一条完整跨进程 trace；
+- 无 Prometheus/Collector 实测；
+- Worker 多副本 scrape、告警和 counter reset 处理未验证；
+- 无真实吞吐、p50/p95、DB lock wait、soak 或 cancel/result race 数据；
+- durable Gauge 刷新失败会返回上一次值，必须结合 readiness；
+- failure script 会中断开发 Compose，只能显式授权后用于独占环境；
+- 不声称生产级、exactly-once、零重复或已通过性能认证。
+
+完整过程见 `docs/phase_9_execution_log.md`、
+`docs/12_observability_and_experiments.md` 和
+`docs/results/phase_9_environment_and_blockers.md`。

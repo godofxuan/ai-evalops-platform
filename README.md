@@ -1,7 +1,7 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–8：工程底座、身份与不可变
-数据集、异步评测与恢复、实时事件、结果比较，以及双人盲评和分歧裁决。
+多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–9：工程底座、身份与不可变
+数据集、异步评测与恢复、实时事件、结果比较、双人盲评，以及可观测性与可复现实验入口。
 
 ## 业务问题
 
@@ -103,6 +103,18 @@ Phase 8 已建立：
 - 第三 reviewer adjudication；
 - agreement、Cohen’s kappa 与 human review packet artifact。
 
+Phase 9 已建立：
+
+- API/Worker/Reaper 独立 Prometheus registry 与低基数指标；
+- API `/metrics`、Worker 9101、Reaper 9102 抓取入口；
+- API request、Run 创建、claim、Target、Evaluator、result、Reaper、SSE 业务 span；
+- W3C `traceparent` 延续，以及 request/trace/tenant/run/job/attempt/worker 日志关联；
+- question/answer/evidence/credential 等敏感字段脱敏；
+- Redis/数据库单轮故障、SSE 断连和观测资源生命周期回归；
+- 20 个并发幂等请求、10 Worker/100 Jobs、2 Reaper 的真实 PostgreSQL 测试合同；
+- 500-case 1/2/4/8 Worker、故障注入、幂等并发和 Run diff 实验脚本；
+- 架构图、面试问题和不夸大证据的简历材料。
+
 ## 架构骨架
 
 ```text
@@ -129,7 +141,9 @@ Reaper ---- expired lease → retry_wait / failed / cancelled
 PostgreSQL 是领域状态的最终事实来源。Redis 只承担可丢失的实时通知，不能决定最终
 Run/Job 结果。SSE 重连首先读取 PostgreSQL，而不是假设 Pub/Sub 可以回放。
 
-更详细的阶段边界见 [项目范围](docs/00_project_scope.md)、[架构说明](docs/01_architecture.md)、[Phase 1 领域模型](docs/02_domain_model.md)和[安全边界](docs/08_security_boundaries.md)。
+更详细的阶段边界见 [项目范围](docs/00_project_scope.md)、[架构说明](docs/01_architecture.md)、
+[完整架构图](docs/architecture_diagram.md)、[Phase 1 领域模型](docs/02_domain_model.md)和
+[安全边界](docs/08_security_boundaries.md)。
 
 ## 快速启动
 
@@ -229,9 +243,40 @@ docker compose -f deploy/compose.yaml down --volumes
 
 所有配置使用 `EVALOPS_` 前缀。示例见 `.env.example`。
 
-数据库和 Redis URL 使用 Pydantic `SecretStr`，日志处理器还会对 `api_key`、`authorization`、`database_url`、`redis_url`、`password`、`secret`、`token` 等字段递归脱敏。脱敏依赖正确字段命名，不能识别被错误放入普通文本字段的任意秘密。
+数据库、Redis URL 和 OTLP headers 使用 Pydantic `SecretStr`。日志处理器还会对
+`api_key`、`authorization`、`database_url`、`redis_url`、`password`、`secret`、
+`token`、`question`、`expected_answer`、`answer`、`response`、`evidence`、`trace`
+等字段递归脱敏。脱敏依赖正确字段命名，不能识别被错误放入普通文本字段的任意秘密。
 
 Dataset 默认限制为 10 MiB 文件、10,000 个 case、1 MiB 单行，可分别通过 `EVALOPS_DATASET_MAX_FILE_BYTES`、`EVALOPS_DATASET_MAX_CASES` 和 `EVALOPS_DATASET_MAX_LINE_BYTES` 下调或在受控范围内调整。
+
+## 指标、Trace 与实验
+
+```bash
+curl http://127.0.0.1:8000/metrics
+```
+
+Prometheus 指标不使用 tenant/run/job/attempt ID 标签；这些高基数字段只进入日志和 trace。
+API 抓取会从 PostgreSQL 刷新 queue/running/heartbeat Gauge。Worker/Reaper 分别在
+Compose 内部端口 9101/9102 暴露自己的 counter/histogram。
+
+配置 `EVALOPS_OTEL_EXPORTER_OTLP_ENDPOINT` 后，API、Worker 和 Reaper 使用 OTLP/HTTP
+向 Collector 导出 span。未配置 endpoint 时仍生成本进程 trace ID，但没有后端持久化，
+不能声称已经具备生产 trace 查询。
+
+可复现实验：
+
+```bash
+uv run python -m scripts.run_concurrency_test
+uv run python -m scripts.run_load_test
+uv run python -m scripts.run_comparison_experiment
+uv run python -m scripts.run_failure_scenarios --allow-service-disruption
+```
+
+实验密钥从 `EVALOPS_EXPERIMENT_API_KEY` 读取。failure 脚本会 stop/kill 开发 Compose
+服务，只能在独占开发环境执行。结果默认写入 `docs/results/` 且拒绝覆盖。完整合同见
+[可观测性与实验](docs/12_observability_and_experiments.md)和
+[故障矩阵](docs/13_failure_injection_matrix.md)。
 
 ## 测试与质量命令
 
@@ -321,7 +366,7 @@ at-least-once 执行和崩溃恢复的实验结论。
 
 ## 实验结果
 
-Phase 0–8 的本地命令、RED/GREEN 证据和环境限制分别记录在
+Phase 0–9 的本地命令、RED/GREEN 证据和环境限制分别记录在
 [Phase 0 日志](docs/phase_0_execution_log.md)、[Phase 1 日志](docs/phase_1_execution_log.md)、
 [Phase 2 日志](docs/phase_2_execution_log.md)和
 [Phase 3 日志](docs/phase_3_execution_log.md)和
@@ -329,7 +374,8 @@ Phase 0–8 的本地命令、RED/GREEN 证据和环境限制分别记录在
 [Phase 5 日志](docs/phase_5_execution_log.md)和
 [Phase 6 日志](docs/phase_6_execution_log.md)和
 [Phase 7 日志](docs/phase_7_execution_log.md)和
-[Phase 8 日志](docs/phase_8_execution_log.md)。幂等细节见
+[Phase 8 日志](docs/phase_8_execution_log.md)和
+[Phase 9 日志](docs/phase_9_execution_log.md)。幂等细节见
 [Run 幂等合同](docs/04_idempotency_contract.md)，领取细节见
 [Worker 租约合同](docs/05_worker_lease_contract.md)，阶段汇总见
 [工程日志](docs/engineering_journal.md)。
@@ -353,6 +399,26 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
 
+2026-07-29 Phase 9 本机阶段结果：
+
+| 检查 | 结果 |
+|---|---|
+| Python / uv | CPython 3.12.13 / uv 0.11.32 |
+| observability deps | OpenTelemetry SDK 1.44.0 / Prometheus Client 0.26.0 |
+| lock | `uv lock --check` 通过；60 packages |
+| format / lint | 196 files already formatted；All checks passed |
+| mypy | app + scripts 96 source files，无问题 |
+| pytest 非集成 | 230 passed，6 deselected |
+| 真实 PostgreSQL/Redis contracts | 6 skipped；本机未启用真实服务 |
+| Alembic | 唯一 head `20260729_0007`；offline PostgreSQL SQL 通过 |
+| 500-case / 1/2/4/8 Worker | NOT-RUN；Docker/Compose 均为 CommandNotFound |
+| fault/container comparison 实验 | NOT-RUN；没有运行栈 |
+| GitHub Actions | 未运行；没有 push |
+
+未执行实验的完整清单见
+[Phase 9 环境与阻塞](docs/results/phase_9_environment_and_blockers.md)。本 README 不提供
+吞吐/p50/p95 数字，因为本机没有产生这些证据。
+
 ## 当前限制
 
 - tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
@@ -362,7 +428,9 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
 - HTTP SSRF 检查仍有 DNS check/connect TOCTOU，需要部署级 egress 控制；
-- 没有 Prometheus 指标或 OpenTelemetry trace；
+- 已有 Prometheus 指标和 OpenTelemetry SDK span，但本机未配置 Prometheus/Collector；
+- API 与 Worker 当前通过领域 ID 关联不同 trace，尚未持久化跨进程 parent context；
+- 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
 - review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；
 - 任意 JSONB metric 排序没有表达式索引，尚无大 Run query plan/容量证据；
@@ -370,7 +438,7 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 - SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
-## 面试展示路径（Phase 8）
+## 面试展示路径（Phase 9）
 
 1. 解释 API Key 为什么只保存版本化 scrypt hash，以及 unknown prefix 为什么执行 dummy hash；
 2. 展示 Principal 如何从服务端 tenant 关联派生，请求体 `tenant_id` 如何被拒绝；
@@ -400,3 +468,8 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 26. 展示 candidate SQL、own-submission join 和 packet artifact 的三层盲化。
 27. 展示为什么 task/reviewer unique 仍需要 Task `FOR UPDATE`。
 28. 解释 observed/expected agreement、kappa 和单类别分母为零。
+29. 展示为什么 tenant/run/job ID 进入 trace/log 而不是 Prometheus label。
+30. 展示 API 如何延续 W3C traceparent，以及为什么 Worker 目前是新的 trace。
+31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
+32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
+33. 明确区分 230 passed、6 skipped 和 NOT-RUN 容量实验，拒绝把合同当成实测结果。
