@@ -491,3 +491,29 @@ Gate 0 文档提交以分支范围 `a95f484..codex/evidence-gate-0` 为准。未
 
 停止。只有用户确认 Gate 1、定义 success/adoption gate，并提供或批准可运行的独占 Docker
 环境后，才开始 Gate 1 的 RED tests 和实验工具改进。
+
+## Gate 0 复验：gate0-20260729T200900+0800-a95f484
+
+本节是同一基线 SHA 的第二次只读复验，保留在原 Gate 0 记录之后，不替换前一批证据。
+
+- 基线 SHA：`a95f484d0d2e0f659a442efa5b8d4ad6ddece644`；
+- 正式 500-case：未启动；
+- 生产代码、测试、migration、CI/Compose 语义：未修改；
+- 仓库内 uv：`.codex-tools/Scripts/uv.exe` 0.11.32，lock check 与 sync dry-run 通过；
+- Ruff format/lint、mypy：`VERIFIED`；
+- 默认 `.pytest-tmp`：222 passed、13 setup errors，`FAILED`；
+- 新系统 basetemp：235 passed、6 deselected，`CONTRACT_VERIFIED`；
+- 真实服务：5432/6379 不可达；强制 integration 连接尝试被保留为基础设施
+  `FAILED`，不是 pass/skip；
+- Alembic：单 head `20260729_0008`，offline SQL 完整生成，`VERIFIED`；
+- Compose smoke：Docker 命令不存在，`NOT_RUN`；
+- Prometheus：13 个逻辑指标与 5 个定向合同通过；live 多进程抓取 `NOT_RUN`。
+
+复验证据：
+
+- [manifest](../results/gate_0/gate0-20260729T200900+0800-a95f484/manifest.json)
+- [raw evidence summary](../results/gate_0/gate0-20260729T200900+0800-a95f484/raw_evidence.md)
+- [Gate 1 protocol draft](../results/gate_0/gate0-20260729T200900+0800-a95f484/gate_1_protocol_draft.md)
+
+复验仍不支持容量、扩展拐点、lock-wait、强杀恢复时间、故障恢复、soak、完整 SSRF、
+跨进程 trace 或真人双评结论。Gate 0 到此停止，等待用户确认。

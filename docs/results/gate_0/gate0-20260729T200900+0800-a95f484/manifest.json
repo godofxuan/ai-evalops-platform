@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "gate": 0,
+  "run_id": "gate0-20260729T200900+0800-a95f484",
+  "started_at": "2026-07-29T20:09:00+08:00",
+  "recorded_at": "2026-07-29T20:19:05.3859390+08:00",
+  "timezone": "Asia/Shanghai",
+  "scope": "read-only baseline and Gate 1 experiment protocol draft",
+  "formal_load_run_started": false,
+  "production_code_changed": false,
+  "git": {
+    "baseline_branch": "main",
+    "recording_branch": "codex/evidence-gate-0",
+    "head": "a95f484d0d2e0f659a442efa5b8d4ad6ddece644",
+    "head_authored_at": "2026-07-29T13:43:14+08:00",
+    "head_subject": "docs: record GitHub CI closure evidence",
+    "initial_tracked_worktree": "clean",
+    "note": "The branch name changed during collection without a Gate 0 branch command; both observations resolve to the same HEAD."
+  },
+  "file_hashes_sha256": {
+    "pyproject.toml": "521dc604b7f056ebc2d6c97c9f6095e3f54758992a8cd562f4d099a7983bb466",
+    "uv.lock": "9d44fb6b1b33b5fe59e89667ce87e56f92413faf7e001db75176b292005bbb9c",
+    "deploy/compose.yaml": "eff7f01e4512fe2779eab1f4cdc780946f6957e3564355c7b300c9b1de14435f",
+    ".github/workflows/ci.yml": "4c7c0663aa345df4fbeee9e9d58d3e216e59423a4ef30bc2ece3052dd2996611",
+    "README.md": "8620fdf30a9d91bff3bb9b03e123f69d8b0d530baa889201c1f3b1d767604374"
+  },
+  "host": {
+    "operating_system": "Microsoft Windows 11 Pro",
+    "version": "10.0.26200",
+    "build": "26200",
+    "architecture": "64-bit",
+    "cpu": "AMD Ryzen 5 7500F 6-Core Processor",
+    "physical_cores": 6,
+    "logical_processors": 12,
+    "total_physical_memory_bytes": 33947549696,
+    "free_physical_memory_kib_at_snapshot": 13151168,
+    "disk_free_bytes_at_snapshot": {
+      "C:": 28210819072,
+      "D:": 72570888192
+    }
+  },
+  "toolchain": {
+    "global_python": "3.13.5",
+    "project_python": "3.12.13",
+    "uv": "0.11.32",
+    "pytest": "9.1.1",
+    "ruff": "0.16.0",
+    "mypy": "1.20.2",
+    "alembic": "1.18.5",
+    "sqlalchemy": "2.0.51",
+    "psycopg": "3.3.4",
+    "redis_py": "7.4.1",
+    "httpx": "0.28.1",
+    "prometheus_client": "0.26.0",
+    "opentelemetry_sdk": "1.44.0"
+  },
+  "services": {
+    "docker_cli": {
+      "runtime_version": null,
+      "status": "UNKNOWN",
+      "reason": "docker command is absent from PATH"
+    },
+    "docker_compose": {
+      "runtime_version": null,
+      "status": "UNKNOWN",
+      "reason": "docker command is absent from PATH"
+    },
+    "postgresql": {
+      "configured_image": "postgres:18.4-alpine3.24",
+      "runtime_version": null,
+      "tcp_127_0_0_1_5432": "unreachable-within-2s",
+      "status": "NOT_RUN"
+    },
+    "redis": {
+      "configured_image": "redis:8.8.1-alpine3.23",
+      "runtime_version": null,
+      "tcp_127_0_0_1_6379": "unreachable-within-2s",
+      "status": "NOT_RUN"
+    }
+  },
+  "checks": [
+    {
+      "name": "uv lock and environment",
+      "result": "60 packages resolved; 58 installed packages checked; dry-run would make no changes",
+      "evidence_level": "VERIFIED"
+    },
+    {
+      "name": "ruff format",
+      "result": "199 files already formatted",
+      "evidence_level": "VERIFIED"
+    },
+    {
+      "name": "ruff lint",
+      "result": "All checks passed",
+      "evidence_level": "VERIFIED"
+    },
+    {
+      "name": "mypy strict target",
+      "result": "Success: no issues found in 103 source files",
+      "evidence_level": "VERIFIED"
+    },
+    {
+      "name": "non-integration pytest with repository default basetemp",
+      "result": "222 passed, 6 deselected, 13 setup errors caused by access denied while removing existing .pytest-tmp",
+      "evidence_level": "FAILED"
+    },
+    {
+      "name": "non-integration pytest with fresh system basetemp and cache disabled",
+      "result": "235 passed, 6 deselected",
+      "evidence_level": "CONTRACT_VERIFIED"
+    },
+    {
+      "name": "real PostgreSQL and Redis integration",
+      "result": "6 tests selected with EVALOPS_RUN_INTEGRATION=1; infrastructure connection attempt did not complete and was terminated after more than two minutes; both service ports were then confirmed unreachable",
+      "evidence_level": "FAILED"
+    },
+    {
+      "name": "Alembic heads and history",
+      "result": "one linear head: 20260729_0008; eight revisions from base",
+      "evidence_level": "VERIFIED"
+    },
+    {
+      "name": "Alembic PostgreSQL offline SQL",
+      "result": "base through 20260729_0008 generated successfully with BEGIN and COMMIT",
+      "evidence_level": "VERIFIED"
+    },
+    {
+      "name": "Compose smoke",
+      "result": "not started because docker/compose command is absent",
+      "evidence_level": "NOT_RUN"
+    },
+    {
+      "name": "Prometheus catalogue and configuration contracts",
+      "result": "5 targeted tests passed; 13 logical metrics found; live multi-process scrape not run",
+      "evidence_level": "CONTRACT_VERIFIED"
+    }
+  ],
+  "commit_list": [
+    "a95f484d0d2e0f659a442efa5b8d4ad6ddece644"
+  ],
+  "unsupported_claims": [
+    "No local real-service integration pass was obtained.",
+    "No local Docker image or Compose topology was started.",
+    "No 500-case capacity number was produced.",
+    "No production throughput, saturation point, lock-wait distribution, recovery-time objective, or soak stability is established.",
+    "Configured PostgreSQL and Redis image tags are not runtime version evidence.",
+    "CI contract success is not a capacity result.",
+    "The platform does not provide exactly-once execution.",
+    "API and Worker are not yet joined by persisted asynchronous trace context."
+  ]
+}
