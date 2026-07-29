@@ -27,7 +27,16 @@ def evaluate_preflight(observations: Mapping[str, bool]) -> dict[str, Any]:
     """Evaluate sanitized preflight facts without receiving credential values."""
     sanitized = {check: observations.get(check, False) for check in REQUIRED_PREFLIGHT_CHECKS}
     blockers = [check for check, passed in sanitized.items() if not passed]
+    if not sanitized["source_commit_matches"]:
+        status = "SOURCE_MISMATCH"
+    elif not sanitized["tracked_worktree_clean"]:
+        status = "DIRTY_BUILD_CONTEXT"
+    elif blockers:
+        status = "ENVIRONMENT_BLOCKED"
+    else:
+        status = "READY"
     return {
+        "status": status,
         "ready": not blockers,
         "checks": sanitized,
         "blockers": blockers,

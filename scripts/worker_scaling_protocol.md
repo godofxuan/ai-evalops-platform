@@ -25,6 +25,19 @@ Negative scaling is a valid result and must be retained.
 CLI overrides must be recorded in the manifest and create a new run ID. A measured run
 must never overwrite another run.
 
+## Prepared evidence gate
+
+Only manifest schema v2 is executable. Before Docker or any arm interaction, the
+executor must revalidate the source commit, tracked workspace state, untracked or
+Git-ignored files that would enter the Docker build context, configuration, measurement
+and warm-up datasets, dataset hash record, protocol, arm plan, Compose file, Dockerfile,
+`.dockerignore`, and every key execution script.
+
+The preflight outcome is one of `READY`, `HASH_MISMATCH`, `SOURCE_MISMATCH`,
+`DIRTY_BUILD_CONTEXT`, `MANIFEST_INVALID`, or `ENVIRONMENT_BLOCKED`, with all failed
+checks retained. Schema v1 bundles remain historical, read-only evidence and must be
+prepared again rather than migrated or silently rewritten.
+
 ## Execution
 
 For each arm: verify the requested replica count and health; wait for an empty queue; run
@@ -34,7 +47,7 @@ success, failure, timeout, and partial evidence.
 
 Correctness is decided from durable Run, Job, Attempt, and CaseResult rows. API rows alone
 cannot prove uniqueness. Missing measurements are `UNKNOWN`; a behavior that was not
-induced is `NOT_TESTED`; sampled lock waits without continuous timing are `DIRECTIONAL`.
+induced is `NOT_RUN`; sampled lock waits without continuous timing are `DIRECTIONAL`.
 
 ## Frozen plots
 

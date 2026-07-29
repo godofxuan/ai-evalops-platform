@@ -260,7 +260,7 @@ def summarize_arm(
         "postgres_connections": dict(unavailable),
         "redis_publish_failures": dict(unavailable),
         "stale_submission_rejection": {
-            "evidence": "NOT_TESTED",
+            "evidence": "NOT_RUN",
             "observed": 0,
         },
     }

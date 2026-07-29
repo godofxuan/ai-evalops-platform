@@ -116,6 +116,10 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     protocol_bytes = (manifest_path.parent / "protocol.md").read_bytes()
     compose_bytes = Path("deploy/compose.yaml").read_bytes()
+    dockerfile_bytes = Path("Dockerfile").read_bytes()
+    dockerignore_bytes = Path(".dockerignore").read_bytes()
+    arm_plan_bytes = (manifest_path.parent / "arm_order.json").read_bytes()
+    dataset_hashes_bytes = (manifest_path.parent / "dataset" / "hashes.json").read_bytes()
     assert {
         key: manifest[key]
         for key in (
@@ -127,7 +131,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "seed",
         )
     } == {
-        "schema_version": 1,
+        "schema_version": 2,
         "experiment": "worker_scaling",
         "run_id": "gate1-contract",
         "status": "prepared",
@@ -139,7 +143,62 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
         "sha256": hashlib.sha256(protocol_bytes).hexdigest(),
     }
     assert len(manifest["provenance"]["source_commit"]) == 40
-    assert manifest["provenance"]["compose_sha256"] == hashlib.sha256(compose_bytes).hexdigest()
+    assert manifest["provenance"]["compose"] == {
+        "path": "deploy/compose.yaml",
+        "sha256": hashlib.sha256(compose_bytes).hexdigest(),
+    }
+    assert manifest["provenance"]["dockerfile"] == {
+        "path": "Dockerfile",
+        "sha256": hashlib.sha256(dockerfile_bytes).hexdigest(),
+    }
+    assert manifest["provenance"]["dockerignore"] == {
+        "path": ".dockerignore",
+        "sha256": hashlib.sha256(dockerignore_bytes).hexdigest(),
+    }
+    expected_scripts = {
+        path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        for path in (
+            "scripts/experiment_support.py",
+            "scripts/gate1_collectors.py",
+            "scripts/gate1_database.py",
+            "scripts/gate1_evidence.py",
+            "scripts/gate1_plots.py",
+            "scripts/gate1_preflight.py",
+            "scripts/gate1_prepared_evidence.py",
+            "scripts/run_load_test.py",
+            "scripts/worker_scaling_protocol.py",
+        )
+    }
+    assert manifest["provenance"]["execution_scripts"] == {
+        "algorithm": "sha256",
+        "files": expected_scripts,
+    }
+    configuration = manifest["configuration"]
+    assert configuration["values"] == {
+        "api_url": "http://127.0.0.1:8000",
+        "api_key_env": "EVALOPS_EXPERIMENT_API_KEY",
+        "database_url_env": "EVALOPS_EXPERIMENT_DATABASE_URL",
+        "workers": [1, 2, 4, 8],
+        "cases": 500,
+        "warmup_cases": 50,
+        "delay_ms": 25,
+        "poll_seconds": 0.5,
+        "deadline_seconds": 900.0,
+        "readiness_deadline_seconds": 120,
+        "collector_interval_seconds": 1.0,
+        "seed": 1729,
+        "repetitions": 4,
+    }
+    configuration_bytes = json.dumps(
+        configuration["values"],
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    assert configuration["sha256"] == hashlib.sha256(configuration_bytes).hexdigest()
+    assert manifest["dataset"]["hashes_path"] == "dataset/hashes.json"
+    assert manifest["dataset"]["hashes_sha256"] == hashlib.sha256(dataset_hashes_bytes).hexdigest()
+    assert manifest["arm_plan"]["sha256"] == hashlib.sha256(arm_plan_bytes).hexdigest()
     assert manifest["adoption_gate"]["automatic_worker_count_change"] is False
 
 
@@ -163,7 +222,9 @@ def test_load_prepare_mode_rejects_run_id_path_traversal(tmp_path: Path) -> None
 
 def test_load_execute_mode_preserves_preflight_failure_before_any_arm(
     tmp_path: Path,
+    clean_gate1_repository: Path,
 ) -> None:
+    assert clean_gate1_repository == Path.cwd()
     output_root = tmp_path / "load"
     common = [
         "--output-root",
@@ -178,9 +239,75 @@ def test_load_execute_mode_preserves_preflight_failure_before_any_arm(
     failure_path = output_root / "gate1-preflight" / "failures" / "preflight.json"
     failure = json.loads(failure_path.read_text(encoding="utf-8"))
     assert failure["ready"] is False
+    assert failure["status"] == "ENVIRONMENT_BLOCKED"
     assert "quality_gate_confirmed" in failure["blockers"]
     assert "adoption_gate_confirmed" in failure["blockers"]
     assert not any((output_root / "gate1-preflight" / "raw").iterdir())
+
+
+def test_load_execute_mode_revalidates_bundle_before_environment_preflight(
+    tmp_path: Path,
+    clean_gate1_repository: Path,
+) -> None:
+    assert clean_gate1_repository == Path.cwd()
+    output_root = tmp_path / "load"
+    common = [
+        "--output-root",
+        str(output_root),
+        "--run-id",
+        "gate1-stale-evidence",
+    ]
+    run_directory = output_root / "gate1-stale-evidence"
+
+    assert load_main(["--prepare-only", *common]) == 0
+    measurement_path = run_directory / "dataset" / "measurement.jsonl"
+    measurement_path.write_bytes(measurement_path.read_bytes() + b'{"tampered":true}\n')
+
+    assert load_main(["--execute-prepared", *common]) == 1
+
+    failure = json.loads(
+        (run_directory / "failures" / "preflight.json").read_text(encoding="utf-8")
+    )
+    assert failure["status"] == "HASH_MISMATCH"
+    assert failure["checks"]["measurement_hash_matches"] is False
+    assert "runtime" not in failure
+    assert not any((run_directory / "raw").iterdir())
+
+
+def test_load_execute_mode_rejects_runtime_configuration_drift(
+    tmp_path: Path,
+    clean_gate1_repository: Path,
+) -> None:
+    assert clean_gate1_repository == Path.cwd()
+    output_root = tmp_path / "load"
+    common = [
+        "--output-root",
+        str(output_root),
+        "--run-id",
+        "gate1-config-drift",
+    ]
+    run_directory = output_root / "gate1-config-drift"
+
+    assert load_main(["--prepare-only", *common]) == 0
+    assert (
+        load_main(
+            [
+                "--execute-prepared",
+                *common,
+                "--collector-interval-seconds",
+                "60",
+            ]
+        )
+        == 1
+    )
+
+    failure = json.loads(
+        (run_directory / "failures" / "preflight.json").read_text(encoding="utf-8")
+    )
+    assert failure["status"] == "HASH_MISMATCH"
+    assert failure["checks"]["requested_configuration_matches"] is False
+    assert "requested_configuration_matches" in failure["blockers"]
+    assert "runtime" not in failure
 
 
 def test_load_prepare_mode_freezes_hashed_dual_workload_dataset(tmp_path: Path) -> None:

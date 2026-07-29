@@ -274,7 +274,7 @@ def test_arm_summary_never_turns_missing_measurements_into_zero() -> None:
         assert summary[missing_signal]["evidence"] == "UNKNOWN"
         assert summary[missing_signal].get("value") is None
     assert summary["stale_submission_rejection"] == {
-        "evidence": "NOT_TESTED",
+        "evidence": "NOT_RUN",
         "observed": 0,
     }
 

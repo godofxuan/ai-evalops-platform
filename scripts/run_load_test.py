@@ -43,9 +43,15 @@ from scripts.gate1_preflight import (
     collect_preflight,
     required_services_healthy,
 )
+from scripts.gate1_prepared_evidence import (
+    KEY_EXECUTION_SCRIPT_PATHS,
+    PREPARED_MANIFEST_SCHEMA_VERSION,
+    canonical_json_sha256,
+    sha256_bytes,
+    sha256_file,
+    verify_prepared_evidence,
+)
 from scripts.worker_scaling_protocol import build_balanced_arm_plan
-
-PROTOCOL_SOURCE = Path(__file__).with_name("worker_scaling_protocol.md")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -84,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def prepare_load_experiment(args: argparse.Namespace) -> Path:
+    repository = Path.cwd().resolve()
     run_id = str(args.run_id or datetime.now(UTC).strftime("load-%Y%m%dT%H%M%SZ"))
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}", run_id) is None:
         raise ExperimentError("run ID must be a safe single path segment")
@@ -111,15 +118,30 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
     run_directory.mkdir(exist_ok=False)
     for evidence_directory in ("raw", "summary", "failures", "plots"):
         (run_directory / evidence_directory).mkdir()
-    protocol_content = PROTOCOL_SOURCE.read_bytes()
+    protocol_source = repository / "scripts" / "worker_scaling_protocol.md"
+    protocol_content = protocol_source.read_bytes()
     (run_directory / "protocol.md").write_bytes(protocol_content)
     source_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
+        [
+            "git",
+            "-c",
+            f"safe.directory={repository}",
+            "-C",
+            str(repository),
+            "rev-parse",
+            "HEAD",
+        ],
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
-    compose_content = Path(args.compose_file).read_bytes()
+    compose_path = _repository_file(repository, Path(args.compose_file))
+    dockerfile_path = _repository_file(repository, Path("Dockerfile"))
+    dockerignore_path = _repository_file(repository, Path(".dockerignore"))
+    execution_script_hashes = {
+        path: sha256_file(_repository_file(repository, Path(path)))
+        for path in KEY_EXECUTION_SCRIPT_PATHS
+    }
     dataset = write_measurement_dataset(
         run_directory=run_directory,
         case_count=args.cases,
@@ -132,10 +154,11 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
         repetitions=args.repetitions,
         seed=args.seed,
     )
+    configuration_values = _prepared_configuration(args, worker_counts=worker_counts)
     write_report(
         run_directory / "manifest.json",
         {
-            "schema_version": 1,
+            "schema_version": PREPARED_MANIFEST_SCHEMA_VERSION,
             "experiment": "worker_scaling",
             "run_id": run_id,
             "status": "prepared",
@@ -143,29 +166,75 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
             "seed": args.seed,
             "protocol": {
                 "path": "protocol.md",
-                "sha256": hashlib.sha256(protocol_content).hexdigest(),
+                "sha256": sha256_bytes(protocol_content),
             },
             "provenance": {
                 "source_commit": source_commit,
-                "compose_path": str(args.compose_file),
-                "compose_sha256": hashlib.sha256(compose_content).hexdigest(),
+                "compose": _file_binding(repository, compose_path),
+                "dockerfile": _file_binding(repository, dockerfile_path),
+                "dockerignore": _file_binding(repository, dockerignore_path),
+                "execution_scripts": {
+                    "algorithm": "sha256",
+                    "files": execution_script_hashes,
+                },
             },
             "adoption_gate": {
                 "automatic_worker_count_change": False,
                 "decision_owner": "human",
             },
             "configuration": {
-                "cases": args.cases,
-                "warmup_cases": args.warmup_cases,
-                "delay_ms": args.delay_ms,
-                "readiness_deadline_seconds": args.readiness_deadline_seconds,
-                "collector_interval_seconds": args.collector_interval_seconds,
+                "values": configuration_values,
+                "sha256": canonical_json_sha256(configuration_values),
             },
             "dataset": dataset,
             "arm_plan": arm_plan,
         },
     )
     return run_directory
+
+
+def _repository_file(repository: Path, path: Path) -> Path:
+    candidate = path if path.is_absolute() else repository / path
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(repository)
+    except ValueError as error:
+        raise ExperimentError(
+            f"prepared source file must be inside the repository: {path}"
+        ) from error
+    if not resolved.is_file():
+        raise ExperimentError(f"prepared source file is unavailable: {path}")
+    return resolved
+
+
+def _file_binding(repository: Path, path: Path) -> dict[str, str]:
+    return {
+        "path": path.relative_to(repository).as_posix(),
+        "sha256": sha256_file(path),
+    }
+
+
+def _prepared_configuration(
+    args: argparse.Namespace,
+    *,
+    worker_counts: list[int] | None = None,
+) -> dict[str, Any]:
+    resolved_worker_counts = worker_counts or [int(value) for value in args.workers.split(",")]
+    return {
+        "api_url": str(args.api_url),
+        "api_key_env": str(args.api_key_env),
+        "database_url_env": str(args.database_url_env),
+        "workers": resolved_worker_counts,
+        "cases": int(args.cases),
+        "warmup_cases": int(args.warmup_cases),
+        "delay_ms": int(args.delay_ms),
+        "poll_seconds": float(args.poll_seconds),
+        "deadline_seconds": float(args.deadline_seconds),
+        "readiness_deadline_seconds": float(args.readiness_deadline_seconds),
+        "collector_interval_seconds": float(args.collector_interval_seconds),
+        "seed": int(args.seed),
+        "repetitions": int(args.repetitions),
+    }
 
 
 def write_measurement_dataset(
@@ -232,6 +301,8 @@ def write_measurement_dataset(
     write_report(dataset_directory / "hashes.json", hashes)
     return {
         "generator": "gate1-deterministic-jsonl-v1",
+        "hashes_path": "dataset/hashes.json",
+        "hashes_sha256": sha256_file(dataset_directory / "hashes.json"),
         "measurement_path": "dataset/measurement.jsonl",
         "warmup_path": "dataset/warmup.jsonl",
         "workload_profiles": ["io_latency_v1", "transient_5pct_v1"],
@@ -276,6 +347,7 @@ def write_arm_order(
         write_report(run_directory / "arm_order.json", plan)
         return {
             "path": "arm_order.json",
+            "sha256": sha256_file(run_directory / "arm_order.json"),
             "algorithm": plan["algorithm"],
             "seed": seed,
             "arm_count": len(arms),
@@ -327,6 +399,7 @@ def write_arm_order(
     write_report(run_directory / "arm_order.json", plan)
     return {
         "path": "arm_order.json",
+        "sha256": sha256_file(run_directory / "arm_order.json"),
         "algorithm": plan["algorithm"],
         "seed": seed,
         "nonce": nonce,
@@ -341,8 +414,18 @@ def run_prepared_preflight(args: argparse.Namespace) -> bool:
     ):
         raise ExperimentError("--execute-prepared requires a safe --run-id")
     run_directory = Path(args.output_root) / str(args.run_id)
+    evidence_result = verify_prepared_evidence(
+        run_directory=run_directory,
+        repository=Path.cwd(),
+        compose_file=Path(args.compose_file),
+        requested_configuration=_prepared_configuration(args),
+    )
+    if not evidence_result["ready"]:
+        write_report(run_directory / "failures" / "preflight.json", evidence_result)
+        return False
+
     manifest = json.loads((run_directory / "manifest.json").read_text(encoding="utf-8"))
-    result = collect_preflight(
+    environment_result = collect_preflight(
         expected_source_commit=str(manifest["provenance"]["source_commit"]),
         compose_file=Path(args.compose_file),
         evidence_directory=run_directory,
@@ -351,6 +434,14 @@ def run_prepared_preflight(args: argparse.Namespace) -> bool:
         quality_gate_confirmed=bool(args.confirm_quality_gate),
         adoption_gate_confirmed=bool(args.confirm_adoption_gate),
     )
+    result = {
+        **environment_result,
+        "checks": {
+            **evidence_result["checks"],
+            **environment_result["checks"],
+        },
+        "details": evidence_result["details"],
+    }
     preflight_path = (
         run_directory / "preflight.json"
         if result["ready"]
