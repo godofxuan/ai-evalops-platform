@@ -517,3 +517,11 @@ Gate 0 文档提交以分支范围 `a95f484..codex/evidence-gate-0` 为准。未
 
 复验仍不支持容量、扩展拐点、lock-wait、强杀恢复时间、故障恢复、soak、完整 SSRF、
 跨进程 trace 或真人双评结论。Gate 0 到此停止，等待用户确认。
+
+## Gate 1 工具建设
+
+Gate 1 已完成 prepare/preflight/reconciliation/collector/summary 的合同化实现，但当前主机
+没有 Docker/PostgreSQL/Redis，正式 500-case 矩阵仍为 `NOT_RUN`，没有容量或推荐 Worker
+结论。完整的逐步判断、RED→GREEN、问题与效果记录见：
+
+- [Gate 1 execution log](../gate_1_execution_log.md)

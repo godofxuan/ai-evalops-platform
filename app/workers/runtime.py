@@ -3,6 +3,7 @@ import os
 import socket
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from time import perf_counter
 from typing import Protocol
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.failures import SQLAlchemyFailureCommitter
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
-from app.jobs.reaper import SQLAlchemyJobReaper
+from app.jobs.reaper import ReapedJob, SQLAlchemyJobReaper
 from app.jobs.results import SQLAlchemyResultCommitter
 from app.jobs.retry_policy import RetryPolicy
 from app.observability.metrics import PlatformMetrics, start_metrics_server
@@ -30,6 +31,11 @@ from app.workers.worker import EvaluationWorker
 class WorkerIteration(Protocol):
     async def process_one(self, *, worker_id: str) -> bool:
         """Process at most one durable Job."""
+
+
+class ReaperIteration(Protocol):
+    async def reap(self, *, limit: int = 100) -> tuple[ReapedJob, ...]:
+        """Recover at most one bounded batch of expired leases."""
 
 
 class IterationLogger(Protocol):
@@ -141,7 +147,11 @@ async def run_reaper_process(
                 with telemetry.start_as_current_span("reaper.recover_expired_leases"):
                     trace_id = telemetry.current_trace_id()
                     with structlog.contextvars.bound_contextvars(trace_id=trace_id):
-                        reaped = await reaper.reap(limit=settings.reaper_batch_size)
+                        reaped = await run_reaper_iteration(
+                            reaper,
+                            metrics=metrics,
+                            limit=settings.reaper_batch_size,
+                        )
                 metrics.record_job_lease_expired(len(reaped))
                 for item in reaped:
                     if item.action == "requeued":
@@ -204,6 +214,22 @@ async def run_reaper_process(
         await redis_client.aclose()
         await engine.dispose()
         logger.info("reaper_stopped")
+
+
+async def run_reaper_iteration(
+    reaper: ReaperIteration,
+    *,
+    metrics: PlatformMetrics,
+    limit: int,
+) -> tuple[ReapedJob, ...]:
+    started_at = perf_counter()
+    try:
+        return await reaper.reap(limit=limit)
+    finally:
+        metrics.observe_db_operation(
+            operation="reaper",
+            duration_seconds=perf_counter() - started_at,
+        )
 
 
 def _retry_policy(settings: Settings) -> RetryPolicy:

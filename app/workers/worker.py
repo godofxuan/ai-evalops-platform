@@ -97,8 +97,16 @@ class EvaluationWorker:
         self._telemetry = telemetry
 
     async def process_one(self, *, worker_id: str) -> bool:
-        with self._span("job.claim", {"worker.id": worker_id}):
-            claims = await self._claimer.claim(worker_id=worker_id, limit=1)
+        claim_started_at = perf_counter()
+        try:
+            with self._span("job.claim", {"worker.id": worker_id}):
+                claims = await self._claimer.claim(worker_id=worker_id, limit=1)
+        finally:
+            if self._metrics is not None:
+                self._metrics.observe_db_operation(
+                    operation="claim",
+                    duration_seconds=perf_counter() - claim_started_at,
+                )
         if not claims:
             return False
         claim = claims[0]
@@ -178,35 +186,41 @@ class EvaluationWorker:
                     attempt_number=claim.attempt_number,
                 )
         except LeaseOperationError as error:
-            with self._span("failure.persist"):
-                failure_receipt = await self._failure_committer.commit_failure(
-                    claim=claim,
-                    lease_version=error.lease_version,
-                    error=error.error,
-                )
+            failure_receipt = await self._commit_failure(
+                claim=claim,
+                lease_version=error.lease_version,
+                error=error.error,
+            )
             self._record_failure_metric(failure_receipt)
             await self._publish_failure(claim, failure_receipt)
             return True
         except Exception as error:
-            with self._span("failure.persist"):
-                failure_receipt = await self._failure_committer.commit_failure(
-                    claim=claim,
-                    lease_version=lease_version,
-                    error=error,
-                )
+            failure_receipt = await self._commit_failure(
+                claim=claim,
+                lease_version=lease_version,
+                error=error,
+            )
             self._record_failure_metric(failure_receipt)
             await self._publish_failure(claim, failure_receipt)
             return True
         finally:
             if self._metrics is not None:
                 self._metrics.observe_case_duration(perf_counter() - case_started_at)
-        with self._span("result.persist"):
-            result_receipt = await self._result_committer.commit_success(
-                claim=claim,
-                lease_version=lease_version,
-                target_result=target_result,
-                evaluation_result=evaluation_result,
-            )
+        result_started_at = perf_counter()
+        try:
+            with self._span("result.persist"):
+                result_receipt = await self._result_committer.commit_success(
+                    claim=claim,
+                    lease_version=lease_version,
+                    target_result=target_result,
+                    evaluation_result=evaluation_result,
+                )
+        finally:
+            if self._metrics is not None:
+                self._metrics.observe_db_operation(
+                    operation="result",
+                    duration_seconds=perf_counter() - result_started_at,
+                )
         if self._metrics is not None:
             self._metrics.record_job_succeeded()
         await self._publish(
@@ -224,6 +238,28 @@ class EvaluationWorker:
             getattr(result_receipt, "run_status", None),
         )
         return True
+
+    async def _commit_failure(
+        self,
+        *,
+        claim: ClaimedJob,
+        lease_version: int,
+        error: BaseException,
+    ) -> FailureCommitReceipt:
+        started_at = perf_counter()
+        try:
+            with self._span("failure.persist"):
+                return await self._failure_committer.commit_failure(
+                    claim=claim,
+                    lease_version=lease_version,
+                    error=error,
+                )
+        finally:
+            if self._metrics is not None:
+                self._metrics.observe_db_operation(
+                    operation="failure",
+                    duration_seconds=perf_counter() - started_at,
+                )
 
     def _record_failure_metric(self, receipt: object) -> None:
         if self._metrics is None:

@@ -19,6 +19,8 @@ def test_metrics_registry_exposes_required_platform_signals() -> None:
     metrics.record_job_lease_expired()
     metrics.set_worker_heartbeat_age(3.5)
     metrics.observe_case_duration(0.25)
+    for operation in ("claim", "result", "failure", "reaper"):
+        metrics.observe_db_operation(operation=operation, duration_seconds=0.012)
     metrics.sse_connected()
     metrics.record_redis_publish_failure()
 
@@ -36,6 +38,7 @@ def test_metrics_registry_exposes_required_platform_signals() -> None:
         "job_lease_expired_total",
         "worker_heartbeat_age",
         "case_duration",
+        "db_operation_duration",
         "sse_connections",
         "redis_publish_failures_total",
     ):
@@ -44,6 +47,8 @@ def test_metrics_registry_exposes_required_platform_signals() -> None:
     assert "tenant_id=" not in rendered
     assert "run_id=" not in rendered
     assert "job_id=" not in rendered
+    for operation in ("claim", "result", "failure", "reaper"):
+        assert f'db_operation_duration_seconds_count{{operation="{operation}"}} 1.0' in rendered
 
 
 def test_sse_connection_gauge_returns_to_zero_after_disconnect() -> None:

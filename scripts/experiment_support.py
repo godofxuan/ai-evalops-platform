@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 from datetime import UTC, datetime
@@ -50,6 +51,18 @@ class ExperimentClient:
         name_prefix: str,
         cases: list[dict[str, Any]],
     ) -> str:
+        version = await self.create_dataset_version_record(
+            name_prefix=name_prefix,
+            cases=cases,
+        )
+        return str(version["id"])
+
+    async def create_dataset_version_record(
+        self,
+        *,
+        name_prefix: str,
+        cases: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         dataset = await self._request_json(
             "POST",
             "/api/v1/datasets",
@@ -64,7 +77,11 @@ class ExperimentClient:
             f"/api/v1/datasets/{dataset['id']}/versions",
             files={"file": ("experiment.jsonl", content, "application/x-ndjson")},
         )
-        return str(version["id"])
+        return bind_dataset_version(
+            version,
+            expected_sha256=hashlib.sha256(content).hexdigest(),
+            expected_case_count=len(cases),
+        )
 
     async def create_run(
         self,
@@ -73,6 +90,8 @@ class ExperimentClient:
         target_config: dict[str, Any],
         evaluator_config: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
+        source_commit: str | None = None,
+        component_version: str = "phase9-experiment-v1",
     ) -> dict[str, Any]:
         return await self._request_json(
             "POST",
@@ -82,14 +101,15 @@ class ExperimentClient:
                 "dataset_version_id": dataset_version_id,
                 "target": {
                     "type": "mock",
-                    "version": "phase9-experiment-v1",
+                    "version": component_version,
                     "config": target_config,
                 },
                 "evaluator": {
                     "type": "basic_answer",
-                    "version": "phase9-experiment-v1",
+                    "version": component_version,
                     "config": evaluator_config or {"max_attempts": 3},
                 },
+                "source_commit": source_commit,
             },
         )
 
@@ -194,6 +214,25 @@ def percentile(values: list[float], fraction: float) -> float | None:
     upper = min(lower + 1, len(ordered) - 1)
     weight = position - lower
     return ordered[lower] + (ordered[upper] - ordered[lower]) * weight
+
+
+def bind_dataset_version(
+    response: dict[str, Any],
+    *,
+    expected_sha256: str,
+    expected_case_count: int,
+) -> dict[str, Any]:
+    server_sha256 = str(response.get("sha256", ""))
+    server_case_count = int(response.get("case_count", -1))
+    if server_sha256 != expected_sha256:
+        raise ExperimentError("server dataset digest does not match uploaded bytes")
+    if server_case_count != expected_case_count:
+        raise ExperimentError("server dataset case count does not match uploaded bytes")
+    return {
+        "id": str(response["id"]),
+        "sha256": server_sha256,
+        "case_count": server_case_count,
+    }
 
 
 def experiment_envelope(*, experiment: str, configuration: dict[str, Any]) -> dict[str, Any]:

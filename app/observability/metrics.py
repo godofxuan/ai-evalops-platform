@@ -12,6 +12,8 @@ from prometheus_client import (
     start_http_server,
 )
 
+DB_OPERATIONS = frozenset({"claim", "result", "failure", "reaper"})
+
 
 class PlatformMetrics:
     """Own one Prometheus registry per process.
@@ -84,6 +86,13 @@ class PlatformMetrics:
             buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120),
             registry=self.registry,
         )
+        self._db_operation_duration = Histogram(
+            "db_operation_duration_seconds",
+            "Observed duration of bounded durable database operations.",
+            ("operation",),
+            buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
+            registry=self.registry,
+        )
         self._sse_connections = Gauge(
             "sse_connections",
             "Currently open SSE response iterators.",
@@ -137,6 +146,11 @@ class PlatformMetrics:
 
     def observe_case_duration(self, seconds: float) -> None:
         self._case_duration.observe(max(seconds, 0.0))
+
+    def observe_db_operation(self, *, operation: str, duration_seconds: float) -> None:
+        if operation not in DB_OPERATIONS:
+            raise ValueError(f"unsupported database operation metric: {operation}")
+        self._db_operation_duration.labels(operation=operation).observe(max(duration_seconds, 0.0))
 
     def sse_connected(self) -> None:
         self._sse_connections.inc()

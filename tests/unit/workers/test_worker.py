@@ -193,6 +193,7 @@ async def test_worker_persists_target_failure_instead_of_losing_claim() -> None:
     )
     result_committer = RecordingCommitter()
     failure_committer = RecordingFailureCommitter()
+    metrics = PlatformMetrics()
     worker = EvaluationWorker(
         claimer=SingleClaimer(claimed_job),
         target_factory=lambda _kind, _config: FailingTarget(),
@@ -200,11 +201,16 @@ async def test_worker_persists_target_failure_instead_of_losing_claim() -> None:
         result_committer=result_committer,
         failure_committer=failure_committer,
         lease_runner=PassThroughLeaseRunner(),
+        metrics=metrics,
     )
 
     assert await worker.process_one(worker_id="worker-1") is True
     assert isinstance(failure_committer.failure, TargetHTTPError)
     assert result_committer.committed is False
+    assert (
+        'db_operation_duration_seconds_count{operation="failure"} 1.0'
+        in metrics.render().decode("utf-8")
+    )
 
 
 async def test_worker_commits_with_latest_heartbeat_lease_version() -> None:
@@ -340,3 +346,5 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
     rendered = metrics.render().decode("utf-8")
     assert "job_succeeded_total 1.0" in rendered
     assert "case_duration_count 1.0" in rendered
+    assert 'db_operation_duration_seconds_count{operation="claim"} 1.0' in rendered
+    assert 'db_operation_duration_seconds_count{operation="result"} 1.0' in rendered

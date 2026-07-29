@@ -1,9 +1,12 @@
+import hashlib
+import json
 from pathlib import Path
 
 import pytest
 
 from scripts.experiment_support import (
     ExperimentError,
+    bind_dataset_version,
     failed_experiment_envelope,
     percentile,
     write_report,
@@ -11,6 +14,8 @@ from scripts.experiment_support import (
 from scripts.run_concurrency_test import build_parser as concurrency_parser
 from scripts.run_failure_scenarios import build_parser as failure_parser
 from scripts.run_load_test import build_parser as load_parser
+from scripts.run_load_test import main as load_main
+from scripts.worker_scaling_protocol import build_balanced_arm_plan
 
 
 def test_experiment_percentile_uses_documented_linear_interpolation() -> None:
@@ -19,6 +24,25 @@ def test_experiment_percentile_uses_documented_linear_interpolation() -> None:
     assert percentile(values, 0.50) == 25.0
     assert percentile(values, 0.95) == 38.5
     assert percentile([], 0.95) is None
+
+
+def test_dataset_version_binding_rejects_server_digest_mismatch() -> None:
+    with pytest.raises(ExperimentError, match="server dataset digest"):
+        bind_dataset_version(
+            {"id": "version-1", "sha256": "b" * 64, "case_count": 500},
+            expected_sha256="a" * 64,
+            expected_case_count=500,
+        )
+
+    assert bind_dataset_version(
+        {"id": "version-1", "sha256": "a" * 64, "case_count": 500},
+        expected_sha256="a" * 64,
+        expected_case_count=500,
+    ) == {
+        "id": "version-1",
+        "sha256": "a" * 64,
+        "case_count": 500,
+    }
 
 
 def test_result_writer_refuses_to_overwrite_prior_evidence(tmp_path: Path) -> None:
@@ -51,3 +75,250 @@ def test_experiment_cli_defaults_cover_required_scale_and_concurrency() -> None:
     assert concurrency.requests == 20
     assert failure.allow_service_disruption is False
     assert failure.lease_recovery_wait_seconds == 40
+
+
+def test_worker_scaling_plan_balances_every_worker_count_across_positions() -> None:
+    arms = build_balanced_arm_plan()
+
+    assert len(arms) == 32
+    assert len({arm.arm_id for arm in arms}) == 32
+    for workload in {"io_latency_v1", "transient_5pct_v1"}:
+        workload_arms = [arm for arm in arms if arm.workload == workload]
+        assert {arm.repetition for arm in workload_arms} == {1, 2, 3, 4}
+        for position in range(1, 5):
+            assert {arm.workers for arm in workload_arms if arm.position == position} == {
+                1,
+                2,
+                4,
+                8,
+            }
+
+
+def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
+    output_root = tmp_path / "load"
+
+    exit_code = load_main(
+        [
+            "--prepare-only",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "gate1-contract",
+            "--seed",
+            "1729",
+        ]
+    )
+
+    manifest_path = output_root / "gate1-contract" / "manifest.json"
+    assert exit_code == 0
+    for evidence_directory in ("raw", "summary", "failures", "plots"):
+        assert (manifest_path.parent / evidence_directory).is_dir()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    protocol_bytes = (manifest_path.parent / "protocol.md").read_bytes()
+    compose_bytes = Path("deploy/compose.yaml").read_bytes()
+    assert {
+        key: manifest[key]
+        for key in (
+            "schema_version",
+            "experiment",
+            "run_id",
+            "status",
+            "formal_run_started",
+            "seed",
+        )
+    } == {
+        "schema_version": 1,
+        "experiment": "worker_scaling",
+        "run_id": "gate1-contract",
+        "status": "prepared",
+        "formal_run_started": False,
+        "seed": 1729,
+    }
+    assert manifest["protocol"] == {
+        "path": "protocol.md",
+        "sha256": hashlib.sha256(protocol_bytes).hexdigest(),
+    }
+    assert len(manifest["provenance"]["source_commit"]) == 40
+    assert manifest["provenance"]["compose_sha256"] == hashlib.sha256(compose_bytes).hexdigest()
+    assert manifest["adoption_gate"]["automatic_worker_count_change"] is False
+
+
+def test_load_prepare_mode_rejects_run_id_path_traversal(tmp_path: Path) -> None:
+    output_root = tmp_path / "load"
+    escaped = tmp_path / "escaped"
+
+    exit_code = load_main(
+        [
+            "--prepare-only",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "../escaped",
+        ]
+    )
+
+    assert exit_code == 1
+    assert not escaped.exists()
+
+
+def test_load_execute_mode_preserves_preflight_failure_before_any_arm(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "load"
+    common = [
+        "--output-root",
+        str(output_root),
+        "--run-id",
+        "gate1-preflight",
+    ]
+
+    assert load_main(["--prepare-only", *common]) == 0
+    assert load_main(["--execute-prepared", *common]) == 1
+
+    failure_path = output_root / "gate1-preflight" / "failures" / "preflight.json"
+    failure = json.loads(failure_path.read_text(encoding="utf-8"))
+    assert failure["ready"] is False
+    assert "quality_gate_confirmed" in failure["blockers"]
+    assert "adoption_gate_confirmed" in failure["blockers"]
+    assert not any((output_root / "gate1-preflight" / "raw").iterdir())
+
+
+def test_load_prepare_mode_freezes_hashed_dual_workload_dataset(tmp_path: Path) -> None:
+    output_root = tmp_path / "load"
+
+    exit_code = load_main(
+        [
+            "--prepare-only",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "gate1-dataset",
+            "--cases",
+            "500",
+            "--delay-ms",
+            "50",
+        ]
+    )
+
+    dataset_root = output_root / "gate1-dataset" / "dataset"
+    dataset_bytes = (dataset_root / "measurement.jsonl").read_bytes()
+    warmup_bytes = (dataset_root / "warmup.jsonl").read_bytes()
+    hashes = json.loads((dataset_root / "hashes.json").read_text(encoding="utf-8"))
+    cases = [json.loads(line) for line in dataset_bytes.splitlines()]
+    warmup_cases = [json.loads(line) for line in warmup_bytes.splitlines()]
+    transient_case_ids = {
+        case["case_id"]
+        for case in cases
+        if case["metadata"]["mock_profiles"]["transient_5pct_v1"]["fail_until_attempt"] == 1
+    }
+    expected_transient_ids = set(
+        sorted(
+            (f"load-{index:04d}" for index in range(500)),
+            key=lambda case_id: hashlib.sha256(case_id.encode()).hexdigest(),
+        )[:25]
+    )
+
+    assert exit_code == 0
+    assert len(cases) == 500
+    assert hashes == {
+        "algorithm": "sha256",
+        "measurement_sha256": hashlib.sha256(dataset_bytes).hexdigest(),
+        "measurement_bytes": len(dataset_bytes),
+        "measurement_cases": 500,
+        "warmup_sha256": hashlib.sha256(warmup_bytes).hexdigest(),
+        "warmup_bytes": len(warmup_bytes),
+        "warmup_cases": 50,
+    }
+    assert len(warmup_cases) == 50
+    assert {case["case_id"] for case in cases}.isdisjoint(case["case_id"] for case in warmup_cases)
+    assert transient_case_ids == expected_transient_ids
+    assert {profile for case in cases for profile in case["metadata"]["mock_profiles"]} == {
+        "io_latency_v1",
+        "transient_5pct_v1",
+    }
+
+
+def test_load_prepare_mode_freezes_repeated_seeded_arm_order(tmp_path: Path) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    common_arguments = [
+        "--prepare-only",
+        "--run-id",
+        "gate1-order",
+        "--workers",
+        "1,2,4,8",
+        "--repetitions",
+        "3",
+        "--seed",
+        "1729",
+    ]
+
+    assert load_main([*common_arguments, "--output-root", str(first_root)]) == 0
+    assert load_main([*common_arguments, "--output-root", str(second_root)]) == 0
+
+    first_plan = json.loads(
+        (first_root / "gate1-order" / "arm_order.json").read_text(encoding="utf-8")
+    )
+    second_plan = json.loads(
+        (second_root / "gate1-order" / "arm_order.json").read_text(encoding="utf-8")
+    )
+    arms = first_plan["arms"]
+    pair_counts = {
+        (workload, workers): sum(
+            arm["workload"] == workload and arm["workers"] == workers for arm in arms
+        )
+        for workload in ("io_latency_v1", "transient_5pct_v1")
+        for workers in (1, 2, 4, 8)
+    }
+
+    assert first_plan == second_plan
+    assert len(arms) == 24
+    assert pair_counts == {
+        (workload, workers): 3
+        for workload in ("io_latency_v1", "transient_5pct_v1")
+        for workers in (1, 2, 4, 8)
+    }
+    assert all(arm["warmup_required"] is True for arm in arms)
+    assert all(
+        len({arm["workers"] for arm in arms[index : index + 3]}) > 1
+        for index in range(len(arms) - 2)
+    )
+
+
+def test_load_prepare_mode_defaults_to_four_position_balanced_repetitions(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "load"
+
+    assert (
+        load_main(
+            [
+                "--prepare-only",
+                "--output-root",
+                str(output_root),
+                "--run-id",
+                "gate1-balanced-default",
+                "--seed",
+                "1729",
+            ]
+        )
+        == 0
+    )
+
+    plan = json.loads(
+        (output_root / "gate1-balanced-default" / "arm_order.json").read_text(encoding="utf-8")
+    )
+    arms = plan["arms"]
+
+    assert plan["algorithm"] == "position-balanced-v1"
+    assert plan["repetitions"] == 4
+    assert len(arms) == 32
+    for workload in ("io_latency_v1", "transient_5pct_v1"):
+        workload_arms = [arm for arm in arms if arm["workload"] == workload]
+        for position in range(1, 5):
+            assert {arm["workers"] for arm in workload_arms if arm["position"] == position} == {
+                1,
+                2,
+                4,
+                8,
+            }
