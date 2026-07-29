@@ -80,27 +80,50 @@ jobs:
 
       - name: Integration - concurrent job claiming and lease fencing
         if: ${{ !cancelled() }}
-        run: uv run --no-sync pytest tests/concurrency/test_job_claiming.py
+        run: >-
+          uv run --no-sync pytest tests/concurrency/test_job_claiming.py
+          --junitxml=/tmp/junit-job-claiming.xml
 
       - name: Integration - blinded human review
         if: ${{ !cancelled() }}
-        run: uv run --no-sync pytest tests/integration/test_human_reviews.py
+        run: >-
+          uv run --no-sync pytest tests/integration/test_human_reviews.py
+          --junitxml=/tmp/junit-human-reviews.xml
 
       - name: Integration - tenant identity and immutable datasets
         if: ${{ !cancelled() }}
-        run: uv run --no-sync pytest tests/integration/test_identity_and_datasets.py
+        run: >-
+          uv run --no-sync pytest tests/integration/test_identity_and_datasets.py
+          --junitxml=/tmp/junit-identity-datasets.xml
 
       - name: Integration - readiness dependencies
         if: ${{ !cancelled() }}
-        run: uv run --no-sync pytest tests/integration/test_readiness.py
+        run: >-
+          uv run --no-sync pytest tests/integration/test_readiness.py
+          --junitxml=/tmp/junit-readiness.xml
 
       - name: Integration - Redis event isolation
         if: ${{ !cancelled() }}
-        run: uv run --no-sync pytest tests/integration/test_redis_events.py
+        run: >-
+          uv run --no-sync pytest tests/integration/test_redis_events.py
+          --junitxml=/tmp/junit-redis-events.xml
 
       - name: Integration - Run idempotency and tenant boundary
         if: ${{ !cancelled() }}
-        run: uv run --no-sync pytest tests/integration/test_run_idempotency.py
+        run: >-
+          uv run --no-sync pytest tests/integration/test_run_idempotency.py
+          --junitxml=/tmp/junit-run-idempotency.xml
+
+      - name: Annotate integration failures
+        if: ${{ failure() && !cancelled() }}
+        run: >-
+          uv run --no-sync python scripts/ci_annotations.py junit
+          /tmp/junit-job-claiming.xml
+          /tmp/junit-human-reviews.xml
+          /tmp/junit-identity-datasets.xml
+          /tmp/junit-readiness.xml
+          /tmp/junit-redis-events.xml
+          /tmp/junit-run-idempotency.xml
 
       - name: Build application image
         if: ${{ !cancelled() }}
@@ -124,6 +147,15 @@ jobs:
       - name: Preserve Compose diagnostics
         if: always()
         run: docker compose -f deploy/compose.yaml ps && docker compose -f deploy/compose.yaml logs --no-color
+
+      - name: Annotate Compose startup failure
+        if: ${{ failure() && !cancelled() }}
+        run: |
+          docker compose -f deploy/compose.yaml ps --all > /tmp/compose-diagnostics.txt
+          docker compose -f deploy/compose.yaml logs --no-color --tail 80 >> /tmp/compose-diagnostics.txt
+          python3 scripts/ci_annotations.py text \
+            --title "Compose startup failure" \
+            /tmp/compose-diagnostics.txt
 
       - name: Stop Compose topology
         if: always()
