@@ -293,6 +293,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     created_by=api_key_id,
                 )
             )
+            await session.flush()
             session.add(
                 EvaluationJob(
                     id=race_job_id,
