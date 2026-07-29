@@ -672,3 +672,48 @@ Python 与配置
 - 不声称 exactly-once event delivery 或生产级。
 
 完整过程见 `docs/phase_6_execution_log.md` 与 `docs/07_realtime_events.md`。
+
+## 2026-07-29 — Phase 7：指标、Artifact 与 Run 比较（完成）
+
+### 基本信息
+
+- 起始 SHA：`2b157b5`
+- 实现提交：`437248c`
+- 目标：case keyset API、指标重算/持久化、Run-owned JSON artifact、同/跨版本比较。
+
+### 设计与修改
+
+- cursor 绑定 sort/direction/metric/status/error，权限仍由 Principal + tenant SQL 决定。
+- metric JSONB 仅 numeric cast，其余 NULLS LAST。
+- rate 用全部 Job 为分母；latency/evaluator metric 只用有效成功结果。
+- 新增 RunMetric 与 Artifact.run_id，migration head 0006。
+- 三种 deterministic report 使用现有 SHA-256 content-addressed store。
+- compare 的 delta 固定 right-left；不同 dataset version 发 warning，case diff 只取交集。
+- Run GET 读取已持久化 metric value，详细分布由 metrics API 返回。
+
+### 关键问题
+
+- Alembic 已格式化约束名被 naming convention 再格式化；用 `op.f` 修正真实 DROP 名。
+- `/runs/compare` 可能被动态 UUID 路由抢先匹配；调整 router 注册顺序。
+- SQLAlchemy stubs、异构 payload 和 conditional predicate 触发 strict mypy；均做局部显式类型。
+- 审查发现 RunRead.metrics 长期为空，补 RED 回归和 repository 加载。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| 非集成全量 | 201 passed，5 deselected |
+| 真实 PostgreSQL 扩展合同 | 1 skipped |
+| Ruff | All checks passed |
+| mypy app | 78 source files，无问题 |
+| Alembic | head `20260729_0006`，offline SQL 通过 |
+
+### 未解决与取舍
+
+- 没有 arbitrary metric expression index 或真实 EXPLAIN 结果。
+- content store 可能有无 metadata 引用的 orphan，需要未来 GC。
+- 不同版本同 case_id 的语义一致性仍需内容 hash/人工约束。
+- 没有统计显著性、置信区间或生产容量结论。
+
+完整过程见 `docs/phase_7_execution_log.md` 与
+`docs/10_results_metrics_and_comparison.md`。
