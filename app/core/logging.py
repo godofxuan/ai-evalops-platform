@@ -13,10 +13,18 @@ _SENSITIVE_KEYS = {
     "authorization",
     "database_url",
     "dsn",
+    "answer",
+    "evidence",
+    "expected_answer",
+    "input",
     "password",
+    "prompt",
+    "question",
     "redis_url",
+    "response",
     "secret",
     "token",
+    "trace",
 }
 _SENSITIVE_SUFFIXES = ("_api_key", "_password", "_secret", "_token")
 

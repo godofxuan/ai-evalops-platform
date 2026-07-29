@@ -15,6 +15,8 @@ def test_structured_logging_redacts_sensitive_fields_recursively() -> None:
         api_key="plain-api-key",
         database_url="postgresql://user:database-password@db/evalops",
         nested={"authorization": "Bearer upstream-token", "safe": "kept"},
+        question="private customer question",
+        answer="private model answer",
         outcome="error",
     )
 
@@ -23,4 +25,6 @@ def test_structured_logging_redacts_sensitive_fields_recursively() -> None:
     assert event["api_key"] == "[REDACTED]"
     assert event["database_url"] == "[REDACTED]"
     assert event["nested"] == {"authorization": "[REDACTED]", "safe": "kept"}
+    assert event["question"] == "[REDACTED]"
+    assert event["answer"] == "[REDACTED]"
     assert event["outcome"] == "error"

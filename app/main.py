@@ -24,6 +24,7 @@ from app.api.middleware import RequestContextMiddleware
 from app.api.routes_datasets import router as datasets_router
 from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
+from app.api.routes_observability import router as observability_router
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
@@ -31,6 +32,7 @@ from app.artifacts.storage import LocalArtifactStore
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
 from app.core.logging import configure_logging, get_logger
+from app.core.telemetry import Telemetry, parse_otlp_headers
 from app.datasets.service import (
     DatasetNameConflictError,
     DatasetNotFoundError,
@@ -47,6 +49,7 @@ from app.health.service import (
     build_infrastructure_readiness_probe,
 )
 from app.jobs.cancellation import SQLAlchemyCancellationService
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
 from app.results.service import SQLAlchemyResultService
@@ -75,11 +78,26 @@ def create_app(
     runtime_settings = settings or Settings()
     configure_logging(log_level=runtime_settings.log_level)
     logger = get_logger(__name__)
+    metrics = PlatformMetrics()
+    telemetry = Telemetry(
+        service_name=runtime_settings.otel_service_name,
+        enabled=runtime_settings.otel_enabled,
+        otlp_endpoint=runtime_settings.otel_exporter_otlp_endpoint,
+        otlp_headers=parse_otlp_headers(
+            None
+            if runtime_settings.otel_exporter_otlp_headers is None
+            else runtime_settings.otel_exporter_otlp_headers.get_secret_value()
+        ),
+        resource_attributes={"process.role": "api"},
+    )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         if readiness_probe is not None:
-            yield
+            try:
+                yield
+            finally:
+                telemetry.shutdown()
             return
 
         runtime_settings.artifact_root.mkdir(parents=True, exist_ok=True)
@@ -103,8 +121,13 @@ def create_app(
         application.state.run_service = SQLAlchemyRunService(
             repository=SQLAlchemyRunRepository(session_factory),
             artifact_store=artifact_store,
+            metrics=metrics,
+            telemetry=telemetry,
         )
-        application.state.event_publisher = RedisEventPublisher(redis_client)
+        application.state.event_publisher = RedisEventPublisher(
+            redis_client,
+            metrics=metrics,
+        )
         application.state.run_event_stream = RunEventStream(
             run_service=application.state.run_service,
             subscriber=RedisEventSubscriber(
@@ -112,6 +135,8 @@ def create_app(
                 poll_timeout_seconds=runtime_settings.sse_heartbeat_seconds,
             ),
             fallback_poll_seconds=runtime_settings.sse_fallback_poll_seconds,
+            metrics=metrics,
+            telemetry=telemetry,
         )
         application.state.cancellation_service = SQLAlchemyCancellationService(session_factory)
         application.state.result_service = SQLAlchemyResultService(
@@ -134,6 +159,7 @@ def create_app(
         finally:
             await redis_client.aclose()
             await engine.dispose()
+            telemetry.shutdown()
             logger.info("application_stopped")
 
     application = FastAPI(
@@ -142,8 +168,11 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = runtime_settings
+    application.state.metrics = metrics
+    application.state.telemetry = telemetry
     application.state.readiness_probe = readiness_probe or NotConfiguredReadinessProbe()
     application.state.api_key_lookup = None
+    application.state.session_factory = None
     application.state.dataset_service = None
     application.state.run_service = None
     application.state.result_service = None
@@ -152,6 +181,7 @@ def create_app(
     application.state.run_event_stream = None
     application.state.cancellation_service = None
     application.include_router(health_router)
+    application.include_router(observability_router)
     application.include_router(datasets_router)
     application.include_router(results_router)
     application.include_router(reviews_router)
@@ -195,7 +225,11 @@ def create_app(
         RequestValidationError,
         handle_request_validation_error,
     )
-    application.add_middleware(RequestContextMiddleware)
+    application.add_middleware(
+        RequestContextMiddleware,
+        metrics=metrics,
+        telemetry=telemetry,
+    )
     return application
 
 

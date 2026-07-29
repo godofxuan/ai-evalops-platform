@@ -3,8 +3,10 @@ from uuid import UUID
 
 from app.artifacts.storage import ArtifactStore
 from app.auth.principals import Principal
+from app.core.telemetry import Telemetry
 from app.datasets.validation import validate_jsonl
 from app.evaluators.base import UnsupportedEvaluatorError, build_evaluator
+from app.observability.metrics import PlatformMetrics
 from app.runs.idempotency import canonical_request_hash
 from app.runs.repository import NewRun, RunRepository, RunSnapshot
 from app.runs.schemas import RunCreate, RunRead
@@ -60,9 +62,13 @@ class SQLAlchemyRunService:
         *,
         repository: RunRepository,
         artifact_store: ArtifactStore,
+        metrics: PlatformMetrics | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self._repository = repository
         self._artifact_store = artifact_store
+        self._metrics = metrics
+        self._telemetry = telemetry
 
     async def create_run(
         self,
@@ -97,29 +103,37 @@ class SQLAlchemyRunService:
 
         target_config = dict(request.target.config)
         evaluator_config = dict(request.evaluator.config)
-        snapshot = await self._repository.create_or_replay(
-            NewRun(
-                tenant_id=principal.tenant_id,
-                created_by=principal.api_key_id,
-                dataset_version_id=request.dataset_version_id,
-                dataset_hash=source.sha256,
-                idempotency_key=idempotency_key,
-                request_hash=request_hash,
-                target_type=request.target.type,
-                target_config=target_config,
-                target_config_hash=canonical_request_hash(target_config),
-                evaluator_type=request.evaluator.type,
-                evaluator_config=evaluator_config,
-                evaluator_config_hash=canonical_request_hash(evaluator_config),
-                target_version=request.target.version,
-                evaluator_version=request.evaluator.version,
-                source_commit=request.source_commit,
-                max_attempts=max_attempts,
-                cases=tuple(case.model_dump(mode="json") for case in validated.cases),
-            )
+        new_run = NewRun(
+            tenant_id=principal.tenant_id,
+            created_by=principal.api_key_id,
+            dataset_version_id=request.dataset_version_id,
+            dataset_hash=source.sha256,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            target_type=request.target.type,
+            target_config=target_config,
+            target_config_hash=canonical_request_hash(target_config),
+            evaluator_type=request.evaluator.type,
+            evaluator_config=evaluator_config,
+            evaluator_config_hash=canonical_request_hash(evaluator_config),
+            target_version=request.target.version,
+            evaluator_version=request.evaluator.version,
+            source_commit=request.source_commit,
+            max_attempts=max_attempts,
+            cases=tuple(case.model_dump(mode="json") for case in validated.cases),
         )
+        if self._telemetry is None:
+            snapshot = await self._repository.create_or_replay(new_run)
+        else:
+            with self._telemetry.start_as_current_span(
+                "run.create.database_transaction",
+                attributes={"tenant.id": str(principal.tenant_id)},
+            ):
+                snapshot = await self._repository.create_or_replay(new_run)
         if snapshot.request_hash != request_hash:
             raise IdempotencyConflictError
+        if snapshot.created_now and self._metrics is not None:
+            self._metrics.record_run_created()
         return _to_run_read(snapshot)
 
     async def get_run(

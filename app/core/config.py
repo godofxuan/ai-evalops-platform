@@ -46,6 +46,18 @@ class Settings(BaseSettings):
     retry_jitter_ratio: float = Field(default=0.2, ge=0, le=1)
     sse_heartbeat_seconds: float = Field(default=15.0, gt=0, le=300)
     sse_fallback_poll_seconds: float = Field(default=2.0, gt=0, le=300)
+    metrics_enabled: bool = True
+    metrics_host: str = "0.0.0.0"
+    worker_metrics_port: int = Field(default=9101, ge=1, le=65_535)
+    reaper_metrics_port: int = Field(default=9102, ge=1, le=65_535)
+    otel_enabled: bool = True
+    otel_service_name: str = Field(
+        default="ai-evalops-platform",
+        min_length=1,
+        max_length=128,
+    )
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_exporter_otlp_headers: SecretStr | None = None
 
     @model_validator(mode="after")
     def validate_worker_timing(self) -> "Settings":

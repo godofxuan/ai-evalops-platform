@@ -20,12 +20,18 @@ x-app-environment: &app-environment
   EVALOPS_RETRY_JITTER_RATIO: "0.2"
   EVALOPS_SSE_HEARTBEAT_SECONDS: "15.0"
   EVALOPS_SSE_FALLBACK_POLL_SECONDS: "2.0"
+  EVALOPS_METRICS_ENABLED: "true"
+  EVALOPS_METRICS_HOST: "0.0.0.0"
+  EVALOPS_WORKER_METRICS_PORT: "9101"
+  EVALOPS_REAPER_METRICS_PORT: "9102"
+  EVALOPS_OTEL_ENABLED: "true"
+  EVALOPS_OTEL_SERVICE_NAME: ai-evalops-platform
 
 x-app-service: &app-service
   build:
     context: ..
     dockerfile: Dockerfile
-  image: ai-evalops-platform:phase1
+  image: ai-evalops-platform:phase9
   environment: *app-environment
   volumes:
     - artifact_data:/data/artifacts
@@ -110,11 +116,15 @@ services:
   worker:
     <<: *app-service
     command: ["python", "-m", "app.cli", "worker"]
+    expose:
+      - "9101"
     depends_on: *ready-dependencies
 
   reaper:
     <<: *app-service
     command: ["python", "-m", "app.cli", "reaper"]
+    expose:
+      - "9102"
     depends_on: *ready-dependencies
 
 volumes:

@@ -8,7 +8,9 @@ from uuid import UUID
 
 from app.auth.principals import Principal
 from app.core.logging import get_logger
+from app.core.telemetry import Telemetry
 from app.events.models import EventType, ProgressEvent
+from app.observability.metrics import PlatformMetrics
 from app.runs.schemas import RunRead
 
 type Sleep = Callable[[float], Awaitable[None]]
@@ -52,6 +54,8 @@ class RunEventStream:
         subscriber: EventSubscriber,
         fallback_poll_seconds: float,
         sleep: Sleep = asyncio.sleep,
+        metrics: PlatformMetrics | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         if fallback_poll_seconds <= 0:
             raise ValueError("fallback poll interval must be positive")
@@ -59,6 +63,8 @@ class RunEventStream:
         self._subscriber = subscriber
         self._fallback_poll_seconds = fallback_poll_seconds
         self._sleep = sleep
+        self._metrics = metrics
+        self._telemetry = telemetry
         self._logger = get_logger(__name__)
 
     async def open(
@@ -84,9 +90,42 @@ class RunEventStream:
         run_id: UUID,
         initial: RunRead,
     ) -> AsyncGenerator[str]:
+        if self._metrics is not None:
+            self._metrics.sse_connected()
+        try:
+            stream = self._stream_events(
+                principal=principal,
+                run_id=run_id,
+                initial=initial,
+            )
+            if self._telemetry is None:
+                async with aclosing(stream):
+                    async for chunk in stream:
+                        yield chunk
+            else:
+                with self._telemetry.start_as_current_span(
+                    "sse.connection",
+                    attributes={
+                        "tenant.id": str(principal.tenant_id),
+                        "run.id": str(run_id),
+                    },
+                ):
+                    async with aclosing(stream):
+                        async for chunk in stream:
+                            yield chunk
+        finally:
+            if self._metrics is not None:
+                self._metrics.sse_disconnected()
+
+    async def _stream_events(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        initial: RunRead,
+    ) -> AsyncGenerator[str]:
         latest_snapshot = initial.model_dump_json()
         yield _encode_sse(_snapshot_event(principal=principal, snapshot=initial))
-
         try:
             live_stream = self._subscriber.listen(
                 tenant_id=principal.tenant_id,

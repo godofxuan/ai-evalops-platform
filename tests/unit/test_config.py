@@ -44,3 +44,15 @@ def test_worker_heartbeat_must_be_shorter_than_lease() -> None:
             worker_lease_seconds=10,
             worker_heartbeat_seconds=10,
         )
+
+
+def test_observability_settings_have_safe_bounded_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.metrics_enabled is True
+    assert settings.metrics_host == "0.0.0.0"
+    assert settings.worker_metrics_port == 9101
+    assert settings.reaper_metrics_port == 9102
+    assert settings.otel_enabled is True
+    assert settings.otel_service_name == "ai-evalops-platform"
+    assert settings.otel_exporter_otlp_endpoint is None

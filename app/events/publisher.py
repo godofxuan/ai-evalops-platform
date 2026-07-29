@@ -4,6 +4,7 @@ from redis.asyncio import Redis
 
 from app.core.logging import get_logger
 from app.events.models import ProgressEvent, run_event_channel
+from app.observability.metrics import PlatformMetrics
 
 
 class EventPublisher(Protocol):
@@ -12,9 +13,15 @@ class EventPublisher(Protocol):
 
 
 class RedisEventPublisher:
-    def __init__(self, redis_client: Redis) -> None:
+    def __init__(
+        self,
+        redis_client: Redis,
+        *,
+        metrics: PlatformMetrics | None = None,
+    ) -> None:
         self._redis = redis_client
         self._logger = get_logger(__name__)
+        self._metrics = metrics
 
     async def publish(self, event: ProgressEvent) -> bool:
         channel = run_event_channel(
@@ -24,6 +31,8 @@ class RedisEventPublisher:
         try:
             delivered = await self._redis.publish(channel, event.model_dump_json())
         except Exception as error:
+            if self._metrics is not None:
+                self._metrics.record_redis_publish_failure()
             self._logger.warning(
                 "progress_event_publish_failed",
                 event_type=event.event_type.value,

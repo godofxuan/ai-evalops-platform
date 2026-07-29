@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, Request, status
 
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
+from app.core.telemetry import Telemetry
 from app.events.models import EventType, ProgressEvent
 from app.events.publisher import EventPublisher
 from app.jobs.cancellation import CancellationService
@@ -35,11 +36,16 @@ async def create_run(
     service = cast(RunService | None, request.app.state.run_service)
     if service is None:
         raise RuntimeError("run service is not configured")
-    return await service.create_run(
-        principal=principal,
-        idempotency_key=idempotency_key,
-        request=payload,
-    )
+    telemetry = cast(Telemetry, request.app.state.telemetry)
+    with telemetry.start_as_current_span(
+        "run.create",
+        attributes={"tenant.id": str(principal.tenant_id)},
+    ):
+        return await service.create_run(
+            principal=principal,
+            idempotency_key=idempotency_key,
+            request=payload,
+        )
 
 
 @router.get("/{run_id}", response_model=RunRead)

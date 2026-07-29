@@ -4,6 +4,7 @@ from uuid import UUID
 
 from app.events.models import EventType, ProgressEvent
 from app.events.publisher import RedisEventPublisher
+from app.observability.metrics import PlatformMetrics
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
@@ -46,6 +47,8 @@ async def test_publisher_uses_exact_tenant_run_channel() -> None:
 
 
 async def test_redis_failure_is_best_effort_and_does_not_escape() -> None:
-    publisher = RedisEventPublisher(BrokenRedis())
+    metrics = PlatformMetrics()
+    publisher = RedisEventPublisher(BrokenRedis(), metrics=metrics)
 
     assert await publisher.publish(_event()) is False
+    assert "redis_publish_failures_total 1.0" in metrics.render().decode("utf-8")

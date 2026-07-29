@@ -61,6 +61,7 @@ class RunSnapshot:
     started_at: datetime | None
     finished_at: datetime | None
     metrics: dict[str, Any] = field(default_factory=dict)
+    created_now: bool = False
 
 
 class RunRepository(Protocol):
@@ -228,7 +229,7 @@ class SQLAlchemyRunRepository:
             if existing is None:
                 raise
             return existing
-        return _snapshot(run)
+        return _snapshot(run, created_now=True)
 
     async def get_run(
         self,
@@ -262,6 +263,7 @@ def _snapshot(
     run: EvaluationRun,
     *,
     metrics: dict[str, Any] | None = None,
+    created_now: bool = False,
 ) -> RunSnapshot:
     return RunSnapshot(
         id=run.id,
@@ -276,6 +278,7 @@ def _snapshot(
         started_at=run.started_at,
         finished_at=run.finished_at,
         metrics={} if metrics is None else metrics,
+        created_now=created_now,
     )
 
 

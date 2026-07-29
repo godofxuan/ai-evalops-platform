@@ -6,6 +6,7 @@ from uuid import UUID
 from app.auth.principals import Principal
 from app.events.models import EventType, ProgressEvent
 from app.events.sse import RunEventStream
+from app.observability.metrics import PlatformMetrics
 from app.runs.schemas import RunRead
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
@@ -113,6 +114,25 @@ async def test_stream_sends_database_snapshot_before_live_event_and_heartbeat() 
     assert third[0] == "heartbeat"
     assert snapshots.calls[0] == (PRINCIPAL, RUN_ID)
     assert subscriber.closed is True
+
+
+async def test_stream_connection_metric_is_released_when_client_disconnects() -> None:
+    metrics = PlatformMetrics()
+    service = RunEventStream(
+        run_service=SnapshotService([_snapshot()]),
+        subscriber=FakeSubscriber([None]),
+        fallback_poll_seconds=0.5,
+        sleep=_no_sleep,
+        metrics=metrics,
+    )
+
+    stream = await service.open(principal=PRINCIPAL, run_id=RUN_ID)
+    await anext(stream)
+    assert "sse_connections 1.0" in metrics.render().decode("utf-8")
+
+    await stream.aclose()
+
+    assert "sse_connections 0.0" in metrics.render().decode("utf-8")
 
 
 async def test_redis_failure_degrades_to_changed_postgresql_snapshot() -> None:

@@ -2,6 +2,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+from app.core.telemetry import Telemetry
 from app.domain.evaluation import (
     EvaluationCase,
     EvaluationResult,
@@ -11,6 +15,7 @@ from app.domain.evaluation import (
 )
 from app.events.models import EventType, ProgressEvent
 from app.jobs.claiming import ClaimedJob
+from app.observability.metrics import PlatformMetrics
 from app.targets.base import TargetHTTPError
 from app.workers.worker import EvaluationWorker
 
@@ -276,3 +281,62 @@ async def test_progress_publisher_failure_does_not_fail_completed_job() -> None:
 
     assert await worker.process_one(worker_id="worker-1") is True
     assert committer.committed is True
+
+
+async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
+    claimed_job = ClaimedJob(
+        job_id=JOB_ID,
+        run_id=RUN_ID,
+        tenant_id=TENANT_ID,
+        case_id="case-1",
+        case_payload={"case_id": "case-1", "question": "q", "metadata": {}},
+        attempt_id=ATTEMPT_ID,
+        attempt_number=1,
+        worker_id="worker-1",
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=30),
+        version=2,
+        target_type="mock",
+        target_config={},
+        target_version="v1",
+        evaluator_type="execution",
+        evaluator_config={},
+        evaluator_version="v1",
+    )
+    exporter = InMemorySpanExporter()
+    telemetry = Telemetry(
+        service_name="evalops-worker-test",
+        span_processors=(SimpleSpanProcessor(exporter),),
+    )
+    metrics = PlatformMetrics()
+
+    class RecordingPublisher:
+        async def publish(self, event: ProgressEvent) -> bool:
+            del event
+            return True
+
+    worker = EvaluationWorker(
+        claimer=SingleClaimer(claimed_job),
+        target_factory=lambda _kind, _config: RecordingTarget(),
+        evaluator_factory=lambda _kind, _config: RecordingEvaluator(),
+        result_committer=RecordingCommitter(),
+        failure_committer=RecordingFailureCommitter(),
+        lease_runner=PassThroughLeaseRunner(),
+        event_publisher=RecordingPublisher(),
+        metrics=metrics,
+        telemetry=telemetry,
+    )
+
+    assert await worker.process_one(worker_id="worker-1") is True
+
+    span_names = {span.name for span in exporter.get_finished_spans()}
+    assert {
+        "job.claim",
+        "job.process",
+        "target.call",
+        "evaluator.evaluate",
+        "result.persist",
+        "progress.publish",
+    } <= span_names
+    rendered = metrics.render().decode("utf-8")
+    assert "job_succeeded_total 1.0" in rendered
+    assert "case_duration_count 1.0" in rendered
