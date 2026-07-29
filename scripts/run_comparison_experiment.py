@@ -7,6 +7,7 @@ from scripts.experiment_support import (
     ExperimentClient,
     ExperimentError,
     experiment_envelope,
+    failed_experiment_envelope,
     write_report,
 )
 
@@ -129,6 +130,17 @@ def main() -> int:
         write_report(args.output, report)
     except (ExperimentError, OSError) as error:
         print(f"experiment failed: {error}")
+        try:
+            write_report(
+                args.output,
+                failed_experiment_envelope(
+                    experiment="run_comparison",
+                    configuration={"api_url": args.api_url, "case_count": 4},
+                    error=error,
+                ),
+            )
+        except ExperimentError as write_error:
+            print(f"could not preserve failed result: {write_error}")
         return 1
     print(f"preserved experiment result: {args.output}")
     return 0

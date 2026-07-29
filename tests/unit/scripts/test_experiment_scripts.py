@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from scripts.experiment_support import ExperimentError, percentile, write_report
+from scripts.experiment_support import (
+    ExperimentError,
+    failed_experiment_envelope,
+    percentile,
+    write_report,
+)
 from scripts.run_concurrency_test import build_parser as concurrency_parser
 from scripts.run_failure_scenarios import build_parser as failure_parser
 from scripts.run_load_test import build_parser as load_parser
@@ -22,6 +27,18 @@ def test_result_writer_refuses_to_overwrite_prior_evidence(tmp_path: Path) -> No
 
     with pytest.raises(ExperimentError, match="refusing to overwrite"):
         write_report(output, {"status": "replacement"})
+
+
+def test_failed_experiment_record_contains_no_exception_message_or_secret() -> None:
+    report = failed_experiment_envelope(
+        experiment="fault",
+        configuration={"cases": 1},
+        error=RuntimeError("Bearer secret-must-not-be-recorded"),
+    )
+
+    assert report["status"] == "failed"
+    assert report["error"] == {"type": "RuntimeError"}
+    assert "secret-must-not-be-recorded" not in str(report)
 
 
 def test_experiment_cli_defaults_cover_required_scale_and_concurrency() -> None:

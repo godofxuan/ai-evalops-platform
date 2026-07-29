@@ -207,6 +207,22 @@ def experiment_envelope(*, experiment: str, configuration: dict[str, Any]) -> di
     }
 
 
+def failed_experiment_envelope(
+    *,
+    experiment: str,
+    configuration: dict[str, Any],
+    error: BaseException,
+) -> dict[str, Any]:
+    report = experiment_envelope(
+        experiment=experiment,
+        configuration=configuration,
+    )
+    report["status"] = "failed"
+    report["finished_at"] = datetime.now(UTC).isoformat()
+    report["error"] = {"type": type(error).__name__}
+    return report
+
+
 def write_report(path: Path, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():

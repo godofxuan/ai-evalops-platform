@@ -9,6 +9,7 @@ from scripts.experiment_support import (
     ExperimentClient,
     ExperimentError,
     experiment_envelope,
+    failed_experiment_envelope,
     percentile,
     write_report,
 )
@@ -134,6 +135,22 @@ def main() -> int:
         write_report(args.output, report)
     except (ExperimentError, OSError, subprocess.CalledProcessError) as error:
         print(f"experiment failed: {error}")
+        try:
+            write_report(
+                args.output,
+                failed_experiment_envelope(
+                    experiment="worker_scaling",
+                    configuration={
+                        "workers": args.workers,
+                        "cases": args.cases,
+                        "delay_ms": args.delay_ms,
+                        "api_url": args.api_url,
+                    },
+                    error=error,
+                ),
+            )
+        except ExperimentError as write_error:
+            print(f"could not preserve failed result: {write_error}")
         return 1
     print(f"preserved experiment result: {args.output}")
     return 0

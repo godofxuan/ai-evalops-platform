@@ -12,6 +12,7 @@ from scripts.experiment_support import (
     ExperimentClient,
     ExperimentError,
     experiment_envelope,
+    failed_experiment_envelope,
     write_report,
 )
 
@@ -143,8 +144,16 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             deadline_seconds=args.deadline_seconds,
         )
         await asyncio.to_thread(_compose, args.compose_file, "kill", "worker")
-        await asyncio.sleep(args.lease_recovery_wait_seconds)
-        await asyncio.to_thread(_compose, args.compose_file, "up", "--detach", "worker")
+        try:
+            await asyncio.sleep(args.lease_recovery_wait_seconds)
+        finally:
+            await asyncio.to_thread(
+                _compose,
+                args.compose_file,
+                "up",
+                "--detach",
+                "worker",
+            )
         crash_snapshot, _ = await client.wait_for_run(
             str(crash_run["id"]),
             poll_seconds=args.poll_seconds,
@@ -213,6 +222,20 @@ def main() -> int:
         write_report(args.output, report)
     except (ExperimentError, OSError, subprocess.CalledProcessError, httpx.HTTPError) as error:
         print(f"experiment failed: {error}")
+        try:
+            write_report(
+                args.output,
+                failed_experiment_envelope(
+                    experiment="compose_failure_injection",
+                    configuration={
+                        "api_url": args.api_url,
+                        "lease_recovery_wait_seconds": args.lease_recovery_wait_seconds,
+                    },
+                    error=error,
+                ),
+            )
+        except ExperimentError as write_error:
+            print(f"could not preserve failed result: {write_error}")
         return 1
     print(f"preserved experiment result: {args.output}")
     return 0
