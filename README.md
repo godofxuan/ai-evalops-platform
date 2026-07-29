@@ -399,21 +399,22 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 | Docker build / Compose up | 未运行；`docker --version` 与 `docker compose version` 均为 CommandNotFound |
 | GitHub Actions | 未运行；没有 push |
 
-2026-07-29 Phase 9 本机阶段结果：
+2026-07-29 Phase 9 当前验证结果（本机 + GitHub CI）：
 
 | 检查 | 结果 |
 |---|---|
 | Python / uv | CPython 3.12.13 / uv 0.11.32 |
 | observability deps | OpenTelemetry SDK 1.44.0 / Prometheus Client 0.26.0 |
 | lock | `uv lock --check` 通过；60 packages |
-| format / lint | 196 files already formatted；All checks passed |
-| mypy | app + scripts 96 source files，无问题 |
-| pytest 非集成 | 231 passed，6 deselected |
-| 真实 PostgreSQL/Redis contracts | 6 skipped；本机未启用真实服务 |
-| Alembic | 唯一 head `20260729_0007`；offline PostgreSQL SQL 通过 |
+| format / lint | 199 files already formatted；All checks passed |
+| mypy | app + scripts + integration/concurrency tests，103 source files，无问题 |
+| pytest 非集成 | 235 passed，6 deselected |
+| 真实 PostgreSQL/Redis contracts | 本机 6 skipped；GitHub Actions 6 passed |
+| Alembic | 唯一 head `20260729_0008`；offline SQL 与 CI 真实 PostgreSQL migration 通过 |
+| Docker image / Compose smoke | 本机无 Docker；GitHub Actions build、迁移、API/Worker/Reaper 启动和 readiness 通过 |
 | 500-case / 1/2/4/8 Worker | NOT-RUN；Docker/Compose 均为 CommandNotFound |
 | fault/container comparison 实验 | NOT-RUN；没有运行栈 |
-| GitHub Actions | 未运行；没有 push |
+| GitHub Actions | [Run #7](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30425559361) 两个 job 均通过 |
 
 未执行实验的完整清单见
 [Phase 9 环境与阻塞](docs/results/phase_9_environment_and_blockers.md)。本 README 不提供
@@ -472,4 +473,5 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 30. 展示 API 如何延续 W3C traceparent，以及为什么 Worker 目前是新的 trace。
 31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
 32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
-33. 明确区分 231 passed、6 skipped 和 NOT-RUN 容量实验，拒绝把合同当成实测结果。
+33. 明确区分本机 235 passed、CI 6 个真实服务合同 passed 和 NOT-RUN 容量实验，拒绝把
+    合同当成性能实测结果。

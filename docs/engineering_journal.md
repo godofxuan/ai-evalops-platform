@@ -848,3 +848,40 @@ Python 与配置
 完整过程见 `docs/phase_9_execution_log.md`、
 `docs/12_observability_and_experiments.md` 和
 `docs/results/phase_9_environment_and_blockers.md`。
+
+## 2026-07-29 — 公开发布与 GitHub CI 闭环
+
+### 发布结果
+
+- 公开仓库：`https://github.com/godofxuan/ai-evalops-platform`
+- 首次推送提交：`a1c3e10`
+- 最终成功验证提交：`06dc670`
+- 成功运行：
+  `https://github.com/godofxuan/ai-evalops-platform/actions/runs/30425559361`
+
+### 七轮运行得到的工程结论
+
+1. YAML parser 通过不等于 GitHub Actions 语义通过；`runner` context 不能用于 job 级
+   env。加入 actionlint 反馈循环后定位并修复。
+2. 大而合并的 CI 步骤只能给出模糊 failure；具名集成合同和 build/start 分段显著提高
+   可诊断性。
+3. 匿名 API 不允许下载 job logs；有界 JUnit/Compose annotation 提供了不接触 Token
+   的可审计错误证据。
+4. skipped integration test 可能隐藏测试本身的属性漂移和 parent/child flush 顺序问题；
+   因此把 integration/concurrency 测试加入 mypy，并让 CI 真正运行全部 6 个合同。
+5. Compose `--wait` 与 one-shot migration 的生命周期语义冲突；显式拆成依赖、
+   migration、长运行进程和 readiness 四阶段后 smoke 通过。
+6. CHECK 约束允许新枚举值不代表物理 `VARCHAR` 长度也自动变化；新增 migration
+   `20260729_0008` 扩宽 artifact type。
+
+### 最终证据
+
+| 检查 | 结果 |
+|---|---|
+| 本机非集成 | 235 passed，6 deselected |
+| mypy | 103 source files，无问题 |
+| Alembic | 单一 head `20260729_0008`，offline SQL 通过 |
+| GitHub 真实服务合同 | 6 passed |
+| GitHub Compose smoke | build、migration、API/Worker/Reaper、readiness 通过 |
+
+仍不声称 500-case 性能、故障恢复时延、soak、生产容量或 exactly-once。

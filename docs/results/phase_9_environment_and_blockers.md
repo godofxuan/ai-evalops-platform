@@ -17,7 +17,7 @@
 | uv | 0.11.32 |
 | OpenTelemetry SDK | 1.44.0 |
 | Prometheus Client | 0.26.0 |
-| Alembic head | `20260729_0007`（单一 head） |
+| Alembic head | `20260729_0008`（单一 head） |
 | Docker CLI | 不存在，CommandNotFound |
 | Docker Compose | 不存在，CommandNotFound |
 | 本机 PostgreSQL/Redis | 未配置为本阶段真实测试服务 |
@@ -31,15 +31,15 @@
 | 修复日志测试与 SSE close 后 | 15 passed |
 | Worker/durable observability 定向回归 | 10 passed |
 | fault matrix、脚本与 MockTarget profile | 12 passed |
-| `ruff format --check .` | 196 files already formatted |
+| `ruff format --check .` | 199 files already formatted |
 | `ruff check .` | All checks passed |
-| `mypy app scripts` | 96 source files，无问题 |
-| 非集成全量 pytest | 231 passed，6 deselected |
-| integration contract 命令 | 6 skipped，231 deselected |
+| `mypy app scripts tests/integration tests/concurrency` | 103 source files，无问题 |
+| 非集成全量 pytest | 235 passed，6 deselected |
+| 本机 integration contract 命令 | 6 skipped，235 deselected |
 | `uv lock --check` | 60 packages resolved，无变更 |
 | load/failure script `--help` | 正常 |
-| `alembic heads` | 单一 head `20260729_0007` |
-| Alembic offline PostgreSQL SQL | 从 baseline 到 0007 全部生成并 COMMIT |
+| `alembic heads` | 单一 head `20260729_0008` |
+| Alembic offline PostgreSQL SQL | 从 baseline 到 0008 全部生成并 COMMIT |
 
 ## 3. 本阶段真实遇到的问题
 
@@ -101,7 +101,33 @@ Target 实现。
 
 效果：同一个 Dataset Version 能通过两个 Run target profile 产生可复现的四类 diff。
 
-## 4. 未执行的真实实验
+## 4. GitHub CI 真实服务证据
+
+公开仓库：
+[godofxuan/ai-evalops-platform](https://github.com/godofxuan/ai-evalops-platform)
+
+最终验证运行：
+[GitHub Actions Run #7](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30425559361)，
+提交 `06dc670`。
+
+| 检查 | 远程结果 |
+|---|---|
+| workflow semantic validation | 通过，创建 2 个 job |
+| lock / format / lint | 通过 |
+| mypy | app、scripts、integration/concurrency tests 共 103 个源文件，通过 |
+| 非集成 pytest | 235 passed |
+| 真实 PostgreSQL/Redis contracts | 6 passed |
+| 10 Worker / 100 Jobs / 2 Reaper 合同 | 通过 |
+| 20 个相同 Idempotency-Key 并发请求 | 通过 |
+| cancel/result 真实 PostgreSQL 竞态合同 | 通过 |
+| Alembic | baseline → `20260729_0008` 在真实 PostgreSQL 上通过 |
+| Docker image build | 通过 |
+| Compose smoke | PostgreSQL/Redis 健康、migration、API/Worker/Reaper 启动、readiness 全部通过 |
+
+这些结果证明合同在一次 GitHub-hosted Runner 上实际通过，但不等于性能、耐久性或生产
+可靠性认证。
+
+## 5. 未执行的真实实验
 
 以下结果不是失败，也不是通过，而是 **NOT-RUN / SKIPPED-no-infra**：
 
@@ -111,23 +137,28 @@ Target 实现。
 | 500 cases × 2 Workers | NOT-RUN | Docker/Compose 不存在 |
 | 500 cases × 4 Workers | NOT-RUN | Docker/Compose 不存在 |
 | 500 cases × 8 Workers | NOT-RUN | Docker/Compose 不存在 |
-| 20 并发相同 Idempotency-Key（真实 PG） | SKIPPED | 无 migrated PostgreSQL |
-| 10 Worker 竞争 100 Jobs | SKIPPED | 无 migrated PostgreSQL |
-| 2 Reaper 并发回收 | SKIPPED | 无 migrated PostgreSQL |
+| 20 并发相同 Idempotency-Key（真实 PG） | CI-PASSED | GitHub Actions 单次合同通过，非负载认证 |
+| 10 Worker 竞争 100 Jobs | CI-PASSED | GitHub Actions 单次合同通过，非容量认证 |
+| 2 Reaper 并发回收 | CI-PASSED | GitHub Actions 单次合同通过，非 soak 结果 |
 | Worker kill + lease recovery | NOT-RUN | Docker/Compose 不存在 |
 | Redis 容器中断与恢复 | NOT-RUN | Docker/Compose 不存在 |
 | PostgreSQL 容器中断 | NOT-RUN | Docker/Compose 不存在 |
-| cancel/result 真实竞态 | SKIPPED | 真实 PG 合同已编码；本机无 migrated PostgreSQL |
+| cancel/result 真实竞态 | CI-PASSED | GitHub Actions 单次真实 PG 合同通过 |
 | comparison 四 case 实验 | NOT-RUN | 无 API/Worker/PG/Redis 运行栈 |
 | OTLP 导出到 Collector | NOT-RUN | 未配置 Collector |
 | Prometheus 多副本抓取 | NOT-RUN | 未配置 Prometheus |
 
 因此本文件没有吞吐、p50/p95、DB lock wait 或失败率数字。任何数字都会是伪造。
 
-## 5. 在有 Docker 的机器上继续
+## 6. 在有 Docker 的机器上继续
 
 ```bash
-docker compose -f deploy/compose.yaml up --build --wait
+docker compose -f deploy/compose.yaml build
+docker compose -f deploy/compose.yaml up --detach --wait postgres redis
+docker compose -f deploy/compose.yaml run --rm --no-deps migrate
+docker compose -f deploy/compose.yaml up --detach --no-deps api worker reaper
+curl --fail --retry 20 --retry-all-errors --retry-delay 2 \
+  http://127.0.0.1:8000/health/ready
 uv run python -m scripts.create_dev_api_key \
   --tenant-slug phase9 \
   --tenant-name "Phase 9 experiments" \
