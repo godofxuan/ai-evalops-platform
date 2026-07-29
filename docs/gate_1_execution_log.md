@@ -245,3 +245,52 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
 
 只有在独占 Docker 主机满足 preflight、用户明确确认两个 gate，并完成 dry run/绘图工具冻结
 后，才能启动正式矩阵。
+
+## 9. 提交后 prepare-only 与 preflight 实证
+
+工具代码提交：
+
+```text
+c72e8c5c2ca0ab5610e3ee7a0d131bfe437ffa00
+feat(eval): build evidence-first worker scaling harness
+```
+
+在 tracked worktree 干净时实际执行：
+
+```text
+python -m scripts.run_load_test \
+  --prepare-only \
+  --output-root docs/results/gate_1 \
+  --run-id gate1-plan-c72e8c5-20260729T150959Z
+```
+
+生成结果：
+
+- manifest status：`prepared`；
+- `formal_run_started=false`；
+- source commit：`c72e8c5c2ca0ab5610e3ee7a0d131bfe437ffa00`；
+- protocol SHA：重新计算匹配；
+- measurement：500 行，SHA 重新计算匹配；
+- warm-up：50 行，SHA 重新计算匹配；
+- arm algorithm：`position-balanced-v1`；
+- arm count：32；
+- prepare 后 raw entry count：0。
+
+随后带两个确认 gate 执行 `--execute-prepared`。preflight 结果：
+
+- `source_commit_matches=true`；
+- `tracked_worktree_clean=true`；
+- `quality_gate_confirmed=true`；
+- `adoption_gate_confirmed=true`；
+- `docker_cli_available=false`；
+- `compose_config_valid=false`；
+- `required_services_healthy=false`；
+- `api_key_present=false`；
+- `database_url_present=false`；
+- `ready=false`；
+- preflight 后 raw entry count 仍为 0。
+
+因此执行器只保存
+`docs/results/gate_1/gate1-plan-c72e8c5-20260729T150959Z/failures/preflight.json`，
+没有上传 Dataset、缩放 Worker 或启动任何 arm。该失败证明 fail-closed 状态机生效，不是
+正式容量实验失败。

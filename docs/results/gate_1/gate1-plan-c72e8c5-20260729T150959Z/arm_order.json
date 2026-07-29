@@ -1,0 +1,306 @@
+{
+  "schema_version": 1,
+  "algorithm": "position-balanced-v1",
+  "seed": 1729,
+  "repetitions": 4,
+  "workloads": [
+    "io_latency_v1",
+    "transient_5pct_v1"
+  ],
+  "workers": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "arms": [
+    {
+      "arm_id": "transient_5pct_v1-r02-p01-w02",
+      "order": 1,
+      "repetition": 2,
+      "workload": "transient_5pct_v1",
+      "workers": 2,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r02-p02-w04",
+      "order": 2,
+      "repetition": 2,
+      "workload": "transient_5pct_v1",
+      "workers": 4,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r02-p03-w01",
+      "order": 3,
+      "repetition": 2,
+      "workload": "transient_5pct_v1",
+      "workers": 1,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r02-p04-w08",
+      "order": 4,
+      "repetition": 2,
+      "workload": "transient_5pct_v1",
+      "workers": 8,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r04-p01-w08",
+      "order": 5,
+      "repetition": 4,
+      "workload": "transient_5pct_v1",
+      "workers": 8,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r04-p02-w01",
+      "order": 6,
+      "repetition": 4,
+      "workload": "transient_5pct_v1",
+      "workers": 1,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r04-p03-w04",
+      "order": 7,
+      "repetition": 4,
+      "workload": "transient_5pct_v1",
+      "workers": 4,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r04-p04-w02",
+      "order": 8,
+      "repetition": 4,
+      "workload": "transient_5pct_v1",
+      "workers": 2,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r03-p01-w04",
+      "order": 9,
+      "repetition": 3,
+      "workload": "transient_5pct_v1",
+      "workers": 4,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r03-p02-w08",
+      "order": 10,
+      "repetition": 3,
+      "workload": "transient_5pct_v1",
+      "workers": 8,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r03-p03-w02",
+      "order": 11,
+      "repetition": 3,
+      "workload": "transient_5pct_v1",
+      "workers": 2,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r03-p04-w01",
+      "order": 12,
+      "repetition": 3,
+      "workload": "transient_5pct_v1",
+      "workers": 1,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r01-p01-w01",
+      "order": 13,
+      "repetition": 1,
+      "workload": "io_latency_v1",
+      "workers": 1,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r01-p02-w02",
+      "order": 14,
+      "repetition": 1,
+      "workload": "io_latency_v1",
+      "workers": 2,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r01-p03-w08",
+      "order": 15,
+      "repetition": 1,
+      "workload": "io_latency_v1",
+      "workers": 8,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r01-p04-w04",
+      "order": 16,
+      "repetition": 1,
+      "workload": "io_latency_v1",
+      "workers": 4,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r03-p01-w04",
+      "order": 17,
+      "repetition": 3,
+      "workload": "io_latency_v1",
+      "workers": 4,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r03-p02-w08",
+      "order": 18,
+      "repetition": 3,
+      "workload": "io_latency_v1",
+      "workers": 8,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r03-p03-w02",
+      "order": 19,
+      "repetition": 3,
+      "workload": "io_latency_v1",
+      "workers": 2,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r03-p04-w01",
+      "order": 20,
+      "repetition": 3,
+      "workload": "io_latency_v1",
+      "workers": 1,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r02-p01-w02",
+      "order": 21,
+      "repetition": 2,
+      "workload": "io_latency_v1",
+      "workers": 2,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r02-p02-w04",
+      "order": 22,
+      "repetition": 2,
+      "workload": "io_latency_v1",
+      "workers": 4,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r02-p03-w01",
+      "order": 23,
+      "repetition": 2,
+      "workload": "io_latency_v1",
+      "workers": 1,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r02-p04-w08",
+      "order": 24,
+      "repetition": 2,
+      "workload": "io_latency_v1",
+      "workers": 8,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r01-p01-w01",
+      "order": 25,
+      "repetition": 1,
+      "workload": "transient_5pct_v1",
+      "workers": 1,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r01-p02-w02",
+      "order": 26,
+      "repetition": 1,
+      "workload": "transient_5pct_v1",
+      "workers": 2,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r01-p03-w08",
+      "order": 27,
+      "repetition": 1,
+      "workload": "transient_5pct_v1",
+      "workers": 8,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "transient_5pct_v1-r01-p04-w04",
+      "order": 28,
+      "repetition": 1,
+      "workload": "transient_5pct_v1",
+      "workers": 4,
+      "position": 4,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r04-p01-w08",
+      "order": 29,
+      "repetition": 4,
+      "workload": "io_latency_v1",
+      "workers": 8,
+      "position": 1,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r04-p02-w01",
+      "order": 30,
+      "repetition": 4,
+      "workload": "io_latency_v1",
+      "workers": 1,
+      "position": 2,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r04-p03-w04",
+      "order": 31,
+      "repetition": 4,
+      "workload": "io_latency_v1",
+      "workers": 4,
+      "position": 3,
+      "warmup_required": true
+    },
+    {
+      "arm_id": "io_latency_v1-r04-p04-w02",
+      "order": 32,
+      "repetition": 4,
+      "workload": "io_latency_v1",
+      "workers": 2,
+      "position": 4,
+      "warmup_required": true
+    }
+  ]
+}
