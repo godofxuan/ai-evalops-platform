@@ -37,7 +37,8 @@ jobs:
       EVALOPS_ENVIRONMENT: test
       EVALOPS_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
       EVALOPS_REDIS_URL: redis://127.0.0.1:6379/0
-      EVALOPS_ARTIFACT_ROOT: ${{ runner.temp }}/evalops-artifacts
+      # The runner context is unavailable while job-level env is evaluated.
+      EVALOPS_ARTIFACT_ROOT: /tmp/evalops-artifacts
       EVALOPS_ALEMBIC_CONFIG_PATH: alembic.ini
       EVALOPS_RUN_INTEGRATION: "1"
     steps:
