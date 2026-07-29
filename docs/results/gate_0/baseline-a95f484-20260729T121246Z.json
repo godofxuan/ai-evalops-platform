@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "gate": 0,
+  "purpose": "read-only baseline before evidence-capacity and fault experiments",
+  "baseline_started_at": "2026-07-29T12:12:46.8011220Z",
+  "baseline_collection_finished_at": "2026-07-29T12:17:36.3608486Z",
+  "timezone": "Asia/Shanghai",
+  "repository": {
+    "path": "D:\\文档\\ai-evalops-platform",
+    "remote": "https://github.com/godofxuan/ai-evalops-platform.git",
+    "visibility": "public",
+    "branch_before_evidence_docs": "main",
+    "head_sha": "a95f484d0d2e0f659a442efa5b8d4ad6ddece644",
+    "tree_sha": "304e586c389c5391118714f77d95048d48d97e90",
+    "working_tree_before_evidence_docs": "clean",
+    "tracked_files": 212,
+    "python_files": 169,
+    "markdown_files": 30
+  },
+  "host": {
+    "os": "Microsoft Windows 11 专业版",
+    "os_version": "10.0.26200",
+    "os_build": "26200",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 5 7500F 6-Core Processor",
+    "physical_cores": 6,
+    "logical_processors": 12,
+    "memory_total_bytes": 33947549696,
+    "memory_free_at_capture_bytes": 13164429312,
+    "disk_d_used_at_capture_bytes": 766571986944,
+    "disk_d_free_at_capture_bytes": 72570875904
+  },
+  "tooling": {
+    "project_python": "CPython 3.12.13",
+    "system_python": "CPython 3.13.5",
+    "python_launcher_default": "CPython 3.14",
+    "uv": {
+      "status": "NOT_FOUND",
+      "current_lock_check": "NOT_RUN"
+    },
+    "docker": {
+      "status": "NOT_FOUND",
+      "compose_status": "NOT_FOUND"
+    },
+    "postgresql": {
+      "client_status": "NOT_FOUND",
+      "server_status": "NOT_LISTENING",
+      "port": 5432,
+      "compose_image_contract": "postgres:18.4-alpine3.24"
+    },
+    "redis": {
+      "client_status": "NOT_FOUND",
+      "server_status": "NOT_LISTENING",
+      "port": 6379,
+      "compose_image_contract": "redis:8.8.1-alpine3.23"
+    }
+  },
+  "locked_environment": {
+    "uv_lock_package_entries": 60,
+    "uv_lock_sha256": "9d44fb6b1b33b5fe59e89667ce87e56f92413faf7e001db75176b292005bbb9c",
+    "selected_installed_versions": {
+      "alembic": "1.18.5",
+      "fastapi": "0.140.7",
+      "httpx": "0.28.1",
+      "mypy": "1.20.2",
+      "opentelemetry-api": "1.44.0",
+      "opentelemetry-sdk": "1.44.0",
+      "opentelemetry-exporter-otlp-proto-http": "1.44.0",
+      "prometheus-client": "0.26.0",
+      "psycopg": "3.3.4",
+      "pydantic": "2.13.4",
+      "pydantic-settings": "2.14.2",
+      "pytest": "9.1.1",
+      "pytest-asyncio": "1.4.0",
+      "redis": "7.4.1",
+      "ruff": "0.16.0",
+      "sqlalchemy": "2.0.51",
+      "structlog": "25.5.0",
+      "uvicorn": "0.51.0"
+    }
+  },
+  "quality": {
+    "ruff_format": {
+      "evidence_level": "VERIFIED",
+      "result": "199 files already formatted"
+    },
+    "ruff_lint": {
+      "evidence_level": "VERIFIED",
+      "result": "All checks passed"
+    },
+    "mypy": {
+      "evidence_level": "VERIFIED",
+      "scope": "app scripts tests/integration tests/concurrency",
+      "result": "Success: no issues found in 103 source files"
+    },
+    "pytest_non_integration": {
+      "evidence_level": "VERIFIED",
+      "result": "235 passed, 6 deselected",
+      "duration_seconds": 7.36
+    }
+  },
+  "external_service_validation": {
+    "local_integration_attempt": {
+      "evidence_level": "FAILED",
+      "result": "6 failed, 235 deselected",
+      "duration_seconds": 21.95,
+      "failure_boundary": "external infrastructure precondition",
+      "postgresql_error": "psycopg.errors.ConnectionTimeout",
+      "redis_error": "ConnectionRefusedError 10061",
+      "readiness_status": 503,
+      "business_assertion_failures_observed": false
+    },
+    "local_compose_smoke": {
+      "evidence_level": "NOT_RUN",
+      "reason": "docker command is not installed"
+    },
+    "github_actions": {
+      "evidence_level": "CONTRACT_VERIFIED",
+      "run_number": 8,
+      "run_id": 30425920287,
+      "head_sha": "a95f484d0d2e0f659a442efa5b8d4ad6ddece644",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/godofxuan/ai-evalops-platform/actions/runs/30425920287",
+      "jobs": {
+        "quality-and-integration": "success",
+        "compose-smoke": "success"
+      }
+    }
+  },
+  "migrations": {
+    "evidence_level": "VERIFIED",
+    "revision_files": 8,
+    "unique_head": "20260729_0008",
+    "offline_sql_exit_code": 0,
+    "offline_sql_lines": 388,
+    "offline_sql_sha256": "67f4fd99df56ad95816b09a3c72b2a222c549e070e67244aaf36a75ded4f6d1f",
+    "transaction_begin_present": true,
+    "transaction_commit_present": true,
+    "artifact_type_varchar_32_alter_present": true
+  },
+  "observability": {
+    "evidence_level": "CONTRACT_VERIFIED",
+    "metrics_enabled": true,
+    "metrics_host": "0.0.0.0",
+    "api_metrics_path": "/metrics",
+    "worker_metrics_port": 9101,
+    "reaper_metrics_port": 9102,
+    "otel_enabled": true,
+    "otel_service_name": "ai-evalops-platform",
+    "otel_endpoint_configured": false,
+    "logical_metrics": [
+      "api_request_total",
+      "api_request_duration",
+      "run_created_total",
+      "job_queue_depth",
+      "job_running",
+      "job_succeeded_total",
+      "job_failed_total",
+      "job_retry_total",
+      "job_lease_expired_total",
+      "worker_heartbeat_age",
+      "case_duration",
+      "sse_connections",
+      "redis_publish_failures_total"
+    ],
+    "high_cardinality_identity_labels_present": false,
+    "current_capacity_metric_gaps": [
+      "queue wait distribution",
+      "claim transaction latency",
+      "database lock wait",
+      "process CPU and RSS history",
+      "PostgreSQL connection history",
+      "per-arm environment binding"
+    ]
+  },
+  "gate_results": {
+    "gate_0": "VERIFIED_WITH_LOCAL_INFRASTRUCTURE_BLOCKERS",
+    "gate_1_capacity": "NOT_RUN",
+    "gate_2_worker_kill_fencing": "NOT_RUN",
+    "gate_3_dependency_fault_matrix": "NOT_RUN",
+    "gate_4_soak": "NOT_RUN",
+    "gate_5_ssrf_dns_toctou": "NOT_RUN",
+    "gate_6_async_trace_linking": "NOT_RUN",
+    "gate_7_human_rag_pilot": "NOT_RUN"
+  },
+  "unsupported_claims": [
+    "production throughput or capacity",
+    "worker scaling efficiency",
+    "real crash-recovery latency",
+    "long-run resource stability",
+    "complete SSRF prevention",
+    "cross-process single-trace continuity",
+    "distributed disaster recovery",
+    "exactly-once execution",
+    "human review quality"
+  ]
+}
