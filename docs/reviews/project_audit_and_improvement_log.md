@@ -520,8 +520,9 @@ Gate 0 文档提交以分支范围 `a95f484..codex/evidence-gate-0` 为准。未
 
 ## Gate 1 工具建设
 
-Gate 1 已完成 prepare/preflight/reconciliation/collector/summary 的合同化实现，但当前主机
-没有 Docker/PostgreSQL/Redis，正式 500-case 矩阵仍为 `NOT_RUN`，没有容量或推荐 Worker
-结论。完整的逐步判断、RED→GREEN、问题与效果记录见：
+Gate 1 已完成 prepare/preflight/reconciliation/collector/summary/plot 的合同化实现。
+绘图工具会以 create-new 方式同时生成五张 PNG 和机器可审计 manifest，但当前主机没有
+Docker/PostgreSQL/Redis，正式 500-case 矩阵及正式数据图仍为 `NOT_RUN`，没有容量或推荐
+Worker 结论。完整的逐步判断、RED→GREEN、问题与效果记录见：
 
 - [Gate 1 execution log](../gate_1_execution_log.md)

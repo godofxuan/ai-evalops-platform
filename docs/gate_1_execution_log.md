@@ -171,6 +171,42 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
 - measured arm 才启动 collectors；
 - 失败立即停止后续 arm，并只记录 exception type，不记录可能含秘密的异常消息。
 
+### 4.9 可复现 PNG 图表
+
+观察：执行器已经能写 `aggregate.json` 和 `arms.csv`，但 `plots/` 永远为空。仅预建目录不能
+满足正式证据输出；同时不能为了“看起来完成”生成空白图或把缺测值画成 0。
+
+判断：
+
+- Matplotlib 放入 `dev` dependency group，而不是生产 dependencies；
+- `uv.lock` 冻结实际版本，Dockerfile 的 `UV_NO_DEV=1` 继续排除它；
+- 正式执行器使用延迟导入，普通生产脚本导入不依赖绘图库；
+- 一个公开入口一次写 aggregate、CSV、五张 PNG 和图表 manifest；
+- manifest 保存所有 arm 原始绘图点、证据等级、折线分组、renderer 版本、backend 和 DPI；
+- 图只连接同一 workload、同一 repetition，并按 Worker 数排序；
+- case latency/end-to-end、CPU/RSS 分别使用双 y 轴；
+- 任一目标文件已存在时，在开始绘图前整体拒绝。
+
+TDD 与问题记录：
+
+1. RED：`scripts.gate1_plots` 不存在；GREEN：生成五张带 PNG signature、大小超过 1 KiB
+   的图和 manifest。
+2. RED：后面的 `database.png` 已存在时，旧实现会先写前三张图，再抛
+   `FileExistsError`；GREEN：预检全部六个目标并统一抛 `ExperimentError`，没有部分写入。
+3. RED：finalization 遇到旧图时已先写 aggregate/CSV；GREEN：入口预检两张表和全部图表
+   目标，在第一个写操作前拒绝。
+4. RED：正式汇总入口不存在；GREEN：`finalize_gate1_run_evidence` 同时生成表格和图。
+5. RED：随机 arm 顺序没有可审计的 repetition 分组；GREEN：manifest 保存
+   `line_series`，绘图共用同一有序分组。
+6. RED：manifest 没有 renderer provenance；GREEN：保存 Matplotlib 版本、`Agg` 和
+   144 DPI。
+7. 视觉抽查第一次发现 end-to-end 数万毫秒把几十毫秒 case latency 压平；改为双 y 轴。
+8. 第二次视觉抽查发现 RSS 接近时自动 offset 难读；关闭 offset，并固定 x 轴为实际 Worker
+   刻度。
+
+合成预览仅用于验证版式，没有放入 `docs/results/`，也不作为容量证据。正式 PNG 只有完成
+真实 32-arm 后才会出现。
+
 ## 5. 输出
 
 完成的正式 run 设计为：
@@ -188,12 +224,17 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
   summary/aggregate.json
   summary/arms.csv
   failures/index.json
-  plots/
+  plots/manifest.json
+  plots/throughput.png
+  plots/latency.png
+  plots/queue_and_claim.png
+  plots/database.png
+  plots/cpu_and_rss.png
 ```
 
-当前没有 Matplotlib/Pillow。为避免给后端项目引入大型运行时依赖，且没有正式数据，本阶段
-没有生成空白或伪造 PNG。正式图表仍是已知未闭合项；必须在正式主机冻结可复现的绘图工具
-后生成，或把协议改为无需外部依赖的 SVG 并经用户确认。未生成图表状态为 `NOT_RUN`。
+绘图工具合同已闭合，Matplotlib 3.11.1 由 `uv.lock` 固定在 dev 组。当前仍没有正式
+32-arm 数据，所以正式 `plots/*.png` 是 `NOT_RUN`；单元测试生成的合成图只证明渲染合同，
+不证明任何容量结果。
 
 ## 6. 遇到的问题
 
@@ -206,20 +247,27 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
 5. 格式检查多次报告机械换行；运行 Ruff formatter 后复查。
 6. 本机没有 Docker/PostgreSQL/Redis，因此数据库查询、Compose scale、per-replica scrape
    和 32-arm 正式矩阵无法运行。
+7. 新会话最初在 `PATH` 中找不到 `uv`；这不是产品 RED。定位到项目级
+   `.codex-tools/Scripts/uv.exe` 后，用绝对路径管理依赖和锁文件。
+8. Matplotlib 初版类型检查发现 selector 二次调用后仍可能为 `None`，以及含默认参数的
+   lambda 无法推断；改为单次取值和显式 selector 工厂后 strict mypy 通过。
+9. 合成图视觉抽查发现双量级同轴与 RSS offset 问题；修正后重新生成并复查。
 
 ## 7. 当前验证结果
 
-- `uv lock --check`：60 packages resolved；
+- `uv lock --check`：70 packages resolved；
 - Ruff lint：All checks passed；
-- Ruff format：213 files already formatted；
-- mypy strict：108 source files，无问题；
-- 非 integration：260 passed、6 deselected；
+- Ruff format：216 files already formatted；
+- mypy strict：109 source files，无问题；
+- 非 integration：265 passed、6 deselected；
 - Gate 1 collectors/preflight/reconciliation/experiment/metrics/worker 定向回归：
-  35 passed；
+  41 passed；
+- Gate 1 plot 公开产物合同：5 passed；
 - 正式 500-case：`NOT_RUN`；
 - 真实 PostgreSQL collector：`NOT_RUN`；
 - Docker scale/health/resource scrape：`NOT_RUN`；
-- required PNG plots：`NOT_RUN`。
+- required PNG renderer：`CONTRACT_VERIFIED`；
+- 正式数据 PNG plots：`NOT_RUN`。
 
 ## 8. 已达到与未达到
 
@@ -233,18 +281,19 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
 - bounded Prometheus database-operation metrics；
 - Docker/PostgreSQL/Prometheus 原始采集接口；
 - per-arm 与跨重复汇总保留负扩展；
+- create-new 的五图 bundle、机器可审计 manifest 和正式执行器接线；
 - 不自动改变 Worker 数。
 
 未达到：
 
 - 没有正式吞吐、p95/p99、queue/claim/lock、CPU/RSS 或连接曲线；
 - 没有证明正式适配层能在当前主机连接服务；
-- 没有绘图产物；
+- 没有正式数据绘图产物；合成预览不算实验结果；
 - 没有生产容量结论；
 - 没有 exactly-once、故障恢复、soak、SSRF、跨进程 trace 或真人双评结论。
 
-只有在独占 Docker 主机满足 preflight、用户明确确认两个 gate，并完成 dry run/绘图工具冻结
-后，才能启动正式矩阵。
+只有在独占 Docker 主机满足 preflight、用户明确确认两个 gate，并完成服务级 dry run 后，
+才能启动正式矩阵。绘图工具冻结已经完成，但没有消除基础设施 blocker。
 
 ## 9. 提交后 prepare-only 与 preflight 实证
 

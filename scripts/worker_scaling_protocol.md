@@ -36,6 +36,22 @@ Correctness is decided from durable Run, Job, Attempt, and CaseResult rows. API 
 cannot prove uniqueness. Missing measurements are `UNKNOWN`; a behavior that was not
 induced is `NOT_TESTED`; sampled lock waits without continuous timing are `DIRECTIONAL`.
 
+## Frozen plots
+
+The formal finalization step must create all five PNG files together:
+`throughput.png`, `latency.png`, `queue_and_claim.png`, `database.png`, and
+`cpu_and_rss.png`. It must also create `plots/manifest.json` with every plotted arm,
+line grouping, evidence state, renderer version, non-interactive backend, and DPI.
+
+Lines are grouped by workload and repetition, ordered by Worker count, and never connect
+different repetitions. Case latency and end-to-end duration use separate y axes. CPU and
+RSS use separate y axes. Missing values remain absent/`UNKNOWN`, not zero. Plot files and
+the manifest are create-new evidence and must never be partially overwritten.
+
+The renderer is the Matplotlib version resolved by the run's source commit and `uv.lock`,
+using the non-interactive `Agg` backend at 144 DPI. Matplotlib is a development dependency
+and is excluded from the production image by `UV_NO_DEV=1`.
+
 ## Correctness gate
 
 Every measured arm must contain exactly the expected Job rows, exactly one CaseResult for

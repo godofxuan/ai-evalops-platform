@@ -713,6 +713,64 @@ async def _run_prepared_arm(
         raise
 
 
+def finalize_gate1_run_evidence(
+    run_directory: Path,
+    summary_records: Sequence[dict[str, Any]],
+) -> None:
+    """Write the cross-arm tables and required PNG evidence as one finalization step."""
+    from scripts.gate1_plots import PLOT_FILENAMES, generate_gate1_plots
+
+    final_paths = [
+        run_directory / "summary" / "aggregate.json",
+        run_directory / "summary" / "arms.csv",
+        run_directory / "plots" / "manifest.json",
+        *(run_directory / "plots" / filename for filename in PLOT_FILENAMES),
+    ]
+    conflicts = [str(path.relative_to(run_directory)) for path in final_paths if path.exists()]
+    if conflicts:
+        raise ExperimentError(
+            f"refusing to overwrite existing Gate 1 final evidence: {', '.join(conflicts)}"
+        )
+    aggregate = aggregate_arm_summaries(summary_records)
+    write_report(run_directory / "summary" / "aggregate.json", aggregate)
+    csv_path = run_directory / "summary" / "arms.csv"
+    with csv_path.open("x", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=(
+                "arm_id",
+                "workload",
+                "workers",
+                "repetition",
+                "valid_for_capacity_comparison",
+                "throughput_cases_per_second",
+                "case_latency_p95_ms",
+                "case_latency_p99_ms",
+                "end_to_end_ms",
+                "collector_missed_samples",
+            ),
+        )
+        writer.writeheader()
+        for record in summary_records:
+            arm = record["arm"]
+            summary = record["summary"]
+            writer.writerow(
+                {
+                    "arm_id": arm["arm_id"],
+                    "workload": arm["workload"],
+                    "workers": arm["workers"],
+                    "repetition": arm["repetition"],
+                    "valid_for_capacity_comparison": summary["valid_for_capacity_comparison"],
+                    "throughput_cases_per_second": summary["throughput_cases_per_second"],
+                    "case_latency_p95_ms": summary["case_latency_ms"]["p95"],
+                    "case_latency_p99_ms": summary["case_latency_ms"]["p99"],
+                    "end_to_end_ms": summary["end_to_end_ms"],
+                    "collector_missed_samples": summary.get("collector_missed_samples"),
+                }
+            )
+    generate_gate1_plots(summary_records, run_directory / "plots")
+
+
 async def _run_prepared(args: argparse.Namespace) -> dict[str, Any]:
     run_directory = Path(args.output_root) / str(args.run_id)
     manifest = json.loads((run_directory / "manifest.json").read_text(encoding="utf-8"))
@@ -770,43 +828,7 @@ async def _run_prepared(args: argparse.Namespace) -> dict[str, Any]:
         )
         for arm in arm_plan["arms"]
     ]
-    aggregate = aggregate_arm_summaries(summary_records)
-    write_report(run_directory / "summary" / "aggregate.json", aggregate)
-    csv_path = run_directory / "summary" / "arms.csv"
-    with csv_path.open("x", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(
-            stream,
-            fieldnames=(
-                "arm_id",
-                "workload",
-                "workers",
-                "repetition",
-                "valid_for_capacity_comparison",
-                "throughput_cases_per_second",
-                "case_latency_p95_ms",
-                "case_latency_p99_ms",
-                "end_to_end_ms",
-                "collector_missed_samples",
-            ),
-        )
-        writer.writeheader()
-        for record in summary_records:
-            arm = record["arm"]
-            summary = record["summary"]
-            writer.writerow(
-                {
-                    "arm_id": arm["arm_id"],
-                    "workload": arm["workload"],
-                    "workers": arm["workers"],
-                    "repetition": arm["repetition"],
-                    "valid_for_capacity_comparison": summary["valid_for_capacity_comparison"],
-                    "throughput_cases_per_second": summary["throughput_cases_per_second"],
-                    "case_latency_p95_ms": summary["case_latency_ms"]["p95"],
-                    "case_latency_p99_ms": summary["case_latency_ms"]["p99"],
-                    "end_to_end_ms": summary["end_to_end_ms"],
-                    "collector_missed_samples": summary["collector_missed_samples"],
-                }
-            )
+    finalize_gate1_run_evidence(run_directory, summary_records)
     write_report(run_directory / "failures" / "index.json", {"failures": []})
     execution["status"] = "completed"
     execution["finished_at"] = datetime.now(UTC).isoformat()
