@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "experiment": "worker_scaling",
+  "run_id": "gate1-plan-e21c31c-20260729T162352Z",
+  "status": "prepared",
+  "formal_run_started": false,
+  "seed": 1729,
+  "protocol": {
+    "path": "protocol.md",
+    "sha256": "bc46870ab7599b31aff4ce686f5220903fe971793107956d57e2b59d6dd8ced2"
+  },
+  "provenance": {
+    "source_commit": "e21c31cbb85fdf6b24cdfd0ef7bcbdf40a948ff8",
+    "compose_path": "deploy\\compose.yaml",
+    "compose_sha256": "eff7f01e4512fe2779eab1f4cdc780946f6957e3564355c7b300c9b1de14435f"
+  },
+  "adoption_gate": {
+    "automatic_worker_count_change": false,
+    "decision_owner": "human"
+  },
+  "configuration": {
+    "cases": 500,
+    "warmup_cases": 50,
+    "delay_ms": 25,
+    "readiness_deadline_seconds": 120,
+    "collector_interval_seconds": 1.0
+  },
+  "dataset": {
+    "generator": "gate1-deterministic-jsonl-v1",
+    "measurement_path": "dataset/measurement.jsonl",
+    "warmup_path": "dataset/warmup.jsonl",
+    "workload_profiles": [
+      "io_latency_v1",
+      "transient_5pct_v1"
+    ],
+    "transient_selection": {
+      "algorithm": "sha256(case_id)-ascending",
+      "rate_percent": 5
+    },
+    "algorithm": "sha256",
+    "measurement_sha256": "dd9e1a59c2176214196937f3a0ece15fe324ef310dda0396f95577db2b0751aa",
+    "measurement_bytes": 147890,
+    "measurement_cases": 500,
+    "warmup_sha256": "d94ea6bb5273224c2680d8510f1218be4414b4d839816023b5a4d8b0c70745aa",
+    "warmup_bytes": 14940,
+    "warmup_cases": 50
+  },
+  "arm_plan": {
+    "path": "arm_order.json",
+    "algorithm": "position-balanced-v1",
+    "seed": 1729,
+    "arm_count": 32
+  }
+}

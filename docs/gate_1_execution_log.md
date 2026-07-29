@@ -343,3 +343,71 @@ python -m scripts.run_load_test \
 `docs/results/gate_1/gate1-plan-c72e8c5-20260729T150959Z/failures/preflight.json`，
 没有上传 Dataset、缩放 Worker 或启动任何 arm。该失败证明 fail-closed 状态机生效，不是
 正式容量实验失败。
+
+## 10. 图表工具提交后的第二次 prepare-only 与 preflight
+
+图表工具和更新后的冻结协议提交：
+
+```text
+e21c31cbb85fdf6b24cdfd0ef7bcbdf40a948ff8
+feat(eval): add reproducible Gate 1 plots
+```
+
+在该提交的 tracked worktree 干净时实际执行：
+
+```text
+python -m scripts.run_load_test \
+  --prepare-only \
+  --output-root docs/results/gate_1 \
+  --run-id gate1-plan-e21c31c-20260729T162352Z
+```
+
+独立重算结果：
+
+- manifest status：`prepared`；
+- `formal_run_started=false`；
+- source commit：`e21c31cbb85fdf6b24cdfd0ef7bcbdf40a948ff8`；
+- protocol SHA-256：
+  `bc46870ab7599b31aff4ce686f5220903fe971793107956d57e2b59d6dd8ced2`，重算匹配；
+- measurement：500 行，SHA-256
+  `dd9e1a59c2176214196937f3a0ece15fe324ef310dda0396f95577db2b0751aa`，重算匹配；
+- warm-up：50 行，SHA-256
+  `d94ea6bb5273224c2680d8510f1218be4414b4d839816023b5a4d8b0c70745aa`，重算匹配；
+- arm algorithm：`position-balanced-v1`；
+- arm count：32；
+- prepare 后 `raw/` 和 `plots/` entry count 均为 0。
+
+随后实际执行：
+
+```text
+python -m scripts.run_load_test \
+  --execute-prepared \
+  --output-root docs/results/gate_1 \
+  --run-id gate1-plan-e21c31c-20260729T162352Z \
+  --confirm-quality-gate \
+  --confirm-adoption-gate
+```
+
+结果为预期的退出码 1 和 fail-closed blocker：
+
+- `source_commit_matches=true`；
+- `tracked_worktree_clean=true`；
+- `disk_space_sufficient=true`；
+- `quality_gate_confirmed=true`；
+- `adoption_gate_confirmed=true`；
+- `docker_cli_available=false`；
+- `compose_config_valid=false`；
+- `required_services_healthy=false`；
+- `api_key_present=false`；
+- `database_url_present=false`；
+- `ready=false`；
+- preflight 后 `raw/` 和 `plots/` entry count 仍为 0。
+
+保存位置：
+
+```text
+docs/results/gate_1/gate1-plan-e21c31c-20260729T162352Z/
+```
+
+因此第二次计划已绑定新增图表协议，但仍未产生任何正式图。这个结果同时证明两点：新的
+source/protocol 绑定生效；基础设施 blocker 没有被绘图工具变化掩盖或绕过。
