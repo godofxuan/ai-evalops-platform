@@ -169,7 +169,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 .join(EvaluationJob)
                 .where(EvaluationJob.run_id == run_id)
             )
-        assert attempt_count == 20
+        assert attempt_count == 100
 
         first = claims[0]
         heartbeat = SQLAlchemyHeartbeatService(
