@@ -16,6 +16,7 @@ class ArtifactType(StrEnum):
     RUN_METRICS = "run_metrics"
     FAILURE_CASES = "failure_cases"
     SUMMARY_REPORT = "summary_report"
+    HUMAN_REVIEW_PACKET = "human_review_packet"
 
 
 class RunStatus(StrEnum):
@@ -43,3 +44,10 @@ class AttemptOutcome(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     LEASE_EXPIRED = "lease_expired"
+
+
+class ReviewTaskStatus(StrEnum):
+    OPEN = "open"
+    AGREED = "agreed"
+    DISPUTED = "disputed"
+    ADJUDICATED = "adjudicated"

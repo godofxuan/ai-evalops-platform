@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -25,6 +26,7 @@ from app.domain.enums import (
     ArtifactType,
     AttemptOutcome,
     JobStatus,
+    ReviewTaskStatus,
     RunStatus,
     TenantStatus,
 )
@@ -75,6 +77,13 @@ job_status_enum = Enum(
 attempt_outcome_enum = Enum(
     AttemptOutcome,
     name="attempt_outcome",
+    native_enum=False,
+    create_constraint=True,
+    values_callable=lambda members: [member.value for member in members],
+)
+review_task_status_enum = Enum(
+    ReviewTaskStatus,
+    name="review_task_status",
     native_enum=False,
     create_constraint=True,
     values_callable=lambda members: [member.value for member in members],
@@ -132,6 +141,12 @@ class APIKey(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
     key_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    can_review: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     status: Mapped[APIKeyStatus] = mapped_column(
         api_key_status_enum,
         nullable=False,
@@ -491,6 +506,137 @@ class RunMetric(Base):
         nullable=False,
         default=dict,
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class HumanReviewTask(Base):
+    __tablename__ = "human_review_tasks"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "case_id",
+            name="uq_human_review_tasks_run_id_case_id",
+        ),
+        Index(
+            "ix_human_review_tasks_tenant_id_status_created_at",
+            "tenant_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("evaluation_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    case_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    packet_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[ReviewTaskStatus] = mapped_column(
+        review_task_status_enum,
+        nullable=False,
+        default=ReviewTaskStatus.OPEN,
+        server_default=ReviewTaskStatus.OPEN.value,
+    )
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("api_keys.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class HumanReviewSubmission(Base):
+    __tablename__ = "human_review_submissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            "reviewer_id",
+            name="uq_human_review_submissions_task_id_reviewer_id",
+        ),
+        Index(
+            "ix_human_review_submissions_tenant_id_created_at",
+            "tenant_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    task_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("human_review_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reviewer_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("api_keys.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    labels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    comment: Mapped[str | None] = mapped_column(String(1_000))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class HumanReviewAdjudication(Base):
+    __tablename__ = "human_review_adjudications"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            name="uq_human_review_adjudications_task_id",
+        ),
+        Index(
+            "ix_human_review_adjudications_tenant_id_created_at",
+            "tenant_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    task_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("human_review_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    adjudicator_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("api_keys.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    labels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    rationale: Mapped[str] = mapped_column(String(2_000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

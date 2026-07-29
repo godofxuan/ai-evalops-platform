@@ -7,3 +7,4 @@ class Principal:
     tenant_id: UUID
     api_key_id: UUID
     key_prefix: str
+    can_review: bool = False

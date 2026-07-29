@@ -20,6 +20,7 @@ class APIKeyCandidate:
     api_key_status: APIKeyStatus
     tenant_status: TenantStatus
     expires_at: datetime | None
+    can_review: bool = False
 
 
 class APIKeyLookup(Protocol):
@@ -61,4 +62,5 @@ async def authenticate_api_key(
         tenant_id=candidate.tenant_id,
         api_key_id=candidate.api_key_id,
         key_prefix=candidate.key_prefix,
+        can_review=candidate.can_review,
     )

@@ -10,6 +10,9 @@ from app.persistence.orm_models import (
     DatasetVersion,
     EvaluationJob,
     EvaluationRun,
+    HumanReviewAdjudication,
+    HumanReviewSubmission,
+    HumanReviewTask,
     JobAttempt,
     RunMetric,
 )
@@ -28,7 +31,7 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
-def test_orm_metadata_has_tables_introduced_through_phase_7() -> None:
+def test_orm_metadata_has_tables_introduced_through_phase_8() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
         "artifacts",
@@ -38,6 +41,9 @@ def test_orm_metadata_has_tables_introduced_through_phase_7() -> None:
         "datasets",
         "evaluation_jobs",
         "evaluation_runs",
+        "human_review_adjudications",
+        "human_review_submissions",
+        "human_review_tasks",
         "job_attempts",
         "run_metrics",
         "tenants",
@@ -89,6 +95,20 @@ def test_run_metrics_are_unique_per_run_and_metric_name() -> None:
     assert frozenset({"run_id", "metric_name"}) in unique_column_sets(RunMetric.__table__)
     assert foreign_key_targets(RunMetric.__table__, "run_id") == {"evaluation_runs.id"}
     assert {"metric_value", "metric_json", "created_at"} <= set(RunMetric.__table__.columns.keys())
+
+
+def test_human_review_history_is_tenant_owned_and_immutable_by_constraint() -> None:
+    assert frozenset({"run_id", "case_id"}) in unique_column_sets(HumanReviewTask.__table__)
+    assert frozenset({"task_id", "reviewer_id"}) in unique_column_sets(
+        HumanReviewSubmission.__table__
+    )
+    assert frozenset({"task_id"}) in unique_column_sets(HumanReviewAdjudication.__table__)
+    for table in (
+        HumanReviewTask.__table__,
+        HumanReviewSubmission.__table__,
+        HumanReviewAdjudication.__table__,
+    ):
+        assert foreign_key_targets(table, "tenant_id") == {"tenants.id"}
 
 
 def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> None:

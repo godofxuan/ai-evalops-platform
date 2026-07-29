@@ -10,6 +10,11 @@ from app.datasets.service import (
     DuplicateDatasetVersionError,
 )
 from app.datasets.validation import DatasetValidationError
+from app.reviews.service import (
+    ReviewConflictError,
+    ReviewNotFoundError,
+    ReviewPermissionError,
+)
 from app.runs.service import (
     IdempotencyConflictError,
     InvalidEvaluatorConfigurationError,
@@ -196,6 +201,57 @@ async def handle_invalid_target_configuration(
             "error": {
                 "code": "invalid_target_config",
                 "message": "Target configuration is invalid.",
+            }
+        },
+    )
+
+
+async def handle_review_not_found(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, ReviewNotFoundError):
+        raise exception
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": {
+                "code": "resource_not_found",
+                "message": "The requested resource was not found.",
+            }
+        },
+    )
+
+
+async def handle_review_permission(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, ReviewPermissionError):
+        raise exception
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": {
+                "code": "human_reviewer_required",
+                "message": "This credential is not authorized for human review.",
+            }
+        },
+    )
+
+
+async def handle_review_conflict(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, ReviewConflictError):
+        raise exception
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "review_conflict",
+                "message": "The immutable review workflow rejects this action.",
             }
         },
     )

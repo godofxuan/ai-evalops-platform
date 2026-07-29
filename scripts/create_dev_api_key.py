@@ -39,6 +39,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tenant-name")
     parser.add_argument("--key-name", default="development")
     parser.add_argument("--expires-in-days", type=positive_days)
+    parser.add_argument(
+        "--human-reviewer",
+        action="store_true",
+        help="Mark this credential as eligible for human review endpoints.",
+    )
     return parser
 
 
@@ -66,6 +71,7 @@ async def create_key(
     tenant_name: str,
     key_name: str,
     expires_in_days: int | None,
+    can_review: bool = False,
 ) -> tuple[GeneratedAPIKey, UUID]:
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
@@ -94,6 +100,7 @@ async def create_key(
                     key_prefix=generated.prefix,
                     key_hash=generated.key_hash,
                     expires_at=expires_at,
+                    can_review=can_review,
                 )
             )
             await session.flush()
@@ -112,6 +119,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             tenant_name=arguments.tenant_name or arguments.tenant_slug,
             key_name=arguments.key_name,
             expires_in_days=arguments.expires_in_days,
+            can_review=arguments.human_reviewer,
         )
     )
     print(

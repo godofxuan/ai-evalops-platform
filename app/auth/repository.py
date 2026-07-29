@@ -62,6 +62,7 @@ class SQLAlchemyAPIKeyLookup:
             api_key_status=api_key.status,
             tenant_status=tenant_status,
             expires_at=api_key.expires_at,
+            can_review=api_key.can_review,
         )
 
     async def mark_used(self, api_key_id: UUID, *, used_at: datetime) -> bool:

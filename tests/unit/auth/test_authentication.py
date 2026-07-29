@@ -44,6 +44,7 @@ async def test_valid_api_key_returns_server_derived_principal_and_marks_last_use
         api_key_status=APIKeyStatus.ACTIVE,
         tenant_status=TenantStatus.ACTIVE,
         expires_at=None,
+        can_review=True,
     )
     lookup = InMemoryAPIKeyLookup(candidate)
 
@@ -52,6 +53,7 @@ async def test_valid_api_key_returns_server_derived_principal_and_marks_last_use
     assert principal.tenant_id == tenant_id
     assert principal.api_key_id == api_key_id
     assert principal.key_prefix == "evk_001122334455"
+    assert principal.can_review is True
     assert lookup.last_used == (api_key_id, now)
 
 
