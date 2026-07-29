@@ -408,7 +408,7 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 | lock | `uv lock --check` 通过；60 packages |
 | format / lint | 196 files already formatted；All checks passed |
 | mypy | app + scripts 96 source files，无问题 |
-| pytest 非集成 | 230 passed，6 deselected |
+| pytest 非集成 | 231 passed，6 deselected |
 | 真实 PostgreSQL/Redis contracts | 6 skipped；本机未启用真实服务 |
 | Alembic | 唯一 head `20260729_0007`；offline PostgreSQL SQL 通过 |
 | 500-case / 1/2/4/8 Worker | NOT-RUN；Docker/Compose 均为 CommandNotFound |
@@ -472,4 +472,4 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 30. 展示 API 如何延续 W3C traceparent，以及为什么 Worker 目前是新的 trace。
 31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
 32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
-33. 明确区分 230 passed、6 skipped 和 NOT-RUN 容量实验，拒绝把合同当成实测结果。
+33. 明确区分 231 passed、6 skipped 和 NOT-RUN 容量实验，拒绝把合同当成实测结果。

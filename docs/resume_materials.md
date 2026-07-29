@@ -22,7 +22,7 @@ at-least-once Job 执行、崩溃恢复、幂等结果持久化、SSE 进度、R
 - 接入 Prometheus 与 OpenTelemetry，设计低基数指标、W3C trace context、Worker
   业务 span、Redis/SSE 故障指标和可复现实验结果保存。
 - 建立 unit/API/真实 PostgreSQL/Redis/concurrency/failure-injection 四层合同；本地
-  230 个非集成测试通过，真实服务合同因当前环境无 Docker 明确标记为 skipped。
+  231 个非集成测试通过，真实服务合同因当前环境无 Docker 明确标记为 skipped。
 
 最后一条必须保留“真实服务 skipped”的限定。运行并保存真实实验之后，才能用真实
 数字替换它。

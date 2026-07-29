@@ -35,7 +35,7 @@
 | 2 Reaper 回收 99 个剩余 lease | 每个 Job 只被一个 Reaper 回收 | 真实 PG 测试已扩展；本机 skipped |
 | stale heartbeat | owner/version 不匹配都拒绝 | 真实 PG 测试存在；本机 skipped |
 | stale result writer | 第二次/旧 lease commit 拒绝；CaseResult 数为 1 | 真实 PG 测试存在；本机 skipped |
-| cancel/result race | 最终状态必须是显式状态机允许的终态，不产生两个结果 | 纯逻辑合同存在；真实竞争尚未执行 |
+| cancel/result race | 最终状态必须是显式状态机允许的终态，只产生一个 CaseResult | 真实 PG 并发合同已编码；本机 skipped |
 
 ## 实验验收规则
 

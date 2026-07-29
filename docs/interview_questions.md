@@ -158,7 +158,7 @@ serializer 也只接受盲化 packet。三层边界减少未来重构误泄露�
 
 ## 实验与证据
 
-### 29. 230 passed 能证明性能好吗？
+### 29. 231 passed 能证明性能好吗？
 
 不能。它证明纯逻辑/API 合同没有回归。真实 PostgreSQL/Redis 测试在本机 skipped，
 500-case 扩容实验因 Docker 缺失未执行。

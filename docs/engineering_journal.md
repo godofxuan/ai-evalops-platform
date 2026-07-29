@@ -771,6 +771,7 @@ Python 与配置
 - 可观测性提交：`5af65ca`
 - 实验工具提交：`36b2baf`
 - 失败证据保留修复：`80ed75e`
+- 指标/取消竞态合同：`eff9b2e`
 - 目标：低基数 metrics、业务 traces、failure injection、真实并发规模合同、
   500-case 扩容脚本和最终展示材料。
 
@@ -827,7 +828,7 @@ Python 与配置
 |---|---|
 | Ruff | All checks passed |
 | mypy app scripts | 96 source files，无问题 |
-| 非集成全量 | 230 passed，6 deselected |
+| 非集成全量 | 231 passed，6 deselected |
 | 真实服务合同 | 6 skipped |
 | lock | 60 packages，check 通过 |
 | Alembic | 单一 head `20260729_0007`，offline SQL 通过 |
@@ -839,7 +840,7 @@ Python 与配置
 - API 到 Worker 没有持久化 parent trace context，不是一条完整跨进程 trace；
 - 无 Prometheus/Collector 实测；
 - Worker 多副本 scrape、告警和 counter reset 处理未验证；
-- 无真实吞吐、p50/p95、DB lock wait、soak 或 cancel/result race 数据；
+- 无真实吞吐、p50/p95、DB lock wait 或 soak 数据；cancel/result race 合同已编码但本机 skipped；
 - durable Gauge 刷新失败会返回上一次值，必须结合 readiness；
 - failure script 会中断开发 Compose，只能显式授权后用于独占环境；
 - 不声称生产级、exactly-once、零重复或已通过性能认证。

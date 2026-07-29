@@ -11,6 +11,7 @@
 | 可观测性实现提交 | `5af65ca` |
 | 实验工具提交 | `36b2baf` |
 | 失败证据保留修复 | `80ed75e` |
+| 指标/取消竞态合同 | `eff9b2e` |
 | uv 环境 Python | CPython 3.12.13 |
 | 系统默认 Python | 3.13.5（项目命令没有使用它） |
 | uv | 0.11.32 |
@@ -33,8 +34,8 @@
 | `ruff format --check .` | 196 files already formatted |
 | `ruff check .` | All checks passed |
 | `mypy app scripts` | 96 source files，无问题 |
-| 非集成全量 pytest | 230 passed，6 deselected |
-| integration contract 命令 | 6 skipped，230 deselected |
+| 非集成全量 pytest | 231 passed，6 deselected |
+| integration contract 命令 | 6 skipped，231 deselected |
 | `uv lock --check` | 60 packages resolved，无变更 |
 | load/failure script `--help` | 正常 |
 | `alembic heads` | 单一 head `20260729_0007` |
@@ -116,7 +117,7 @@ Target 实现。
 | Worker kill + lease recovery | NOT-RUN | Docker/Compose 不存在 |
 | Redis 容器中断与恢复 | NOT-RUN | Docker/Compose 不存在 |
 | PostgreSQL 容器中断 | NOT-RUN | Docker/Compose 不存在 |
-| cancel/result 真实竞态 | NOT-RUN | 无真实 PG/进程环境 |
+| cancel/result 真实竞态 | SKIPPED | 真实 PG 合同已编码；本机无 migrated PostgreSQL |
 | comparison 四 case 实验 | NOT-RUN | 无 API/Worker/PG/Redis 运行栈 |
 | OTLP 导出到 Collector | NOT-RUN | 未配置 Collector |
 | Prometheus 多副本抓取 | NOT-RUN | 未配置 Prometheus |

@@ -8,6 +8,7 @@
 
 实验工具提交：`36b2baf`
 失败证据保留修复：`80ed75e`
+指标/取消竞态合同：`eff9b2e`
 
 ## 1. 阶段目标
 
@@ -242,8 +243,8 @@ Python (uv): 3.12.13
 uv: 0.11.32
 Ruff: All checks passed
 mypy app scripts: 96 source files, no issues
-pytest non-integration: 230 passed, 6 deselected
-pytest integration contract: 6 skipped, 230 deselected
+pytest non-integration: 231 passed, 6 deselected
+pytest integration contract: 6 skipped, 231 deselected
 uv lock --check: resolved 60 packages
 Alembic: one head 20260729_0007; offline SQL complete
 Docker: CommandNotFound
@@ -255,6 +256,7 @@ Docker Compose: CommandNotFound
 - `5af65ca feat(obs): add metrics traces and fault telemetry`
 - `36b2baf test(experiments): add reproducible phase 9 scenarios`
 - `80ed75e fix(experiments): preserve failed run evidence`
+- `eff9b2e test(obs): cover metric replay and cancel race`
 
 文档提交在本日志完成后创建。
 
@@ -272,7 +274,7 @@ Docker Compose: CommandNotFound
 - PostgreSQL lock wait；
 - 真实 Redis/DB outage recovery 时间；
 - OTLP Collector 和 Prometheus 多副本抓取；
-- cancel/result 的真实数据库竞态结果；
+- cancel/result 的真实数据库竞态合同已编码，但本机没有执行结果；
 - 生产容量、安全或可靠性。
 
 ## 10. 为什么没有采用其他方案
