@@ -67,7 +67,7 @@ jobs:
         run: uv run --no-sync ruff check .
 
       - name: Type check
-        run: uv run --no-sync mypy app
+        run: uv run --no-sync mypy app scripts tests/integration tests/concurrency
 
       - name: Run tests without external services
         run: uv run --no-sync pytest -m "not integration"
@@ -138,11 +138,24 @@ jobs:
       - name: Build the complete current topology
         run: docker compose -f deploy/compose.yaml build
 
-      - name: Start the complete current topology
-        run: docker compose -f deploy/compose.yaml up --detach --wait --wait-timeout 180
+      - name: Start and wait for PostgreSQL and Redis
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --wait
+          --wait-timeout 180 postgres redis
+
+      - name: Apply migrations in the Compose topology
+        run: docker compose -f deploy/compose.yaml run --rm --no-deps migrate
+
+      - name: Start API, Worker, and Reaper
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --no-deps
+          api worker reaper
 
       - name: Verify readiness through the published API port
-        run: curl --fail --silent --show-error http://127.0.0.1:8000/health/ready
+        run: >-
+          curl --fail --silent --show-error
+          --retry 20 --retry-all-errors --retry-delay 2
+          http://127.0.0.1:8000/health/ready
 
       - name: Preserve Compose diagnostics
         if: always()

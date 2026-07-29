@@ -35,14 +35,21 @@ second: 50%, comma</failure>
 
 def test_report_text_bounds_diagnostic_output(tmp_path: Path, capsys: object) -> None:
     diagnostic = tmp_path / "compose.txt"
-    diagnostic.write_text("prefix-" + ("x" * (MAX_MESSAGE_CHARS + 100)), encoding="utf-8")
+    diagnostic.write_text(
+        "service-status-prefix\n" + ("x" * (MAX_MESSAGE_CHARS + 100)) + "\nlog-tail",
+        encoding="utf-8",
+    )
 
     assert report_text(diagnostic, title="Compose: startup") == 1
 
     output = capsys.readouterr().out
     assert "title=Compose%3A startup" in output
-    assert "prefix-" not in output
-    assert len(output.split("::", 2)[2].rstrip()) == MAX_MESSAGE_CHARS
+    assert "service-status-prefix" in output
+    assert "bounded diagnostic omitted middle content" in output
+    assert "log-tail" in output
+    encoded_message = output.split("::", 2)[2].rstrip()
+    decoded_message = encoded_message.replace("%0D", "\r").replace("%0A", "\n").replace("%25", "%")
+    assert len(decoded_message) == MAX_MESSAGE_CHARS
 
 
 def test_missing_reports_are_ignored(tmp_path: Path, capsys: object) -> None:

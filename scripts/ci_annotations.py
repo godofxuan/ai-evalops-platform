@@ -62,6 +62,11 @@ def report_text(path: Path, *, title: str) -> int:
     message = path.read_text(encoding="utf-8", errors="replace")
     if not message.strip():
         return 0
+    if len(message) > MAX_MESSAGE_CHARS:
+        marker = "\n... bounded diagnostic omitted middle content ...\n"
+        head_chars = (MAX_MESSAGE_CHARS - len(marker)) // 2
+        tail_chars = MAX_MESSAGE_CHARS - len(marker) - head_chars
+        message = f"{message[:head_chars]}{marker}{message[-tail_chars:]}"
     emit_error(title=title, message=message)
     return 1
 

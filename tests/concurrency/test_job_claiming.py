@@ -80,27 +80,29 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     name="Claim concurrency tenant",
                 )
             )
-            session.add(
-                APIKey(
-                    id=api_key_id,
-                    tenant_id=tenant_id,
-                    name="claim-test",
-                    key_prefix=f"ce_{tenant_id.hex[:8]}",
-                    key_hash="not-a-real-key",
-                )
+            await session.flush()
+            session.add_all(
+                [
+                    APIKey(
+                        id=api_key_id,
+                        tenant_id=tenant_id,
+                        name="claim-test",
+                        key_prefix=f"ce_{tenant_id.hex[:8]}",
+                        key_hash="not-a-real-key",
+                    ),
+                    Dataset(id=dataset_id, tenant_id=tenant_id, name="claim-dataset"),
+                    Artifact(
+                        id=artifact_id,
+                        tenant_id=tenant_id,
+                        artifact_type=ArtifactType.DATASET_SOURCE,
+                        sha256="a" * 64,
+                        media_type="application/x-ndjson",
+                        byte_size=1,
+                        storage_path="aa/" + "a" * 64,
+                    ),
+                ]
             )
-            session.add(Dataset(id=dataset_id, tenant_id=tenant_id, name="claim-dataset"))
-            session.add(
-                Artifact(
-                    id=artifact_id,
-                    tenant_id=tenant_id,
-                    artifact_type=ArtifactType.DATASET_SOURCE,
-                    sha256="a" * 64,
-                    media_type="application/x-ndjson",
-                    byte_size=1,
-                    storage_path="aa/" + "a" * 64,
-                )
-            )
+            await session.flush()
             session.add(
                 DatasetVersion(
                     id=version_id,
@@ -112,6 +114,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     case_count=100,
                 )
             )
+            await session.flush()
             session.add(
                 EvaluationRun(
                     id=run_id,
@@ -133,6 +136,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     created_by=api_key_id,
                 )
             )
+            await session.flush()
             session.add_all(
                 [
                     EvaluationJob(

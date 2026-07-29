@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-from app.auth.api_keys import generate_api_key
+from app.auth.api_keys import GeneratedAPIKey, generate_api_key
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
 from app.main import create_app
@@ -73,13 +73,14 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                     name="Review integration tenant",
                 )
             )
+            await session.flush()
             session.add_all(
                 [
                     APIKey(
                         id=creator_id,
                         tenant_id=tenant_id,
                         name="creator",
-                        key_prefix=creator_key.key_prefix,
+                        key_prefix=creator_key.prefix,
                         key_hash=creator_key.key_hash,
                         can_review=False,
                     ),
@@ -87,7 +88,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                         id=reviewer_a_id,
                         tenant_id=tenant_id,
                         name="reviewer-a",
-                        key_prefix=reviewer_a_key.key_prefix,
+                        key_prefix=reviewer_a_key.prefix,
                         key_hash=reviewer_a_key.key_hash,
                         can_review=True,
                     ),
@@ -95,7 +96,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                         id=reviewer_b_id,
                         tenant_id=tenant_id,
                         name="reviewer-b",
-                        key_prefix=reviewer_b_key.key_prefix,
+                        key_prefix=reviewer_b_key.prefix,
                         key_hash=reviewer_b_key.key_hash,
                         can_review=True,
                     ),
@@ -103,7 +104,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                         id=adjudicator_id,
                         tenant_id=tenant_id,
                         name="adjudicator",
-                        key_prefix=adjudicator_key.key_prefix,
+                        key_prefix=adjudicator_key.prefix,
                         key_hash=adjudicator_key.key_hash,
                         can_review=True,
                     ),
@@ -195,9 +196,8 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                     )
                 )
 
-        def headers(key: object) -> dict[str, str]:
-            generated = cast(type(creator_key), key)
-            return {"Authorization": (f"Bearer {generated.plaintext.get_secret_value()}")}
+        def headers(key: GeneratedAPIKey) -> dict[str, str]:
+            return {"Authorization": (f"Bearer {key.plaintext.get_secret_value()}")}
 
         labels_a = {
             "retrieval_relevance": 4,

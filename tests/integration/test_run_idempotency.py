@@ -66,16 +66,21 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                         slug=f"run-integration-b-{uuid4().hex}",
                         name="Run integration tenant B",
                     ),
+                ]
+            )
+            await session.flush()
+            session.add_all(
+                [
                     APIKey(
                         tenant_id=tenant_a_id,
                         name="run-integration-a",
-                        key_prefix=generated_a.key_prefix,
+                        key_prefix=generated_a.prefix,
                         key_hash=generated_a.key_hash,
                     ),
                     APIKey(
                         tenant_id=tenant_b_id,
                         name="run-integration-b",
-                        key_prefix=generated_b.key_prefix,
+                        key_prefix=generated_b.prefix,
                         key_hash=generated_b.key_hash,
                     ),
                 ]

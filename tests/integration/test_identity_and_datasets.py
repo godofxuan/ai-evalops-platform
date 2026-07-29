@@ -66,16 +66,21 @@ async def test_real_identity_tenant_dataset_version_and_artifact_boundaries(
                         slug=f"integration-b-{uuid4().hex}",
                         name="Integration tenant B",
                     ),
+                ]
+            )
+            await session.flush()
+            session.add_all(
+                [
                     APIKey(
                         tenant_id=tenant_a_id,
                         name="integration-a",
-                        key_prefix=generated_a.key_prefix,
+                        key_prefix=generated_a.prefix,
                         key_hash=generated_a.key_hash,
                     ),
                     APIKey(
                         tenant_id=tenant_b_id,
                         name="integration-b",
-                        key_prefix=generated_b.key_prefix,
+                        key_prefix=generated_b.prefix,
                         key_hash=generated_b.key_hash,
                     ),
                 ]
@@ -164,7 +169,7 @@ async def test_real_identity_tenant_dataset_version_and_artifact_boundaries(
                 async with session_factory.begin() as session:
                     key_b = (
                         await session.execute(
-                            select(APIKey).where(APIKey.key_prefix == generated_b.key_prefix)
+                            select(APIKey).where(APIKey.key_prefix == generated_b.prefix)
                         )
                     ).scalar_one()
                     key_b.status = APIKeyStatus.REVOKED
