@@ -7,6 +7,7 @@ import pytest
 
 from app.auth.principals import Principal
 from app.domain.enums import RunStatus
+from app.observability.metrics import PlatformMetrics
 from app.runs.idempotency import canonical_request_hash
 from app.runs.repository import (
     DatasetVersionSource,
@@ -75,6 +76,7 @@ class RecordingRunRepository:
             created_at=datetime(2026, 7, 29, 13, 0, tzinfo=UTC),
             started_at=None,
             finished_at=None,
+            created_now=True,
         )
 
     async def get_run(self, *, tenant_id: UUID, run_id: UUID) -> RunSnapshot | None:
@@ -244,6 +246,54 @@ async def test_create_run_replays_same_request_without_recreating_jobs() -> None
 
     assert replayed.id == RUN_ID
     assert replayed.total_jobs == 2
+
+
+async def test_run_created_metric_excludes_idempotency_replay() -> None:
+    content = (
+        b'{"case_id":"case-1","question":"q1","expected_answer":"a1","metadata":{}}\n'
+        b'{"case_id":"case-2","question":"q2","expected_answer":"a2","metadata":{}}'
+    )
+    artifact_sha256 = hashlib.sha256(content).hexdigest()
+    metrics = PlatformMetrics()
+    request = make_run_request()
+    creator = SQLAlchemyRunService(
+        repository=RecordingRunRepository(artifact_sha256),
+        artifact_store=StaticArtifactStore(content),
+        metrics=metrics,
+    )
+
+    await creator.create_run(
+        principal=PRINCIPAL,
+        idempotency_key="create-rag-v1",
+        request=request,
+    )
+    request_hash = canonical_request_hash(request.model_dump(mode="json", exclude_none=False))
+    replay = SQLAlchemyRunService(
+        repository=ReplayRunRepository(
+            RunSnapshot(
+                id=RUN_ID,
+                dataset_version_id=DATASET_VERSION_ID,
+                request_hash=request_hash,
+                status=RunStatus.QUEUED,
+                total_jobs=2,
+                succeeded_jobs=0,
+                failed_jobs=0,
+                cancelled_jobs=0,
+                created_at=datetime(2026, 7, 29, 13, 0, tzinfo=UTC),
+                started_at=None,
+                finished_at=None,
+            )
+        ),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+        metrics=metrics,
+    )
+    await replay.create_run(
+        principal=PRINCIPAL,
+        idempotency_key="create-rag-v1",
+        request=request,
+    )
+
+    assert "run_created_total 1.0" in metrics.render().decode("utf-8")
 
 
 async def test_get_run_returns_persisted_metric_summary() -> None:

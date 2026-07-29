@@ -7,9 +7,11 @@ import pytest
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
+from app.auth.principals import Principal
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, AttemptOutcome, JobStatus, RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult, TokenUsage
+from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
@@ -67,6 +69,8 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
     api_key_id = uuid4()
     artifact_id = uuid4()
     job_ids = tuple(uuid4() for _ in range(100))
+    race_run_id = uuid4()
+    race_job_id = uuid4()
     try:
         async with session_factory.begin() as session:
             session.add(
@@ -262,13 +266,94 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             )
         assert retry_wait_count == 99
         assert expired_attempt_count == 99
+
+        async with session_factory.begin() as session:
+            session.add(
+                EvaluationRun(
+                    id=race_run_id,
+                    tenant_id=tenant_id,
+                    dataset_version_id=version_id,
+                    dataset_hash="a" * 64,
+                    idempotency_key=f"race-{race_run_id.hex}",
+                    request_hash="e" * 64,
+                    target_type="mock",
+                    target_config_json={"type": "mock"},
+                    target_config_hash="f" * 64,
+                    evaluator_type="execution",
+                    evaluator_config_json={"type": "execution"},
+                    evaluator_config_hash="1" * 64,
+                    target_version="v1",
+                    evaluator_version="v1",
+                    status=RunStatus.QUEUED,
+                    total_jobs=1,
+                    created_by=api_key_id,
+                )
+            )
+            session.add(
+                EvaluationJob(
+                    id=race_job_id,
+                    run_id=race_run_id,
+                    case_id="cancel-result-race",
+                    case_payload_json={
+                        "case_id": "cancel-result-race",
+                        "question": "q",
+                    },
+                    status=JobStatus.QUEUED,
+                    max_attempts=1,
+                )
+            )
+        race_claim = (await claimer.claim(worker_id="race-worker", limit=1))[0]
+        cancellation = SQLAlchemyCancellationService(
+            session_factory,
+            clock=clock,
+        )
+        principal = Principal(
+            tenant_id=tenant_id,
+            api_key_id=api_key_id,
+            key_prefix="race_key",
+        )
+        race_outcomes = await asyncio.gather(
+            cancellation.cancel_run(
+                principal=principal,
+                run_id=race_run_id,
+            ),
+            committer.commit_success(
+                claim=race_claim,
+                lease_version=race_claim.version,
+                target_result=target_result,
+                evaluation_result=evaluation_result,
+            ),
+            return_exceptions=True,
+        )
+        assert not any(isinstance(outcome, BaseException) for outcome in race_outcomes)
+        async with session_factory() as session:
+            race_result_count = await session.scalar(
+                select(func.count(CaseResult.id)).where(CaseResult.job_id == race_job_id)
+            )
+            race_job_status = await session.scalar(
+                select(EvaluationJob.status).where(EvaluationJob.id == race_job_id)
+            )
+            race_run_status = await session.scalar(
+                select(EvaluationRun.status).where(EvaluationRun.id == race_run_id)
+            )
+        assert race_result_count == 1
+        assert race_job_status is JobStatus.SUCCEEDED
+        assert race_run_status is RunStatus.SUCCEEDED
     finally:
         async with session_factory.begin() as session:
             await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id))
-            await session.execute(delete(CaseResult).where(CaseResult.run_id == run_id))
-            await session.execute(delete(JobAttempt).where(JobAttempt.job_id.in_(job_ids)))
-            await session.execute(delete(EvaluationJob).where(EvaluationJob.run_id == run_id))
-            await session.execute(delete(EvaluationRun).where(EvaluationRun.id == run_id))
+            await session.execute(
+                delete(CaseResult).where(CaseResult.run_id.in_((run_id, race_run_id)))
+            )
+            await session.execute(
+                delete(JobAttempt).where(JobAttempt.job_id.in_((*job_ids, race_job_id)))
+            )
+            await session.execute(
+                delete(EvaluationJob).where(EvaluationJob.run_id.in_((run_id, race_run_id)))
+            )
+            await session.execute(
+                delete(EvaluationRun).where(EvaluationRun.id.in_((run_id, race_run_id)))
+            )
             await session.execute(delete(DatasetVersion).where(DatasetVersion.id == version_id))
             await session.execute(delete(Artifact).where(Artifact.id == artifact_id))
             await session.execute(delete(Dataset).where(Dataset.id == dataset_id))
