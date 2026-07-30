@@ -416,3 +416,542 @@ SHA，单靠自描述 manifest 无法证明真实性。
 
 停止条件已经满足：P1-1 完成，P1-2 尚未开始。下一步必须由用户确认后再进入 P1-2 或在有
 Docker/PostgreSQL/Redis 的独占环境重新 prepare；不能直接复用旧 schema v1 bundle。
+
+# P1-2：缺失指标不能写成 VERIFIED 0
+
+执行日期：2026-07-30（Asia/Shanghai）
+
+阶段起始分支：`codex/gate1-evidence-hardening`
+
+阶段起始 SHA：`003b29c202becf9da48eac433407151e4ae367b3`
+
+实现提交：`fdae758c2b0e625085f269db61d4d1fa352197ad`
+
+远端操作：未 push、未创建 PR。
+
+## 问题名称
+
+Prometheus 缺失或失败的指标被默认值改写成 `VERIFIED 0`
+
+### 原始行为
+
+问题位于 `scripts/gate1_collectors.py` 的 `summarize_prometheus_deltas()`：
+
+1. 函数预先为 `claim`、`result`、`failure`、`reaper` 创建 count/sum/buckets 全零对象；
+2. 计算 before/after delta 时使用 `mapping.get(key, 0.0)`；
+3. Redis publication failure delta 从 `0.0` 开始累加；
+4. 最终所有预初始化的零对象都获得 `evidence: VERIFIED`；
+5. 调用方没有 `status`、`observation` 或采集失败来源可用于区分：
+   - 指标存在且 delta 为零；
+   - scrape 成功但指标不存在；
+   - before/after 只有一侧存在；
+   - endpoint 请求失败；
+   - exposition 无法可信解析。
+
+阶段开始时执行了真实复现：
+
+```text
+before={"worker-abc": ""}
+after={"worker-abc": ""}
+```
+
+旧输出把四类数据库操作都写成：
+
+```json
+{
+  "evidence": "VERIFIED",
+  "count": 0.0,
+  "sum_seconds": 0.0,
+  "mean_ms": null,
+  "buckets": {}
+}
+```
+
+同时把 Redis 指标写成：
+
+```json
+{
+  "evidence": "VERIFIED",
+  "delta": 0.0
+}
+```
+
+这是“没有观测”被改写成“已验证为零”，不是展示格式问题。
+
+### 证据
+
+| 证据 | 观察 |
+|---|---|
+| 原始源码 | 四类 operation 预初始化为 0 |
+| 原始源码 | before/after 缺键使用 `0.0` 补齐 |
+| 原始源码 | Redis 未见任何序列时仍返回 `VERIFIED` |
+| 原有测试 | collector 5 tests 全部通过 |
+| 真实复现 | 空 scrape 返回四组 `VERIFIED` 零对象 |
+| 现有协议 | 已写明 missing measurement 应为 `UNKNOWN` |
+
+现有测试没有发现问题，因为唯一的 Prometheus delta 测试只覆盖：
+
+- 同一个 Worker container；
+- before/after 都有 claim histogram；
+- before/after 都有 Redis counter；
+- 所有值格式合法；
+- label 完全符合预期；
+- 没有 endpoint、重复、非有限值或缺失场景。
+
+该测试证明了“正常输入可以算 delta”，没有证明“缺失输入不会被补零”。
+
+### 风险
+
+该问题是正式 Gate 1 的阻断缺陷：
+
+1. `VERIFIED 0` 会被图表、汇总或人工采用判断当成真实证据；
+2. 多 Worker 场景只要部分容器有序列，旧聚合可能掩盖其他容器缺失；
+3. before/after 单侧缺失会被当成从 0 增长或归零；
+4. Redis failure 为 0 可能被错误表述为“已验证无发布失败”；
+5. `NaN`/`Inf` 可能进入非标准 JSON 数值；
+6. 重复序列会后值覆盖前值；
+7. 带意外 label 的序列会被静默聚合，破坏冻结协议和低基数合同；
+8. endpoint 失败直接抛异常，缺少 per-source 机器可读原因；
+9. 即使 PostgreSQL reconciliation 通过，必需 Prometheus 证据缺失时 arm 仍可能保留
+   `valid_for_capacity_comparison=true`。
+
+修复前不得运行正式 Gate 1，也不得根据这些零值形成 Worker 采用结论。
+
+### RED 测试
+
+严格按垂直切片执行；每次只新增一个行为测试，再写最小 GREEN。后续测试若已被前一个
+最小实现自然覆盖，则如实记录为“新增时已 GREEN”，没有为了制造失败而加入多余实现。
+
+| # | 行为 | RED/首次观察 | GREEN 效果 |
+|---:|---|---|---|
+| 1 | 空 scrape | `required_metrics_complete` 不存在；旧复现为 `VERIFIED 0` | 返回 `MISSING/UNKNOWN/null` |
+| 2 | scrape 成功但目标不存在 | tracer fix 后新增时已 GREEN | 与空正文分开形成回归合同 |
+| 3 | 指标真实存在且 delta=0 | 成功对象没有 `status/observation/value` | `OBSERVED_ZERO/VERIFIED/0` |
+| 4 | 指标存在且 delta>0 | DB histogram 仍是旧形状 | `OBSERVED_VALUE`，保留 count/sum/mean/buckets |
+| 5 | 非法 exposition | 第三方 parser 的 `ValueError` 直接穿透 | 统一为结构化 `COLLECTION_FAILED/null` |
+| 6 | endpoint 请求失败 | `CalledProcessError` 直接终止 | scrape 保存 `endpoint_request_failed` |
+| 7 | 同一指标重复 | 后值覆盖前值并输出 `VERIFIED 0` | 重复键使该来源 collection failed |
+| 8 | label 组合不符合协议 | 带 `tenant` 的 claim 被接受并输出 `VERIFIED 0` | 冻结目标 label 集合并 fail closed |
+| 9 | `NaN`、`+Inf`、`-Inf` | 前两者为 VERIFIED 非有限值；后者抛 counter decreased | 三者统一 `COLLECTION_FAILED/null` |
+| 10 | before/after 单侧缺失 | 无关 metric 消失先触发 counter decreased | 只处理 Gate 1 目标；单侧目标为 `MISSING` |
+| 11 | 必需指标在一个 Worker 缺失 | 另一个 Worker 有 claim 即输出 VERIFIED | 要求覆盖每个应采集 Worker；arm 不可比较 |
+| 12 | 可选指标缺失 | 前述实现完成后新增时已 GREEN | `UNKNOWN/null`，不误伤必需证据完整性 |
+| 13 | 缺失必需证据接入 arm | 不存在公开合并合同，测试 ImportError | 合并接口令 comparison fail closed |
+| 14 | Prometheus schema v2 | `schema_version` 不存在 | collector 结果显式为 v2 |
+| 15 | Gate 1 result schema v2 | aggregate 没有版本字段 | summary/aggregate/execution/plot 统一 v2 |
+
+测试还补充了：
+
+- optional metric collection failure 映射为 `UNKNOWN/COLLECTION_FAILED/null`；
+- raw snapshot writer 保存失败 reason code，不创建伪 `.prom` 文件；
+- DB histogram 真实零也是 `OBSERVED_ZERO`；
+- plot manifest 和 aggregate artifact 明确为 schema v2。
+
+### 方案比较
+
+#### 方案 A：继续使用数字，只加一个布尔字段
+
+例如保留 `value=0`，另加 `collected=false`。
+
+拒绝原因：
+
+- 旧消费者仍可能只读取数字；
+- `0` 仍同时承载两种互斥语义；
+- 无法表达 missing 与 endpoint/parse failure 的差异。
+
+#### 方案 B：任何缺失或失败都抛异常并终止 arm
+
+优点是 fail closed，实现较小。
+
+拒绝作为唯一方案的原因：
+
+- 无法保留哪个 source、哪个 metric 失败；
+- 可选 failure/reaper 指标缺失不应与必需 claim/result 缺失完全等价；
+- 不利于保存 partial evidence；
+- endpoint failure 只能留下顶层异常类型，不能形成机器可读 metric evidence。
+
+#### 方案 C：只使用 `float | None`
+
+这能避免 UNKNOWN 变成 0，但不能区分 `MISSING` 与 `COLLECTION_FAILED`，也不能证明 0
+确实来自配对序列。
+
+#### 方案 D：显式 scrape 状态 + per-metric 结果（采用）
+
+使用一个很小的 `PrometheusScrape` 值对象保留：
+
+- `COLLECTED + text`；
+- `COLLECTION_FAILED + reason`。
+
+随后通过同一公开汇总接口生成：
+
+```json
+{
+  "status": "VERIFIED | UNKNOWN | FAILED",
+  "evidence": "VERIFIED | DIRECTIONAL | UNKNOWN | FAILED",
+  "observation": "OBSERVED_ZERO | OBSERVED_VALUE | MISSING | COLLECTION_FAILED",
+  "value": "number | null",
+  "reason": "...",
+  "source": "...",
+  "sample_count": 0
+}
+```
+
+采用原因：
+
+- 直接表达用户要求的三种核心语义；
+- 保留 `evidence` 供现有图表/读者使用；
+- UNKNOWN/FAILED 一律是 `value=null`；
+- 真实零仍是数值零；
+- required/optional 映射可以集中执行；
+- 失败 raw evidence 可以保留；
+- 不需要新模块、数据库或大规模重构。
+
+### 选择的最小方案
+
+#### 1. Scrape 边界
+
+`collect_prometheus_snapshot()` 不再让单个 endpoint 的 `CalledProcessError` 丢失上下文。
+每个 API/Worker/Reaper source 返回：
+
+- `COLLECTED`：包含原始 exposition text；
+- `COLLECTION_FAILED`：`text=null`，reason 为稳定 reason code。
+
+成功 `.prom` 原文保持不变。失败来源写入同一 phase 目录的
+`collection_failures.json`，不创建内容为零或空的伪 `.prom` 文件。
+
+#### 2. Parser 边界
+
+parser 现在：
+
+- 把第三方 `TypeError/ValueError` 统一为 `CollectorParseError`；
+- 拒绝重复 sample key；
+- 拒绝 `NaN` 和正负无穷；
+- 对 Gate 1 目标指标冻结 label 集合；
+- Redis counter 不允许 label；
+- DB count/sum 只允许 `operation`；
+- DB bucket 只允许 `operation` 与 `le`；
+- operation 只允许 `claim/result/failure/reaper`；
+- 无关 Prometheus 指标不会参与 Gate 1 delta，也不会因普通增减影响目标结果。
+
+#### 3. 配对和 source 完整性
+
+只有同一个 source、同一个 metric、同一个 label key 同时存在于 before/after 时才计算
+delta。任一侧缺失均为 `MISSING`，不使用 `0.0` 补齐。
+
+来源合同：
+
+- `claim/result/failure`：Worker；
+- `reaper`：Reaper；
+- `redis_publish_failures_total`：所有已 scrape 的 API/Worker/Reaper。
+
+`claim` 和 `result` 必须覆盖每个 Worker；Redis counter 必须覆盖每个已 scrape source。
+
+#### 4. required 与 optional
+
+| 指标 | 必需性 | MISSING | COLLECTION_FAILED |
+|---|---|---|---|
+| claim DB histogram | required | `UNKNOWN/null`，arm 不可比较 | `FAILED/null`，arm 不可比较 |
+| result DB histogram | required | `UNKNOWN/null`，arm 不可比较 | `FAILED/null`，arm 不可比较 |
+| Redis publish failures | required | `UNKNOWN/null`，arm 不可比较 | `FAILED/null`，arm 不可比较 |
+| failure DB histogram | optional | `UNKNOWN/null` | `UNKNOWN/null` |
+| reaper DB histogram | optional | `UNKNOWN/null` | `UNKNOWN/null` |
+
+failure/reaper 是否发生取决于 workload 与运行事实，不能把“没出现序列”写成真零。
+
+#### 5. arm fail-closed
+
+新增 `merge_prometheus_evidence()`，集中完成：
+
+- claim 字段接入；
+- result/failure/reaper 字段接入；
+- Redis 字段接入；
+- `required_metrics_complete=false` 时强制
+  `valid_for_capacity_comparison=false`。
+
+它返回新字典，不修改调用方传入对象，便于测试并降低隐式副作用。
+
+#### 6. Schema version
+
+两类 schema 必须区分：
+
+1. prepared manifest schema v2：P1-1 的执行前证据绑定；
+2. Gate 1 result schema v2：P1-2 的指标语义。
+
+本阶段将以下新结果升级为 result schema v2：
+
+- Prometheus delta；
+- per-arm summary wrapper；
+- aggregate summary；
+- execution report；
+- plot manifest。
+
+没有把 prepared manifest 升为 v3，因为其结构没有因 P1-2 改变；新的 source commit、脚本
+SHA 和 protocol SHA 已足以使旧 prepared bundle fail closed。
+
+### 修改文件
+
+| 文件 | 修改原因 |
+|---|---|
+| `scripts/gate1_collectors.py` | scrape 状态、parser 校验、配对/source 完整性、三态输出 |
+| `scripts/gate1_evidence.py` | result schema v2 常量和 Prometheus evidence 合并 |
+| `scripts/run_load_test.py` | 使用 fail-closed 合并；per-arm/execution 写 result schema v2 |
+| `scripts/gate1_plots.py` | plot manifest 随嵌入 point 形状升级为 schema v2 |
+| `scripts/worker_scaling_protocol.md` | 冻结 required/optional、状态、source 和兼容合同 |
+| `tests/unit/scripts/test_gate1_collectors.py` | 指定的 scrape/metric 异常矩阵 |
+| `tests/unit/scripts/test_gate1_evidence.py` | arm fail-closed 与 aggregate schema |
+| `tests/unit/scripts/test_gate1_plots.py` | plot/aggregate artifact schema v2 |
+
+没有新增文件或为了抽象拆分新模块。核心复杂性仍隐藏在既有 collector 公共接口后。
+
+### Migration，如有
+
+数据库 migration：无。
+
+理由：
+
+- 没有修改 ORM、表、列、约束或持久化数据；
+- 变化只影响新 Gate 1 文件 artifact；
+- Alembic 历史 migration 没有被修改；
+- `20260729_0008` 仍是唯一 head；
+- 全历史离线 SQL 可以生成。
+
+Result schema v1 没有执行原地迁移。原因是 v1 已丢失关键事实：历史
+`VERIFIED 0` 无法区分真零与缺失，任何自动迁移都会猜测并伪造证据。
+
+### 修改中遇到的问题
+
+#### 1. 附件第一次按默认编码读取出现乱码
+
+原因：PowerShell 默认解码没有按 UTF-8 解释附件。
+
+处理：所有后续读取显式指定 `-Encoding UTF8`，重新逐段核对 P1-2 和全局约束。
+
+影响：只影响第一次终端展示；没有在乱码状态下修改文件。
+
+#### 2. PowerShell `foreach` 直接接格式化管道失败
+
+表现：检查两个 manifest 的临时命令报 `An empty pipe element is not allowed`。
+
+处理：改为循环内显式输出。
+
+影响：命令没有执行到写操作，仓库未改变。
+
+#### 3. uv 默认 cache 无写权限
+
+表现：`C:\Users\xuan\AppData\Local\uv\cache` 报拒绝访问。
+
+处理：只对当前验证命令设置仓库内 `.uv-cache`。
+
+影响：第一次 pytest 没有启动，不能记为测试失败；重跑后正常。
+
+#### 4. Git dubious ownership
+
+表现：不同沙箱执行身份触发 Git 安全保护。
+
+处理：没有修改全局 Git 配置；只对当前命令增加仓库级
+`-c safe.directory=D:/文档/ai-evalops-platform`。
+
+影响：没有降低其他仓库的 Git 安全边界。
+
+#### 5. 非有限值出现三种不一致旧行为
+
+表现：
+
+- `NaN` → `VERIFIED` 且 value 为 NaN；
+- `+Inf` → `VERIFIED` 且 value 为 Inf；
+- `-Inf` → counter decreased 异常。
+
+处理：在 parser 边界统一拒绝所有非有限值。
+
+效果：三类输入都得到一致的 `COLLECTION_FAILED/null`。
+
+#### 6. 单侧缺失先被无关指标误伤
+
+测试使用一个无关 process metric 和单侧 Redis metric 时，旧循环先把无关 metric 的消失
+判断成 counter decreased。
+
+处理：delta 循环只处理冻结的 Gate 1 目标 metric；无关 metric 不参与。
+
+效果：单侧目标缺失准确得到 `MISSING`，不被无关序列覆盖。
+
+#### 7. Ruff 与 mypy 自审问题
+
+第一次自审：
+
+- Ruff 报 2 个文件需要格式化；
+- mypy 报 3 个问题，来自跨分支复用 `operation`/`aggregate` 变量名；
+- Redis 结果的嵌套三元表达式可读性差。
+
+处理：
+
+- 在 GREEN 状态下改为语义独立变量名；
+- Redis 分支改成普通 `if/elif/else`；
+- 执行 Ruff formatter；
+- 没有增加 ignore，也没有降低 strict 配置。
+
+效果：相关测试仍绿，strict mypy 0 issue。
+
+### 定向测试结果
+
+最终定向命令覆盖：
+
+```text
+tests/unit/scripts/test_gate1_collectors.py
+tests/unit/scripts/test_gate1_evidence.py
+tests/unit/scripts/test_gate1_plots.py
+tests/unit/scripts/test_experiment_scripts.py
+```
+
+结果：
+
+```text
+48 passed in 5.07s
+```
+
+完整 Gate 1 相关单元回归：
+
+```text
+tests/unit/scripts/test_gate1_collectors.py
+tests/unit/scripts/test_gate1_evidence.py
+tests/unit/scripts/test_gate1_plots.py
+tests/unit/scripts/test_gate1_preflight.py
+tests/unit/scripts/test_gate1_prepared_evidence.py
+tests/unit/scripts/test_experiment_scripts.py
+```
+
+最终结果：
+
+```text
+75 passed in 17.03s
+```
+
+### 回归结果
+
+| 检查 | 结果 | 证据状态 |
+|---|---|---|
+| `uv lock --check` | Resolved 70 packages in 2ms | `VERIFIED` |
+| Ruff format 全仓 | 220 files already formatted | `VERIFIED` |
+| Ruff lint 全仓 | All checks passed | `VERIFIED` |
+| strict mypy | 110 source files，无问题 | `VERIFIED` |
+| Gate 1 定向回归 | 75 passed in 17.03s | `VERIFIED` |
+| 非 integration 全量 | 307 passed，6 deselected in 22.36s | `VERIFIED` |
+| integration 标记收集 | 6 skipped，307 deselected in 2.45s | `NOT_RUN` |
+| Alembic heads | `20260729_0008 (head)` | `VERIFIED` |
+| Alembic history | 单线历史到 `20260729_0008` | `VERIFIED` |
+| Alembic offline SQL | 完整生成，无错误 | `VERIFIED` |
+| Docker CLI | 当前 shell 不存在 | `NOT_RUN`（环境前置条件） |
+| Docker build / Compose smoke | 未执行 | `NOT_RUN` |
+| 正式 500-case / 32-arm | 未启动 | `NOT_RUN` |
+| 长时间 soak / 破坏性故障注入 | 未启动 | `NOT_RUN` |
+
+真实服务测试的 6 个 skip 原因仍是没有设置 `EVALOPS_RUN_INTEGRATION=1` 且没有提供已迁移
+PostgreSQL/Redis。它们不能写成 passed，也不表示业务断言失败。
+
+### 本次证明了什么
+
+- 空 scrape 不再产生 `VERIFIED 0`；
+- 成功 scrape 中缺失目标不再产生数字；
+- before/after 单侧缺失不再用 0 补齐；
+- 指标存在且 delta=0 能明确表示为 `OBSERVED_ZERO/VERIFIED/0`；
+- 指标存在且 delta>0 能明确表示为 `OBSERVED_VALUE`；
+- endpoint、非法格式、重复、非法 label、NaN/Inf 都不会产生 VERIFIED 数字；
+- required 与 optional 的缺失/失败映射不同；
+- claim/result/Redis 必需证据缺失会令 arm 不可用于容量比较；
+- 多 Worker 必须逐 source 完整，不会由一个 Worker 的序列代表全体；
+- 新结果带 schema v2；
+- 旧 `evidence` 字段仍保留；
+- raw endpoint failure reason code 会被保存；
+- 没有更改数据库或历史 migration；
+- 没有运行正式实验、没有改变 Worker 数、没有生成容量数字。
+
+### 仍未证明什么
+
+- 没有真实 Docker/Compose scrape；
+- 没有证明 API/Worker/Reaper 实际 endpoint 在本机都可访问；
+- 没有真实多 Worker 的 source 覆盖结果；
+- 没有真实 PostgreSQL/Redis integration 执行；
+- 没有正式 500-case、32-arm、吞吐、p95/p99 或资源曲线；
+- 没有证明生产 Prometheus service discovery；
+- 没有运行容器重启后的 counter reset 场景；
+- 同 container identity 下 cumulative counter decrease 仍会使 arm fail closed，而不是生成
+  可比较 metric；
+- source role 判断依赖 collector 自己生成的 `service-containerid` key；若未来改变 key 格式，
+  必须先升级协议和测试；
+- result schema v1 的历史零值仍然是不可恢复的歧义证据；
+- P1-3 的 finalization 原子发布尚未开始；
+- image digest、完整 build-context、SSRF 和 artifact ownership 等后续 P1 finding 尚未处理。
+
+### 对旧 prepared evidence 的影响
+
+仓库内两个旧 bundle 仍是：
+
+- `gate1-plan-c72e8c5-20260729T150959Z`：prepared manifest schema v1；
+- `gate1-plan-e21c31c-20260729T162352Z`：prepared manifest schema v1。
+
+P1-1 已经决定它们只读保留、不可执行。本阶段没有改写其中任何文件。
+
+P1-2 又修改了：
+
+- `scripts/gate1_collectors.py`；
+- `scripts/gate1_evidence.py`；
+- `scripts/gate1_plots.py`；
+- `scripts/run_load_test.py`；
+- frozen protocol。
+
+因此，即使外部存在基于 `003b29c` 生成的 prepared manifest schema v2 bundle，当前 P1-1
+verifier 也应通过 source commit、execution-script SHA 或 protocol SHA 将其拒绝。正确做法
+是在 `fdae758` 或后续目标 commit 的干净、独占工作区重新 prepare，不得原地补 hash。
+
+新结果 artifact：
+
+- 只生成 result schema v2；
+- schema v1 结果保持只读；
+- 不覆盖旧结果；
+- 不尝试把旧 `VERIFIED 0` 自动迁移为 OBSERVED_ZERO；
+- 若必须读取 v1，只能标注其“缺失与真零不可区分”的限制，不能用于正式证据升级。
+
+### 简历与面试表述
+
+可以表述为：
+
+> 在多租户异步 AI 评测平台的 Worker 扩展实验中，我通过 TDD 修复了 Prometheus collector
+> 把缺失序列默认成 `VERIFIED 0` 的证据污染问题。我建立了
+> `OBSERVED_ZERO / MISSING / COLLECTION_FAILED` 语义，冻结 per-service label/source
+> 合同，拒绝重复与 NaN/Inf，并让 claim/result/Redis 必需证据缺失时 fail closed，
+> 同时把新实验结果升级为 schema v2、保留旧 artifact 只读。
+
+更简短的简历条目：
+
+> Hardened evidence-first load-test collectors with explicit missing/failure semantics,
+> per-replica completeness checks, schema-versioned artifacts, and TDD regression coverage,
+> preventing absent Prometheus series from being reported as verified zero.
+
+不能表述为：
+
+- 已验证 500-case 性能；
+- 已证明 8 Worker 优于 1 Worker；
+- 已完成生产容量认证；
+- 已验证真实多副本 Prometheus；
+- 已完成 Gate 1；
+- 已完全解决所有实验 artifact 原子性问题。
+
+## P1-2 阶段结论与停止点
+
+P1-2 的 RED → GREEN → 必要重构 → 定向测试 → 全仓回归 → 协议 → 实现提交已经完成。
+
+回滚边界：
+
+- `git revert fdae758` 可回滚 P1-2 实现、测试和协议；
+- 不需要数据库 downgrade；
+- 没有远端 push 或 PR；
+- 没有正式运行结果需要删除；
+- 历史 bundle 未被修改。
+
+当前代码已经消除了已复现的 `MISSING -> VERIFIED 0` 路径，但正式 Gate 1 仍不能运行：
+
+1. P1-3 finalization 部分发布风险尚未修复；
+2. P1-4/P1-5 镜像与 build-context 不可变绑定尚未完成；
+3. 当前机器没有 Docker/PostgreSQL/Redis 实验环境；
+4. 必须在所有阻断 finding 修复并再次确认后，重新 prepare 新 bundle。
+
+本阶段停止在 P1-3 之前。
