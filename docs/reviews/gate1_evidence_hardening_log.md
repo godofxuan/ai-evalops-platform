@@ -1383,3 +1383,352 @@ P1-3 的修改前审计、RED → GREEN、完整失败矩阵、必要重构、�
 2. 后续 build-context 与其他阻断 finding 尚未完成；
 3. 当前机器没有 Docker/PostgreSQL/Redis 正式实验环境；
 4. 必须等所有阻断项完成后，从最终干净提交重新 prepare 新 bundle。
+
+---
+
+## P1-4：不可变本地镜像身份、构建来源与运行容器绑定
+
+日期：2026-07-30
+
+实现提交：
+
+```text
+243883ab7e7d4d33e9c2e4d819706114de898aab
+fix(gate1): bind prepared runs to immutable images
+```
+
+阶段状态：`IMPLEMENTED_AND_CONTRACT_VERIFIED / REAL_DOCKER_NOT_RUN`。
+
+### 接到阶段指令后的适合性判断
+
+进入 P1-4 前没有直接照抄建议实现，而是先检查它是否适合当前仓库。结论是：风险真实、
+优先级合理，但必须把“registry digest”和“本地 Docker image ID”分开，不能因为两者都
+长得像 `sha256:...` 就混写证据等级。
+
+修改前的证据为：
+
+| 位置 | 修改前事实 | 风险 |
+|---|---|---|
+| `deploy/compose.yaml` | 应用服务共用 `ai-evalops-platform:phase9` 可变标签 | 同一个 tag 可在准备后指向另一张镜像 |
+| `Dockerfile`/构建流程 | 没有在构建命令中写 revision/source/created 与输入 hash 标签 | 无法从运行容器反查源码和构建输入 |
+| prepared manifest schema v2 | 没有 `provenance.image` | bundle 不绑定实际执行镜像 |
+| `collect_preflight` | 只调用 `docker compose images --quiet` 收集一组 ID | 没有逐个绑定正在运行的 API/Worker/Reaper |
+| Compose project | 依赖目录推导默认 project name | 从不同目录启动会改变 project identity |
+| build context | verifier 只找 dirty path，没有冻结整体 context fingerprint | 干净路径集合相同也不能证明内容相同 |
+
+因此采用以下设计：
+
+1. 当前流程没有 registry push/pull，所以使用 Docker 本地不可变 image ID；
+2. 证据状态只能写 `LOCAL_IMAGE_ID_VERIFIED`；
+3. `registry_digest` 必须为 `null`，不能写 `REGISTRY_DIGEST_VERIFIED`；
+4. human-readable repository/tag 仍保留给人阅读，但安全判断只信 immutable ID；
+5. prepared manifest 升级到 schema v3，旧 v1/v2 继续历史只读，不做静默迁移；
+6. `--prepare-only` 允许一个受限副作用：构建并 inspect 镜像；不启动服务、上传 Dataset、
+   缩放 Worker 或启动 formal arm；
+7. P1-4 只建立当前 `docker-context-sha256-v1` 合同；Dockerignore 完整语义、symlink、
+   secret/ignore precedence 留给 P1-5，不提前宣称完成。
+
+### 冻结后的 image binding
+
+新 manifest 的 `provenance.image` 至少绑定：
+
+```json
+{
+  "identity_kind": "LOCAL_IMAGE_ID",
+  "verification": "LOCAL_IMAGE_ID_VERIFIED",
+  "repository": "ai-evalops-platform",
+  "tag": "phase9",
+  "reference": "ai-evalops-platform:phase9",
+  "immutable_id": "sha256:<64 hex>",
+  "registry_digest": null,
+  "compose_project": "ai-evalops-platform",
+  "source_commit": "<40 hex>",
+  "source": "https://github.com/godofxuan/ai-evalops-platform",
+  "dockerfile_sha256": "<64 hex>",
+  "build_context": {
+    "algorithm": "docker-context-sha256-v1",
+    "sha256": "<64 hex>",
+    "file_count": 0
+  },
+  "build": {
+    "created": "<UTC timestamp>",
+    "image_created": "<docker inspect timestamp>"
+  },
+  "runtime": {
+    "python": "3.12.13",
+    "os": "linux",
+    "architecture": "amd64"
+  },
+  "labels": {
+    "org.opencontainers.image.revision": "<source commit>",
+    "org.opencontainers.image.source": "<repository URL>",
+    "org.opencontainers.image.created": "<UTC timestamp>",
+    "io.ai-evalops.dockerfile.sha256": "<Dockerfile SHA>",
+    "io.ai-evalops.build-context.sha256": "<context SHA>",
+    "io.ai-evalops.python.version": "3.12.13"
+  }
+}
+```
+
+manifest 校验不只检查“这是一个字典”。上述字段会做格式校验，并做以下交叉绑定：
+
+- image source commit 必须等于 manifest provenance source commit；
+- image Dockerfile SHA 必须等于 provenance Dockerfile SHA；
+- revision/source/created 标签必须等于 image 对应字段；
+- Dockerfile/context/Python 标签必须等于 image 对应字段；
+- LOCAL identity 下 `registry_digest` 只能为 `null`；
+- build 时间必须是可解析的 UTC `Z` 时间；
+- runtime Python 必须等于 Dockerfile 当前冻结版本 `3.12.13`。
+
+### RED → GREEN 详细记录
+
+| 步骤 | RED 观察 | 判断与最小修改 | GREEN 效果 |
+|---|---|---|---|
+| 1 | 新测试导入 `scripts.gate1_image_evidence` 失败 | 先建立独立模块，不把镜像安全逻辑继续塞入 runner | 模块可导入，同 tag/不同 ID 有独立比较入口 |
+| 2 | 同 tag、不同 image ID 仍可能被当作可运行 | 只比较三个应用服务的 `.Image` 与 manifest immutable ID | 返回 `IMAGE_ID_MISMATCH` |
+| 3 | revision 不同仍 ready | 加入 `org.opencontainers.image.revision` 精确比较 | 返回 `IMAGE_REVISION_MISMATCH` |
+| 4 | revision 缺失与“不匹配”混成一个状态 | 单独记录标签存在性 | 返回 `IMAGE_REVISION_LABEL_MISSING` |
+| 5 | 来自其他 Compose project 的容器仍通过 | 检查 `com.docker.compose.project` | 返回 `COMPOSE_PROJECT_MISMATCH` |
+| 6 | Dockerfile/context 标签与 manifest 不同仍通过 | 加入两个 build-input 标签比较 | 返回 `IMAGE_BUILD_INPUT_MISMATCH` |
+| 7 | 成功路径只返回泛化 `READY` | 明确 identity kind 与成功证据等级 | 返回 `LOCAL_IMAGE_ID_VERIFIED`，没有 registry 声明 |
+| 8 | manifest 删除 `provenance.image` 后 verifier 仍 `READY` | schema 升到 v3，并把 image 设为必需 | 返回 `MANIFEST_INVALID` |
+| 9 | producer 测试读取不到 image | `prepare_load_experiment` 调用镜像绑定边界并写入 manifest | producer 合同转绿 |
+| 10 | build context 新增未跟踪 Python 时只走到“未实现”错误 | 构建前读取 Git porcelain，并按 `.dockerignore` 过滤 | 明确拒绝 `app/untracked_image_input.py` |
+| 11 | 完整构建合同仍报 `image build binding is not implemented` | 实现 build、labels、inspect、immutable ID 与 runtime 读取 | 冻结 ID/标签/runtime 测试通过 |
+| 12 | 正式 `collect_preflight` 不接受 `expected_image` | 将 manifest image 传入正式预检，inspect Compose 的具体容器 | 环境全通过但 ID 不同时返回 `IMAGE_ID_MISMATCH` |
+| 13 | 畸形 image 字典仍被 verifier 判为 `READY` | 增加字段格式和跨字段一致性校验 | 缺 repository/tag/ID/hash/time/runtime/labels 均 `MANIFEST_INVALID` |
+| 14 | 执行前新增 Python 只显示 dirty path，没有整体 hash 差异 | 用构建阶段同一算法重算 context | 同时得到 `docker_build_context_clean=false` 与 context hash mismatch |
+| 15 | 已跟踪 Dockerfile 修改没有在 build 前被拒绝，而是继续找 Docker | Git 状态判断扩展到 staged/unstaged/tracked/untracked/ignored | 在调用 Docker 前拒绝未记录 Dockerfile 输入 |
+| 16 | image build 失败后留下无 manifest 的 run 目录 | 把 Git/构建/inspect/hash 全部前置，成功后才建 run 目录 | 失败不留下半成品 run 目录 |
+| 17 | 模拟 `docker build` 期间修改 Python 后仍进入 image inspect | 构建后重新计算 Git 状态和 context fingerprint | 返回 `build context changed during image build` |
+
+### 为什么正式 preflight 不再使用 `docker compose images --quiet`
+
+`docker compose images --quiet` 返回的是 Compose 相关镜像集合，不足以回答“哪个具体容器
+正在运行哪张镜像”。新流程为：
+
+```text
+docker compose ps --format json
+  -> 取 API/Worker/Reaper 的具体 container ID
+  -> docker inspect <container ID>
+  -> 读取 .Image、.Config.Image、受控标签
+  -> 与 manifest image binding 精确比较
+```
+
+preflight 输出只保存经筛选的：
+
+- service；
+- container ID；
+- image reference；
+- immutable image ID；
+- revision；
+- Compose project。
+
+不会把容器的任意环境变量或完整 labels 原样写入证据，避免把潜在秘密扩散到
+`preflight.json`。
+
+镜像检查成为六个必需 check：
+
+```text
+identity_kind_supported
+container_image_ids_match
+image_revision_labels_present
+image_revision_labels_match
+compose_project_matches
+image_build_input_labels_match
+```
+
+状态优先级为：
+
+1. source commit 错误；
+2. tracked worktree/build context 错误；
+3. Docker/Compose/必需服务不可检查；
+4. 具体 image identity/revision/project/build-input 错误；
+5. 凭据存在性、磁盘和人工 gate 等其余环境 blocker；
+6. 全部通过才是 `READY`。
+
+这样 Docker 本身不存在时仍得到 `ENVIRONMENT_BLOCKED`，不会被空容器列表误写成
+`IMAGE_ID_MISMATCH`；当环境可检查时，镜像错误又不会被泛化状态吞掉。
+
+### 文件级修改及原因
+
+| 文件 | 修改 | 原因 |
+|---|---|---|
+| `scripts/gate1_image_evidence.py` | 新增 context fingerprint、Git clean gate、镜像 build/inspect、manifest schema、运行容器比较 | 将镜像证据做成单一安全边界 |
+| `scripts/run_load_test.py` | prepare 生成 image binding；execute 传入 expected image；失败前不创建 run 目录 | 正式 producer/consumer 接线并避免半成品 |
+| `scripts/gate1_prepared_evidence.py` | schema v3、image 跨字段校验、执行前 context 重算、新模块脚本 hash | prepared bundle fail-closed |
+| `scripts/gate1_preflight.py` | inspect 具体容器、六项必需检查、具体失败状态、筛选后的 runtime evidence | 证明运行对象而不是只看 tag |
+| `deploy/compose.yaml` | 顶层固定 `name: ai-evalops-platform` | 稳定 Compose project identity |
+| `scripts/worker_scaling_protocol.md` | 冻结 schema v3、本地 ID 语义、prepare 副作用和运行容器检查 | 让每个新 bundle 带正确协议 |
+| `docs/gate_1_execution_log.md` | 更新 prepare/preflight 流程与 P1-4 `NOT_RUN` 边界 | 防止历史说明误导执行者 |
+| 四个单测文件 | 增加镜像、manifest、preflight、失败清理和竞态矩阵；外部 Docker 用边界替身 | 通过可复现 RED/GREEN 证明合同 |
+
+新 `gate1_image_evidence.py` 已加入 `KEY_EXECUTION_SCRIPT_PATHS`。以后该安全实现发生任何
+修改，旧 prepared bundle 会因 execution-script SHA 不一致被拒绝。
+
+### 遇到的问题、为什么发生、怎样处理
+
+#### 1. 当前 PowerShell 找不到 `uv`
+
+最初执行：
+
+```text
+uv run pytest ...
+```
+
+得到 `CommandNotFoundException`。这不是产品 RED。仓库已有 `.venv`，因此后续统一使用：
+
+```text
+.\.venv\Scripts\python.exe -m pytest ...
+```
+
+没有安装新工具或改动依赖。
+
+#### 2. 旧 `.pytest-tmp` 在 Windows 上拒绝清理
+
+pytest 在 fixture 初始化前收到 `WinError 5`，测试体没有执行。没有强删、改 ACL 或把它
+冒充产品失败，而是为每次运行使用系统临时目录下的唯一 `--basetemp`，并关闭 pytest
+cacheprovider。随后同一测试真实运行并通过。
+
+#### 3. subprocess 替身意外影响 `platform.platform()`
+
+正式 preflight 集成测试替换了 `subprocess.run`。Windows 的 `platform.platform()` 内部
+也会执行 `ver`，于是替身报告 unexpected command。判断为测试隔离问题，固定测试平台值
+`test-platform`，没有修改生产平台采集语义。
+
+#### 4. 新外部 Docker 边界让旧 prepare 单测尝试真实构建
+
+这些测试的目标是 Dataset、manifest、状态机或 hash，不是 Docker daemon。为它们注入
+结构完整、使用真实 Dockerfile/context hash 的 fake local image binding；真实 builder
+继续在独立测试中模拟 Docker CLI 并验证命令、labels、inspect 和 runtime，没有把核心
+逻辑整体 mock 掉。
+
+#### 5. Ruff 与 mypy
+
+Ruff 首次报告 3 处 import order 和 5 个文件的机械格式；自动修复后全仓通过。mypy 唯一
+问题是通过布尔变量间接判断 timestamp 为字符串时无法完成类型收窄；改为在
+`isinstance(str)` 分支内解析，运行语义不变，strict mypy 转绿。
+
+#### 6. 文档合同仍写 schema v2
+
+代码升级到 v3 后检查冻结协议，发现仍写“Only manifest schema v2 is executable”。
+如果不修，未来可能按错误协议解释 bundle。更新协议和执行日志后重新跑 56 条定向测试。
+
+#### 7. 当前机器没有 Docker
+
+最终探测结果：
+
+```text
+DOCKER_UNAVAILABLE
+```
+
+因此没有真实运行 `docker build`、`docker image inspect`、`docker compose config/up`
+或容器 smoke。所有 Docker 命令路径都通过受控 unit boundary 测试，但证据状态只能是
+`CONTRACT_VERIFIED`，真实 Docker 为 `NOT_RUN`。
+
+### 最终验证证据
+
+#### 定向与全量测试
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| P1-4 image/preflight/prepared/runner 定向矩阵 | 56 passed in 39.09s | `VERIFIED` |
+| 非 integration 全量 | 333 passed、6 deselected in 51.46s | `VERIFIED` |
+| integration 标记 | 6 skipped、333 deselected in 1.64s | `NOT_RUN` |
+
+六个 integration skip 仍要求显式设置 `EVALOPS_RUN_INTEGRATION=1`，并提供已迁移真实
+PostgreSQL/Redis。它们没有被写成 passed。
+
+#### 静态与仓库检查
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| Ruff lint 全仓 | All checks passed | `VERIFIED` |
+| Ruff format 全仓 | 223 files already formatted | `VERIFIED` |
+| strict mypy | 106 source files，无问题 | `VERIFIED` |
+| `git diff --check` | 无 whitespace error | `VERIFIED` |
+| Docker CLI | `DOCKER_UNAVAILABLE` | `NOT_RUN` |
+| Docker build / Compose smoke | 未执行 | `NOT_RUN` |
+| 正式 500-case / 32-arm | 未执行 | `NOT_RUN` |
+
+### 本阶段已经证明什么
+
+- 同一个可变 tag 指向不同 image ID 时会被拒绝；
+- revision 标签缺失和 revision 不匹配有不同状态；
+- 其他 Compose project 的容器会被拒绝；
+- Dockerfile/context 标签与 manifest 不同会被拒绝；
+- LOCAL image ID 不会被误称为 registry digest；
+- manifest 缺失或畸形 image binding 会在 Git/Docker 前失败；
+- source commit、Dockerfile、context、labels 和 runtime 有跨字段绑定；
+- tracked/untracked/ignored 且进入 build context 的未记录路径会在 build 前失败；
+- prepare 与 execute 使用同一 context fingerprint 算法；
+- build 过程中 context 变化会在 inspect 前失败；
+- image build 失败不会留下半成品 run 目录；
+- preflight inspect 的是具体运行容器，而不是只看 Compose 镜像集合；
+- 预检证据不会原样持久化任意容器标签或环境变量；
+- 新镜像证据实现本身进入 prepared execution-script hash。
+
+### 本阶段仍未证明什么
+
+- 没有真实 Docker daemon，未证明实际 Docker/BuildKit 输出与 mock 边界完全一致；
+- 没有 registry 操作，未验证或声明 registry digest；
+- 没有运行 Compose，未实测 project label、三类应用容器 ID 和 OCI labels；
+- 当前 context matcher 不是 Docker/Moby `.dockerignore` 解析器的完整重实现；
+- symlink 逃逸、复杂 `**`、negation precedence、escaped whitespace、特殊路径引用和
+  Dockerfile-specific ignore file 仍属于 P1-5；
+- 没有证明 secrets 一定不会进入所有可能的构建上下文；
+- 构建前后双快照缩小了竞态窗口，但不是 BuildKit 对实际发送 tar stream 的密码学证明；
+- 没有 PostgreSQL/Redis integration、正式 500-case 数据或 Worker 容量结论；
+- P1-5 及 SSRF、artifact ownership 等其他 P1 finding 尚未完成。
+
+### 对旧 artifact 与 prepared bundle 的影响
+
+- 没有修改任何 `docs/results/` 历史 artifact；
+- 没有运行正式实验，也没有生成新 plan/bundle；
+- schema v1/v2 manifest 保持历史只读；
+- schema v3 是唯一可执行 prepared manifest；
+- 旧 bundle 不能手工补 image 字段或重写 schema 号；
+- 所有阻断 finding 完成后，应从最终干净、已提交 HEAD 重新执行 `--prepare-only`；
+- 因为 prepare 现在需要 Docker，本机 `DOCKER_UNAVAILABLE` 时会在创建 run 目录前失败。
+
+### 回滚边界
+
+```text
+git revert 243883ab7e7d4d33e9c2e4d819706114de898aab
+```
+
+可回滚 P1-4 实现、测试、Compose project name、schema v3 和冻结协议。不需要数据库
+downgrade；没有正式运行结果需要删除。若未来已生成 schema v3 bundle，回滚前必须先
+保留只读审计副本，不能让旧代码把它当作可执行 v2 bundle。
+
+本阶段没有 push、没有 PR。
+
+### 简历与面试表述
+
+可以表述为：
+
+> Bound prepared AI evaluation runs to immutable local Docker image IDs with
+> source/build-input OCI labels, manifest cross-validation, exact running-container
+> inspection, fail-closed mismatch states, and pre/post-build context stability checks.
+
+不能表述为：
+
+- 已验证 registry digest；
+- 已在真实 Docker/Compose 环境完成 smoke；
+- 已完成所有 build-context hardening；
+- 已运行 Gate 1 正式容量矩阵；
+- 已证明某个 Worker 数最优；
+- 已解决所有 P1 finding。
+
+## P1-4 阶段结论与下一停止点
+
+P1-4 的修改前判断、TDD RED → GREEN、manifest schema v3、不可变本地 image ID、
+OCI/build-input labels、正式 preflight 接线、构建前后 context 稳定性、冻结协议、
+定向/全量/静态验证和本地实现提交均已完成。
+
+当前停止在 P1-5 之前。正式 Gate 1 仍不能运行，因为：
+
+1. P1-5 的完整 build-context 语义与 secret/symlink 边界尚未完成；
+2. 其他阻断 P1 finding 尚未完成；
+3. 当前机器没有 Docker/PostgreSQL/Redis 正式实验环境；
+4. 必须等所有阻断项完成后，从最终干净提交重新 prepare schema v3 bundle。
