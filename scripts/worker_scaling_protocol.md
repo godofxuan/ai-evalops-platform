@@ -92,6 +92,33 @@ The renderer is the Matplotlib version resolved by the run's source commit and `
 using the non-interactive `Agg` backend at 144 DPI. Matplotlib is a development dependency
 and is excluded from the production image by `UV_NO_DEV=1`.
 
+## Frozen final-bundle publication
+
+Root-level `raw/<arm_id>/` and `summary/<arm_id>.json` are execution-time working
+evidence. Their presence does not mean that a formal result was published. The only
+published result is the complete `<run_id>/final/` directory.
+
+Finalization uses final-bundle schema v1 while the enclosed metric artifacts continue to
+use result schema v2. These are independent version axes: the bundle schema describes
+layout, hashes, and publication; the result schema describes metric meaning.
+
+The finalizer must:
+
+1. acquire the run-local finalization lock and reject an existing `final/` target;
+2. create staging on the same filesystem as the run directory;
+3. copy every raw arm directory and matching per-arm summary into staging;
+4. write aggregate JSON and CSV, all five PNG files, and the plot manifest in staging;
+5. write `final/manifest.json` metadata in staging with every payload path, byte size,
+   and SHA-256 digest;
+6. re-read the manifest and independently validate the exact file count, required paths,
+   schemas, arm cross-references, PNG signatures, byte sizes, and every SHA-256 digest;
+7. recheck the formal target and publish with one same-filesystem atomic directory rename.
+
+Any build, render, write, hash, validation, conflict, or rename failure must remove
+staging and leave no new formal bundle. Existing partial or complete `final/` directories
+are immutable conflicts and must remain byte-for-byte unchanged. Concurrent finalizers
+must not publish twice.
+
 ## Correctness gate
 
 Every measured arm must contain exactly the expected Job rows, exactly one CaseResult for

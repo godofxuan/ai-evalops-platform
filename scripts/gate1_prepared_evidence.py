@@ -14,6 +14,7 @@ KEY_EXECUTION_SCRIPT_PATHS = (
     "scripts/gate1_collectors.py",
     "scripts/gate1_database.py",
     "scripts/gate1_evidence.py",
+    "scripts/gate1_finalization.py",
     "scripts/gate1_plots.py",
     "scripts/gate1_preflight.py",
     "scripts/gate1_prepared_evidence.py",

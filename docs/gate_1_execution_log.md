@@ -209,7 +209,7 @@ TDD 与问题记录：
 
 ## 5. 输出
 
-完成的正式 run 设计为：
+P1-3 原子发布加固后，run 根目录与正式 bundle 的边界为：
 
 ```text
 <run_id>/
@@ -219,22 +219,32 @@ TDD 与问题记录：
   execution.json
   dataset/
   arm_order.json
-  raw/<arm_id>/
-  summary/<arm_id>.json
-  summary/aggregate.json
-  summary/arms.csv
+  raw/<arm_id>/                  # 执行期工作证据
+  summary/<arm_id>.json          # 执行期工作证据
   failures/index.json
-  plots/manifest.json
-  plots/throughput.png
-  plots/latency.png
-  plots/queue_and_claim.png
-  plots/database.png
-  plots/cpu_and_rss.png
+  plots/                         # prepare 时预建；不是正式发布标志
+  final/                         # 只有该目录整体出现才表示正式发布
+    manifest.json                # final-bundle schema v1 + 全部 payload SHA-256
+    raw/<arm_id>/
+    summary/<arm_id>.json
+    summary/aggregate.json
+    summary/arms.csv
+    plots/manifest.json
+    plots/throughput.png
+    plots/latency.png
+    plots/queue_and_claim.png
+    plots/database.png
+    plots/cpu_and_rss.png
 ```
 
+根级 `raw/` 与 per-arm `summary/` 允许逐步形成，因为它们是工作区；跨 arm 表格和图只在
+同文件系统 staging 中生成。所有 payload 的文件数、schema、arm 引用、字节数和 SHA-256
+复验通过后，staging 才以一次目录重命名发布为 `final/`。已有 partial/complete `final/`
+一律拒绝覆盖；失败会清理 staging。
+
 绘图工具合同已闭合，Matplotlib 3.11.1 由 `uv.lock` 固定在 dev 组。当前仍没有正式
-32-arm 数据，所以正式 `plots/*.png` 是 `NOT_RUN`；单元测试生成的合成图只证明渲染合同，
-不证明任何容量结果。
+32-arm 数据，所以正式 `final/plots/*.png` 是 `NOT_RUN`；单元测试生成的合成图只证明
+渲染和原子发布合同，不证明任何容量结果。
 
 ## 6. 遇到的问题
 

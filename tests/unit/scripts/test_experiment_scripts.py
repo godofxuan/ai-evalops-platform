@@ -162,6 +162,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "scripts/gate1_collectors.py",
             "scripts/gate1_database.py",
             "scripts/gate1_evidence.py",
+            "scripts/gate1_finalization.py",
             "scripts/gate1_plots.py",
             "scripts/gate1_preflight.py",
             "scripts/gate1_prepared_evidence.py",
