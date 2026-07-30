@@ -12,6 +12,7 @@ from matplotlib.axes import Axes  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
 from scripts.experiment_support import ExperimentError
+from scripts.gate1_evidence import GATE1_RESULT_SCHEMA_VERSION
 
 PLOT_FILENAMES = (
     "throughput.png",
@@ -322,7 +323,7 @@ def generate_gate1_plots(
     for filename, renderer in renderers:
         renderer(points, output_directory / filename)
     manifest = {
-        "schema_version": 1,
+        "schema_version": GATE1_RESULT_SCHEMA_VERSION,
         "arm_ids": [str(point["arm_id"]) for point in points],
         "plots": sorted(PLOT_FILENAMES),
         "renderer": {

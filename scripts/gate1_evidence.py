@@ -6,6 +6,8 @@ from typing import Any
 
 from scripts.experiment_support import percentile
 
+GATE1_RESULT_SCHEMA_VERSION = 2
+
 JOB_STATUSES = (
     "queued",
     "running",
@@ -305,6 +307,24 @@ def summarize_arm(
     return summary
 
 
+def merge_prometheus_evidence(
+    *,
+    summary: Mapping[str, Any],
+    prometheus_delta: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Attach Prometheus evidence and fail closed on required collection gaps."""
+    merged = dict(summary)
+    db_operations = prometheus_delta["db_operations"]
+    merged["claim_latency_ms"] = dict(db_operations["claim"])
+    merged["db_transaction_latency_ms"] = {
+        operation: dict(db_operations[operation]) for operation in ("result", "failure", "reaper")
+    }
+    merged["redis_publish_failures"] = dict(prometheus_delta["redis_publish_failures"])
+    if not bool(prometheus_delta["required_metrics_complete"]):
+        merged["valid_for_capacity_comparison"] = False
+    return merged
+
+
 def aggregate_arm_summaries(
     records: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -365,6 +385,7 @@ def aggregate_arm_summaries(
                     }
                 )
     return {
+        "schema_version": GATE1_RESULT_SCHEMA_VERSION,
         "groups": groups,
         "negative_scaling": negative_scaling,
         "automatic_adoption_decision": None,

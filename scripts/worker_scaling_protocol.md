@@ -49,6 +49,33 @@ Correctness is decided from durable Run, Job, Attempt, and CaseResult rows. API 
 cannot prove uniqueness. Missing measurements are `UNKNOWN`; a behavior that was not
 induced is `NOT_RUN`; sampled lock waits without continuous timing are `DIRECTIONAL`.
 
+## Prometheus evidence semantics
+
+New Gate 1 result artifacts use result schema v2. Every Prometheus-derived metric records
+`status`, `observation`, `value`, `reason`, `source`, and `sample_count`; the legacy
+`evidence` field remains present for evidence strength and read compatibility.
+
+- `OBSERVED_ZERO` means the same finite series existed in paired before/after scrapes and
+  its cumulative delta was exactly zero. It is `VERIFIED` with numeric value `0`.
+- `OBSERVED_VALUE` means the paired finite series had a positive delta.
+- `MISSING` means a successful scrape did not contain every required paired series. It is
+  `UNKNOWN` with `value: null`; zero must never be substituted.
+- `COLLECTION_FAILED` means the endpoint request, exposition parsing, uniqueness check,
+  finite-number check, or frozen label contract failed. Its value is always `null`.
+
+Claim and result database-operation histograms must be complete on every Worker source.
+The unlabelled Redis publication-failure counter must be complete on every scraped
+API/Worker/Reaper source. These are required comparison evidence: a missing or failed
+required metric makes the arm ineligible for capacity comparison.
+
+Failure histograms on Workers and reaper histograms on Reapers are event-conditional and
+optional. Their absence or collection failure remains `UNKNOWN` and does not by itself
+invalidate otherwise complete required evidence.
+
+Endpoint failures are preserved beside raw `.prom` files as machine-readable reason
+codes. Result schema v1 artifacts remain read-only: a historical `VERIFIED 0` cannot be
+reliably migrated because v1 did not retain whether the source series was observed.
+
 ## Frozen plots
 
 The formal finalization step must create all five PNG files together:

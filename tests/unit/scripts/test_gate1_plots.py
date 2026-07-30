@@ -92,6 +92,7 @@ def test_gate1_plot_bundle_preserves_every_arm_as_auditable_png_evidence(
         (output_directory / "manifest.json").read_text(encoding="utf-8")
     )
     assert persisted_manifest == manifest
+    assert manifest["schema_version"] == 2
     assert manifest["arm_ids"] == ["io-w1-r1", "io-w2-r1"]
     assert manifest["plots"] == sorted(expected_pngs)
     assert manifest["renderer"] == {
@@ -129,6 +130,8 @@ def test_gate1_finalization_writes_tables_and_required_plots_together(
     finalize_gate1_run_evidence(tmp_path, _summary_records())
 
     assert (tmp_path / "summary" / "aggregate.json").is_file()
+    aggregate = json.loads((tmp_path / "summary" / "aggregate.json").read_text(encoding="utf-8"))
+    assert aggregate["schema_version"] == 2
     assert (tmp_path / "summary" / "arms.csv").is_file()
     assert (tmp_path / "plots" / "manifest.json").is_file()
     assert len(list((tmp_path / "plots").glob("*.png"))) == 5

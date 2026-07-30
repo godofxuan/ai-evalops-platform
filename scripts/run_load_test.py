@@ -34,7 +34,9 @@ from scripts.gate1_database import (
     collect_reconciliation_bundle,
 )
 from scripts.gate1_evidence import (
+    GATE1_RESULT_SCHEMA_VERSION,
     aggregate_arm_summaries,
+    merge_prometheus_evidence,
     reconcile_arm,
     summarize_arm,
 )
@@ -747,19 +749,10 @@ async def _run_prepared_arm(
             before=prometheus_before,
             after=prometheus_after,
         )
-        summary["claim_latency_ms"] = prometheus_delta["db_operations"].get(
-            "claim",
-            {
-                "evidence": "UNKNOWN",
-                "value": None,
-                "reason": "claim histogram was absent from per-container scrapes",
-            },
+        summary = merge_prometheus_evidence(
+            summary=summary,
+            prometheus_delta=prometheus_delta,
         )
-        summary["db_transaction_latency_ms"] = {
-            operation: prometheus_delta["db_operations"].get(operation)
-            for operation in ("result", "failure", "reaper")
-        }
-        summary["redis_publish_failures"] = prometheus_delta["redis_publish_failures"]
         summary["collector_missed_samples"] = collector_evidence["missed_samples"]
         resources_by_container: dict[str, list[dict[str, Any]]] = {}
         for sample in resource_samples:
@@ -785,7 +778,11 @@ async def _run_prepared_arm(
         write_report(arm_directory / "reconciliation.json", reconciliation)
         write_report(
             run_directory / "summary" / f"{arm['arm_id']}.json",
-            {"arm": arm, "summary": summary},
+            {
+                "schema_version": GATE1_RESULT_SCHEMA_VERSION,
+                "arm": arm,
+                "summary": summary,
+            },
         )
         return {
             "arm_id": arm["arm_id"],
@@ -872,7 +869,7 @@ async def _run_prepared(args: argparse.Namespace) -> dict[str, Any]:
     if database_url is None:
         raise ExperimentError(f"required environment variable {args.database_url_env} is unset")
     execution: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": GATE1_RESULT_SCHEMA_VERSION,
         "run_id": str(args.run_id),
         "started_at": datetime.now(UTC).isoformat(),
         "status": "running",

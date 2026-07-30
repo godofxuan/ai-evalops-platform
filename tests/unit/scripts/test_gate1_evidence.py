@@ -1,5 +1,6 @@
 from scripts.gate1_evidence import (
     aggregate_arm_summaries,
+    merge_prometheus_evidence,
     reconcile_arm,
     summarize_arm,
 )
@@ -315,6 +316,33 @@ def test_arm_summary_promotes_only_supplied_collector_samples() -> None:
     assert summary["redis_publish_failures"]["delta"] == 1
 
 
+def test_missing_required_prometheus_evidence_invalidates_capacity_comparison() -> None:
+    unavailable = {
+        "status": "UNKNOWN",
+        "evidence": "UNKNOWN",
+        "observation": "MISSING",
+        "value": None,
+    }
+    summary = merge_prometheus_evidence(
+        summary={"valid_for_capacity_comparison": True},
+        prometheus_delta={
+            "required_metrics_complete": False,
+            "db_operations": {
+                "claim": unavailable,
+                "result": unavailable,
+                "failure": unavailable,
+                "reaper": unavailable,
+            },
+            "redis_publish_failures": unavailable,
+        },
+    )
+
+    assert summary["valid_for_capacity_comparison"] is False
+    assert summary["claim_latency_ms"]["value"] is None
+    assert summary["db_transaction_latency_ms"]["result"]["value"] is None
+    assert summary["redis_publish_failures"]["value"] is None
+
+
 def test_arm_summary_separates_retry_queue_wait_from_first_claim_wait() -> None:
     summary = summarize_arm(
         reconciliation={"valid_for_capacity_comparison": True, "retry_count": 1},
@@ -389,6 +417,7 @@ def test_aggregate_keeps_every_repetition_and_negative_scaling() -> None:
         ]
     )
 
+    assert aggregate["schema_version"] == 2
     assert aggregate["groups"][0]["throughput_cases_per_second"] == {
         "points": [10.0, 12.0],
         "median": 11.0,
