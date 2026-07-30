@@ -490,3 +490,78 @@ build-context 中未跟踪 Python、manifest 缺失/畸形 image、错误 Compos
 P1-5 仍需继续审计 Dockerignore 完整语义、symlink、ignore precedence、secret 文件和
 精确 build-context 边界。因此 P1-4 的 `docker-context-sha256-v1` 是当前受测合同，不应
 被表述为已完成所有 build-context hardening。
+
+## 12. P1-5 Build context / Git commit 一致性加固
+
+状态：`CONTRACT_VERIFIED / REAL_DOCKER_BUILD_NOT_RUN`。
+
+实现提交：
+
+```text
+eb33de494bbda4850b7f29240dcce54146a42339
+fix(gate1): audit Docker build context against Git
+```
+
+### 修改前风险
+
+P1-4 已有 `docker-context-sha256-v1`，但它仍不足以作为正式 Gate 1 输入证明：
+
+- image builder 只拒绝“实际进入 context 的 Git 状态行”，所以被 Docker 排除的 staged
+  变更不会在构建前失败；
+- prepare 与 execute 各自维护一份近似 `.dockerignore` 匹配器，根路径、嵌套路径和
+  `**` 可能得到不同结论；
+- Git porcelain 文本会转义非 ASCII 路径，逐行切片会把路径记录错；
+- Dockerfile 专用 ignore 文件会覆盖根 `.dockerignore`，但 manifest 只绑定根文件；
+- 干净 Git 提交中的 symlink 或 `.env*` 仍可能进入 context；
+- builder 相信调用者传入的 source commit，且没有在构建后确认 `HEAD` 没有前进；
+- 旧 schema v3 无法表达 P1-5 新语义，却仍会被当作当前可执行 bundle。
+
+### 最终合同
+
+本阶段保留“内容指纹”方案，同时加上严格 Git 前置条件：
+
+1. tracked 或 staged 变更无论是否被 Docker 排除，一律阻断；
+2. untracked / Git-ignored 文件只有实际进入 root `.dockerignore` 定义的 context 时才阻断；
+3. Git 路径通过 NUL 分隔接口读取，不解析面向人的引号或 rename 文本；
+4. root pattern 只匹配相应根路径；递归规则显式使用独立 `**` 路径段；
+5. UTF-8 BOM、首列注释和 last-match negation 按冻结子集处理；
+6. 复合 `foo**bar` 之类未审计语法、Dockerfile 专用 ignore、实际进入 context 的 Git
+   symlink 和 `.env*` 路径统一返回 `UNSAFE_BUILD_CONTEXT`；
+7. 构建前后都运行完整审计并比较 `docker-context-sha256-v2`；
+8. 构建前后都要求仓库 `HEAD` 等于 manifest source commit；
+9. prepared verifier 复用同一个公共审计入口，不再维护第二份 matcher；
+10. prepared manifest 升为 schema v4；v1/v2/v3 只读，不迁移、不改号。
+
+`docker-context-sha256-v2` 是平台自己的规范化输入绑定，不冒充 Docker/BuildKit 内部
+context digest。它记录按路径排序的普通文件 path、kind、size 和内容 SHA-256；symlink
+target 只用于形成可诊断快照，正式安全审计会先拒绝实际进入 context 的 symlink。
+
+### 已验证
+
+- P1-5 与 Gate 1 聚焦矩阵：79 passed；
+- 最终非 integration 全量：356 passed、6 deselected；
+- integration 标记：6 skipped、356 deselected，原因仍是未启用真实 PostgreSQL/Redis；
+- `uv lock --check`：70 packages resolved；
+- Ruff lint：`All checks passed!`；
+- Ruff format：224 files already formatted；
+- strict mypy：106 source files，无问题；
+- `git diff --check`：无 whitespace error；
+- Docker 只读探测：PowerShell `CommandNotFoundException`，所以真实
+  build/inspect/Compose smoke 为 `NOT_RUN`。
+
+覆盖的关键样例包括 tracked、staged、未跟踪 `app/*.py`、根 `tests/` 排除文件、
+Git-ignored 但进入 context 的文件、嵌套 generated cache、嵌套 `.env`、已提交
+symlink、Dockerfile 专用 ignore、修改 Dockerfile、修改 `uv.lock`、非 ASCII Git
+路径、构建期间 context 变化，以及构建期间提交排除文件导致 `HEAD` 前进。
+
+### 仍未证明
+
+- 本机没有 Docker CLI/daemon，因此没有比较真实 Docker/BuildKit 行为与受控 CLI
+  boundary；
+- matcher 是明确冻结且失败关闭的受测子集，不是 Moby patternmatcher 的完整重实现；
+- `.env*` 是本阶段明确的敏感路径规则，不等于通用 secret scanner；
+- 构建前后快照和 `HEAD` 检查缩小并检测已覆盖竞态，但不是对 Docker 实际发送 tar
+  stream 的内部密码学证明；
+- 没有创建新的 `docs/results/` bundle，没有运行 500-case/32-arm，没有容量结论。
+
+本阶段没有 push、没有 PR。后续阶段必须另行确认；正式 Gate 1 仍不能启动。

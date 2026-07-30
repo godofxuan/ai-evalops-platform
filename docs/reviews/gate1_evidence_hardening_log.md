@@ -1732,3 +1732,278 @@ OCI/build-input labels、正式 preflight 接线、构建前后 context 稳定�
 2. 其他阻断 P1 finding 尚未完成；
 3. 当前机器没有 Docker/PostgreSQL/Redis 正式实验环境；
 4. 必须等所有阻断项完成后，从最终干净提交重新 prepare schema v3 bundle。
+
+## P1-5 Build context / Git commit 一致性
+
+### 阶段结果
+
+P1-5 实现提交已经在本地创建：
+
+```text
+eb33de494bbda4850b7f29240dcce54146a42339
+fix(gate1): audit Docker build context against Git
+```
+
+结论是 `CONTRACT_VERIFIED / REAL_DOCKER_BUILD_NOT_RUN`。本阶段没有 push、没有 PR、
+没有生成新 prepared bundle、没有运行正式 Gate 1。
+
+### 修改前先判断：应该选哪一种证明
+
+开始前考虑了两种方案：
+
+1. 只要求一个完全干净的 Git checkout；
+2. 继续保存实际进入 Docker context 的内容指纹。
+
+只选方案 1 的优点是简单，但不能证明两个“看起来都干净”的目录具有相同输入内容，也
+无法继续校验 P1-4 已写进 OCI label 和 manifest 的 context SHA。只选方案 2 又不够：
+指纹可能稳定地绑定到错误 source commit，也可能遗漏 Dockerignore precedence、
+symlink 或 secret。
+
+最终选择是组合合同：
+
+- 保留内容指纹并升级为 `docker-context-sha256-v2`；
+- tracked/staged 必须全局干净，即使路径被 Docker 排除；
+- untracked/ignored 只在实际进入 context 时阻断；
+- 对无法安全模拟的语法或输入类型失败关闭；
+- 构建前后同时重跑审计和核对 `HEAD`。
+
+这个选择比“把所有 ignored 文件一刀切拒绝”更可用：根 `tests/` 下的本地测试文件、
+排除的 `.env.local` 和生成缓存不会无故阻断；但 `app/untracked.py`、Git 忽略却进入
+context 的文件、staged 排除文件仍会阻断。
+
+### Dockerignore 语义依据与边界
+
+实现判断参考了：
+
+- [Docker build context 官方文档](https://docs.docker.com/build/concepts/context/)；
+- [Moby patternmatcher](https://github.com/moby/patternmatcher/blob/main/patternmatcher.go)；
+- [Moby ignorefile reader](https://github.com/moby/patternmatcher/blob/main/ignorefile/ignorefile.go)。
+
+由此冻结以下规则：
+
+- Dockerfile 专用 ignore 比根 `.dockerignore` 优先，因此当前 manifest 只绑定根文件时，
+  专用文件必须失败关闭；
+- `**` 只有作为完整路径段时由本实现审计，`foo**bar` 等复合形式返回
+  `unsupported_dockerignore_patterns`；
+- 最后一个匹配规则决定 include/exclude，支持 negation 顺序；
+- 只在原始行第一列出现的 `#` 是注释；
+- 读取规则时去除 UTF-8 BOM；
+- 根 `tests` 只排除根目录，不误排除 `app/tests/...`；
+- 递归 cache、bytecode 和 environment 文件必须显式使用 `**/...`。
+
+这仍然是一个明确的受测子集，不是 Moby parser 的完整重实现。文档和错误信息都保留
+这个限制，没有声称完全兼容所有 escape、平台特殊路径和 glob 组合。
+
+### 最终审计输出
+
+公共入口 `audit_gate1_build_context(...)` 返回：
+
+```text
+status
+ready
+blockers
+binding
+details.dirty_paths
+details.tracked_or_staged_paths
+details.included_symlink_paths
+details.dockerfile_specific_ignore_path
+details.unsupported_dockerignore_patterns
+details.sensitive_paths_in_context
+```
+
+状态含义：
+
+| 状态 | 含义 |
+|---|---|
+| `READY` | Git 与受测 context 合同均满足 |
+| `DIRTY_BUILD_CONTEXT` | tracked/staged 变化，或有 untracked/ignored 文件进入 context |
+| `UNSAFE_BUILD_CONTEXT` | symlink、`.env*`、Dockerfile 专用 ignore 或不支持的模式进入安全边界 |
+
+Git 路径不再解析 `status --porcelain` 的人类文本，而是分别使用：
+
+```text
+git diff --name-only -z --
+git diff --cached --name-only -z --
+git ls-files --others --exclude-standard -z
+git ls-files --others --ignored --exclude-standard -z
+git ls-files --stage -z
+```
+
+这样 staged、unstaged、untracked、ignored 和 index mode 各有清晰来源，NUL 分隔也不会
+把非 ASCII 路径、空格、引号或 rename 箭头解析错。
+
+### TDD RED → GREEN 逐步记录
+
+| 步骤 | 修改前/RED 观察 | 判断与最小修改 | 达成效果 |
+|---|---|---|---|
+| 1 | 新测试无法 import `audit_gate1_build_context` | 先建立单一公共审计入口和 v2 算法名 | 干净仓库返回 `READY` 与 v2 binding |
+| 2 | staged 的 `tests/staged_probe.py` 被 Docker 排除，所以仍 `READY` | tracked/staged 独立于 Docker exclusion 收集 | staged 排除文件返回 `tracked_or_staged_changes` |
+| 3 | 根规则 `tests` 错误隐藏 `app/tests/untracked_source.py` | pattern 按完整路径段和祖先匹配 | 根规则不再误匹配任意同名 segment |
+| 4 | `app/__pycache__/generated.pyc` 进入 context | 实现独立 `**` 路径段，并把 bytecode 规则改成递归 | 嵌套 bytecode 不改变 binding |
+| 5 | `app/.env.local` 进入 context | `.env*` 改为 `**/.env*` | 嵌套环境覆盖被排除，结果不含秘密值 |
+| 6 | Windows `Path.symlink_to` 报 `WinError 1314`，测试体未进入产品逻辑 | 不跳过；改用 Git blob + `update-index --cacheinfo 120000` 构造可移植 index symlink | 获得真实产品 RED，而不是把权限错误冒充产品失败 |
+| 7 | 已提交且进入 context 的 mode `120000` 路径仍 `READY` | 读取 `git ls-files --stage -z` | 返回 `UNSAFE_BUILD_CONTEXT / included_symlinks` |
+| 8 | 已提交 `Dockerfile.dockerignore` 仍 `READY` | 检查 Dockerfile 同名专用 ignore | 返回 `dockerfile_specific_ignore` |
+| 9 | `foo**bar` 被近似 matcher 接受 | 只支持完整 `**` component，其余失败关闭 | 返回具体 unsupported pattern |
+| 10 | 根 `tests/local_probe.py` 未跟踪 | 这是期望反例，不改产品 | 特征测试直接 GREEN，证明不会拒绝所有 untracked |
+| 11 | 修改 `uv.lock` | 现有严格 tracked + context binding 已覆盖 | 特征测试直接 GREEN 并准确报告 `uv.lock` |
+| 12 | builder 遇到 staged 排除文件仍继续找 Docker，最终报 Docker 不存在 | 在任何 Docker 调用前接公共审计 | 先报 context blocker，不再误报环境问题 |
+| 13 | 模拟构建期间修改 excluded tracked file 后仍进入 image inspect | 构建后重跑完整审计，不只重算 included hash | inspect 前报告具体 changed path |
+| 14 | prepared verifier 对同一 staged 文件同时报 worktree dirty 和 context clean | verifier 消费公共审计 `ready` 与 details | 两项检查不再互相矛盾 |
+| 15 | 接入严格审计后 4 个旧测试从 `HASH_MISMATCH` 退化成泛化 `DIRTY_BUILD_CONTEXT` | 发现 tracked 文件被同时错误放进 `dirty_paths`；拆成互斥集合并恢复状态优先级 | Compose/script/Dockerfile/dockerignore 变更继续报告更精确 hash mismatch |
+| 16 | `app/本地输入.py` 被记录成八进制转义片段 | 改用 NUL 分隔 Git 命令并按 UTF-8 解码 | details 精确保留非 ASCII 路径 |
+| 17 | 删除 env 排除规则并提交 `.env.production` 后仍 `READY` | 只按路径检查实际 included `.env*`，不读取/回显值 | 干净提交中的环境秘密也失败关闭 |
+| 18 | 传入错误的 40 位 `source_commit` 仍一路走到 Docker | 构建前读取 `git rev-parse HEAD` 并精确比较 | 错误提交在 Docker 前被拒绝 |
+| 19 | 新提交绑定令 3 个模拟成功测试失败，因为它们硬编码 `bbbb...` | 不放宽产品；测试改读各自临时仓库真实 HEAD | 测试夹具符合真实调用合同 |
+| 20 | 构建期间修改并提交 excluded file 后，Git 干净且 context hash 不变，仍进入 inspect | 构建后再次比较 `HEAD` | 检测 source commit 在 build 期间前进 |
+| 21 | schema v3 bundle 在新语义下仍 `READY` | 当前 prepared schema 升 v4 | v1/v2/v3 保持历史只读 |
+| 22 | 带 UTF-8 BOM 的 `.dockerignore` 令 file count 从 19 激增到 69 | 规则读取改用 `utf-8-sig`，binding 仍读取原始文件字节 | BOM 不再让 `.git` 泄漏进 context |
+| 23 | `" #local-generated.txt"` 被错误当注释，file count 多 1 | 在 strip 前判断首列 `#` | 与 Moby comment 顺序一致 |
+| 24 | `app/.pytest_cache/...` 被 Git 忽略但进入 context | `.pytest_cache` 改为 `**/.pytest_cache` | 嵌套 pytest cache 不改变 binding |
+| 25 | builder 错误写“unrecorded state”，无法准确描述已提交 secret/symlink | 抽取统一诊断格式 | 错误包含 status、blockers、paths、patterns，措辞准确 |
+
+### 遇到的非产品问题与处理
+
+#### 1. Windows 创建 symlink 权限不足
+
+第一次 symlink 测试收到：
+
+```text
+WinError 1314: 客户端没有所需的特权
+```
+
+测试在调用产品前就失败，所以没有记录为产品 RED，也没有用 skip 隐藏要求。最终通过 Git
+index mode `120000` 构造与平台无关的 symlink 提交，验证的是审计实际读取的 Git 类型。
+
+#### 2. 文档/代码补丁锚点不匹配
+
+两次 `apply_patch` 因当前行格式或选错文件末尾锚点而未应用。工具明确返回
+`Failed to find expected lines`，文件没有发生部分写入。处理方式是重新读取当前实际片段，
+拆成小补丁再应用，没有使用覆盖式脚本。
+
+#### 3. schema 验证命令写错测试名
+
+一次 pytest 命令引用不存在的
+`test_prepare_only_creates_reproducible_evidence_contract`，输出 `no tests ran`。它没有被计入
+通过证据；通过 `rg "^def test_"` 找到真实
+`test_load_prepare_mode_creates_run_scoped_manifest` 后重跑，4 个 schema 测试才得到
+`4 passed`。
+
+#### 4. prepared 状态分类回归
+
+公共审计初次接线后得到 `23 passed, 4 failed`。失败不是阻断失效，而是 Compose、
+execution script、Dockerfile 和 dockerignore 变更从精确 `HASH_MISMATCH` 退化成
+`DIRTY_BUILD_CONTEXT`。第一次只调整优先级仍失败，说明推断不完整。继续检查数据后发现
+`dirty_paths` 混入 tracked 行，修正分类源头后 5 个定向测试和完整 27 个 prepared 测试
+全部通过。
+
+#### 5. 静态格式问题
+
+首次 Ruff 检查报告一个 `SIM114` 和 5 个待格式化文件。合并等价状态分支并运行项目
+formatter 后，重新检查全绿。没有用 lint ignore 压掉问题。
+
+#### 6. Docker 不可用
+
+只读命令：
+
+```text
+docker version --format '{{json .}}'
+```
+
+得到 PowerShell `CommandNotFoundException`。因此没有尝试真实 build、inspect 或 Compose，
+也没有把 mock CLI boundary 写成 Docker 实证。
+
+#### 7. 组合式 Git 自检触发 safe-directory 差异
+
+一次把测试计数、`git diff` 和 `git status` 用分号放在同一 PowerShell 命令中执行时，
+后续 Git 段落处于不同 sandbox 用户上下文，分别输出“not a git repository”和
+“dubious ownership”。这些输出没有被当作仓库结论，也没有修改全局 Git 配置。后续
+Git 自检拆成独立调用，并显式传入当前仓库 `safe.directory`。
+
+### 文件级修改、原因与效果
+
+| 文件 | 修改 | 为什么 | 效果 |
+|---|---|---|---|
+| `.dockerignore` | bytecode、pytest cache、`.env*` 使用递归规则 | 根规则不能安全代表嵌套生成物 | 嵌套本地文件不进入 binding |
+| `scripts/gate1_image_evidence.py` | v2 matcher、NUL Git 分类、统一 audit、secret/symlink/precedence 检查、前后 context/HEAD 核对 | 建立单一 build-context 安全边界 | builder 在 Docker 前失败关闭，并检测 build 期间漂移 |
+| `scripts/gate1_prepared_evidence.py` | schema v4；删除重复 matcher；复用公共 audit；保留精确状态优先级 | prepare 和 execute 不能使用不同语义 | 正式 preflight 与 builder 得出同一上下文结论 |
+| `scripts/worker_scaling_protocol.md` | 冻结 v4/v2、严格 Git、受支持语法和限制 | 每个新 bundle 都要携带可审计合同 | 协议不再声称旧 v3/v1 语义 |
+| `tests/conftest.py` | 临时 Gate 1 仓库加入 `pyproject.toml`、`uv.lock` | fixture 必须含 Dockerfile 的真实 dependency inputs | lock 修改测试有实际 context 意义 |
+| `tests/unit/scripts/test_gate1_build_context.py` | 新增 15 个独立 context 合同测试 | 将每个边界变成可重复证据 | 路径、ignore、secret、symlink 和语法均可单测 |
+| `tests/unit/scripts/test_gate1_image_evidence.py` | builder 前后 audit、HEAD 与竞态测试 | 单测公共函数不足以证明执行入口已接线 | Docker 调用顺序与失败关闭可验证 |
+| `tests/unit/scripts/test_gate1_prepared_evidence.py` | staged excluded、专用 ignore、`uv.lock`、schema v3 历史测试 | 证明 formal verifier 使用同一合同 | prepared 状态和 details 可审计 |
+| `tests/unit/scripts/test_experiment_scripts.py` | 当前 manifest 期望改为 v4 | producer 与 verifier 必须同版本 | 新 prepare 只产生 v4 |
+
+### 最终验证
+
+| 检查 | 结果 | 证据等级 |
+|---|---|---|
+| P1-5/Gate 1 聚焦矩阵 | 79 passed in 137.58s | `VERIFIED` |
+| 诊断重构后的 image tests | 14 passed in 8.70s | `VERIFIED` |
+| 最终态非 integration 全量 | 356 passed、6 deselected in 163.53s | `VERIFIED` |
+| integration 标记 | 6 skipped、356 deselected in 1.68s | `NOT_RUN` |
+| `uv lock --check` | 70 packages resolved | `VERIFIED` |
+| Ruff lint | All checks passed | `VERIFIED` |
+| Ruff format | 224 files already formatted | `VERIFIED` |
+| strict mypy | 106 source files，无问题 | `VERIFIED` |
+| `git diff --check` | 无输出 | `VERIFIED` |
+| Docker CLI | `CommandNotFoundException` | `NOT_RUN` |
+| Docker build / image inspect / Compose smoke | 未执行 | `NOT_RUN` |
+| 正式 500-case / 32-arm | 未执行 | `NOT_RUN` |
+
+integration 的 6 个 skip 仍分别要求显式 `EVALOPS_RUN_INTEGRATION=1` 以及真实、已迁移的
+PostgreSQL 和/或 Redis。它们没有被写成 passed。
+
+### 本阶段已经证明什么
+
+- tracked/staged 变化即使被 Docker 排除也阻断；
+- untracked/ignored 只有实际 included 才阻断；
+- root pattern 与 nested path 不再混淆；
+- 非 ASCII Git 路径不会被 porcelain quoting 损坏；
+- included Git symlink、`.env*`、Dockerfile 专用 ignore 和未支持 `**` 形式失败关闭；
+- Dockerfile、dockerignore、`uv.lock` 与普通 context 内容变化都能被 binding/preflight
+  检出；
+- builder 与 prepared verifier 使用同一个 audit；
+- builder 前后都验证 context 与 source `HEAD`；
+- schema v4 是唯一当前可执行 prepared manifest；
+- 失败证据只记录安全路径、hash 和 reason，不记录 `.env` 内容。
+
+### 本阶段仍未证明什么
+
+- 没有真实 Docker/BuildKit，因此没有实际 context tar、cache key 或镜像层实证；
+- v2 是平台 evidence binding，不是 Docker 官方 digest；
+- matcher 不是完整 Moby 重实现；只对冻结子集和明确失败关闭路径负责；
+- symlink 通过 Git index mode 验证，没有在这台 Windows 主机创建真实 OS symlink；
+- `.env*` 防线不等于扫描 PEM、云凭据或所有可能 secret；
+- 前后快照不能宣称获得 Docker 内部发送流的原子密码学证明；
+- 没有 PostgreSQL/Redis integration、正式 arm 数据、容量结论或其他未完成 P1 finding
+  的证明。
+
+### 对旧 artifact 与 prepared bundle 的影响
+
+- `docs/results/` 没有修改；
+- 没有生成 schema v4 bundle，因为本机没有 Docker；
+- schema v1/v2/v3 继续作为历史只读证据；
+- 不允许给旧 bundle 手工改 `schema_version` 或补字段；
+- 所有阻断 P1 finding 完成后，必须从最终干净、已提交的 `HEAD` 重新运行
+  `--prepare-only`。
+
+### 回滚边界
+
+实现回滚：
+
+```text
+git revert eb33de494bbda4850b7f29240dcce54146a42339
+```
+
+这会回滚 P1-5 实现、测试、schema v4 和冻结协议。没有数据库 migration，也没有新正式
+artifact 需要删除。若未来已经产生 schema v4 bundle，回滚前必须保留其只读审计副本，
+不能让旧代码把它当成 v3 可执行 bundle。
+
+### P1-5 阶段结论与停止点
+
+P1-5 的修改前判断、TDD、严格 Git/context 审计、secret/symlink/precedence 边界、
+source commit 前后绑定、schema v4、冻结协议、分层验证和本地实现提交均已完成。
+
+当前停止在下一 P1 阶段之前，等待用户确认。正式 Gate 1 仍不能运行，原因包括其他阻断
+P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正式环境。
