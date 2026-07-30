@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import scripts.run_load_test as run_load_test
 from scripts.experiment_support import (
     ExperimentError,
     bind_dataset_version,
@@ -11,11 +12,68 @@ from scripts.experiment_support import (
     percentile,
     write_report,
 )
+from scripts.gate1_image_evidence import compute_docker_build_context_binding
 from scripts.run_concurrency_test import build_parser as concurrency_parser
 from scripts.run_failure_scenarios import build_parser as failure_parser
 from scripts.run_load_test import build_parser as load_parser
 from scripts.run_load_test import main as load_main
 from scripts.worker_scaling_protocol import build_balanced_arm_plan
+
+
+def _fake_local_image_binding(**kwargs: object) -> dict[str, object]:
+    repository = Path(kwargs["repository"])
+    source_commit = str(kwargs["source_commit"])
+    dockerfile_path = Path(kwargs["dockerfile_path"])
+    dockerignore_path = Path(kwargs["dockerignore_path"])
+    dockerfile_sha256 = hashlib.sha256(dockerfile_path.read_bytes()).hexdigest()
+    created = "2026-07-30T00:00:00Z"
+    build_context = compute_docker_build_context_binding(
+        repository=repository,
+        dockerignore_path=dockerignore_path,
+    )
+    context_sha256 = str(build_context["sha256"])
+    source = "https://github.com/godofxuan/ai-evalops-platform"
+    return {
+        "identity_kind": "LOCAL_IMAGE_ID",
+        "verification": "LOCAL_IMAGE_ID_VERIFIED",
+        "repository": "ai-evalops-platform",
+        "tag": "phase9",
+        "reference": "ai-evalops-platform:phase9",
+        "immutable_id": f"sha256:{'a' * 64}",
+        "registry_digest": None,
+        "compose_project": "ai-evalops-platform",
+        "source_commit": source_commit,
+        "source": source,
+        "dockerfile_sha256": dockerfile_sha256,
+        "build_context": build_context,
+        "build": {
+            "created": created,
+        },
+        "runtime": {
+            "python": "3.12.13",
+            "os": "linux",
+            "architecture": "amd64",
+        },
+        "labels": {
+            "org.opencontainers.image.revision": source_commit,
+            "org.opencontainers.image.source": source,
+            "org.opencontainers.image.created": created,
+            "io.ai-evalops.dockerfile.sha256": dockerfile_sha256,
+            "io.ai-evalops.build-context.sha256": context_sha256,
+            "io.ai-evalops.python.version": "3.12.13",
+        },
+    }
+
+
+@pytest.fixture(autouse=True)
+def _replace_external_gate1_image_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        run_load_test,
+        "build_gate1_image_binding",
+        _fake_local_image_binding,
+    )
 
 
 def test_experiment_percentile_uses_documented_linear_interpolation() -> None:
@@ -131,7 +189,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "seed",
         )
     } == {
-        "schema_version": 2,
+        "schema_version": 3,
         "experiment": "worker_scaling",
         "run_id": "gate1-contract",
         "status": "prepared",
@@ -155,6 +213,12 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
         "path": ".dockerignore",
         "sha256": hashlib.sha256(dockerignore_bytes).hexdigest(),
     }
+    assert manifest["provenance"]["image"] == _fake_local_image_binding(
+        repository=Path.cwd(),
+        source_commit=manifest["provenance"]["source_commit"],
+        dockerfile_path=Path.cwd() / "Dockerfile",
+        dockerignore_path=Path.cwd() / ".dockerignore",
+    )
     expected_scripts = {
         path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
         for path in (
@@ -163,6 +227,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "scripts/gate1_database.py",
             "scripts/gate1_evidence.py",
             "scripts/gate1_finalization.py",
+            "scripts/gate1_image_evidence.py",
             "scripts/gate1_plots.py",
             "scripts/gate1_preflight.py",
             "scripts/gate1_prepared_evidence.py",
@@ -219,6 +284,36 @@ def test_load_prepare_mode_rejects_run_id_path_traversal(tmp_path: Path) -> None
 
     assert exit_code == 1
     assert not escaped.exists()
+
+
+def test_load_prepare_image_build_failure_leaves_no_partial_run_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "load"
+
+    def fail_image_build(**kwargs: object) -> dict[str, object]:
+        del kwargs
+        raise ExperimentError("synthetic image build failure")
+
+    monkeypatch.setattr(
+        run_load_test,
+        "build_gate1_image_binding",
+        fail_image_build,
+    )
+
+    exit_code = load_main(
+        [
+            "--prepare-only",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "gate1-image-failure",
+        ]
+    )
+
+    assert exit_code == 1
+    assert not (output_root / "gate1-image-failure").exists()
 
 
 def test_load_execute_mode_preserves_preflight_failure_before_any_arm(

@@ -7,7 +7,12 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
-PREPARED_MANIFEST_SCHEMA_VERSION = 2
+from scripts.gate1_image_evidence import (
+    compute_docker_build_context_binding,
+    gate1_image_binding_errors,
+)
+
+PREPARED_MANIFEST_SCHEMA_VERSION = 3
 
 KEY_EXECUTION_SCRIPT_PATHS = (
     "scripts/experiment_support.py",
@@ -15,6 +20,7 @@ KEY_EXECUTION_SCRIPT_PATHS = (
     "scripts/gate1_database.py",
     "scripts/gate1_evidence.py",
     "scripts/gate1_finalization.py",
+    "scripts/gate1_image_evidence.py",
     "scripts/gate1_plots.py",
     "scripts/gate1_preflight.py",
     "scripts/gate1_prepared_evidence.py",
@@ -148,6 +154,16 @@ def _required_manifest_errors(
         value = _optional_manifest_value(manifest, dotted_path)
         if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
             errors.append(dotted_path)
+    errors.extend(
+        gate1_image_binding_errors(
+            _optional_manifest_value(manifest, "provenance.image"),
+            expected_source_commit=source_commit,
+            expected_dockerfile_sha256=_optional_manifest_value(
+                manifest,
+                "provenance.dockerfile.sha256",
+            ),
+        )
+    )
     configuration = _optional_manifest_value(manifest, "configuration.values")
     if not isinstance(configuration, Mapping) or set(configuration) != PREPARED_CONFIGURATION_KEYS:
         errors.append("configuration.values")
@@ -350,6 +366,14 @@ def verify_prepared_evidence(
         if _docker_context_includes(path, dockerignore_rules)
     )
     hash_mismatches: list[dict[str, str | None]] = []
+    try:
+        observed_build_context = compute_docker_build_context_binding(
+            repository=repository,
+            dockerignore_path=dockerignore_path,
+        )
+        observed_build_context_sha256 = str(observed_build_context["sha256"])
+    except OSError:
+        observed_build_context_sha256 = None
     execution_script_hashes_match = True
     for path, expected_sha256 in manifest["provenance"]["execution_scripts"]["files"].items():
         execution_script_hashes_match &= _file_hash_matches(
@@ -425,6 +449,13 @@ def verify_prepared_evidence(
             expected_sha256=str(manifest["provenance"]["dockerignore"]["sha256"]),
             mismatches=hash_mismatches,
         ),
+        "image_build_context_hash_matches": _digest_matches(
+            check="image_build_context_hash_matches",
+            path=".",
+            expected_sha256=str(manifest["provenance"]["image"]["build_context"]["sha256"]),
+            observed_sha256=observed_build_context_sha256,
+            mismatches=hash_mismatches,
+        ),
         "configuration_hash_matches": _digest_matches(
             check="configuration_hash_matches",
             path="configuration.values",
@@ -447,6 +478,8 @@ def verify_prepared_evidence(
         status = "ENVIRONMENT_BLOCKED"
     elif not checks["source_commit_matches"]:
         status = "SOURCE_MISMATCH"
+    elif not checks["docker_build_context_clean"]:
+        status = "DIRTY_BUILD_CONTEXT"
     elif any(
         not checks[check]
         for check in checks
@@ -459,7 +492,7 @@ def verify_prepared_evidence(
         }
     ):
         status = "HASH_MISMATCH"
-    elif not checks["tracked_worktree_clean"] or not checks["docker_build_context_clean"]:
+    elif not checks["tracked_worktree_clean"]:
         status = "DIRTY_BUILD_CONTEXT"
     else:
         status = "READY"

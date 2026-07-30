@@ -39,6 +39,7 @@ from scripts.gate1_evidence import (
     summarize_arm,
 )
 from scripts.gate1_finalization import finalize_gate1_run_evidence
+from scripts.gate1_image_evidence import build_gate1_image_binding
 from scripts.gate1_preflight import (
     collect_compose_service_rows,
     collect_preflight,
@@ -114,14 +115,11 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
     ):
         raise ExperimentError("polling, deadline, and collector intervals must be positive")
     output_root = Path(args.output_root)
-    output_root.mkdir(parents=True, exist_ok=True)
     run_directory = output_root / run_id
-    run_directory.mkdir(exist_ok=False)
-    for evidence_directory in ("raw", "summary", "failures", "plots"):
-        (run_directory / evidence_directory).mkdir()
+    if run_directory.exists():
+        raise ExperimentError(f"prepared run directory already exists: {run_directory}")
     protocol_source = repository / "scripts" / "worker_scaling_protocol.md"
     protocol_content = protocol_source.read_bytes()
-    (run_directory / "protocol.md").write_bytes(protocol_content)
     source_commit = subprocess.run(
         [
             "git",
@@ -139,10 +137,21 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
     compose_path = _repository_file(repository, Path(args.compose_file))
     dockerfile_path = _repository_file(repository, Path("Dockerfile"))
     dockerignore_path = _repository_file(repository, Path(".dockerignore"))
+    image_binding = build_gate1_image_binding(
+        repository=repository,
+        source_commit=source_commit,
+        dockerfile_path=dockerfile_path,
+        dockerignore_path=dockerignore_path,
+    )
     execution_script_hashes = {
         path: sha256_file(_repository_file(repository, Path(path)))
         for path in KEY_EXECUTION_SCRIPT_PATHS
     }
+    output_root.mkdir(parents=True, exist_ok=True)
+    run_directory.mkdir(exist_ok=False)
+    for evidence_directory in ("raw", "summary", "failures", "plots"):
+        (run_directory / evidence_directory).mkdir()
+    (run_directory / "protocol.md").write_bytes(protocol_content)
     dataset = write_measurement_dataset(
         run_directory=run_directory,
         case_count=args.cases,
@@ -174,6 +183,7 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
                 "compose": _file_binding(repository, compose_path),
                 "dockerfile": _file_binding(repository, dockerfile_path),
                 "dockerignore": _file_binding(repository, dockerignore_path),
+                "image": image_binding,
                 "execution_scripts": {
                     "algorithm": "sha256",
                     "files": execution_script_hashes,
@@ -428,6 +438,7 @@ def run_prepared_preflight(args: argparse.Namespace) -> bool:
     manifest = json.loads((run_directory / "manifest.json").read_text(encoding="utf-8"))
     environment_result = collect_preflight(
         expected_source_commit=str(manifest["provenance"]["source_commit"]),
+        expected_image=manifest["provenance"]["image"],
         compose_file=Path(args.compose_file),
         evidence_directory=run_directory,
         api_key_env=str(args.api_key_env),

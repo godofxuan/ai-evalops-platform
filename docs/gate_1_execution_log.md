@@ -153,8 +153,11 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
 
 `--prepare-only`：
 
-- 只生成协议、Dataset、arm order、manifest 和空证据目录；
-- manifest 保存源码 commit、原 Compose 文件 SHA、协议 SHA、seed、采样间隔和采用门槛；
+- 从干净 Docker build context 构建并 inspect `ai-evalops-platform:phase9`，冻结本地
+  `sha256:...` image ID、OCI/build-input 标签和 Python/OS/architecture；
+- 构建成功后才生成协议、Dataset、arm order、manifest 和空证据目录；
+- manifest 保存源码 commit、原 Compose 文件 SHA、Dockerfile/context SHA、image
+  repository/tag/immutable ID、构建时间、协议 SHA、seed、采样间隔和采用门槛；
 - 不创建服务端 Dataset，不缩放容器，不启动 formal run。
 
 `--execute-prepared`：
@@ -162,8 +165,10 @@ per-container counter delta，仍以 PostgreSQL durable state 作为正确性事
 - 要求安全 run ID；
 - 验证 source commit、tracked worktree、Docker/Compose、服务健康、20 GiB 磁盘、
   API Key/DB URL 的“存在性”、质量门槛确认和采用门槛确认；
+- inspect Compose 列出的具体 API/Worker/Reaper 容器，逐一核对 immutable image ID、
+  revision、Compose project、Dockerfile/context 标签；
 - 只保存渲染后 Compose SHA，不保存可能含密码的正文；
-- 保存 Docker/Compose 版本、镜像 ID、OS/Python/CPU/磁盘；
+- 保存 Docker/Compose 版本、镜像验证状态与经筛选的容器身份、OS/Python/CPU/磁盘；
 - blocker 全部写入 `failures/preflight.json`，`raw/` 保持空；
 - 通过后按冻结 arm order 执行；
 - 每次 scale 后验证恰好 N 个 Worker、核心服务健康、全局非终态队列为空；
@@ -421,3 +426,67 @@ docs/results/gate_1/gate1-plan-e21c31c-20260729T162352Z/
 
 因此第二次计划已绑定新增图表协议，但仍未产生任何正式图。这个结果同时证明两点：新的
 source/protocol 绑定生效；基础设施 blocker 没有被绘图工具变化掩盖或绕过。
+
+## 11. P1-4 不可变本地镜像绑定
+
+状态：`CONTRACT_VERIFIED / REAL_DOCKER_BUILD_NOT_RUN`。
+
+P1-4 修复前，Compose 只声明可变标签 `ai-evalops-platform:phase9`，preflight 只保存
+`docker compose images --quiet` 的一组 ID。旧逻辑不能证明正在运行的
+API/Worker/Reaper：
+
+- 来自本次准备所绑定的 source commit；
+- 使用准备时的 Dockerfile 和 build context；
+- 属于目标 Compose project；
+- 不是同名标签后来重新指向的另一张镜像。
+
+本阶段增加 `scripts/gate1_image_evidence.py`。`--prepare-only` 现在要求 build context
+没有未提交、未跟踪或“被 Git 忽略但仍进入 Docker context”的路径，然后：
+
+1. 计算 Dockerfile SHA-256 和规范化 context SHA-256；
+2. 使用 revision/source/created、Dockerfile/context/Python 标签构建镜像；
+3. 构建后重算 Git 状态和 context hash，拒绝构建过程中的输入漂移；
+4. inspect 标签、不可变本地 image ID、创建时间、OS 和 architecture；
+5. 用不可变 image ID 临时执行 `python --version` 并要求 `3.12.13`；
+6. 将 repository、human-readable tag、immutable ID、source commit、全部 hash、构建时间
+   和 runtime 写入 prepared manifest schema v3。
+
+本地 Docker image ID 明确记为 `LOCAL_IMAGE_ID_VERIFIED`，`registry_digest` 为 `null`。
+本阶段没有访问 registry，因此没有声称 `REGISTRY_DIGEST_VERIFIED`。
+
+`--execute-prepared` 在任何 arm 前先重算 context hash，再对 Compose 返回的具体容器 ID
+执行 `docker inspect`。API/Worker/Reaper 必须同时满足：
+
+- 三类必需服务都存在，且每个 `.Image` 精确等于 manifest immutable ID；
+- `org.opencontainers.image.revision` 存在并等于 manifest source commit；
+- `com.docker.compose.project=ai-evalops-platform`；
+- Dockerfile/context 标签等于 manifest；
+- Compose 顶层 `name` 固定为 `ai-evalops-platform`。
+
+对应失败状态分别保留为 `IMAGE_ID_MISMATCH`、
+`IMAGE_REVISION_LABEL_MISSING`、`IMAGE_REVISION_MISMATCH`、
+`COMPOSE_PROJECT_MISMATCH` 和 `IMAGE_BUILD_INPUT_MISMATCH`，不会被统一吞成
+`ENVIRONMENT_BLOCKED`。Docker/Compose 或必需服务本身不可用时仍优先报告环境阻断。
+
+TDD 覆盖了同 tag 不同 ID、revision 不匹配、revision 缺失、旧 Dockerfile 镜像、
+build-context 中未跟踪 Python、manifest 缺失/畸形 image、错误 Compose project、
+已跟踪 Dockerfile 修改、构建过程中 context 变化，以及镜像构建失败不留下半成品 run
+目录。
+
+最终验证：
+
+- P1-4 相关四个单测文件：56 passed；
+- 非 integration 全量：333 passed、6 deselected；
+- integration 标记：6 skipped，因为没有启用真实 PostgreSQL/Redis；
+- Ruff：223 files already formatted，lint 全部通过；
+- strict mypy：106 source files，无问题；
+- `git diff --check`：无 whitespace error；
+- Docker CLI：`DOCKER_UNAVAILABLE`，真实 build/Compose smoke 为 `NOT_RUN`。
+
+本阶段没有生成或修改任何 `docs/results/` 正式实验 artifact，没有启动 500-case/32-arm，
+没有得出 Worker 数或容量结论。manifest schema v1/v2 保持历史只读；P1-4 之后必须从最终
+干净提交重新执行 `--prepare-only`，不能给旧 manifest 手工补 image 字段。
+
+P1-5 仍需继续审计 Dockerignore 完整语义、symlink、ignore precedence、secret 文件和
+精确 build-context 边界。因此 P1-4 的 `docker-context-sha256-v1` 是当前受测合同，不应
+被表述为已完成所有 build-context hardening。

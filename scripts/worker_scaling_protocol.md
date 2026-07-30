@@ -27,16 +27,33 @@ must never overwrite another run.
 
 ## Prepared evidence gate
 
-Only manifest schema v2 is executable. Before Docker or any arm interaction, the
+Only manifest schema v3 is executable. Before any service or arm interaction, the
 executor must revalidate the source commit, tracked workspace state, untracked or
 Git-ignored files that would enter the Docker build context, configuration, measurement
 and warm-up datasets, dataset hash record, protocol, arm plan, Compose file, Dockerfile,
-`.dockerignore`, and every key execution script.
+`.dockerignore`, every key execution script, and the Docker build-context fingerprint.
+
+Preparation has one bounded Docker side effect: from a clean build context it builds the
+human-readable `ai-evalops-platform:phase9` reference with OCI revision/source/created
+labels plus Dockerfile, build-context, and Python-version labels. It inspects the result,
+records the immutable local `sha256:...` image ID, OS, architecture, Python runtime, and
+all cross-bound metadata in the manifest, and verifies that the context did not change
+during the build. Preparation does not start Compose services, upload a Dataset, scale a
+Worker, or start a formal arm.
+
+A local image ID is reported only as `LOCAL_IMAGE_ID_VERIFIED`; it is never described as
+a registry digest. Before execution, the preflight inspects the exact running
+API/Worker/Reaper containers returned by the frozen Compose project. Every application
+container must use the manifest image ID and carry matching revision, Compose project,
+Dockerfile, and build-context labels. A mutable tag match by itself is insufficient.
 
 The preflight outcome is one of `READY`, `HASH_MISMATCH`, `SOURCE_MISMATCH`,
-`DIRTY_BUILD_CONTEXT`, `MANIFEST_INVALID`, or `ENVIRONMENT_BLOCKED`, with all failed
-checks retained. Schema v1 bundles remain historical, read-only evidence and must be
-prepared again rather than migrated or silently rewritten.
+`DIRTY_BUILD_CONTEXT`, `MANIFEST_INVALID`, `ENVIRONMENT_BLOCKED`,
+`IMAGE_IDENTITY_KIND_UNSUPPORTED`, `IMAGE_ID_MISMATCH`,
+`IMAGE_REVISION_LABEL_MISSING`, `IMAGE_REVISION_MISMATCH`,
+`COMPOSE_PROJECT_MISMATCH`, or `IMAGE_BUILD_INPUT_MISMATCH`, with all failed checks
+retained. Schema v1/v2 bundles remain historical, read-only evidence and must be prepared
+again rather than migrated or silently rewritten.
 
 ## Execution
 
