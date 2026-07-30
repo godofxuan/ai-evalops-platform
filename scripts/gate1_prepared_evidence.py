@@ -3,16 +3,17 @@ import json
 import re
 import subprocess
 from collections.abc import Mapping
-from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
+from scripts.experiment_support import ExperimentError
 from scripts.gate1_image_evidence import (
+    audit_gate1_build_context,
     compute_docker_build_context_binding,
     gate1_image_binding_errors,
 )
 
-PREPARED_MANIFEST_SCHEMA_VERSION = 3
+PREPARED_MANIFEST_SCHEMA_VERSION = 4
 
 KEY_EXECUTION_SCRIPT_PATHS = (
     "scripts/experiment_support.py",
@@ -194,42 +195,6 @@ def _optional_manifest_value(manifest: Mapping[str, Any], dotted_path: str) -> A
         return None
 
 
-def _dockerignore_rules(path: Path) -> list[tuple[bool, str]]:
-    rules: list[tuple[bool, str]] = []
-    try:
-        content = path.read_text(encoding="utf-8")
-    except OSError:
-        return rules
-    for raw_line in content.splitlines():
-        line = raw_line.strip().replace("\\", "/")
-        if not line or line.startswith("#"):
-            continue
-        negated = line.startswith("!")
-        pattern = line[1:] if negated else line
-        pattern = pattern.lstrip("/").rstrip("/")
-        if pattern and pattern != ".":
-            rules.append((negated, pattern))
-    return rules
-
-
-def _docker_context_includes(
-    path: str,
-    rules: list[tuple[bool, str]],
-) -> bool:
-    normalized = path.replace("\\", "/").strip("/")
-    segments = normalized.split("/")
-    excluded = False
-    for negated, pattern in rules:
-        if "/" not in pattern:
-            matched = any(fnmatchcase(segment, pattern) for segment in segments)
-        else:
-            ancestors = ("/".join(segments[:index]) for index in range(1, len(segments) + 1))
-            matched = any(fnmatchcase(ancestor, pattern) for ancestor in ancestors)
-        if matched:
-            excluded = not negated
-    return not excluded
-
-
 def _digest_matches(
     *,
     check: str,
@@ -345,9 +310,6 @@ def verify_prepared_evidence(
     tracked_dirty_paths = [
         row[3:].replace("\\", "/") for row in worktree_rows if not row.startswith(("?? ", "!! "))
     ]
-    build_context_candidates = [
-        row[3:].replace("\\", "/") for row in worktree_rows if row.startswith(("?? ", "!! "))
-    ]
     measurement_path = run_directory / str(manifest["dataset"]["measurement_path"])
     warmup_path = run_directory / str(manifest["dataset"]["warmup_path"])
     dataset_hashes_path = run_directory / str(manifest["dataset"]["hashes_path"])
@@ -359,17 +321,27 @@ def verify_prepared_evidence(
     ).resolve()
     dockerfile_path = repository / str(manifest["provenance"]["dockerfile"]["path"])
     dockerignore_path = repository / str(manifest["provenance"]["dockerignore"]["path"])
-    dockerignore_rules = _dockerignore_rules(dockerignore_path)
-    dirty_build_context_paths = sorted(
-        path
-        for path in build_context_candidates
-        if _docker_context_includes(path, dockerignore_rules)
-    )
+    dirty_build_context_paths: list[str] = []
+    try:
+        build_context_audit = audit_gate1_build_context(
+            repository=repository,
+            dockerfile_path=dockerfile_path,
+            dockerignore_path=dockerignore_path,
+        )
+    except (ExperimentError, OSError):
+        build_context_audit = None
+    if build_context_audit is not None:
+        tracked_dirty_paths = build_context_audit["details"]["tracked_or_staged_paths"]
+        dirty_build_context_paths = build_context_audit["details"]["dirty_paths"]
     hash_mismatches: list[dict[str, str | None]] = []
     try:
-        observed_build_context = compute_docker_build_context_binding(
-            repository=repository,
-            dockerignore_path=dockerignore_path,
+        observed_build_context = (
+            build_context_audit["binding"]
+            if build_context_audit is not None
+            else compute_docker_build_context_binding(
+                repository=repository,
+                dockerignore_path=dockerignore_path,
+            )
         )
         observed_build_context_sha256 = str(observed_build_context["sha256"])
     except OSError:
@@ -391,7 +363,14 @@ def verify_prepared_evidence(
             head.returncode == 0 and observed_source_commit == expected_source_commit
         ),
         "tracked_worktree_clean": worktree.returncode == 0 and not tracked_dirty_paths,
-        "docker_build_context_clean": (worktree.returncode == 0 and not dirty_build_context_paths),
+        "docker_build_context_clean": (
+            worktree.returncode == 0
+            and (
+                bool(build_context_audit["ready"])
+                if build_context_audit is not None
+                else not dirty_build_context_paths
+            )
+        ),
         "measurement_hash_matches": _file_hash_matches(
             check="measurement_hash_matches",
             path_label=str(manifest["dataset"]["measurement_path"]),
@@ -478,7 +457,11 @@ def verify_prepared_evidence(
         status = "ENVIRONMENT_BLOCKED"
     elif not checks["source_commit_matches"]:
         status = "SOURCE_MISMATCH"
-    elif not checks["docker_build_context_clean"]:
+    elif (
+        build_context_audit is not None and build_context_audit["status"] == "UNSAFE_BUILD_CONTEXT"
+    ):
+        status = "UNSAFE_BUILD_CONTEXT"
+    elif dirty_build_context_paths:
         status = "DIRTY_BUILD_CONTEXT"
     elif any(
         not checks[check]
@@ -492,7 +475,7 @@ def verify_prepared_evidence(
         }
     ):
         status = "HASH_MISMATCH"
-    elif not checks["tracked_worktree_clean"]:
+    elif not checks["tracked_worktree_clean"] or not checks["docker_build_context_clean"]:
         status = "DIRTY_BUILD_CONTEXT"
     else:
         status = "READY"
@@ -507,6 +490,9 @@ def verify_prepared_evidence(
             "observed_source_commit": observed_source_commit,
             "tracked_dirty_paths": tracked_dirty_paths,
             "dirty_build_context_paths": dirty_build_context_paths,
+            "build_context_audit_blockers": (
+                build_context_audit["blockers"] if build_context_audit is not None else []
+            ),
             "git_head_returncode": head.returncode,
             "git_status_returncode": worktree.returncode,
         },

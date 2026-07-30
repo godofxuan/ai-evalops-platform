@@ -27,19 +27,38 @@ must never overwrite another run.
 
 ## Prepared evidence gate
 
-Only manifest schema v3 is executable. Before any service or arm interaction, the
-executor must revalidate the source commit, tracked workspace state, untracked or
-Git-ignored files that would enter the Docker build context, configuration, measurement
-and warm-up datasets, dataset hash record, protocol, arm plan, Compose file, Dockerfile,
-`.dockerignore`, every key execution script, and the Docker build-context fingerprint.
+Only manifest schema v4 is executable. Before any service or arm interaction, the
+executor must revalidate the source commit, strict Git state, Docker build-context
+safety, configuration, measurement and warm-up datasets, dataset hash record, protocol,
+arm plan, Compose file, Dockerfile, `.dockerignore`, every key execution script, and the
+Docker build-context fingerprint.
+
+The strict Git gate rejects every tracked or staged change, including changes to paths
+excluded from Docker. Untracked and Git-ignored files block only when the root
+`.dockerignore` would include them in the context. Git paths are read through NUL-delimited
+machine interfaces so quoting, spaces, non-ASCII names, and rename syntax cannot change
+the recorded path.
+
+The root `.dockerignore` contract handles UTF-8 BOM removal, first-column comments,
+component globs, standalone `**` components, and last-match negation. A compound `**`
+inside another component is outside the audited subset and fails closed. A
+Dockerfile-specific ignore file also fails closed because Docker gives it precedence
+over the root file while the manifest binds the root file. Included Git symlinks and
+included `.env*` paths are unsafe; only excluded local environment overrides are allowed.
+
+`docker-context-sha256-v2` hashes a canonical ordered list of every included regular-file
+path, kind, byte length, and content SHA-256 (and records a symlink target only so the
+audit can reject it). It is an application evidence binding, not a claim that the value
+is Docker or BuildKit's internal tar/context digest.
 
 Preparation has one bounded Docker side effect: from a clean build context it builds the
 human-readable `ai-evalops-platform:phase9` reference with OCI revision/source/created
 labels plus Dockerfile, build-context, and Python-version labels. It inspects the result,
 records the immutable local `sha256:...` image ID, OS, architecture, Python runtime, and
-all cross-bound metadata in the manifest, and verifies that the context did not change
-during the build. Preparation does not start Compose services, upload a Dataset, scale a
-Worker, or start a formal arm.
+all cross-bound metadata in the manifest. Before and after `docker build`, preparation
+reruns the complete context audit and verifies that repository `HEAD` still equals the
+manifest source commit. Preparation does not start Compose services, upload a Dataset,
+scale a Worker, or start a formal arm.
 
 A local image ID is reported only as `LOCAL_IMAGE_ID_VERIFIED`; it is never described as
 a registry digest. Before execution, the preflight inspects the exact running
@@ -48,12 +67,12 @@ container must use the manifest image ID and carry matching revision, Compose pr
 Dockerfile, and build-context labels. A mutable tag match by itself is insufficient.
 
 The preflight outcome is one of `READY`, `HASH_MISMATCH`, `SOURCE_MISMATCH`,
-`DIRTY_BUILD_CONTEXT`, `MANIFEST_INVALID`, `ENVIRONMENT_BLOCKED`,
+`DIRTY_BUILD_CONTEXT`, `UNSAFE_BUILD_CONTEXT`, `MANIFEST_INVALID`, `ENVIRONMENT_BLOCKED`,
 `IMAGE_IDENTITY_KIND_UNSUPPORTED`, `IMAGE_ID_MISMATCH`,
 `IMAGE_REVISION_LABEL_MISSING`, `IMAGE_REVISION_MISMATCH`,
 `COMPOSE_PROJECT_MISMATCH`, or `IMAGE_BUILD_INPUT_MISMATCH`, with all failed checks
-retained. Schema v1/v2 bundles remain historical, read-only evidence and must be prepared
-again rather than migrated or silently rewritten.
+retained. Schema v1/v2/v3 bundles remain historical, read-only evidence and must be
+prepared again rather than migrated or silently rewritten.
 
 ## Execution
 

@@ -5,13 +5,14 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from fnmatch import fnmatchcase
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 from scripts.experiment_support import ExperimentError
 
 APPLICATION_SERVICES = frozenset({"api", "worker", "reaper"})
-BUILD_CONTEXT_ALGORITHM = "docker-context-sha256-v1"
+BUILD_CONTEXT_ALGORITHM = "docker-context-sha256-v2"
 COMPOSE_PROJECT = "ai-evalops-platform"
 IMAGE_REFERENCE = "ai-evalops-platform:phase9"
 IMAGE_REPOSITORY = "ai-evalops-platform"
@@ -22,9 +23,11 @@ PYTHON_VERSION = "3.12.13"
 
 def _dockerignore_rules(path: Path) -> list[tuple[bool, str]]:
     rules: list[tuple[bool, str]] = []
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
+        if raw_line.startswith("#"):
+            continue
         line = raw_line.strip().replace("\\", "/")
-        if not line or line.startswith("#"):
+        if not line:
             continue
         negated = line.startswith("!")
         pattern = line[1:] if negated else line
@@ -34,19 +37,53 @@ def _dockerignore_rules(path: Path) -> list[tuple[bool, str]]:
     return rules
 
 
+def _unsupported_dockerignore_patterns(path: Path) -> list[str]:
+    """Return patterns whose recursive-wildcard semantics are not modelled."""
+    return sorted(
+        pattern
+        for _negated, pattern in _dockerignore_rules(path)
+        if any("**" in segment and segment != "**" for segment in pattern.split("/"))
+    )
+
+
 def _docker_context_includes(
     path: str,
     rules: Sequence[tuple[bool, str]],
 ) -> bool:
+    def pattern_matches(
+        pattern_segments: tuple[str, ...],
+        path_segments: tuple[str, ...],
+    ) -> bool:
+        @cache
+        def match(pattern_index: int, path_index: int) -> bool:
+            if pattern_index == len(pattern_segments):
+                return path_index == len(path_segments)
+            pattern_segment = pattern_segments[pattern_index]
+            if pattern_segment == "**":
+                return match(pattern_index + 1, path_index) or (
+                    path_index < len(path_segments) and match(pattern_index, path_index + 1)
+                )
+            return (
+                path_index < len(path_segments)
+                and fnmatchcase(path_segments[path_index], pattern_segment)
+                and match(pattern_index + 1, path_index + 1)
+            )
+
+        return match(0, 0)
+
     normalized = path.replace("\\", "/").strip("/")
     segments = normalized.split("/")
     excluded = False
     for negated, pattern in rules:
-        if "/" not in pattern:
-            matched = any(fnmatchcase(segment, pattern) for segment in segments)
-        else:
-            ancestors = ("/".join(segments[:index]) for index in range(1, len(segments) + 1))
-            matched = any(fnmatchcase(ancestor, pattern) for ancestor in ancestors)
+        pattern_segments = pattern.split("/")
+        ancestors = (segments[:index] for index in range(1, len(segments) + 1))
+        matched = any(
+            pattern_matches(
+                tuple(pattern_segments),
+                tuple(ancestor),
+            )
+            for ancestor in ancestors
+        )
         if matched:
             excluded = not negated
     return not excluded
@@ -57,36 +94,125 @@ def _unrecorded_build_context_paths(
     repository: Path,
     dockerignore_path: Path,
 ) -> list[str]:
-    status = subprocess.run(
+    commands = (
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+        [
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "-z",
+        ],
+    )
+    results = [
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                f"safe.directory={repository}",
+                "-C",
+                str(repository),
+                *arguments,
+            ],
+            check=False,
+            capture_output=True,
+        )
+        for arguments in commands
+    ]
+    if any(result.returncode != 0 for result in results):
+        raise ExperimentError("unable to inspect the Gate 1 Docker build context")
+    rules = _dockerignore_rules(dockerignore_path)
+    paths = {
+        raw_path.decode("utf-8", errors="surrogateescape")
+        for result in results
+        for raw_path in result.stdout.split(b"\0")
+        if raw_path
+    }
+    return sorted(path for path in paths if _docker_context_includes(path, rules))
+
+
+def _tracked_or_staged_change_paths(*, repository: Path) -> list[str]:
+    commands = (
+        ["diff", "--name-only", "-z", "--"],
+        ["diff", "--cached", "--name-only", "-z", "--"],
+    )
+    results = [
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                f"safe.directory={repository}",
+                "-C",
+                str(repository),
+                *arguments,
+            ],
+            check=False,
+            capture_output=True,
+        )
+        for arguments in commands
+    ]
+    if any(result.returncode != 0 for result in results):
+        raise ExperimentError("unable to inspect the Gate 1 Git worktree")
+    return sorted(
+        {
+            raw_path.decode("utf-8", errors="surrogateescape")
+            for result in results
+            for raw_path in result.stdout.split(b"\0")
+            if raw_path
+        }
+    )
+
+
+def _included_git_symlink_paths(
+    *,
+    repository: Path,
+    dockerignore_path: Path,
+) -> list[str]:
+    index = subprocess.run(
         [
             "git",
             "-c",
             f"safe.directory={repository}",
             "-C",
             str(repository),
-            "status",
-            "--porcelain=v1",
-            "--untracked-files=all",
-            "--ignored=matching",
+            "ls-files",
+            "--stage",
+            "-z",
         ],
         check=False,
         capture_output=True,
-        text=True,
     )
-    if status.returncode != 0:
-        raise ExperimentError("unable to inspect the Gate 1 Docker build context")
+    if index.returncode != 0:
+        raise ExperimentError("unable to inspect the Gate 1 Git index")
     rules = _dockerignore_rules(dockerignore_path)
-    unrecorded: set[str] = set()
-    for row in status.stdout.splitlines():
-        if len(row) < 4:
+    symlinks: list[str] = []
+    for record in index.stdout.split(b"\0"):
+        if not record:
             continue
-        path = row[3:]
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        path = path.strip('"').replace("\\", "/")
-        if _docker_context_includes(path, rules):
-            unrecorded.add(path)
-    return sorted(unrecorded)
+        metadata, raw_path = record.split(b"\t", 1)
+        mode = metadata.split(b" ", 1)[0]
+        normalized = raw_path.decode("utf-8", errors="surrogateescape")
+        if mode == b"120000" and _docker_context_includes(normalized, rules):
+            symlinks.append(normalized)
+    return sorted(symlinks)
+
+
+def _included_sensitive_paths(
+    *,
+    repository: Path,
+    dockerignore_path: Path,
+) -> list[str]:
+    rules = _dockerignore_rules(dockerignore_path)
+    return sorted(
+        path.relative_to(repository).as_posix()
+        for path in repository.rglob("*")
+        if (path.is_file() or path.is_symlink())
+        and path.name.startswith(".env")
+        and _docker_context_includes(
+            path.relative_to(repository).as_posix(),
+            rules,
+        )
+    )
 
 
 def compute_docker_build_context_binding(
@@ -132,6 +258,105 @@ def compute_docker_build_context_binding(
     }
 
 
+def audit_gate1_build_context(
+    *,
+    repository: Path,
+    dockerfile_path: Path,
+    dockerignore_path: Path,
+) -> dict[str, Any]:
+    """Audit whether the current repository is safe to use as a Gate 1 context."""
+    dockerfile_specific_ignore = dockerfile_path.with_name(f"{dockerfile_path.name}.dockerignore")
+    dockerfile_specific_ignore_path = (
+        dockerfile_specific_ignore.relative_to(repository).as_posix()
+        if dockerfile_specific_ignore.exists() or dockerfile_specific_ignore.is_symlink()
+        else None
+    )
+    tracked_or_staged_paths = _tracked_or_staged_change_paths(
+        repository=repository,
+    )
+    included_symlink_paths = _included_git_symlink_paths(
+        repository=repository,
+        dockerignore_path=dockerignore_path,
+    )
+    unsupported_dockerignore_patterns = _unsupported_dockerignore_patterns(dockerignore_path)
+    sensitive_paths_in_context = _included_sensitive_paths(
+        repository=repository,
+        dockerignore_path=dockerignore_path,
+    )
+    dirty_paths = _unrecorded_build_context_paths(
+        repository=repository,
+        dockerignore_path=dockerignore_path,
+    )
+    binding = compute_docker_build_context_binding(
+        repository=repository,
+        dockerignore_path=dockerignore_path,
+    )
+    blockers = []
+    if tracked_or_staged_paths:
+        blockers.append("tracked_or_staged_changes")
+    if dirty_paths:
+        blockers.append("unrecorded_build_context_paths")
+    if included_symlink_paths:
+        blockers.append("included_symlinks")
+    if dockerfile_specific_ignore_path is not None:
+        blockers.append("dockerfile_specific_ignore")
+    if unsupported_dockerignore_patterns:
+        blockers.append("unsupported_dockerignore_patterns")
+    if sensitive_paths_in_context:
+        blockers.append("sensitive_paths_in_context")
+    ready = not blockers
+    status = (
+        "UNSAFE_BUILD_CONTEXT"
+        if included_symlink_paths
+        or dockerfile_specific_ignore_path is not None
+        or unsupported_dockerignore_patterns
+        or sensitive_paths_in_context
+        else ("READY" if ready else "DIRTY_BUILD_CONTEXT")
+    )
+    return {
+        "status": status,
+        "ready": ready,
+        "blockers": blockers,
+        "binding": binding,
+        "details": {
+            "dirty_paths": dirty_paths,
+            "tracked_or_staged_paths": tracked_or_staged_paths,
+            "included_symlink_paths": included_symlink_paths,
+            "dockerfile_specific_ignore_path": dockerfile_specific_ignore_path,
+            "unsupported_dockerignore_patterns": unsupported_dockerignore_patterns,
+            "sensitive_paths_in_context": sensitive_paths_in_context,
+        },
+    }
+
+
+def _build_context_audit_diagnostics(audit: Mapping[str, Any]) -> str:
+    details = audit["details"]
+    paths = sorted(
+        {
+            path
+            for key in (
+                "dirty_paths",
+                "tracked_or_staged_paths",
+                "included_symlink_paths",
+                "sensitive_paths_in_context",
+            )
+            for path in details[key]
+        }
+    )
+    if details["dockerfile_specific_ignore_path"] is not None:
+        paths.append(details["dockerfile_specific_ignore_path"])
+    fields = [
+        f"status={audit['status']}",
+        f"blockers={','.join(audit['blockers'])}",
+    ]
+    if paths:
+        fields.append(f"paths={','.join(paths)}")
+    patterns = details["unsupported_dockerignore_patterns"]
+    if patterns:
+        fields.append(f"patterns={','.join(patterns)}")
+    return "; ".join(fields)
+
+
 def _run_checked(
     command: Sequence[str],
     *,
@@ -151,6 +376,24 @@ def _run_checked(
         detail = (exc.stderr or exc.stdout or "").strip()
         suffix = f": {detail}" if detail else ""
         raise ExperimentError(f"command failed ({' '.join(command)}){suffix}") from exc
+
+
+def _repository_head(repository: Path) -> str:
+    observed = _run_checked(
+        [
+            "git",
+            "-c",
+            f"safe.directory={repository}",
+            "-C",
+            str(repository),
+            "rev-parse",
+            "HEAD",
+        ],
+        cwd=repository,
+    ).stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", observed) is None:
+        raise ExperimentError("Gate 1 repository HEAD is not a valid 40-character commit ID")
+    return observed
 
 
 def _validated_local_image_inspection(
@@ -211,20 +454,26 @@ def build_gate1_image_binding(
     dockerignore_path: Path,
 ) -> dict[str, Any]:
     """Build and inspect the immutable local image used by a prepared Gate 1 run."""
-    unrecorded_paths = _unrecorded_build_context_paths(
+    context_audit = audit_gate1_build_context(
         repository=repository,
+        dockerfile_path=dockerfile_path,
         dockerignore_path=dockerignore_path,
     )
-    if unrecorded_paths:
+    if not context_audit["ready"]:
         raise ExperimentError(
-            "Docker build context contains unrecorded paths: " + ", ".join(unrecorded_paths)
+            "Gate 1 Docker build context audit failed "
+            f"({_build_context_audit_diagnostics(context_audit)})"
+        )
+
+    observed_source_commit = _repository_head(repository)
+    if observed_source_commit != source_commit:
+        raise ExperimentError(
+            "Gate 1 image source commit mismatch: "
+            f"expected {source_commit}, observed {observed_source_commit}"
         )
 
     dockerfile_sha256 = hashlib.sha256(dockerfile_path.read_bytes()).hexdigest()
-    build_context = compute_docker_build_context_binding(
-        repository=repository,
-        dockerignore_path=dockerignore_path,
-    )
+    build_context = context_audit["binding"]
     build_created = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     labels = {
         "org.opencontainers.image.revision": source_commit,
@@ -247,19 +496,22 @@ def build_gate1_image_binding(
         build_command.extend(["--label", f"{key}={value}"])
     build_command.append(str(repository))
     _run_checked(build_command, cwd=repository)
-    post_build_context = compute_docker_build_context_binding(
+    post_build_audit = audit_gate1_build_context(
         repository=repository,
+        dockerfile_path=dockerfile_path,
         dockerignore_path=dockerignore_path,
     )
-    post_build_unrecorded_paths = _unrecorded_build_context_paths(
-        repository=repository,
-        dockerignore_path=dockerignore_path,
-    )
-    if post_build_context != build_context or post_build_unrecorded_paths:
-        detail = (
-            ": " + ", ".join(post_build_unrecorded_paths) if post_build_unrecorded_paths else ""
+    if not post_build_audit["ready"] or post_build_audit["binding"] != build_context:
+        raise ExperimentError(
+            "Docker build context changed during image build "
+            f"({_build_context_audit_diagnostics(post_build_audit)})"
         )
-        raise ExperimentError(f"Docker build context changed during image build{detail}")
+    post_build_source_commit = _repository_head(repository)
+    if post_build_source_commit != source_commit:
+        raise ExperimentError(
+            "Gate 1 image source commit changed during image build: "
+            f"expected {source_commit}, observed {post_build_source_commit}"
+        )
 
     image_id, image_created, operating_system, architecture = _validated_local_image_inspection(
         repository=repository,

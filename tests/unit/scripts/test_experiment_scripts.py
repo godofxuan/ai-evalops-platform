@@ -189,7 +189,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "seed",
         )
     } == {
-        "schema_version": 3,
+        "schema_version": 4,
         "experiment": "worker_scaling",
         "run_id": "gate1-contract",
         "status": "prepared",

@@ -83,6 +83,8 @@ def _prepare_bundle(
         "Dockerfile",
         ".dockerignore",
         ".gitignore",
+        "pyproject.toml",
+        "uv.lock",
         "deploy/compose.yaml",
         "scripts/worker_scaling_protocol.md",
         *prepared_evidence.KEY_EXECUTION_SCRIPT_PATHS,
@@ -433,7 +435,7 @@ def test_prepared_evidence_rejects_unsupported_manifest_schema(
     assert result["checks"]["manifest_valid"] is False
     assert "schema_version" in result["details"]["manifest_errors"]
     assert result["details"]["manifest_schema"] == {
-        "expected": 3,
+        "expected": 4,
         "observed": 999,
     }
 
@@ -478,6 +480,28 @@ def test_prepared_evidence_rejects_mutated_dockerfile(
     assert result["status"] == "HASH_MISMATCH"
     assert result["checks"]["dockerfile_hash_matches"] is False
     assert "dockerfile_hash_matches" in result["blockers"]
+
+
+def test_prepared_evidence_rejects_mutated_uv_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, run_directory = _prepare_bundle(tmp_path, monkeypatch)
+    lock_path = repository / "uv.lock"
+    lock_path.write_bytes(lock_path.read_bytes() + b"\n# local dependency drift\n")
+
+    result = prepared_evidence.verify_prepared_evidence(
+        run_directory=run_directory,
+        repository=repository,
+        compose_file=repository / "deploy" / "compose.yaml",
+    )
+
+    assert result["status"] == "HASH_MISMATCH"
+    assert result["ready"] is False
+    assert result["checks"]["tracked_worktree_clean"] is False
+    assert result["checks"]["image_build_context_hash_matches"] is False
+    assert "image_build_context_hash_matches" in result["blockers"]
+    assert result["details"]["tracked_dirty_paths"] == ["uv.lock"]
 
 
 def test_prepared_evidence_rejects_mutated_dockerignore(
@@ -557,6 +581,52 @@ def test_prepared_evidence_rejects_git_ignored_file_entering_docker_context(
     assert result["status"] == "DIRTY_BUILD_CONTEXT"
     assert result["checks"]["docker_build_context_clean"] is False
     assert result["details"]["dirty_build_context_paths"] == ["app/generated.tmp"]
+
+
+def test_prepared_evidence_applies_strict_audit_to_staged_excluded_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, run_directory = _prepare_bundle(tmp_path, monkeypatch)
+    staged_path = repository / "tests" / "staged_probe.py"
+    staged_path.parent.mkdir()
+    staged_path.write_text("STAGED = True\n", encoding="utf-8")
+    _git(repository, "add", "tests/staged_probe.py")
+
+    result = prepared_evidence.verify_prepared_evidence(
+        run_directory=run_directory,
+        repository=repository,
+        compose_file=repository / "deploy" / "compose.yaml",
+    )
+
+    assert result["status"] == "DIRTY_BUILD_CONTEXT"
+    assert result["ready"] is False
+    assert result["checks"]["tracked_worktree_clean"] is False
+    assert result["checks"]["docker_build_context_clean"] is False
+    assert result["details"]["tracked_dirty_paths"] == ["tests/staged_probe.py"]
+    assert result["details"]["build_context_audit_blockers"] == ["tracked_or_staged_changes"]
+
+
+def test_prepared_evidence_rejects_dockerfile_specific_ignore_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, run_directory = _prepare_bundle(tmp_path, monkeypatch)
+    (repository / "Dockerfile.dockerignore").write_text(
+        "*\n",
+        encoding="utf-8",
+    )
+
+    result = prepared_evidence.verify_prepared_evidence(
+        run_directory=run_directory,
+        repository=repository,
+        compose_file=repository / "deploy" / "compose.yaml",
+    )
+
+    assert result["status"] == "UNSAFE_BUILD_CONTEXT"
+    assert result["ready"] is False
+    assert result["checks"]["docker_build_context_clean"] is False
+    assert "dockerfile_specific_ignore" in result["details"]["build_context_audit_blockers"]
 
 
 def test_prepared_evidence_allows_untracked_file_excluded_from_docker_context(
@@ -689,6 +759,32 @@ def test_prepared_evidence_reports_unavailable_git_state_as_environment_blocked(
     assert "git_repository_available" in result["blockers"]
 
 
+def test_prepared_evidence_keeps_historical_schema_v3_bundle_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, run_directory = _prepare_bundle(tmp_path, monkeypatch)
+    manifest_path = run_directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["schema_version"] = 3
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    result = prepared_evidence.verify_prepared_evidence(
+        run_directory=run_directory,
+        repository=repository,
+        compose_file=repository / "deploy" / "compose.yaml",
+    )
+
+    assert result["status"] == "MANIFEST_INVALID"
+    assert result["details"]["manifest_schema"] == {
+        "expected": 4,
+        "observed": 3,
+    }
+
+
 def test_prepared_evidence_keeps_historical_schema_v1_bundle_read_only(
     tmp_path: Path,
 ) -> None:
@@ -706,7 +802,7 @@ def test_prepared_evidence_keeps_historical_schema_v1_bundle_read_only(
 
     assert result["status"] == "MANIFEST_INVALID"
     assert result["details"]["manifest_schema"] == {
-        "expected": 3,
+        "expected": 4,
         "observed": 1,
     }
 

@@ -9,6 +9,23 @@ from scripts.experiment_support import ExperimentError
 from scripts.gate1_image_evidence import build_gate1_image_binding, evaluate_running_image_binding
 
 
+def _git_head(repository: Path) -> str:
+    return subprocess.run(
+        [
+            "git",
+            "-c",
+            f"safe.directory={repository}",
+            "-C",
+            str(repository),
+            "rev-parse",
+            "HEAD",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def test_image_build_rejects_untracked_python_entering_build_context(
     clean_gate1_repository: Path,
 ) -> None:
@@ -17,7 +34,7 @@ def test_image_build_rejects_untracked_python_entering_build_context(
 
     with pytest.raises(
         ExperimentError,
-        match=r"unrecorded.*app/untracked_image_input\.py",
+        match=r"context audit failed.*app/untracked_image_input\.py",
     ):
         build_gate1_image_binding(
             repository=clean_gate1_repository,
@@ -35,12 +52,62 @@ def test_image_build_rejects_tracked_dockerfile_modification_before_docker(
 
     with pytest.raises(
         ExperimentError,
-        match=r"unrecorded.*Dockerfile",
+        match=r"context audit failed.*Dockerfile",
     ):
         build_gate1_image_binding(
             repository=clean_gate1_repository,
             source_commit="a" * 40,
             dockerfile_path=dockerfile_path,
+            dockerignore_path=clean_gate1_repository / ".dockerignore",
+        )
+
+
+def test_image_build_rejects_staged_excluded_change_before_docker(
+    clean_gate1_repository: Path,
+) -> None:
+    staged_path = clean_gate1_repository / "tests" / "staged_probe.py"
+    staged_path.parent.mkdir()
+    staged_path.write_text("STAGED = True\n", encoding="utf-8")
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            f"safe.directory={clean_gate1_repository}",
+            "-C",
+            str(clean_gate1_repository),
+            "add",
+            "tests/staged_probe.py",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    with pytest.raises(
+        ExperimentError,
+        match=r"tracked_or_staged_changes.*tests/staged_probe\.py",
+    ):
+        build_gate1_image_binding(
+            repository=clean_gate1_repository,
+            source_commit="a" * 40,
+            dockerfile_path=clean_gate1_repository / "Dockerfile",
+            dockerignore_path=clean_gate1_repository / ".dockerignore",
+        )
+
+
+def test_image_build_rejects_source_commit_that_is_not_repository_head(
+    clean_gate1_repository: Path,
+) -> None:
+    observed_head = _git_head(clean_gate1_repository)
+    wrong_commit = "a" * 40 if observed_head != "a" * 40 else "b" * 40
+
+    with pytest.raises(
+        ExperimentError,
+        match=r"source commit mismatch",
+    ):
+        build_gate1_image_binding(
+            repository=clean_gate1_repository,
+            source_commit=wrong_commit,
+            dockerfile_path=clean_gate1_repository / "Dockerfile",
             dockerignore_path=clean_gate1_repository / ".dockerignore",
         )
 
@@ -82,16 +149,17 @@ def test_image_build_freezes_local_id_labels_and_runtime(
         raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(gate1_image_evidence.subprocess, "run", fake_run)
+    source_commit = _git_head(clean_gate1_repository)
 
     binding = build_gate1_image_binding(
         repository=clean_gate1_repository,
-        source_commit="b" * 40,
+        source_commit=source_commit,
         dockerfile_path=clean_gate1_repository / "Dockerfile",
         dockerignore_path=clean_gate1_repository / ".dockerignore",
     )
 
     assert commands[0][:2] == ["docker", "build"]
-    assert built_labels["org.opencontainers.image.revision"] == "b" * 40
+    assert built_labels["org.opencontainers.image.revision"] == source_commit
     assert (
         built_labels["org.opencontainers.image.source"]
         == "https://github.com/godofxuan/ai-evalops-platform"
@@ -131,6 +199,7 @@ def test_image_build_rejects_context_change_during_docker_build(
         raise AssertionError(f"unexpected command after context changed: {command}")
 
     monkeypatch.setattr(gate1_image_evidence.subprocess, "run", fake_run)
+    source_commit = _git_head(clean_gate1_repository)
 
     with pytest.raises(
         ExperimentError,
@@ -138,7 +207,131 @@ def test_image_build_rejects_context_change_during_docker_build(
     ):
         build_gate1_image_binding(
             repository=clean_gate1_repository,
-            source_commit="b" * 40,
+            source_commit=source_commit,
+            dockerfile_path=clean_gate1_repository / "Dockerfile",
+            dockerignore_path=clean_gate1_repository / ".dockerignore",
+        )
+
+
+def test_image_build_rejects_excluded_tracked_change_during_docker_build(
+    clean_gate1_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracked_test = clean_gate1_repository / "tests" / "tracked_probe.py"
+    tracked_test.parent.mkdir()
+    tracked_test.write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            f"safe.directory={clean_gate1_repository}",
+            "-C",
+            str(clean_gate1_repository),
+            "add",
+            "tests/tracked_probe.py",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            f"safe.directory={clean_gate1_repository}",
+            "-C",
+            str(clean_gate1_repository),
+            "commit",
+            "-m",
+            "add excluded tracked probe",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    real_run = subprocess.run
+
+    def fake_run(
+        command: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        if command[0] == "git":
+            return real_run(command, **kwargs)
+        if command[:2] == ["docker", "build"]:
+            tracked_test.write_text("VALUE = 2\n", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError(f"unexpected command after excluded tracked path changed: {command}")
+
+    monkeypatch.setattr(gate1_image_evidence.subprocess, "run", fake_run)
+    source_commit = _git_head(clean_gate1_repository)
+
+    with pytest.raises(
+        ExperimentError,
+        match=r"build context changed during.*tests/tracked_probe\.py",
+    ):
+        build_gate1_image_binding(
+            repository=clean_gate1_repository,
+            source_commit=source_commit,
+            dockerfile_path=clean_gate1_repository / "Dockerfile",
+            dockerignore_path=clean_gate1_repository / ".dockerignore",
+        )
+
+
+def test_image_build_rejects_head_change_during_docker_build(
+    clean_gate1_repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracked_test = clean_gate1_repository / "tests" / "tracked_probe.py"
+    tracked_test.parent.mkdir()
+    tracked_test.write_text("VALUE = 1\n", encoding="utf-8")
+    git_prefix = [
+        "git",
+        "-c",
+        f"safe.directory={clean_gate1_repository}",
+        "-C",
+        str(clean_gate1_repository),
+    ]
+    subprocess.run(
+        [*git_prefix, "add", "tests/tracked_probe.py"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [*git_prefix, "commit", "-m", "add excluded tracked probe"],
+        check=True,
+        capture_output=True,
+    )
+    source_commit = _git_head(clean_gate1_repository)
+    real_run = subprocess.run
+
+    def fake_run(
+        command: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        if command[0] == "git":
+            return real_run(command, **kwargs)
+        if command[:2] == ["docker", "build"]:
+            tracked_test.write_text("VALUE = 2\n", encoding="utf-8")
+            real_run(
+                [*git_prefix, "add", "tests/tracked_probe.py"],
+                check=True,
+                capture_output=True,
+            )
+            real_run(
+                [*git_prefix, "commit", "-m", "advance excluded input"],
+                check=True,
+                capture_output=True,
+            )
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError(f"unexpected command after repository HEAD changed: {command}")
+
+    monkeypatch.setattr(gate1_image_evidence.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        ExperimentError,
+        match=r"source commit changed during image build",
+    ):
+        build_gate1_image_binding(
+            repository=clean_gate1_repository,
+            source_commit=source_commit,
             dockerfile_path=clean_gate1_repository / "Dockerfile",
             dockerignore_path=clean_gate1_repository / ".dockerignore",
         )

@@ -31,6 +31,8 @@ def clean_gate1_repository(
         "Dockerfile",
         ".dockerignore",
         ".gitignore",
+        "pyproject.toml",
+        "uv.lock",
         "deploy/compose.yaml",
         "scripts/worker_scaling_protocol.md",
         *KEY_EXECUTION_SCRIPT_PATHS,
