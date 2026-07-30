@@ -955,3 +955,431 @@ P1-2 的 RED → GREEN → 必要重构 → 定向测试 → 全仓回归 → �
 4. 必须在所有阻断 finding 修复并再次确认后，重新 prepare 新 bundle。
 
 本阶段停止在 P1-3 之前。
+
+## P1-3：Gate 1 finalization 整体防止部分发布
+
+### 阶段时间、起点与边界
+
+- 执行日期：2026-07-30；
+- 起始分支：`codex/gate1-evidence-hardening`；
+- 起始 HEAD：`312c5971e9a1f1be7704e2d7c43cf9da7353ca90`；
+- P1-3 实现提交：
+  `67779aea2f3f78c19ed1a8275eb24ace4f1e450e`；
+- 提交说明：`fix(gate1): publish final evidence atomically`；
+- 本阶段没有 push、没有 PR、没有修改 Worker 数量；
+- 没有运行正式 500-case/32-arm，没有生成或覆盖正式容量结果；
+- 没有进入 P1-4 的 image digest，也没有提前处理后续 P1 finding。
+
+开始前重新核对了 P1-3 指令。`staging + validate + publish` 对这个问题是合适的，但不能只把
+五张 PNG 放进 staging：旧执行器在 arm 执行期间已经逐个写入根级 `raw/<arm_id>/` 和
+`summary/<arm_id>.json`。如果继续把这些根级路径称为“正式结果”，无论图片怎么原子化，
+仍然可能存在半套正式 bundle。因此先明确了两个不同状态：
+
+- 根级 `raw/` 和 per-arm `summary/`：执行期工作证据，可以逐步形成；
+- `<run_id>/final/`：唯一正式发布目录，只有完整目录一次出现才表示发布成功。
+
+这是本阶段最重要的设计判断。已有 run 根目录在 prepare 阶段就存在，无法再用一次 rename
+原子替换整个 run；而分别 rename `raw/`、`summary/`、`plots/` 又会重新产生多个提交点。
+把全部正式 payload 收敛到一个新的 `final/` 目录，才有一个明确、可测试的 commit point。
+
+### 修改前证据
+
+修改前的入口是 `scripts/run_load_test.py::finalize_gate1_run_evidence`，执行顺序为：
+
+```text
+检查 aggregate/CSV/plot 目标是否存在
+  -> 写 summary/aggregate.json
+  -> 写 summary/arms.csv
+  -> 写 plots/throughput.png
+  -> 写 plots/latency.png
+  -> 写 plots/queue_and_claim.png
+  -> 写 plots/database.png
+  -> 写 plots/cpu_and_rss.png
+  -> 写 plots/manifest.json
+```
+
+`scripts.experiment_support.write_report` 对单个 JSON 使用 `.tmp -> replace`，只能保证一个
+JSON 文件不会写一半；它不能把 JSON、CSV 和多张 PNG 组合成一个文件系统事务。
+
+原测试只证明：
+
+- 所有文件均成功时能生成表格和图片；
+- 在写入前已经发现某张旧图时会拒绝覆盖。
+
+原测试没有覆盖“预检已经通过，但第 N 个文件才失败”的窗口，也没有 hash 复验、文件数量
+复验、跨文件系统、重复 finalize 或并发 finalize。因此原测试通过并不能证明 bundle
+整体原子。
+
+### TDD 第一个 tracer：第 1 张图之后失败
+
+先给 `matplotlib.figure.Figure.savefig` 的第二次调用注入 `OSError`。第一次调用会真正写完
+`throughput.png`，第二次在 `latency.png` 写入期间失败。测试同时记录调用前根目录的逐文件
+字节快照。
+
+最初尝试：
+
+```text
+uv run pytest ...
+```
+
+失败原因为当前 PowerShell 的 `PATH` 中没有 `uv`。这不是产品 RED，不能作为代码缺陷证据。
+随后定位到项目虚拟环境，改用：
+
+```text
+.\.venv\Scripts\python.exe -m pytest \
+  tests/unit/scripts/test_gate1_plots.py::test_gate1_finalization_failure_after_first_plot_leaves_working_evidence_unchanged
+```
+
+真实 RED 为：
+
+```text
+1 failed
+```
+
+失败后的目录比调用前多出：
+
+- `summary/aggregate.json`；
+- `summary/arms.csv`；
+- 完整的 `plots/throughput.png`；
+- 0 字节的 `plots/latency.png`。
+
+这证明部分发布风险可以稳定复现。第一步最小 GREEN 是在 run 所在文件系统内创建
+`.gate1-final-*` staging，将 aggregate/CSV/plots 全写入 staging，成功后才 rename 为
+`final/`，异常时在 `finally` 清理 staging。结果：
+
+```text
+1 passed
+```
+
+此时只证明了图中途失败不会污染根目录，还没有宣称正式 bundle 已经完整。
+
+### TDD 第二个 tracer：成功路径必须发布完整 bundle
+
+第二条测试要求成功后的 `final/` 同时包含：
+
+- 每个 arm 的全部 raw 文件；
+- 每个 arm 的 result schema v2 summary；
+- `summary/aggregate.json`；
+- `summary/arms.csv`；
+- 五张 PNG；
+- `plots/manifest.json`；
+- 根级 `manifest.json`，列出每个 payload 的 SHA-256 和字节数。
+
+RED 为：
+
+```text
+1 failed
+```
+
+首个明确失败点是 `final/raw/io-w1-r1/jobs.json` 不存在。这说明“只把汇总与图片放入 staging”
+仍不是完整 bundle。
+
+GREEN 增加：
+
+1. 将根级 `raw/` 完整复制到 staging；
+2. 只复制本次 `summary_records` 对应的 per-arm summary，避免混入根级旧 aggregate/CSV；
+3. 在所有表格和图片生成后枚举 payload；
+4. 为每个 payload 写入 SHA-256 与 `size_bytes`；
+5. bundle manifest 自身不做自哈希，避免循环定义。
+
+结果：
+
+```text
+2 passed
+```
+
+### 完整故障矩阵：先 RED，再补验证与并发语义
+
+随后一次写全 P1-3 剩余矩阵。第一次运行结果：
+
+```text
+5 failed, 10 passed
+```
+
+五个仍然存在的真实缺口为：
+
+| 缺口 | RED 表现 |
+|---|---|
+| staging 与 final 不同文件系统 | finalizer 没有 `staging_parent`/设备校验合同，直接 `TypeError` |
+| hash 复验失败 | SHA-256 只计算一次，第二次返回不同值也没有异常 |
+| 文件数不完整 | manifest 写完后删除一张图，仍然发布 |
+| summary 交叉引用不一致 | `io-w1-r1.json` 内写成另一个 arm，仍然发布 |
+| 两个并发 finalize | 只有一个成功，但失败方泄漏底层 `FileExistsError` |
+
+同一批测试中已经通过的场景说明最初 staging 修复具有正确的泛化效果：
+
+- 第 1 张图后失败；
+- 第 3 张图后失败；
+- aggregate summary 写入失败；
+- plot manifest 写入失败；
+- 已存在一个 partial `final/` 文件；
+- 已存在 complete `final/`；
+- 重复 finalize。
+
+为关闭五个缺口，实现了：
+
+1. 用 `os.stat(...).st_dev` 在任何 staging 写入前检查 staging parent 与 run/final parent；
+2. 用 run-local `.gate1-finalize.lock` 原子目录锁串行化 finalize；
+3. 锁后再次检查 `final/`，验证后、rename 前第三次检查 `final/`；
+4. 写完 manifest 后重新读取 manifest，而不是信任内存对象；
+5. 重新枚举实际 payload，要求 manifest 数量、manifest key 集合和磁盘文件集合完全相等；
+6. raw 顶层目录必须与 arm 集合完全相等，并且每个 arm 至少有一个 raw 文件；
+7. 非 raw payload 必须精确等于 per-arm summary、aggregate、CSV、五图和 plot manifest；
+8. per-arm summary 必须是 result schema v2、arm ID 正确，并与传入 record 完全相等；
+9. aggregate 必须与重新执行 `aggregate_arm_summaries(summary_records)` 的结果完全相等；
+10. CSV arm 顺序必须与本次 records 相等；
+11. plot manifest 的 schema、arm、plot 清单、points 和 line-series 交叉引用必须一致；
+12. 每张图必须具有 PNG signature；
+13. 每个 manifest path 必须是安全相对 POSIX 路径；
+14. 禁止 final bundle 中出现 symlink；
+15. 对每个 payload 重新计算字节数与 SHA-256；
+16. rename 的文件系统异常统一映射为受控的 `ExperimentError`；
+17. 任意异常路径都清理本次 staging 和 finalization lock。
+
+完整矩阵转为：
+
+```text
+15 passed
+```
+
+随后增加单独的 per-arm summary schema v1 拒绝测试，并把非 raw 文件集合从“包含 required”
+收紧为“精确等于 required”。最终 P1-3 artifact 测试为：
+
+```text
+16 passed in 8.64s
+```
+
+### 为什么 final-bundle schema 是 v1，而 result schema 仍是 v2
+
+P1-2 升级的 result schema v2 描述指标语义，尤其是 `OBSERVED_ZERO / MISSING /
+COLLECTION_FAILED`。P1-3 新增的是另一种合同：bundle 的目录、文件列表、hash 和发布方式。
+
+因此没有把指标结果再机械升级为 v3，而是建立独立版本轴：
+
+```json
+{
+  "schema_version": 1,
+  "result_schema_version": 2,
+  "status": "complete",
+  "hash_algorithm": "sha256",
+  "publication_method": "same_filesystem_atomic_directory_rename",
+  "arm_ids": ["..."],
+  "file_count": 0,
+  "files": {
+    "relative/path": {
+      "sha256": "...",
+      "size_bytes": 0
+    }
+  }
+}
+```
+
+这样后续可以独立升级布局合同或指标合同，不会把两个概念混在同一个版本号里。
+
+### 重构判断
+
+第一版 GREEN 直接写在 `run_load_test.py`，使 runner 一次增加 400 多行。继续保留会把：
+
+- 实验编排；
+- bundle 构建；
+- 完整性验证；
+- 文件系统发布；
+
+放在同一个大文件中。完成行为 GREEN 后执行纯重构，新增
+`scripts/gate1_finalization.py`，对外保留：
+
+- `finalize_gate1_run_evidence(...)`；
+- `validate_gate1_final_bundle(...)`。
+
+`run_load_test.py` 只导入并调用 finalizer。重构前后矩阵均为 `15 passed`，之后加 schema
+测试成为 16 条。新模块被加入 `KEY_EXECUTION_SCRIPT_PATHS`，因此 finalization 实现改变时，
+P1-1 verifier 会通过 execution-script SHA-256 拒绝旧 prepared bundle。
+
+### 文件级修改及原因
+
+| 文件 | 修改 | 原因 |
+|---|---|---|
+| `scripts/gate1_finalization.py` | 新增 staging、manifest、复验、锁和原子 rename | 把正式发布做成一个深模块 |
+| `scripts/run_load_test.py` | 删除旧逐文件 finalizer，导入新入口 | runner 只负责编排 |
+| `scripts/gate1_prepared_evidence.py` | 新模块加入关键执行脚本 hash | prepared evidence 必须绑定真正执行的 finalizer |
+| `tests/unit/scripts/test_gate1_plots.py` | 加入完整成功合同和全部失败矩阵 | 证明失败不留下新 partial formal bundle |
+| `tests/unit/scripts/test_experiment_scripts.py` | 更新关键脚本期望 | 与 prepared manifest 生产者一致 |
+| `scripts/worker_scaling_protocol.md` | 冻结工作证据/正式 bundle 边界与发布步骤 | 防止未来把根级 partial 误认成正式结果 |
+| `docs/gate_1_execution_log.md` | 更新输出树与 `NOT_RUN` 路径 | 文档与新合同一致 |
+
+没有修改数据库模型、migration、API、Worker、Reaper 或历史 `docs/results/`。
+
+### 遇到的问题、判断与处理
+
+#### 1. 当前 shell 找不到 `uv`
+
+`uv run pytest` 报命令不存在。改用仓库 `.venv` 中的 Python 运行测试。锁文件检查时定位到：
+
+```text
+.\.codex-tools\Scripts\uv.exe
+```
+
+#### 2. uv 默认缓存 ACL 拒绝
+
+`uv lock --check` 首次访问：
+
+```text
+C:\Users\xuan\AppData\Local\uv\cache
+```
+
+时收到 Windows `Access is denied`。改用仓库已有 `.uv-cache`：
+
+```powershell
+$env:UV_CACHE_DIR = (Join-Path (Get-Location) '.uv-cache')
+.\.codex-tools\Scripts\uv.exe lock --check
+```
+
+结果为：
+
+```text
+Resolved 70 packages in 2ms
+```
+
+#### 3. Gate 1 定向回归第一次为 83 passed、2 failed
+
+一个失败是测试仍硬编码旧关键脚本清单，加入 `gate1_finalization.py` 后更新期望即可。
+
+另一个失败来自测试运行位置：临时 Git 仓库创建在主仓库的 `.pytest-tmp-*` 内，测试移走
+内层 `.git` 后，Git 会向上发现主仓库，于是返回 `SOURCE_MISMATCH`，不是期望的
+`ENVIRONMENT_BLOCKED`。将 `--basetemp` 放到系统临时目录后，同一测试通过：
+
+```text
+1 passed
+```
+
+这证明是嵌套临时仓库隔离问题。本阶段没有借机改变 P1-1 verifier 的生产语义。最终 Gate 1
+定向回归使用主仓库外 basetemp：
+
+```text
+85 passed in 23.96s
+```
+
+#### 4. 格式化检查发现一处机械缩进
+
+新增关键脚本期望时缩进需要 Ruff formatter 调整。格式化后全仓复查通过，没有手工改变
+测试语义。
+
+#### 5. `git diff --check` 在长组合命令末尾偶发报告不在仓库
+
+同一轮组合命令中的 uv、Ruff 和 mypy 都完成，但末尾 `git diff --check` 一次报告
+`Not a git repository`。在明确指定工作目录的独立命令中立即复跑，`git diff --check`、
+`git status` 和 `git diff --stat` 均正常。这没有被误写为产品失败。
+
+### 最终验证证据
+
+#### 静态与依赖
+
+| 检查 | 结果 | 证据状态 |
+|---|---|---|
+| `uv lock --check` | 70 packages，2 ms | `VERIFIED` |
+| Ruff format 全仓 | 221 files already formatted | `VERIFIED` |
+| Ruff lint 全仓 | All checks passed | `VERIFIED` |
+| strict mypy | 105 source files，无问题 | `VERIFIED` |
+| `git diff --check` | 无 whitespace error | `VERIFIED` |
+
+#### 测试
+
+| 测试 | 结果 | 证据状态 |
+|---|---|---|
+| P1-3 finalization/plot artifact 定向 | 16 passed in 8.64s | `VERIFIED` |
+| Gate 1 定向回归 | 85 passed in 23.96s | `VERIFIED` |
+| 非 integration 全量 | 318 passed，6 deselected in 49.07s | `VERIFIED` |
+| integration 标记 | 6 skipped，318 deselected in 1.67s | `NOT_RUN` |
+
+六个 integration skip 的原因仍是没有设置 `EVALOPS_RUN_INTEGRATION=1`，并且没有提供已迁移
+的真实 PostgreSQL/Redis。它们不能写成 passed。
+
+#### Migration 与运行环境
+
+| 检查 | 结果 | 证据状态 |
+|---|---|---|
+| Alembic heads | `20260729_0008 (head)` | `VERIFIED` |
+| Alembic history | 单线从 base 到 `20260729_0008` | `VERIFIED` |
+| Alembic offline SQL | 374 行，成功生成到 head | `VERIFIED` |
+| Docker CLI | 当前 shell 不存在 | `NOT_RUN` |
+| Docker build / Compose smoke | 未执行 | `NOT_RUN` |
+| 正式 500-case / 32-arm | 未执行 | `NOT_RUN` |
+| 长时间 soak / 破坏性故障 | 未执行 | `NOT_RUN` |
+
+### 本阶段已经证明什么
+
+- 第 1 或第 3 张图之后失败不会留下新 `final/`；
+- summary 或 plot manifest 写入失败不会留下新 `final/`；
+- partial/complete 旧 `final/` 都不会被覆盖；
+- 重复 finalize 不会改变已发布 bundle；
+- 两个线程并发 finalize 时恰好一个成功，另一个得到受控错误；
+- staging 与 final 的设备号不同时会在写入前拒绝；
+- manifest 写完后 payload hash 改变会在发布前失败；
+- manifest 写完后文件减少会在发布前失败；
+- per-arm、aggregate、CSV 和 plot manifest 的 schema/arm 引用会复验；
+- 成功发布的 bundle 为 bundle schema v1，内部结果保持 result schema v2；
+- 正式发布只有一个目录 rename commit point；
+- 根级工作证据不会再被文档误称为完整正式结果；
+- 失败清理不会删除或改写已有 formal bundle；
+- 新 finalization 代码已进入 prepared evidence 的不可变脚本 hash。
+
+### 本阶段仍未证明什么
+
+- 没有真实 500-case/32-arm 数据，不能得出任何容量或 Worker 数建议；
+- 没有 Docker/Compose，未证明容器内 Matplotlib/dev 运行环境；
+- 跨文件系统拒绝使用 `st_dev` 故障注入验证，本机没有使用第二个真实可写文件系统做实测；
+- 并发测试证明了同一进程两个线程；没有做多进程、跨主机或网络文件系统测试；
+- `finally` 可以清理普通异常；进程被强制终止或机器断电时可能留下隐藏 staging 或 stale
+  lock，但仍不会把 staging 命名成 `final/`；
+- 没有加入目录 `fsync`，因此没有声明断电级持久性保证；
+- P1-4 的不可变 image digest 尚未开始；
+- 后续 build-context、SSRF、artifact ownership 等 finding 尚未处理。
+
+### 对旧 artifact 与 prepared evidence 的影响
+
+- 历史 result schema v1/v2 artifact 没有被原地修改；
+- 历史目录中没有新增 `final/`，也没有自动迁移；
+- 新的 final-bundle schema v1 只适用于今后重新执行产生的 `final/`；
+- 本提交修改了 protocol、runner、关键脚本列表，并新增 finalization 模块；
+- 因此任何在 `67779ae` 之前 prepare 的 bundle 都应被 source commit、protocol SHA 或
+  execution-script SHA 拒绝；
+- 正确流程是在所有阻断 P1 finding 完成后，从干净、独占、已提交的目标 HEAD 重新
+  `--prepare-only`，不能给旧 manifest 手工补 hash。
+
+### 回滚边界
+
+- `git revert 67779aea2f3f78c19ed1a8275eb24ace4f1e450e` 可回滚 P1-3 实现、测试、协议和输出合同；
+- 不需要数据库 downgrade；
+- 没有正式运行结果需要删除；
+- 没有远端 push 或 PR；
+- 若未来已经产生 bundle，回滚代码前必须先保留其只读审计副本，不能让旧代码覆盖它。
+
+### 简历与面试表述
+
+可以表述为：
+
+> Hardened an evidence-first AI evaluation finalizer with same-filesystem staging,
+> manifest-driven SHA-256 revalidation, exact schema/cross-reference checks, concurrency
+> exclusion, and atomic directory publication, preventing failed runs from exposing
+> partial formal evidence bundles.
+
+不能表述为：
+
+- 已完成 Gate 1 容量认证；
+- 已证明某个 Worker 数最优；
+- 已在真实多机或网络文件系统证明原子性；
+- 已完成镜像 digest/build-context 绑定；
+- 已运行正式性能矩阵；
+- 已解决所有 P1 finding。
+
+## P1-3 阶段结论与停止点
+
+P1-3 的修改前审计、RED → GREEN、完整失败矩阵、必要重构、冻结协议、静态检查、Gate 1
+定向回归、非 integration 全量回归和本地实现提交已经完成。
+
+当前停止在 P1-4 之前。正式 Gate 1 仍不能运行，因为：
+
+1. P1-4 image digest 不可变绑定尚未完成；
+2. 后续 build-context 与其他阻断 finding 尚未完成；
+3. 当前机器没有 Docker/PostgreSQL/Redis 正式实验环境；
+4. 必须等所有阻断项完成后，从最终干净提交重新 prepare 新 bundle。
