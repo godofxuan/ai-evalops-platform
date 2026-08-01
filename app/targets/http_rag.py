@@ -247,6 +247,7 @@ def _validate_and_build_url(config: HTTPRAGTargetConfig) -> httpx.URL:
     if (
         base.scheme != "https"
         or base.hostname is None
+        or not base.hostname.isascii()
         or "%" in base.hostname
         or base.hostname.isdecimal()
         or len(base.hostname.rstrip(".")) > 253

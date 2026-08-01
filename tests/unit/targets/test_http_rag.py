@@ -170,6 +170,25 @@ def test_http_target_rejects_decimal_ip_hostname() -> None:
         )
 
 
+def test_http_target_rejects_unicode_idna_hostname() -> None:
+    with pytest.raises(InvalidTargetConfiguration):
+        HTTPRAGTarget(
+            registered_config(
+                base_url="https://éxample.com",
+                allowed_hosts=["éxample.com"],
+            )
+        )
+
+
+def test_http_target_accepts_operator_normalized_ascii_punycode_hostname() -> None:
+    HTTPRAGTarget(
+        registered_config(
+            base_url="https://xn--xample-9ua.com",
+            allowed_hosts=["xn--xample-9ua.com"],
+        )
+    )
+
+
 @pytest.mark.parametrize(
     ("base_url", "allowed_host"),
     [
