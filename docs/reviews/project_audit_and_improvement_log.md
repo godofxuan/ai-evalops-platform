@@ -438,6 +438,9 @@ operator 管理、tenant 只提交 `target_id`、强制 HTTPS 443、不跟随重
 环境、部署级 egress policy 和第三方渗透测试仍为 `NOT_RUN`，所以结论只能是“旧的二次 DNS
 解析窗口已在当前 HTTPX/HTTPCore 合同下关闭”，不能写成“完整 SSRF 防护已验证”。
 
+Pytest 隔离修复推送后的 GitHub CI Run #11（`30713653240`）两个 job 均成功，包括 migration、
+6 个真实服务合同和 image build；这仍是普通 CI 证据，不是正式 Gate 5 或 SSRF 渗透结论。
+
 ## Gate 6 协议草案：异步 Trace 关联
 
 状态：`DRAFT / NOT_RUN`。

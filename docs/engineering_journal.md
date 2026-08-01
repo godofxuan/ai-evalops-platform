@@ -932,7 +932,8 @@ Python 与配置
 | API/Worker 回归 | 14 passed |
 | 非 integration 全量（CI 同形默认命令） | 412 passed，6 deselected |
 | Ruff / mypy app / lock / diff check | 全部通过；mypy 88 files，lock 70 packages |
-| Docker / integration / 正式 Gate 5 | NOT_RUN |
+| GitHub CI Run #11 | Compose、非集成、migration、6 个真实服务合同、image build 全部成功 |
+| 本机 Docker / 本机 integration / 正式 Gate 5 | NOT_RUN |
 
 应用层已关闭旧的二次 DNS 解析路径，但仍依赖 HTTPX/HTTPCore、操作系统和部署网络合同；生产
 必须叠加 egress policy。没有 Docker/真实服务/渗透测试证据，因此不声称完整 SSRF 防护、

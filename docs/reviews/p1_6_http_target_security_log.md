@@ -651,6 +651,24 @@ PostgreSQL integration 用例都以 `relation does not exist` 级联失败；Red
 418 项、deselect 6 项、执行 `412 passed`。Ruff、mypy、lock 和 diff check 继续通过。修复提交为
 `03d4832c67a3dcf4fc142363e445a5f535adbd73`。
 
+### Cycle 49：GitHub CI #11 关闭级联失败
+
+推送 Pytest 隔离修复与诊断文档后触发 Run #11（`30713653240`，head
+`1141c1462a540e73a8e089cdecfb099f2d88fb56`）。最终 conclusion 为 `success`：
+
+- `compose-smoke` 完整成功；
+- lock、format、lint、mypy 成功；
+- “Run tests without external services”成功；
+- artifact 目录与 Alembic migration 成功；
+- concurrent claim/lease、human review、identity/dataset、readiness、Redis isolation、Run
+  idempotency 六个真实 PostgreSQL/Redis 合同全部成功；
+- integration failure annotation 因无失败而正确 skip；
+- application image build 成功。
+
+这证明 CI #10 的 5 个数据库错误确为 migration 被首个测试失败跳过后的级联，而不是 P1-6
+引入五个独立数据库缺陷。Run #11 是普通 CI 合同，不是正式 Gate 1/Gate 5、容量、SSRF 渗透或
+破坏性故障实验，证据名称继续严格区分。
+
 ## 最终本地验证
 
 | 检查 | 结果 | 证据等级 |
@@ -664,6 +682,7 @@ PostgreSQL integration 用例都以 `relation does not exist` 级联失败；Red
 | strict mypy app | `88 source files`，无问题 | `VERIFIED` |
 | `uv lock --check` | `70 packages` | `VERIFIED` |
 | `git diff --check` | 无输出 | `VERIFIED` |
+| GitHub CI Run #11 | 两个 job success；6 个真实服务合同与镜像构建成功 | `VERIFIED` |
 | Docker CLI | `CommandNotFoundException` | `NOT_RUN` |
 | PostgreSQL/Redis integration | 6 项被明确 deselect，未启用真实服务 | `NOT_RUN` |
 | Docker build / Compose interpolation / egress policy | 未执行 | `NOT_RUN` |
@@ -690,4 +709,5 @@ PostgreSQL integration 用例都以 `relation does not exist` 级联失败；Red
 首次受限环境 push 等待 120 秒后超时，远端查询确认没有分支；切到系统用户上下文后的第一次
 重试因 dubious ownership 立即失败。没有修改全局 safe.directory，而是在第二次重试仅为该命令
 传入 `-c safe.directory=...`，非 force push 成功。远端 SHA 与本地 `23706b3` 一致并触发 CI #10。
-CI #10 暴露 Cycle 48 后，新增 Pytest 隔离提交 `03d4832`；该跟进将随本日志再次推送。
+CI #10 暴露 Cycle 48 后，新增 Pytest 隔离提交 `03d4832`；它与诊断文档推送后由 CI #11
+完整验证成功。

@@ -2037,6 +2037,7 @@ P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正�
 | API/Worker 回归 | 14 passed | `VERIFIED` |
 | 非 integration 全量（CI 同形默认命令） | 412 passed，6 deselected | `VERIFIED` |
 | Ruff / mypy app / lock / diff | 全部通过 | `VERIFIED` |
+| GitHub CI Run #11 | Compose、migration、6 个真实服务合同、image build success | `VERIFIED` |
 | Docker、真实服务、正式 Gate 5 | 未运行 | `NOT_RUN` |
 
 首次全量的唯一失败来自仓库内 basetemp：测试移走临时仓库 `.git` 后，Git 向父目录吸附真实项目
@@ -2045,6 +2046,9 @@ P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正�
 repo-local basetemp；删除该 `addopts` 后，默认聚焦与 412 项全量通过。详细逐条 RED/GREEN、
 依赖合同、孤儿 Git lock 处理和残余风险见
 [`p1_6_http_target_security_log.md`](p1_6_http_target_security_log.md)。
+
+修复推送后的 GitHub CI Run #11（`30713653240`，head `1141c146...`）最终 success：两个 job、
+六个真实服务合同和镜像构建均成功。该证据只提升普通 CI 合同，不改变正式 Gate 的 `NOT_RUN`。
 
 ### 仍未证明与正式 Gate 状态
 
