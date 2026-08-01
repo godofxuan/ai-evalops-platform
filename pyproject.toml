@@ -35,7 +35,7 @@ dev = [
 package = false
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-config --strict-markers --import-mode=importlib --basetemp=.pytest-tmp"
+addopts = "-ra --strict-config --strict-markers --import-mode=importlib"
 asyncio_mode = "auto"
 pythonpath = ["."]
 testpaths = ["tests"]
