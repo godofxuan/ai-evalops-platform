@@ -55,7 +55,22 @@
 - 无论成功或失败都在 `finally` 清理临时文件；
 - 用户输入不能包含 `../` 或绝对路径并进入存储 API。
 
-## 6. 未完成的安全能力
+## 6. HTTP Target 出口边界
+
+- tenant 只提交操作员 Registry 中的 `target_id`，不能提交 URL 或 allowlist；
+- Registry 在应用启动时校验，在 Run 创建时按 ID/version 解析并冻结执行快照；
+- 仅允许 HTTPS 443、精确 ASCII hostname（IDN 使用显式 punycode）、受约束 endpoint，禁止
+  userinfo、query、fragment 和重定向；
+- 全部 DNS A/AAAA 都必须是原生公网地址；私网、loopback、link-local、metadata、multicast 和
+  IPv4-mapped IPv6 均拒绝；
+- transport 连接已验证的数值 IP，同时保留原 Host/TLS SNI，并在读取正文前验证实际 peer；
+- peer 元数据缺失或不一致时失败关闭；HTTP 认证值只从 Worker 的独立环境变量读取；
+- 内部测试使用 MockTarget，不允许通过 HTTP Registry 访问私网目标。
+
+这是应用层纵深防御，不是“完全防 SSRF”证明。生产部署仍需防火墙、NetworkPolicy、安全组或
+等价 egress policy，并在 HTTPX/HTTPCore 升级时重跑 peer 合同测试。
+
+## 7. 未完成的安全能力
 
 - 请求速率限制；
 - PostgreSQL RLS；
@@ -64,5 +79,5 @@
 - 管理员身份与审计 UI；
 - malware 扫描；
 - artifact 加密；
-- SSRF 防护（HTTP Target 属于后续阶段）；
+- 独立的网络出口强制策略与正式 SSRF 渗透测试；
 - 正式威胁建模和第三方安全审计。

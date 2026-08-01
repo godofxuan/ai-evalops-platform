@@ -424,6 +424,19 @@ metadata、IDNA/normalization 和 DNS error/timeout。当前实现每次请求�
 `getaddrinfo`，但 httpx 实际连接没有绑定已验证 peer；因此当前证据只能写
 “存在输入与解析防线，DNS check/connect TOCTOU 未解决”。
 
+### 2026-08-02 P1-6 更新
+
+上述 `BLOCKED_BY_PRODUCT_DECISION` 是审计当时的历史状态。用户随后冻结了合同：Registry 由
+operator 管理、tenant 只提交 `target_id`、强制 HTTPS 443、不跟随重定向、全部 A/AAAA 必须
+是原生公网地址、连接经过验证的数值 IP、保留原 Host/TLS SNI，并在读取正文前校验实际 peer。
+
+本轮已按该合同完成应用层实现和单元/依赖边界证据，详细 RED/GREEN 过程见
+[`p1_6_http_target_security_log.md`](p1_6_http_target_security_log.md)，实现提交为
+`049e59e0760a50377e0cb8b53c61d166ee7dc224`，IDNA 边界跟进为
+`102cb4eda90a8a79ab66d9974b62369dec418e3e`。正式 Gate 5、真实网络攻击
+环境、部署级 egress policy 和第三方渗透测试仍为 `NOT_RUN`，所以结论只能是“旧的二次 DNS
+解析窗口已在当前 HTTPX/HTTPCore 合同下关闭”，不能写成“完整 SSRF 防护已验证”。
+
 ## Gate 6 协议草案：异步 Trace 关联
 
 状态：`DRAFT / NOT_RUN`。

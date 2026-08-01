@@ -63,7 +63,8 @@ Phase 3 已建立：
 
 Phase 4 已建立：
 
-- deterministic MockTarget 与受 HTTPS/allowlist/DNS 策略约束的 HTTPRAGTarget；
+- deterministic MockTarget，以及由操作员 Registry 管理、固定公网 IP 连接并校验实际 peer 的
+  HTTPRAGTarget；
 - ExecutionEvaluator 与明确标为 lexical 的 BasicAnswerEvaluator；
 - Worker 的 claim → Target → Evaluator → result 成功流水线；
 - lease owner/version/expiry fencing 的 CaseResult 提交；
@@ -250,6 +251,40 @@ docker compose -f deploy/compose.yaml down --volumes
 
 Dataset 默认限制为 10 MiB 文件、10,000 个 case、1 MiB 单行，可分别通过 `EVALOPS_DATASET_MAX_FILE_BYTES`、`EVALOPS_DATASET_MAX_CASES` 和 `EVALOPS_DATASET_MAX_LINE_BYTES` 下调或在受控范围内调整。
 
+### HTTP Target Registry
+
+HTTP Target 不是由 tenant 自由提交 URL。操作员通过
+`EVALOPS_HTTP_TARGET_REGISTRY` 维护版本化 Registry，例如在 `.env` 中写入：
+
+```dotenv
+EVALOPS_HTTP_TARGET_REGISTRY={"rag-production":{"version":"rag-v1","config":{"base_url":"https://rag.example.com","endpoint":"/v1/query","auth_env_var":"RAG_PRODUCTION_BEARER_TOKEN"}}}
+```
+
+tenant 创建 Run 时只提交 Registry ID，并让请求版本与 Registry 版本精确一致：
+
+```json
+{
+  "target": {
+    "type": "http_rag",
+    "version": "rag-v1",
+    "config": {"target_id": "rag-production"}
+  }
+}
+```
+
+Registry 不接受 `target_id`、`allowed_hosts`、重定向开关或明文认证值；平台从
+`base_url` 派生精确 hostname，并把经过验证的执行配置冻结到 Run。Registry 中只保存
+`auth_env_var` 名称，真实 token 必须通过部署系统单独注入 Worker 进程；不要把 token 放进
+Registry JSON、源码、镜像或日志。除纯凭证轮换外，操作员修改执行配置时必须同步提升
+Registry version；平台会保存配置 hash，但无法替操作员推断版本命名是否诚实。
+
+HTTP Target 仅允许 HTTPS 443、无 userinfo/query/fragment 的 base URL 和无 authority 的绝对
+endpoint；不跟随重定向。hostname 必须是 ASCII，IDN 由 operator 显式写成规范化 punycode。
+每次执行会解析全部 A/AAAA 地址，只接受原生公网地址，选择其中一个
+数值 IP 建连，同时保留原 hostname 的 Host 与 TLS SNI，并在读取正文前核对实际 peer。生产部署
+仍必须叠加网络 egress policy；这套应用层边界不能被描述为“完全消除 SSRF”。内部测试目标使用
+MockTarget，不要把私网服务加入 HTTP Registry。
+
 ## 指标、Trace 与实验
 
 ```bash
@@ -382,6 +417,9 @@ Phase 0–9 的本地命令、RED/GREEN 证据和环境限制分别记录在
 Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)。
 重试、回收和取消语义见 [恢复合同](docs/06_retry_and_cancellation.md)。
 
+P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RED/GREEN、环境问题和
+残余风险见 [HTTP Target 安全加固记录](docs/reviews/p1_6_http_target_security_log.md)。
+
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
 2026-07-29 Phase 8 本机阶段结果：
@@ -428,7 +466,8 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 - JSONL 第一版有界读入内存，不是流式 parser；
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
-- HTTP SSRF 检查仍有 DNS check/connect TOCTOU，需要部署级 egress 控制；
+- HTTP Target 已固定经过验证的数值公网 IP，并在读取正文前校验实际 peer；仍依赖当前
+  HTTPX/HTTPCore transport 元数据合同和部署级 egress 控制，不声称完全消除 SSRF；
 - 已有 Prometheus 指标和 OpenTelemetry SDK span，但本机未配置 Prometheus/Collector；
 - API 与 Worker 当前通过领域 ID 关联不同 trace，尚未持久化跨进程 parent context；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
@@ -454,7 +493,8 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 11. 展示 `SKIP LOCKED` 领取、owner/version 心跳 fencing 与短事务边界。
 12. 展示 Target 成功后为何仍需再次校验 lease 才能写唯一 CaseResult。
 13. 解释 `lexical_*` 指标为什么不能称为语义准确率。
-14. 说明 HTTP allowlist/DNS 检查能防什么，以及 DNS 重绑定残余风险。
+14. 展示 operator Registry、数值 IP 固定、Host/SNI 保留和 peer 校验如何收紧 DNS 重绑定窗口，
+    以及为什么仍需网络 egress policy。
 15. 解释失败分类、指数退避+jitter，以及未知内部错误为何只保存安全摘要。
 16. 展示取消如何从 running 进入 cancelling，并由 heartbeat 驱动协作式停止。
 17. 展示 Reaper 如何把过期 Attempt 标成 `lease_expired`，再决定重试、失败或取消。

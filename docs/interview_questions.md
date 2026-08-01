@@ -76,8 +76,11 @@ scrypt hash 和常量时间比较，并对未知 prefix 做 dummy hash 降低时
 
 ### 14. HTTP Target 的 SSRF 防护完整吗？
 
-不完整。代码限制 HTTPS、host allowlist 并检查 DNS 地址，但 DNS check 与实际 connect
-之间仍有 TOCTOU。生产环境还需要网络 egress policy、固定 resolver/proxy 和审计。
+不完整，但已不再使用旧的“检查 hostname 后让客户端重新解析”路径。tenant 只能选择操作员
+Registry 的 `target_id`；代码要求 HTTPS 443、不跟随重定向、验证全部 A/AAAA，随后连接一个
+已验证的数值公网 IP，保留原 Host/TLS SNI，并在读取正文前核对实际 peer。缺失或不一致就失败
+关闭。它仍依赖 HTTPX/HTTPCore、操作系统和部署网络的行为，所以生产环境还必须有 egress
+policy、依赖升级回归和审计，不能声称完全防 SSRF。
 
 ## 指标与可观测性
 

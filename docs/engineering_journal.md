@@ -566,7 +566,8 @@ Python 与配置
 ### 未解决与方案取舍
 
 - 执行期间的持续心跳、失败持久化、retry、Reaper 和 cancel 属于 Phase 5。
-- SSRF 仍有 DNS check/connect TOCTOU，需 egress proxy 或固定地址 transport 进一步收紧。
+- 当时 SSRF 仍有 DNS check/connect TOCTOU；该历史缺口已在 2026-08-02 的 P1-6 中通过
+  operator Registry、固定地址连接和实际 peer 校验收紧，但部署级 egress 仍是必需的纵深防御。
 - 没采用 LLM judge、任意 URL、明文认证配置或长数据库事务。
 - 当前不声称 semantic accuracy、exactly-once、生产级或安全认证。
 
@@ -885,3 +886,53 @@ Python 与配置
 | GitHub Compose smoke | build、migration、API/Worker/Reaper、readiness 通过 |
 
 仍不声称 500-case 性能、故障恢复时延、soak、生产容量或 exactly-once。
+
+## 2026-08-02 — P1-6：HTTP Target Registry 与连接 peer 加固
+
+### 基本信息
+
+- 起始 SHA：`b519268a520c7a8f85b629eb4ee8b8e5769be1c6`
+- 主实现提交：`049e59e0760a50377e0cb8b53c61d166ee7dc224`
+- IDNA 边界跟进：`102cb4eda90a8a79ab66d9974b62369dec418e3e`
+- 产品合同：operator-managed Registry + tenant `target_id` + 数值公网 IP 连接 + 实际 peer 校验
+- 数据库 migration：不需要
+
+### 问题、判断与修改
+
+- tenant 原先同时控制 URL 与 allowlist，安全边界等于请求者自我声明；改为部署 Registry，
+  tenant config 必须恰好是 `target_id`，请求 version 必须精确匹配 Registry version；
+- 原实现检查 DNS 后让 HTTPX 再次解析 hostname，存在 rebinding 窗口；改为验证全部 A/AAAA、
+  连接选定数值 IP、保留原 Host/TLS SNI，并在读取正文前核对 `server_addr`；
+- 强制 HTTPS 443、禁止 redirect/userinfo/query/fragment、编码/十进制危险 host、multicast 和
+  IPv4-mapped IPv6；Unicode IDN 拒绝，operator 可显式使用 ASCII punycode；DNS 阶段也受
+  target timeout 约束；
+- peer 元数据缺失、不一致或读取异常都失败关闭为去敏、非重试 `target_peer_mismatch`；
+- Registry 只存 `auth_env_var` 名称，真实 token 由部署系统单独注入 Worker；
+- HTTPX/HTTPCore 移入生产依赖并锁定当前扩展语义；应用 lifespan、`.env.example` 和 Compose
+  完成 Registry 传播；
+- 旧完成结果继续可读，旧排队 HTTP 快照因缺 `target_id` 失败关闭，不做静默迁移。
+
+### 关键 RED/GREEN 与环境问题
+
+- tenant URL、未知 ID、version mismatch、危险端口/地址、混合 DNS、redirect、二次解析、peer
+  mismatch、peer 时序、transport 异常和 DNS 无期限等待均分别得到 RED 后最小修复；
+- 真实 HTTPX 合同最初在连接关闭后读取 peer 得到 `None`，改为流式响应内、读正文前验证；
+- 首次全量为 `409 passed, 1 failed`；诊断证明仓库内 basetemp 删除临时 `.git` 后向上吸附真实
+  Git 工作树。移到系统 temp 后无需改产品代码即恢复，最终全量通过；
+- 暂存前发现昨日遗留的 0 字节 `.git/index.lock`；确认无 Git 进程后只删除该孤儿锁。
+
+### 验证与边界
+
+| 检查 | 结果 |
+|---|---|
+| HTTP/peer 聚焦 | 47 passed |
+| Registry/接线/部署/依赖聚焦 | 28 passed |
+| API/Worker 回归 | 14 passed |
+| 非 integration 全量 | 412 passed，6 deselected |
+| Ruff / mypy app / lock / diff check | 全部通过；mypy 88 files，lock 70 packages |
+| Docker / integration / 正式 Gate 5 | NOT_RUN |
+
+应用层已关闭旧的二次 DNS 解析路径，但仍依赖 HTTPX/HTTPCore、操作系统和部署网络合同；生产
+必须叠加 egress policy。没有 Docker/真实服务/渗透测试证据，因此不声称完整 SSRF 防护、
+生产安全认证或正式 Gate 通过。完整逐条记录见
+`docs/reviews/p1_6_http_target_security_log.md`。

@@ -2007,3 +2007,52 @@ source commit 前后绑定、schema v4、冻结协议、分层验证和本地实
 
 当前停止在下一 P1 阶段之前，等待用户确认。正式 Gate 1 仍不能运行，原因包括其他阻断
 P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正式环境。
+
+## P1-6：HTTP Target operator Registry 与 DNS rebinding 加固
+
+### 阶段判断与不可变实现
+
+- 起始 SHA：`b519268a520c7a8f85b629eb4ee8b8e5769be1c6`
+- 主实现提交：`049e59e0760a50377e0cb8b53c61d166ee7dc224`
+- IDNA 边界跟进：`102cb4eda90a8a79ab66d9974b62369dec418e3e`
+- 用户冻结合同：`A + C`，即 operator-managed Registry 加数值 IP/实际 peer 绑定
+- 正式 Gate、Docker、integration、500-case、32-arm 和破坏性注入：`NOT_RUN`
+
+原安全边界允许 tenant 同时提交 `base_url` 与 `allowed_hosts`，并在应用检查 DNS 后由 HTTPX
+再次解析 hostname。P1-6 改为 tenant 只提交 `target_id`，Registry version 必须与 Run 请求精确
+一致；平台在 Dataset I/O 前验证操作员配置，并把派生的精确 host 与执行配置冻结到 Run。
+
+执行时要求 HTTPS 443、不跟随重定向、全部 A/AAAA 都是原生公网地址；连接选定数值 IP，保留
+原 Host/TLS SNI，并在读取正文前从 HTTPX/HTTPCore network stream 验证实际 peer。元数据缺失、
+异常、非公网、端口错误或地址不一致都失败关闭。Unicode IDN 在配置期拒绝，operator 可显式
+使用 ASCII punycode；DNS resolver 也受 target timeout 约束。
+
+### 本地验证
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| HTTP Target/真实 peer 合同 | 47 passed | `VERIFIED` |
+| Registry/应用接线/部署/依赖 | 28 passed | `VERIFIED` |
+| API/Worker 回归 | 14 passed | `VERIFIED` |
+| 非 integration 全量 | 412 passed，6 deselected | `VERIFIED` |
+| Ruff / mypy app / lock / diff | 全部通过 | `VERIFIED` |
+| Docker、真实服务、正式 Gate 5 | 未运行 | `NOT_RUN` |
+
+首次全量的唯一失败来自仓库内 basetemp：测试移走临时仓库 `.git` 后，Git 向父目录吸附真实项目
+并误报 `SOURCE_MISMATCH`。工作树外 basetemp 使原测试直接通过，且 `rev-parse` 对照确认根因；
+因此没有修改或放宽 prepared-evidence verifier。详细逐条 RED/GREEN、依赖合同、孤儿 Git lock
+处理和残余风险见 [`p1_6_http_target_security_log.md`](p1_6_http_target_security_log.md)。
+
+### 仍未证明与正式 Gate 状态
+
+- 应用层关闭了旧的二次 DNS 解析路径，但不是操作系统、NAT、透明代理或供应链的完整证明；
+- 生产仍必须配置 egress firewall/NetworkPolicy/安全组，并在 HTTPX/HTTPCore 升级时回归；
+- 本机没有 Docker CLI，也没有运行 PostgreSQL/Redis integration、真实攻击网络或渗透测试；
+- 没有数据库 migration，没有修改 `docs/results/`，没有生成新 prepared bundle 或正式 artifact；
+- 正式 Gate 1/Gate 5 继续 `NOT_RUN`，不能把 410 个本地非集成测试写成 Gate 通过。
+
+实现回滚边界：按逆序执行
+`git revert 102cb4eda90a8a79ab66d9974b62369dec418e3e`，再执行
+`git revert 049e59e0760a50377e0cb8b53c61d166ee7dc224`。两个提交都没有 schema 或正式 artifact
+副作用；回滚主实现后，新的 `target_id` HTTP 请求将失去 Registry 支持，旧的不安全 tenant URL
+合同会恢复，因此只能在明确接受安全回退时执行。
