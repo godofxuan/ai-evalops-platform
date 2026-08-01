@@ -433,7 +433,8 @@ operator 管理、tenant 只提交 `target_id`、强制 HTTPS 443、不跟随重
 本轮已按该合同完成应用层实现和单元/依赖边界证据，详细 RED/GREEN 过程见
 [`p1_6_http_target_security_log.md`](p1_6_http_target_security_log.md)，实现提交为
 `049e59e0760a50377e0cb8b53c61d166ee7dc224`，IDNA 边界跟进为
-`102cb4eda90a8a79ab66d9974b62369dec418e3e`。正式 Gate 5、真实网络攻击
+`102cb4eda90a8a79ab66d9974b62369dec418e3e`，Pytest 临时仓库隔离跟进为
+`03d4832c67a3dcf4fc142363e445a5f535adbd73`。正式 Gate 5、真实网络攻击
 环境、部署级 egress policy 和第三方渗透测试仍为 `NOT_RUN`，所以结论只能是“旧的二次 DNS
 解析窗口已在当前 HTTPX/HTTPCore 合同下关闭”，不能写成“完整 SSRF 防护已验证”。
 

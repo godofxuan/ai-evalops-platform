@@ -9,6 +9,7 @@
 - 修改前 HEAD：`b519268a520c7a8f85b629eb4ee8b8e5769be1c6`；
 - 主实现提交：`049e59e0760a50377e0cb8b53c61d166ee7dc224`；
 - IDNA 边界跟进提交：`102cb4eda90a8a79ab66d9974b62369dec418e3e`；
+- Pytest 隔离跟进提交：`03d4832c67a3dcf4fc142363e445a5f535adbd73`；
 - 修改前工作树：clean；
 - 开发方法：公共行为驱动的逐条 RED → 最小 GREEN → GREEN 后重构；
 - 正式 Gate、500-case、32-arm 和破坏性故障注入：本阶段不运行。
@@ -628,6 +629,28 @@ punycode。Unicode 拒绝测试转绿后，`https://xn--xample-9ua.com` 正向�
 `412 passed, 6 deselected`。该 1 行生产修复和 2 条测试单独提交为
 `102cb4eda90a8a79ab66d9974b62369dec418e3e`，没有重写已经创建的主实现提交。
 
+### Cycle 48：GitHub CI 揭示全局 basetemp 仍未修复
+
+主实现、IDNA 和文档提交首次推送后触发 GitHub Actions Run #10
+（`30713117815`，head `23706b3`）。`compose-smoke` 成功；quality job 的 lock、format、lint、
+mypy 成功，但“Run tests without external services”失败。因为 migration 步骤随后被跳过，5 个
+PostgreSQL integration 用例都以 `relation does not exist` 级联失败；Redis isolation 单独成功。
+
+公共 annotations 只给非集成步骤一个泛化 exit code。内置浏览器未登录，页面明确要求登录才能
+看日志；匿名 job-log API 返回 403。两次尝试让 Git Credential Manager 通过 stdin 只在内存
+提供凭据，都在解析请求阶段报 `missing protocol field`，没有取得、输出或写入任何 token，随后
+停止该路径。
+
+回到本地配置后发现，Cycle 46 的机制判断正确，但“只需改本轮命令”的结论不完整：
+`pyproject.toml` 全局 `addopts` 本身硬编码 `--basetemp=.pytest-tmp`，CI 默认命令必然把临时 Git
+仓库放在真实工作树内。本机用 CI 同形命令复现时更早遇到 `.pytest-tmp` 清理权限错误；两种表现
+的共同根因都是 repo-local basetemp。
+
+最小修复从全局 `addopts` 删除该参数，让 Pytest 使用系统 temp。没有删除现有目录或放宽权限。
+同形聚焦命令从 setup error 变为 `1 passed`；随后不带任何 basetemp 覆盖的默认全量明确收集
+418 项、deselect 6 项、执行 `412 passed`。Ruff、mypy、lock 和 diff check 继续通过。修复提交为
+`03d4832c67a3dcf4fc142363e445a5f535adbd73`。
+
 ## 最终本地验证
 
 | 检查 | 结果 | 证据等级 |
@@ -635,7 +658,7 @@ punycode。Unicode 拒绝测试转绿后，`https://xn--xample-9ua.com` 正向�
 | HTTP Target + 真实 HTTPX peer 合同 | `47 passed` | `VERIFIED` |
 | Settings/RunService/app wiring/deployment/dependency 聚焦组 | `28 passed` | `VERIFIED` |
 | API Run + Worker/runtime 回归 | `14 passed` | `VERIFIED` |
-| 非 integration 全量（工作树外 basetemp） | `412 passed, 6 deselected` | `VERIFIED` |
+| 非 integration 全量（CI 同形默认命令、系统 temp） | `412 passed, 6 deselected` | `VERIFIED` |
 | Ruff format | `163 files already formatted` | `VERIFIED` |
 | Ruff lint | `All checks passed` | `VERIFIED` |
 | strict mypy app | `88 source files`，无问题 | `VERIFIED` |
@@ -646,9 +669,10 @@ punycode。Unicode 拒绝测试转绿后，`https://xn--xample-9ua.com` 正向�
 | Docker build / Compose interpolation / egress policy | 未执行 | `NOT_RUN` |
 | 正式 Gate 5、500-case、32-arm、破坏性注入 | 未执行 | `NOT_RUN` |
 
-Pytest 唯一警告是仓库根 `.pytest_cache` 无写权限；每次测试均使用独立 basetemp，测试主体正常
-执行。没有为消除该非产品警告修改目录权限。P1-6 没有数据库 schema 变化，因此没有 Alembic
-migration；没有修改 `docs/results/`，也没有生成或冒充正式 Gate artifact。
+最终默认全量有 3 个本机权限警告：仓库根 `.pytest_cache` 无写权限，以及系统 temp 中两个旧
+测试目录清理失败；412 个测试主体均正常执行。没有为消除这些非产品警告修改目录权限。P1-6
+没有数据库 schema 变化，因此没有 Alembic migration；没有修改 `docs/results/`，也没有生成或
+冒充正式 Gate artifact。
 
 ## 提交阶段遇到的问题
 
@@ -661,4 +685,9 @@ migration；没有修改 `docs/results/`，也没有生成或冒充正式 Gate a
 提交 `049e59e`。没有执行 `git reset`、没有删除 index、没有覆盖用户文件。
 
 主实现提交后发现遗漏的 IDNA 审计项，没有 amend 或改写原提交；完成独立 RED/GREEN 与全量
-复验后创建跟进提交 `102cb4e`。两个提交都只在本地分支，尚未 push。
+复验后创建跟进提交 `102cb4e`。
+
+首次受限环境 push 等待 120 秒后超时，远端查询确认没有分支；切到系统用户上下文后的第一次
+重试因 dubious ownership 立即失败。没有修改全局 safe.directory，而是在第二次重试仅为该命令
+传入 `-c safe.directory=...`，非 force push 成功。远端 SHA 与本地 `23706b3` 一致并触发 CI #10。
+CI #10 暴露 Cycle 48 后，新增 Pytest 隔离提交 `03d4832`；该跟进将随本日志再次推送。

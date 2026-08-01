@@ -2015,6 +2015,7 @@ P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正�
 - 起始 SHA：`b519268a520c7a8f85b629eb4ee8b8e5769be1c6`
 - 主实现提交：`049e59e0760a50377e0cb8b53c61d166ee7dc224`
 - IDNA 边界跟进：`102cb4eda90a8a79ab66d9974b62369dec418e3e`
+- Pytest 隔离跟进：`03d4832c67a3dcf4fc142363e445a5f535adbd73`
 - 用户冻结合同：`A + C`，即 operator-managed Registry 加数值 IP/实际 peer 绑定
 - 正式 Gate、Docker、integration、500-case、32-arm 和破坏性注入：`NOT_RUN`
 
@@ -2034,14 +2035,16 @@ P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正�
 | HTTP Target/真实 peer 合同 | 47 passed | `VERIFIED` |
 | Registry/应用接线/部署/依赖 | 28 passed | `VERIFIED` |
 | API/Worker 回归 | 14 passed | `VERIFIED` |
-| 非 integration 全量 | 412 passed，6 deselected | `VERIFIED` |
+| 非 integration 全量（CI 同形默认命令） | 412 passed，6 deselected | `VERIFIED` |
 | Ruff / mypy app / lock / diff | 全部通过 | `VERIFIED` |
 | Docker、真实服务、正式 Gate 5 | 未运行 | `NOT_RUN` |
 
 首次全量的唯一失败来自仓库内 basetemp：测试移走临时仓库 `.git` 后，Git 向父目录吸附真实项目
 并误报 `SOURCE_MISMATCH`。工作树外 basetemp 使原测试直接通过，且 `rev-parse` 对照确认根因；
-因此没有修改或放宽 prepared-evidence verifier。详细逐条 RED/GREEN、依赖合同、孤儿 Git lock
-处理和残余风险见 [`p1_6_http_target_security_log.md`](p1_6_http_target_security_log.md)。
+因此没有修改或放宽 prepared-evidence verifier。GitHub CI #10 随后证明 Pytest 全局配置仍强制
+repo-local basetemp；删除该 `addopts` 后，默认聚焦与 412 项全量通过。详细逐条 RED/GREEN、
+依赖合同、孤儿 Git lock 处理和残余风险见
+[`p1_6_http_target_security_log.md`](p1_6_http_target_security_log.md)。
 
 ### 仍未证明与正式 Gate 状态
 
@@ -2052,6 +2055,7 @@ P1 finding 尚未完成，以及当前主机没有 Docker/PostgreSQL/Redis 正�
 - 正式 Gate 1/Gate 5 继续 `NOT_RUN`，不能把 410 个本地非集成测试写成 Gate 通过。
 
 实现回滚边界：按逆序执行
+`git revert 03d4832c67a3dcf4fc142363e445a5f535adbd73`，再执行
 `git revert 102cb4eda90a8a79ab66d9974b62369dec418e3e`，再执行
 `git revert 049e59e0760a50377e0cb8b53c61d166ee7dc224`。两个提交都没有 schema 或正式 artifact
 副作用；回滚主实现后，新的 `target_id` HTTP 请求将失去 Registry 支持，旧的不安全 tenant URL

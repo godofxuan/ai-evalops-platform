@@ -894,6 +894,7 @@ Python 与配置
 - 起始 SHA：`b519268a520c7a8f85b629eb4ee8b8e5769be1c6`
 - 主实现提交：`049e59e0760a50377e0cb8b53c61d166ee7dc224`
 - IDNA 边界跟进：`102cb4eda90a8a79ab66d9974b62369dec418e3e`
+- Pytest 隔离跟进：`03d4832c67a3dcf4fc142363e445a5f535adbd73`
 - 产品合同：operator-managed Registry + tenant `target_id` + 数值公网 IP 连接 + 实际 peer 校验
 - 数据库 migration：不需要
 
@@ -918,7 +919,8 @@ Python 与配置
   mismatch、peer 时序、transport 异常和 DNS 无期限等待均分别得到 RED 后最小修复；
 - 真实 HTTPX 合同最初在连接关闭后读取 peer 得到 `None`，改为流式响应内、读正文前验证；
 - 首次全量为 `409 passed, 1 failed`；诊断证明仓库内 basetemp 删除临时 `.git` 后向上吸附真实
-  Git 工作树。移到系统 temp 后无需改产品代码即恢复，最终全量通过；
+  Git 工作树。移到系统 temp 后恢复，但 GitHub CI #10 又证明全局 `addopts` 仍硬编码仓库内
+  basetemp；删除该默认值后，CI 同形默认全量通过；
 - 暂存前发现昨日遗留的 0 字节 `.git/index.lock`；确认无 Git 进程后只删除该孤儿锁。
 
 ### 验证与边界
@@ -928,7 +930,7 @@ Python 与配置
 | HTTP/peer 聚焦 | 47 passed |
 | Registry/接线/部署/依赖聚焦 | 28 passed |
 | API/Worker 回归 | 14 passed |
-| 非 integration 全量 | 412 passed，6 deselected |
+| 非 integration 全量（CI 同形默认命令） | 412 passed，6 deselected |
 | Ruff / mypy app / lock / diff check | 全部通过；mypy 88 files，lock 70 packages |
 | Docker / integration / 正式 Gate 5 | NOT_RUN |
 
