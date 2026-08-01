@@ -422,6 +422,113 @@ async def test_create_run_rejects_unsupported_target_before_dataset_io() -> None
         )
 
 
+async def test_create_run_rejects_tenant_supplied_http_url_before_dataset_io() -> None:
+    request = make_run_request()
+    request.target.type = "http_rag"
+    request.target.config = {
+        "base_url": "https://rag.example.com",
+        "endpoint": "/query",
+        "allowed_hosts": ["rag.example.com"],
+    }
+    service = SQLAlchemyRunService(
+        repository=NewRequestRepositoryThatMustNotLoadSource(),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+    )
+
+    with pytest.raises(InvalidTargetConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL,
+            idempotency_key="tenant-url-is-not-a-registry-reference",
+            request=request,
+        )
+
+
+async def test_create_run_snapshots_operator_registered_http_target() -> None:
+    content = (
+        b'{"case_id":"case-1","question":"q1","expected_answer":"a1","metadata":{}}\n'
+        b'{"case_id":"case-2","question":"q2","expected_answer":"a2","metadata":{}}'
+    )
+    repository = RecordingRunRepository(hashlib.sha256(content).hexdigest())
+    registered_config = {
+        "base_url": "https://rag.example.com",
+        "endpoint": "/v1/query",
+        "auth_env_var": "RAG_PRODUCTION_TOKEN",
+    }
+    service = SQLAlchemyRunService(
+        repository=repository,
+        artifact_store=StaticArtifactStore(content),
+        http_target_registry={
+            "rag-production": {
+                "version": "rag-v1",
+                "config": registered_config,
+            }
+        },
+    )
+    request = make_run_request()
+    request.target.type = "http_rag"
+    request.target.config = {"target_id": "rag-production"}
+    request.target.version = "rag-v1"
+
+    await service.create_run(
+        principal=PRINCIPAL,
+        idempotency_key="create-rag-v1",
+        request=request,
+    )
+
+    assert repository.new_run is not None
+    assert repository.new_run.target_config == {
+        **registered_config,
+        "target_id": "rag-production",
+        "allowed_hosts": ["rag.example.com"],
+    }
+    assert repository.new_run.target_version == "rag-v1"
+
+
+async def test_create_run_rejects_unregistered_http_target_before_dataset_io() -> None:
+    request = make_run_request()
+    request.target.type = "http_rag"
+    request.target.config = {"target_id": "not-registered"}
+    request.target.version = "rag-v1"
+    service = SQLAlchemyRunService(
+        repository=NewRequestRepositoryThatMustNotLoadSource(),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+    )
+
+    with pytest.raises(InvalidTargetConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL,
+            idempotency_key="unregistered-http-target",
+            request=request,
+        )
+
+
+async def test_create_run_rejects_http_target_registry_version_mismatch() -> None:
+    request = make_run_request()
+    request.target.type = "http_rag"
+    request.target.config = {"target_id": "rag-production"}
+    request.target.version = "tenant-claimed-v2"
+    service = SQLAlchemyRunService(
+        repository=NewRequestRepositoryThatMustNotLoadSource(),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+        http_target_registry={
+            "rag-production": {
+                "version": "operator-v1",
+                "config": {
+                    "base_url": "https://rag.example.com",
+                    "endpoint": "/v1/query",
+                },
+            }
+        },
+    )
+
+    with pytest.raises(InvalidTargetConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL,
+            idempotency_key="registry-version-mismatch",
+            request=request,
+        )
+
+
 async def test_create_run_rejects_unsupported_evaluator_before_dataset_io() -> None:
     request = make_run_request()
     request.evaluator.type = "not_supported"

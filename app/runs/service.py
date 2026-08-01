@@ -1,4 +1,5 @@
-from typing import Protocol
+from collections.abc import Mapping
+from typing import Any, Protocol
 from uuid import UUID
 
 from app.artifacts.storage import ArtifactStore
@@ -11,6 +12,7 @@ from app.runs.idempotency import canonical_request_hash
 from app.runs.repository import NewRun, RunRepository, RunSnapshot
 from app.runs.schemas import RunCreate, RunRead
 from app.targets.base import InvalidTargetConfiguration, build_target
+from app.targets.http_rag import build_registered_http_target_config
 
 
 class RunService(Protocol):
@@ -62,11 +64,15 @@ class SQLAlchemyRunService:
         *,
         repository: RunRepository,
         artifact_store: ArtifactStore,
+        http_target_registry: Mapping[str, Mapping[str, Any]] | None = None,
         metrics: PlatformMetrics | None = None,
         telemetry: Telemetry | None = None,
     ) -> None:
         self._repository = repository
         self._artifact_store = artifact_store
+        self._http_target_registry = (
+            {} if http_target_registry is None else dict(http_target_registry)
+        )
         self._metrics = metrics
         self._telemetry = telemetry
 
@@ -88,7 +94,11 @@ class SQLAlchemyRunService:
                 raise IdempotencyConflictError
             return _to_run_read(existing)
 
-        _validate_components(request)
+        target_config, target_version = _resolve_target(
+            request,
+            http_target_registry=self._http_target_registry,
+        )
+        _validate_evaluator(request)
         max_attempts = _max_attempts(request)
         source = await self._repository.get_dataset_version_source(
             tenant_id=principal.tenant_id,
@@ -101,7 +111,6 @@ class SQLAlchemyRunService:
         if validated.sha256 != source.sha256 or validated.case_count != source.case_count:
             raise RunInputIntegrityError
 
-        target_config = dict(request.target.config)
         evaluator_config = dict(request.evaluator.config)
         new_run = NewRun(
             tenant_id=principal.tenant_id,
@@ -116,7 +125,7 @@ class SQLAlchemyRunService:
             evaluator_type=request.evaluator.type,
             evaluator_config=evaluator_config,
             evaluator_config_hash=canonical_request_hash(evaluator_config),
-            target_version=request.target.version,
+            target_version=target_version,
             evaluator_version=request.evaluator.version,
             source_commit=request.source_commit,
             max_attempts=max_attempts,
@@ -158,11 +167,46 @@ def _max_attempts(request: RunCreate) -> int:
     return value
 
 
-def _validate_components(request: RunCreate) -> None:
+def _resolve_target(
+    request: RunCreate,
+    *,
+    http_target_registry: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, Any], str]:
+    target_config: dict[str, Any]
+    target_version = request.target.version
+    if request.target.type == "http_rag":
+        if set(request.target.config) != {"target_id"}:
+            raise InvalidTargetConfigurationError
+        target_id = request.target.config.get("target_id")
+        if not isinstance(target_id, str):
+            raise InvalidTargetConfigurationError
+        registered = http_target_registry.get(target_id)
+        if registered is None:
+            raise InvalidTargetConfigurationError
+        registered_version = registered.get("version")
+        registered_config = registered.get("config")
+        if registered_version != request.target.version or not isinstance(
+            registered_config, Mapping
+        ):
+            raise InvalidTargetConfigurationError
+        target_version = request.target.version
+        try:
+            target_config = build_registered_http_target_config(
+                target_id,
+                registered_config,
+            )
+        except InvalidTargetConfiguration as error:
+            raise InvalidTargetConfigurationError from error
+    else:
+        target_config = dict(request.target.config)
     try:
-        build_target(request.target.type, request.target.config)
+        build_target(request.target.type, target_config)
     except InvalidTargetConfiguration as error:
         raise InvalidTargetConfigurationError from error
+    return target_config, target_version
+
+
+def _validate_evaluator(request: RunCreate) -> None:
     try:
         build_evaluator(request.evaluator.type, request.evaluator.config)
     except UnsupportedEvaluatorError as error:

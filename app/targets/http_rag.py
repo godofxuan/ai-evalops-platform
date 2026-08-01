@@ -4,6 +4,7 @@ import os
 import socket
 import time
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -46,6 +47,11 @@ class SystemHostResolver:
 class HTTPRAGTargetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    target_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$",
+    )
     base_url: str = Field(min_length=1, max_length=2_048)
     endpoint: str = Field(min_length=1, max_length=1_024)
     allowed_hosts: list[str] = Field(min_length=1, max_length=20)
@@ -87,10 +93,10 @@ class HTTPRAGTarget:
         try:
             parsed = HTTPRAGTargetConfig.model_validate(dict(config))
             url = _validate_and_build_url(parsed)
-        except (ValidationError, ValueError) as error:
+        except (ValidationError, ValueError, httpx.InvalidURL):
             raise InvalidTargetConfiguration(
                 "unsafe or invalid HTTP target configuration"
-            ) from error
+            ) from None
         self._config = parsed
         self._url = url
         self._client = client
@@ -106,11 +112,24 @@ class HTTPRAGTarget:
         hostname = self._url.host
         if hostname is None:
             raise InvalidTargetConfiguration("target URL has no hostname")
-        addresses = await self._resolver.resolve(hostname)
-        _require_public_addresses(addresses)
+        try:
+            addresses = await asyncio.wait_for(
+                self._resolver.resolve(hostname),
+                timeout=self._config.timeout_seconds,
+            )
+        except TimeoutError:
+            raise TargetTimeoutError from None
+        except socket.gaierror:
+            raise TargetExecutionError(
+                "target_dns_error",
+                "target hostname resolution failed",
+                retryable=True,
+            ) from None
+        validated_addresses = _require_public_addresses(addresses)
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "Host": hostname,
             "X-EvalOps-Job-ID": str(context.job_id),
             "X-EvalOps-Attempt": str(context.attempt_number),
         }
@@ -127,7 +146,12 @@ class HTTPRAGTarget:
 
         started = time.perf_counter()
         try:
-            response = await self._post(payload=payload, headers=headers)
+            response = await self._post(
+                payload=payload,
+                headers=headers,
+                hostname=hostname,
+                address=validated_addresses[0],
+            )
         except httpx.TimeoutException:
             raise TargetTimeoutError from None
         except httpx.RequestError:
@@ -139,7 +163,7 @@ class HTTPRAGTarget:
         latency_ms = max(0, int((time.perf_counter() - started) * 1_000))
         if context.cancellation.is_set():
             raise TargetCancelledError
-        if response.status_code >= 400:
+        if response.status_code >= 300:
             raise TargetHTTPError(response.status_code)
         try:
             body = response.json()
@@ -166,21 +190,56 @@ class HTTPRAGTarget:
         *,
         payload: dict[str, Any],
         headers: dict[str, str],
+        hostname: str,
+        address: str,
     ) -> httpx.Response:
+        pinned_url = self._url.copy_with(host=address)
         if self._client is not None:
-            return await self._client.post(
-                self._url,
+            request = self._client.build_request(
+                "POST",
+                pinned_url,
                 json=payload,
                 headers=headers,
                 timeout=self._config.timeout_seconds,
+                extensions={"sni_hostname": hostname},
             )
-        async with httpx.AsyncClient() as client:
-            return await client.post(
-                self._url,
+            return await _send_checked_response(
+                self._client,
+                request,
+                expected_address=address,
+            )
+        async with httpx.AsyncClient(follow_redirects=False, trust_env=False) as client:
+            request = client.build_request(
+                "POST",
+                pinned_url,
                 json=payload,
                 headers=headers,
                 timeout=self._config.timeout_seconds,
+                extensions={"sni_hostname": hostname},
             )
+            return await _send_checked_response(
+                client,
+                request,
+                expected_address=address,
+            )
+
+
+def build_registered_http_target_config(
+    target_id: str,
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    snapshot = deepcopy(dict(config))
+    if "target_id" in snapshot or "allowed_hosts" in snapshot:
+        raise InvalidTargetConfiguration("registered HTTP target has conflicting fields")
+    base_url = snapshot.get("base_url")
+    try:
+        hostname = urlsplit(base_url).hostname if isinstance(base_url, str) else None
+    except ValueError:
+        hostname = None
+    snapshot["target_id"] = target_id
+    snapshot["allowed_hosts"] = ["" if hostname is None else hostname.rstrip(".").casefold()]
+    HTTPRAGTarget(snapshot)
+    return snapshot
 
 
 def _validate_and_build_url(config: HTTPRAGTargetConfig) -> httpx.URL:
@@ -188,6 +247,11 @@ def _validate_and_build_url(config: HTTPRAGTargetConfig) -> httpx.URL:
     if (
         base.scheme != "https"
         or base.hostname is None
+        or "%" in base.hostname
+        or base.hostname.isdecimal()
+        or len(base.hostname.rstrip(".")) > 253
+        or any(len(label) > 63 for label in base.hostname.split("."))
+        or base.port not in (None, 443)
         or base.username is not None
         or base.password is not None
         or base.query
@@ -212,20 +276,82 @@ def _validate_and_build_url(config: HTTPRAGTargetConfig) -> httpx.URL:
 
 def _is_non_public_ip_literal(hostname: str) -> bool:
     try:
-        return not ipaddress.ip_address(hostname).is_global
+        address = ipaddress.ip_address(hostname)
     except ValueError:
         return False
+    return (
+        not address.is_global
+        or address.is_multicast
+        or getattr(address, "ipv4_mapped", None) is not None
+    )
 
 
-def _require_public_addresses(addresses: tuple[str, ...]) -> None:
+def _require_public_addresses(addresses: tuple[str, ...]) -> tuple[str, ...]:
     if not addresses:
         raise InvalidTargetConfiguration("target hostname did not resolve")
     try:
         parsed = tuple(ipaddress.ip_address(address) for address in addresses)
     except ValueError as error:
         raise InvalidTargetConfiguration("target resolver returned an invalid address") from error
-    if any(not address.is_global for address in parsed):
+    if any(
+        not address.is_global
+        or address.is_multicast
+        or getattr(address, "ipv4_mapped", None) is not None
+        for address in parsed
+    ):
         raise InvalidTargetConfiguration("target hostname must resolve only to public addresses")
+    return tuple(str(address) for address in parsed)
+
+
+def _require_expected_peer(response: httpx.Response, *, expected_address: str) -> None:
+    stream = response.extensions.get("network_stream")
+    get_extra_info = getattr(stream, "get_extra_info", None)
+    if not callable(get_extra_info):
+        raise _peer_mismatch()
+    try:
+        peer = get_extra_info("server_addr")
+    except Exception:
+        raise _peer_mismatch() from None
+    try:
+        if (
+            not isinstance(peer, tuple)
+            or len(peer) < 2
+            or not isinstance(peer[0], str)
+            or peer[1] != 443
+        ):
+            raise _peer_mismatch()
+        peer_address = _require_public_addresses((peer[0].split("%", 1)[0],))[0]
+    except (InvalidTargetConfiguration, ValueError, TypeError):
+        raise _peer_mismatch() from None
+    if peer_address != expected_address:
+        raise _peer_mismatch()
+
+
+async def _send_checked_response(
+    client: httpx.AsyncClient,
+    request: httpx.Request,
+    *,
+    expected_address: str,
+) -> httpx.Response:
+    response = await client.send(
+        request,
+        follow_redirects=False,
+        stream=True,
+    )
+    try:
+        _require_expected_peer(response, expected_address=expected_address)
+        await response.aread()
+    finally:
+        await response.aclose()
+    return response
+
+
+def _peer_mismatch() -> TargetExecutionError:
+    return TargetExecutionError(
+        "target_peer_mismatch",
+        "target peer did not match the validated address",
+        retryable=False,
+    )
 
 
 _MISSING = object()

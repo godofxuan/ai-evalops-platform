@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, JsonValue, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +58,31 @@ class Settings(BaseSettings):
     )
     otel_exporter_otlp_endpoint: str | None = None
     otel_exporter_otlp_headers: SecretStr | None = None
+    http_target_registry: dict[str, dict[str, JsonValue]] = Field(default_factory=dict)
+
+    @field_validator("http_target_registry")
+    @classmethod
+    def validate_http_target_registry_versions(
+        cls,
+        registry: dict[str, dict[str, JsonValue]],
+    ) -> dict[str, dict[str, JsonValue]]:
+        from app.targets.base import InvalidTargetConfiguration
+        from app.targets.http_rag import build_registered_http_target_config
+
+        for target_id, entry in registry.items():
+            if set(entry) - {"version", "config"}:
+                raise ValueError("HTTP target registry entries contain unknown fields")
+            version = entry.get("version")
+            if not isinstance(version, str) or not 1 <= len(version) <= 128:
+                raise ValueError("HTTP target registry entries require a bounded version")
+            config = entry.get("config")
+            if not isinstance(config, dict):
+                raise ValueError("HTTP target registry entries require an execution config")
+            try:
+                build_registered_http_target_config(target_id, config)
+            except InvalidTargetConfiguration as error:
+                raise ValueError("HTTP target registry contains an unsafe config") from error
+        return registry
 
     @model_validator(mode="after")
     def validate_worker_timing(self) -> "Settings":

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -56,3 +57,138 @@ def test_observability_settings_have_safe_bounded_defaults() -> None:
     assert settings.otel_enabled is True
     assert settings.otel_service_name == "ai-evalops-platform"
     assert settings.otel_exporter_otlp_endpoint is None
+
+
+def test_settings_load_operator_http_target_registry(monkeypatch) -> None:
+    registry = {
+        "rag-production": {
+            "version": "rag-v1",
+            "config": {
+                "base_url": "https://rag.example.com",
+                "endpoint": "/v1/query",
+                "auth_env_var": "RAG_PRODUCTION_TOKEN",
+            },
+        }
+    }
+    monkeypatch.setenv("EVALOPS_HTTP_TARGET_REGISTRY", json.dumps(registry))
+
+    settings = Settings(_env_file=None)
+
+    assert settings.http_target_registry == registry
+
+
+def test_settings_accept_registry_without_redundant_allowed_hosts() -> None:
+    settings = Settings(
+        _env_file=None,
+        http_target_registry={
+            "rag-production": {
+                "version": "rag-v1",
+                "config": {
+                    "base_url": "https://rag.example.com",
+                    "endpoint": "/v1/query",
+                },
+            }
+        },
+    )
+
+    assert "allowed_hosts" not in settings.http_target_registry["rag-production"]["config"]
+
+
+def test_settings_reject_registry_supplied_allowed_hosts() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            http_target_registry={
+                "rag-production": {
+                    "version": "rag-v1",
+                    "config": {
+                        "base_url": "https://rag.example.com",
+                        "endpoint": "/v1/query",
+                        "allowed_hosts": ["rag.example.com"],
+                    },
+                }
+            },
+        )
+
+
+def test_settings_reject_unknown_http_target_registry_entry_fields() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            http_target_registry={
+                "rag-production": {
+                    "version": "rag-v1",
+                    "config": {
+                        "base_url": "https://rag.example.com",
+                        "endpoint": "/v1/query",
+                    },
+                    "follow_redirects": True,
+                }
+            },
+        )
+
+
+def test_settings_registry_validation_error_hides_plaintext_secret() -> None:
+    secret = "operator-accidentally-pasted-secret"
+
+    with pytest.raises(ValidationError) as caught:
+        Settings(
+            _env_file=None,
+            http_target_registry={
+                "rag-production": {
+                    "version": "rag-v1",
+                    "config": {
+                        "base_url": "https://rag.example.com",
+                        "endpoint": "/v1/query",
+                        "authentication": {"bearer": secret},
+                    },
+                }
+            },
+        )
+
+    assert secret not in str(caught.value)
+    assert secret not in repr(caught.value)
+
+
+def test_settings_reject_http_target_registry_without_version() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            http_target_registry={
+                "rag-production": {
+                    "version": "",
+                    "config": {
+                        "base_url": "https://rag.example.com",
+                        "endpoint": "/v1/query",
+                    },
+                }
+            },
+        )
+
+
+def test_settings_reject_http_target_registry_without_execution_config() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            http_target_registry={
+                "rag-production": {
+                    "version": "rag-v1",
+                }
+            },
+        )
+
+
+def test_settings_reject_unsafe_http_target_registry_url() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            http_target_registry={
+                "rag-production": {
+                    "version": "rag-v1",
+                    "config": {
+                        "base_url": "http://rag.example.com",
+                        "endpoint": "/v1/query",
+                    },
+                }
+            },
+        )

@@ -121,6 +121,7 @@ def create_app(
         application.state.run_service = SQLAlchemyRunService(
             repository=SQLAlchemyRunRepository(session_factory),
             artifact_store=artifact_store,
+            http_target_registry=runtime_settings.http_target_registry,
             metrics=metrics,
             telemetry=telemetry,
         )

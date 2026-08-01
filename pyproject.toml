@@ -7,6 +7,8 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.16,<2",
     "fastapi>=0.116,<1",
+    "httpcore>=1.0.9,<1.1",
+    "httpx>=0.28.1,<0.29",
     "opentelemetry-api>=1.44,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
     "opentelemetry-sdk>=1.44,<2",
@@ -22,7 +24,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28,<1",
     "matplotlib>=3.11,<4",
     "mypy>=1.17,<2",
     "pytest>=8.4,<10",
