@@ -66,9 +66,15 @@ def _summary_records() -> list[dict[str, object]]:
                 "cpu_rss_by_container": {
                     "worker-1": {
                         "sample_count": 3,
-                        "cpu_percent_peak": 20.0 + workers,
-                        "rss_bytes_peak": 100_000_000 + workers,
+                        "cpu_percent_peak": 900.0,
+                        "rss_bytes_peak": 900_000_000,
                     }
+                },
+                "worker_cluster_resources": {
+                    "status": "VERIFIED",
+                    "worker_containers": [f"worker-{index}" for index in range(1, workers + 1)],
+                    "cpu_percent": {"peak": 20.0 + workers},
+                    "rss_bytes": {"peak": 100_000_000 + workers},
                 },
             },
         }
@@ -249,7 +255,7 @@ def test_gate1_plot_bundle_preserves_every_arm_as_auditable_png_evidence(
         (output_directory / "manifest.json").read_text(encoding="utf-8")
     )
     assert persisted_manifest == manifest
-    assert manifest["schema_version"] == 3
+    assert manifest["schema_version"] == 4
     assert manifest["arm_ids"] == ["io-w1-r1", "io-w2-r1"]
     assert manifest["plots"] == sorted(expected_pngs)
     assert manifest["renderer"] == {
@@ -263,6 +269,9 @@ def test_gate1_plot_bundle_preserves_every_arm_as_auditable_png_evidence(
         "io-w2-r1",
     ]
     assert manifest["points"][0]["db_lock_wait"]["evidence"] == "DIRECTIONAL"
+    assert manifest["points"][0]["worker_cluster_cpu_percent_peak"] == 21.0
+    assert manifest["points"][0]["worker_cluster_rss_bytes_peak"] == 100_000_001
+    assert manifest["points"][0]["resource_containers"] == ["worker-1"]
 
 
 def test_gate1_plot_bundle_refuses_any_partial_overwrite(tmp_path: Path) -> None:
@@ -298,7 +307,7 @@ def test_gate1_finalization_publishes_one_complete_hashed_bundle(
     aggregate = json.loads(
         (final_directory / "summary" / "aggregate.json").read_text(encoding="utf-8")
     )
-    assert aggregate["schema_version"] == 3
+    assert aggregate["schema_version"] == 4
     assert aggregate["gate_evaluation"]["quality_gate"]["status"] == "VERIFIED"
     assert aggregate["gate_evaluation"]["adoption_gate"]["status"] == "NOT_RUN"
     assert (
@@ -318,7 +327,7 @@ def test_gate1_finalization_publishes_one_complete_hashed_bundle(
         if path.is_file() and path != manifest_path
     }
     assert manifest["schema_version"] == 1
-    assert manifest["result_schema_version"] == 3
+    assert manifest["result_schema_version"] == 4
     assert manifest["status"] == "complete"
     assert manifest["hash_algorithm"] == "sha256"
     assert manifest["publication_method"] == "same_filesystem_atomic_directory_rename"

@@ -7,6 +7,7 @@ from scripts.gate1_evidence import (
     merge_prometheus_evidence,
     reconcile_arm,
     summarize_arm,
+    summarize_worker_cluster_resources,
 )
 
 
@@ -320,6 +321,133 @@ def test_arm_summary_promotes_only_supplied_collector_samples() -> None:
     assert summary["redis_publish_failures"]["delta"] == 1
 
 
+def _resource_sample(
+    *,
+    snapshot_index: int,
+    service: str,
+    container: str,
+    cpu_percent: float,
+    rss_bytes: int,
+) -> dict[str, object]:
+    return {
+        "snapshot_index": snapshot_index,
+        "sampled_at": f"2026-08-02T00:00:0{snapshot_index}+00:00",
+        "service": service,
+        "container": container,
+        "cpu_percent": cpu_percent,
+        "rss_bytes": rss_bytes,
+        "memory_limit_bytes": 1_000,
+    }
+
+
+def test_worker_cluster_resources_sum_replicas_within_each_snapshot() -> None:
+    samples = [
+        _resource_sample(
+            snapshot_index=1,
+            service="worker",
+            container="worker-1",
+            cpu_percent=80.0,
+            rss_bytes=100,
+        ),
+        _resource_sample(
+            snapshot_index=1,
+            service="worker",
+            container="worker-2",
+            cpu_percent=10.0,
+            rss_bytes=300,
+        ),
+        _resource_sample(
+            snapshot_index=1,
+            service="api",
+            container="api-1",
+            cpu_percent=999.0,
+            rss_bytes=9_999,
+        ),
+        _resource_sample(
+            snapshot_index=2,
+            service="worker",
+            container="worker-1",
+            cpu_percent=20.0,
+            rss_bytes=500,
+        ),
+        _resource_sample(
+            snapshot_index=2,
+            service="worker",
+            container="worker-2",
+            cpu_percent=70.0,
+            rss_bytes=100,
+        ),
+        _resource_sample(
+            snapshot_index=2,
+            service="postgres",
+            container="postgres-1",
+            cpu_percent=999.0,
+            rss_bytes=9_999,
+        ),
+    ]
+
+    summary = summarize_worker_cluster_resources(samples, expected_workers=2)
+
+    assert summary == {
+        "status": "VERIFIED",
+        "evidence": "VERIFIED",
+        "reason": "worker_totals_summed_by_snapshot",
+        "source": "docker_stats:compose_service=worker",
+        "expected_workers": 2,
+        "snapshot_count": 2,
+        "complete_snapshot_count": 2,
+        "worker_containers": ["worker-1", "worker-2"],
+        "cpu_percent": {"p50": 90.0, "p95": 90.0, "p99": 90.0, "peak": 90.0},
+        "rss_bytes": {"p50": 500.0, "p95": 590.0, "p99": 598.0, "peak": 600},
+    }
+
+
+def test_worker_cluster_resources_keep_missing_replica_unknown_not_zero() -> None:
+    summary = summarize_worker_cluster_resources(
+        [
+            _resource_sample(
+                snapshot_index=1,
+                service="worker",
+                container="worker-1",
+                cpu_percent=10.0,
+                rss_bytes=100,
+            ),
+            _resource_sample(
+                snapshot_index=1,
+                service="api",
+                container="api-1",
+                cpu_percent=20.0,
+                rss_bytes=200,
+            ),
+        ],
+        expected_workers=2,
+    )
+
+    assert summary["status"] == "UNKNOWN"
+    assert summary["reason"] == "worker_snapshot_incomplete"
+    assert summary["snapshot_count"] == 1
+    assert summary["complete_snapshot_count"] == 0
+    assert summary["cpu_percent"]["peak"] is None
+    assert summary["rss_bytes"]["peak"] is None
+
+
+def test_worker_cluster_resources_fail_duplicate_replica_sample() -> None:
+    worker = _resource_sample(
+        snapshot_index=1,
+        service="worker",
+        container="worker-1",
+        cpu_percent=10.0,
+        rss_bytes=100,
+    )
+
+    summary = summarize_worker_cluster_resources([worker, worker], expected_workers=1)
+
+    assert summary["status"] == "FAILED"
+    assert summary["reason"] == "duplicate_worker_sample"
+    assert summary["cpu_percent"]["peak"] is None
+    assert summary["rss_bytes"]["peak"] is None
+
+
 def test_missing_required_prometheus_evidence_invalidates_capacity_comparison() -> None:
     unavailable = {
         "status": "UNKNOWN",
@@ -421,7 +549,7 @@ def test_aggregate_keeps_every_repetition_and_negative_scaling() -> None:
         ]
     )
 
-    assert aggregate["schema_version"] == 3
+    assert aggregate["schema_version"] == 4
     assert aggregate["groups"][0]["throughput_cases_per_second"] == {
         "points": [10.0, 12.0],
         "median": 11.0,

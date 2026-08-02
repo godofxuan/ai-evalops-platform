@@ -189,7 +189,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "seed",
         )
     } == {
-        "schema_version": 5,
+        "schema_version": 6,
         "experiment": "worker_scaling",
         "run_id": "gate1-contract",
         "status": "prepared",
@@ -265,7 +265,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
     assert manifest["dataset"]["hashes_path"] == "dataset/hashes.json"
     assert manifest["dataset"]["hashes_sha256"] == hashlib.sha256(dataset_hashes_bytes).hexdigest()
     assert manifest["arm_plan"]["sha256"] == hashlib.sha256(arm_plan_bytes).hexdigest()
-    assert manifest["result_schema_version"] == 3
+    assert manifest["result_schema_version"] == 4
     assert manifest["quality_gate"] == {
         "automatic_evaluation": True,
         "policy": "all_expected_arms_valid_for_capacity_comparison",

@@ -4,10 +4,12 @@ from pathlib import Path
 
 import pytest
 
+import scripts.gate1_collectors as gate1_collectors
 from scripts.gate1_collectors import (
     CollectorParseError,
     JsonlEvidenceWriter,
     PrometheusScrape,
+    collect_docker_stats_snapshot,
     collect_prometheus_snapshot,
     parse_docker_stats,
     parse_prometheus_samples,
@@ -18,10 +20,11 @@ from scripts.gate1_collectors import (
 
 def test_docker_stats_parser_preserves_raw_values_and_normalizes_resources() -> None:
     sample = parse_docker_stats(
-        '{"Container":"worker-1","CPUPerc":"12.50%","MemUsage":"64.5MiB / 2GiB","MemPerc":"3.15%"}'
+        '{"Container":"worker-1","ID":"abc123","Name":"worker-1","CPUPerc":"12.50%","MemUsage":"64.5MiB / 2GiB","MemPerc":"3.15%"}'
     )
 
     assert sample == {
+        "container_id": "abc123",
         "container": "worker-1",
         "cpu_percent": 12.5,
         "rss_bytes": 67_633_152,
@@ -34,10 +37,56 @@ def test_docker_stats_parser_preserves_raw_values_and_normalizes_resources() -> 
     }
 
 
+def test_docker_stats_snapshot_binds_compose_service_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        gate1_collectors,
+        "collect_compose_service_rows",
+        lambda **_: [
+            {"ID": "worker-id", "Name": "project-worker-1", "Service": "worker"},
+            {"ID": "api-id", "Name": "project-api-1", "Service": "api"},
+        ],
+    )
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        assert command == [
+            "docker",
+            "stats",
+            "--no-stream",
+            "--no-trunc",
+            "--format",
+            "{{json .}}",
+            "worker-id",
+            "api-id",
+        ]
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                '{"Container":"worker-id","ID":"worker-id","Name":"project-worker-1",'
+                '"CPUPerc":"20.0%","MemUsage":"100MiB / 512MiB","MemPerc":"19.5%"}\n'
+                '{"Container":"api-id","ID":"api-id","Name":"project-api-1",'
+                '"CPUPerc":"5.0%","MemUsage":"80MiB / 512MiB","MemPerc":"15.6%"}\n'
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(gate1_collectors.subprocess, "run", fake_run)
+
+    samples = collect_docker_stats_snapshot(compose_file=tmp_path / "compose.yaml")
+
+    assert [(sample["container"], sample["service"]) for sample in samples] == [
+        ("project-worker-1", "worker"),
+        ("project-api-1", "api"),
+    ]
+
+
 def test_docker_stats_parser_rejects_unknown_memory_unit() -> None:
     with pytest.raises(CollectorParseError, match="memory size"):
         parse_docker_stats(
-            '{"Container":"worker-1","CPUPerc":"1.0%","MemUsage":"10frobs / 2GiB","MemPerc":"1.0%"}'
+            '{"Container":"worker-1","ID":"abc123","Name":"worker-1","CPUPerc":"1.0%","MemUsage":"10frobs / 2GiB","MemPerc":"1.0%"}'
         )
 
 

@@ -456,7 +456,7 @@ def test_prepared_evidence_rejects_unsupported_manifest_schema(
     assert result["checks"]["manifest_valid"] is False
     assert "schema_version" in result["details"]["manifest_errors"]
     assert result["details"]["manifest_schema"] == {
-        "expected": 5,
+        "expected": 6,
         "observed": 999,
     }
 
@@ -780,7 +780,7 @@ def test_prepared_evidence_reports_unavailable_git_state_as_environment_blocked(
     assert "git_repository_available" in result["blockers"]
 
 
-@pytest.mark.parametrize("historical_schema", [2, 3, 4])
+@pytest.mark.parametrize("historical_schema", [2, 3, 4, 5])
 def test_prepared_evidence_keeps_superseded_schema_bundle_read_only(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -803,7 +803,7 @@ def test_prepared_evidence_keeps_superseded_schema_bundle_read_only(
 
     assert result["status"] == "MANIFEST_INVALID"
     assert result["details"]["manifest_schema"] == {
-        "expected": 5,
+        "expected": 6,
         "observed": historical_schema,
     }
 
@@ -825,7 +825,7 @@ def test_prepared_evidence_keeps_historical_schema_v1_bundle_read_only(
 
     assert result["status"] == "MANIFEST_INVALID"
     assert result["details"]["manifest_schema"] == {
-        "expected": 5,
+        "expected": 6,
         "observed": 1,
     }
 
