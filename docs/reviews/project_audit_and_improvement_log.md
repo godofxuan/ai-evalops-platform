@@ -594,3 +594,30 @@ Result/Review Task 的 Job 和 Run 不同源。新增 migration `20260802_0010`�
 最终为 success；两个 job、新 PostgreSQL constraint step、实际 migration downgrade/re-upgrade、
 全部既有 integration、image build 与 Compose readiness 都成功。该证据只提升普通 CI 合同，
 不改变正式 Gate 的 `NOT_RUN`。
+
+## P2-2 更新：Human Review Task 创建权限
+
+状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`。
+
+审计确认旧 `POST /runs/{run_id}/review-tasks` 只校验 Run tenant，没有能力检查；任何同 tenant
+有效 key 都能扩大 review cohort 并触发 packet artifact。直接复用 `can_review` 会让每个
+reviewer 都能扩大样本，并破坏现有 creator/reviewer/adjudicator 职责分离，因此实现提交
+`7aab279cdb95a2e1a615d6c982ffddee333db240` 新增独立、默认关闭的
+`can_create_review_tasks`：
+
+- migration `20260802_0011` 给所有旧 key 默认回填 false，不从历史或 `can_review` 推导；
+- API Key ORM → Candidate → Principal 全链路只传播服务端数据库值；
+- service 在数据库与 artifact I/O 前检查，使用独立异常与 403 code；
+- CLI 用 `--review-task-creator` 显式授权，且不自动授予 reviewer 权；
+- 真实 PostgreSQL 合同覆盖 ordinary/reviewer-only 拒绝且零 Task/packet 副作用、creator-only
+  创建成功但 submit 被拒绝；
+- API 回归证明 body/query/header 同名伪造值不能覆盖认证 Principal。
+
+本地结果为 `435 passed, 8 deselected`；权限定向 31 passed，真实 PostgreSQL 1 skipped；
+Ruff 244 files、mypy 108 source files、70-package lock、唯一 Alembic head `0011` 与 6 个离线
+migration tests 全部通过。远端真实服务与 Compose 尚未执行，不能提前记 success。完整
+RED/GREEN、为什么不用 `can_review`、lint 跟进、升级兼容性和回滚顺序见
+[`p2_2_review_task_creation_permission_log.md`](p2_2_review_task_creation_permission_log.md)。
+
+该修改仍不是通用 RBAC、自然人认证、组织审批或数据库 RLS；管理员必须轮换/创建新 creator
+credential。正式 500-case/32-arm Gate 未启动，普通权限 CI 不改变其 `NOT_RUN`。

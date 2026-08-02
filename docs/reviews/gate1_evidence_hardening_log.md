@@ -2149,3 +2149,39 @@ CI 即使成功也只证明列出的 schema/integration/Compose 合同，不等�
 [GitHub Actions Run #15](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30729735398)
 为 `completed / success`，`quality-and-integration` 与 `compose-smoke` 均成功；新 constraint
 integration 和实际 `0010→0009→0010` 也明确执行成功。正式 Gate 继续 `NOT_RUN`。
+
+## P2-2：Human Review Task 创建权限
+
+### 阶段判断与实现
+
+- 起始 SHA：`687cf903ae75b849155ce8ca6855404587fe9f60`；
+- 实现提交：`7aab279cdb95a2e1a615d6c982ffddee333db240`；
+- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`；
+- 没有把创建权复用或自动绑定到 `can_review`，而是新增默认 false 的独立
+  `can_create_review_tasks`；
+- service 在打开 transaction、查询 Run 或写 packet artifact 前失败关闭；
+- ordinary/reviewer-only 返回独立 403，creator-only 仍不能 list/submit/adjudicate；
+- `20260802_0011` 不根据历史任务或 reviewer 权限自动提权，downgrade 只删除新列；
+- API Key ORM、认证 Candidate/Principal、管理员 CLI、HTTP handler 和真实服务合同同步更新。
+
+客户端在 body/query/header 伪造权限的回归也被锁定：服务仍从认证 Principal 读取权限并返回
+403，不接触数据库。完整适用性判断、逐条 RED/GREEN、import 规范问题、兼容性和回滚顺序见
+[`p2_2_review_task_creation_permission_log.md`](p2_2_review_task_creation_permission_log.md)。
+
+### 本地证据与边界
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| 权限相关定向 | 31 passed | `VERIFIED` |
+| 非 integration 全量 | 435 passed，8 deselected | `VERIFIED` |
+| Ruff format/lint | 244 files / All checks passed | `VERIFIED` |
+| strict mypy | 108 source files | `VERIFIED` |
+| uv lock / Alembic | 70 packages；唯一 head `0011` | `VERIFIED` |
+| 全部离线 migration tests | 6 passed | `VERIFIED` |
+| Human Review PostgreSQL 权限矩阵 | 本机 1 skipped | `NOT_RUN_LOCAL` |
+| GitHub Actions / Compose | 尚未推送本阶段提交 | `REMOTE_PENDING` |
+| 正式 500-case/32-arm | 未运行 | `NOT_RUN` |
+
+升级会让所有既有 key 默认失去 Task 创建权，管理员必须显式创建 creator credential；这是
+预期的 fail-closed 兼容性变化。普通 CI 即使成功也只能证明列出的 migration、真实服务和
+Compose 合同，不会把 Boolean capability 提升为通用 RBAC，也不改变正式 Gate 的 `NOT_RUN`。

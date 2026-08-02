@@ -184,6 +184,20 @@ uv run python -m scripts.create_dev_api_key \
   --key-name local
 ```
 
+Human Review Task creator 与 reviewer 是两个默认关闭的独立权限。建议分别创建 credential：
+
+```bash
+uv run python -m scripts.create_dev_api_key \
+  --tenant-slug demo \
+  --key-name review-operator \
+  --review-task-creator
+
+uv run python -m scripts.create_dev_api_key \
+  --tenant-slug demo \
+  --key-name reviewer-a \
+  --human-reviewer
+```
+
 撤销时只传安全前缀，不要把完整密钥放入命令历史：
 
 ```bash
@@ -393,6 +407,13 @@ P2-1 migration `20260802_0010`：
 - upgrade 在加约束前检查历史矛盾并失败关闭，不会擅自改写归属；downgrade 恢复旧单列
   外键并移除可派生的 Dataset Version tenant 列。
 
+P2-2 migration `20260802_0011`：
+
+- 新增默认 false 的 `api_keys.can_create_review_tasks`；
+- 普通 key 和 reviewer-only key 都不能创建/扩展 Human Review Task；
+- creator-only key 可以创建 Task，但不会因此获得 list/submit/adjudicate reviewer 权限；
+- 权限只从数据库认证记录进入 Principal，请求 body/query/header 不能自我提权。
+
 所有已实现的 dataset/version 和 artifact reference 读取先过滤服务端 tenant 与资源 ID，再
 解析 blob。跨表复合外键提供数据库纵深防御，但当前仍未启用 PostgreSQL RLS；两者不是
 同一种隔离机制。
@@ -491,6 +512,7 @@ P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RE
 - API 与 Worker 当前通过领域 ID 关联不同 trace，尚未持久化跨进程 parent context；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
+- can_create_review_tasks 与 can_review 独立且都默认关闭；当前仍不是通用 RBAC/scope 系统；
 - review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；
 - 任意 JSONB metric 排序没有表达式索引，尚无大 Run query plan/容量证据；
 - artifact 支持已知 SHA 的无引用清理，但尚无定时全盘扫描/对象存储生命周期 GC；

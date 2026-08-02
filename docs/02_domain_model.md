@@ -38,11 +38,13 @@ Authorization: Bearer evk_<12-hex-prefix>_<high-entropy-secret>
 Principal(
   tenant_id,
   api_key_id,
-  key_prefix
+  key_prefix,
+  can_review,
+  can_create_review_tasks
 )
 ```
 
-请求体不得接受 `tenant_id`。
+请求体不得接受 `tenant_id` 或权限字段。两个权限都从已认证 API Key 记录派生并默认 false。
 
 ### 2.2 Dataset
 
@@ -222,6 +224,11 @@ P2-1 migration 给 `dataset_versions` 增加从 Dataset 回填的 `tenant_id`，
 `evaluation_jobs`、`job_attempts` 和 `run_metrics` 等只有一条不可歧义父链的表没有机械复制
 tenant 列。`audit_events` 的多态 resource/actor 字符串也不伪装成只能覆盖部分事件的 FK。
 这批复合约束是应用 tenant-scoped 查询之外的纵深防御，不等于 PostgreSQL RLS。
+
+P2-2 migration 新增 `api_keys.can_create_review_tasks`，默认 false。该 capability 只授权创建或
+扩展 Human Review Task；`can_review` 继续独立授权 reviewer list/submit/adjudicate。数据库
+`human_review_tasks.created_by` 记录实际 creator，并由 P2-1 复合 FK 保证同 tenant；创建瞬间
+的 capability 则由 service 在任何数据库/文件写入前校验。
 
 ## 8. 当前能证明与不能证明
 

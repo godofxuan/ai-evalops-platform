@@ -38,6 +38,20 @@
 PostgreSQL RLS：复合外键阻止矛盾归属行，却不会自动给任意 SELECT 注入 tenant 条件。
 未来新增 repository 方法时仍必须有跨 tenant 负面测试。
 
+### 3.1 Human Review capability
+
+- `can_create_review_tasks` 与 `can_review` 都保存在 API Key、默认 false，并从认证记录进入
+  Principal；客户端不能提交权限值；
+- 前者只允许创建/扩展 Task，后者只允许 reviewer list/submit/adjudicate；
+- ordinary、reviewer-only credential 创建 Task 都返回独立 403，且检查发生在数据库和
+  artifact I/O 前；
+- creator-only credential 不会因此获得 reviewer 权限；
+- 管理员 CLI 必须显式使用 `--review-task-creator` 或 `--human-reviewer`，建议为职责分离
+  使用不同 credential。
+
+这两个布尔 capability 是当前工作流的最小权限边界，不是完整 RBAC、组织审批或通用 scope
+系统。数据库 FK 保证 creator 同 tenant，但不能替代服务入口的 capability 检查。
+
 ## 4. 上传边界
 
 - 只接受明确 allowlist 中的 JSONL media type；

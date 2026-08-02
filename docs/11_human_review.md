@@ -2,21 +2,33 @@
 
 ## 身份信任边界
 
-API Key 增加服务端字段 `can_review`，默认 false。只有管理员显式创建：
+API Key 有两个服务端权限，均默认 false：
+
+- `can_create_review_tasks`：创建或扩展 Task；
+- `can_review`：reviewer list/submit/adjudicate。
+
+建议管理员创建相互独立的 credential：
 
 ```bash
+uv run python -m scripts.create_dev_api_key \
+  --tenant-slug demo \
+  --key-name review-operator \
+  --review-task-creator
+
 uv run python -m scripts.create_dev_api_key \
   --tenant-slug demo \
   --key-name reviewer-a \
   --human-reviewer
 ```
 
-认证链从数据库 APIKey 记录派生 `Principal.can_review`。请求体、query 和 header 都不能自行把
-普通 key 提升为 reviewer。
+认证链从数据库 APIKey 记录派生两个 Principal capability。请求体、query 和 header 都不能
+自行提权。管理员可以显式给同一 key 两种权限，但系统不自动联动，组织流程应优先分离。
 
 这能保证：
 
 - Worker 和普通 service key 不能调用 submission/adjudication；
+- 普通 key 和 reviewer-only key 不能创建/扩展 Task；
+- creator-only key 不能 list/submit/adjudicate；
 - 两份 submission 来自不同 reviewer key；
 - adjudicator 必须是第三个 reviewer key。
 
@@ -57,6 +69,10 @@ uv run python -m scripts.create_dev_api_key \
 ```text
 POST /api/v1/runs/{run_id}/review-tasks
 ```
+
+必须使用 `can_create_review_tasks=true` 的 key。权限检查发生在 Run 查询、Task transaction 和
+artifact 写入之前；失败返回 403 `review_task_creator_required`。这与 reviewer 失败的
+`human_reviewer_required` 明确区分。
 
 候选仅来自 tenant-owned Run 的 succeeded Job/CaseResult。sample 使用
 `sha256(run_id:case_id)` deterministic 排序，便于相同 Run 的重试复现。
