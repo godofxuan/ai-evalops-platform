@@ -26,4 +26,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass
+    op.drop_index(
+        "ix_progress_event_outbox_published_retention",
+        table_name="progress_event_outbox",
+        postgresql_where=sa.text("published_at IS NOT NULL"),
+    )
