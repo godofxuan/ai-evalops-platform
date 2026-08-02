@@ -20,7 +20,7 @@ from scripts.gate1_plots import generate_gate1_plots
 def _summary_records() -> list[dict[str, object]]:
     return [
         {
-            "schema_version": 3,
+            "schema_version": 4,
             "arm": {
                 "arm_id": f"io-w{workers}-r1",
                 "workload": "io_latency_v1",

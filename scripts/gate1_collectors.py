@@ -74,7 +74,8 @@ def parse_docker_stats(line: str) -> dict[str, Any]:
     """Normalize one Docker stats JSON line while retaining source strings."""
     try:
         payload = json.loads(line)
-        container = str(payload["Container"])
+        container_id = str(payload["ID"]).strip()
+        container = str(payload["Name"]).strip()
         raw_cpu = str(payload["CPUPerc"])
         raw_memory = str(payload["MemUsage"])
         raw_memory_percent = str(payload["MemPerc"])
@@ -82,7 +83,10 @@ def parse_docker_stats(line: str) -> dict[str, Any]:
         cpu_percent = float(raw_cpu.removesuffix("%"))
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
         raise CollectorParseError("invalid Docker stats JSON sample") from error
+    if not container_id or not container or not math.isfinite(cpu_percent) or cpu_percent < 0:
+        raise CollectorParseError("invalid Docker stats container identity or CPU sample")
     return {
+        "container_id": container_id,
         "container": container,
         "cpu_percent": cpu_percent,
         "rss_bytes": _parse_memory_size(usage),
@@ -96,40 +100,67 @@ def parse_docker_stats(line: str) -> dict[str, Any]:
 
 
 def collect_docker_stats_snapshot(*, compose_file: Path) -> list[dict[str, Any]]:
-    container_ids = subprocess.run(
-        [
-            "docker",
-            "compose",
-            "-f",
-            str(compose_file),
-            "ps",
-            "--quiet",
-            "api",
-            "worker",
-            "reaper",
-            "postgres",
-            "redis",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.splitlines()
-    if not container_ids:
+    experiment_services = {"api", "worker", "reaper", "postgres", "redis"}
+    compose_rows = [
+        row
+        for row in collect_compose_service_rows(compose_file=compose_file)
+        if str(row.get("Service", "")) in experiment_services
+    ]
+    if not compose_rows:
         raise CollectorParseError("Compose returned no experiment containers")
+    containers: dict[str, dict[str, str]] = {}
+    for row in compose_rows:
+        container_id = str(row.get("ID", "")).strip()
+        container_name = str(row.get("Name", "")).strip()
+        service = str(row.get("Service", "")).strip()
+        if not container_id or not container_name or not service:
+            raise CollectorParseError("Compose returned incomplete container identity")
+        if container_id in containers:
+            raise CollectorParseError("Compose returned duplicate container identity")
+        containers[container_id] = {"name": container_name, "service": service}
+
     stats = subprocess.run(
         [
             "docker",
             "stats",
             "--no-stream",
+            "--no-trunc",
             "--format",
             "{{json .}}",
-            *container_ids,
+            *containers,
         ],
         check=True,
         capture_output=True,
         text=True,
     )
-    return [parse_docker_stats(line) for line in stats.stdout.splitlines() if line.strip()]
+    samples: list[dict[str, Any]] = []
+    observed_ids: set[str] = set()
+    for line in stats.stdout.splitlines():
+        if not line.strip():
+            continue
+        sample = parse_docker_stats(line)
+        sample_id = str(sample["container_id"])
+        matching_ids = [
+            container_id
+            for container_id in containers
+            if container_id == sample_id
+            or container_id.startswith(sample_id)
+            or sample_id.startswith(container_id)
+        ]
+        if len(matching_ids) != 1:
+            raise CollectorParseError("Docker stats container identity is not uniquely bound")
+        compose_id = matching_ids[0]
+        if compose_id in observed_ids:
+            raise CollectorParseError("Docker stats returned duplicate container sample")
+        identity = containers[compose_id]
+        if sample["container"] != identity["name"]:
+            raise CollectorParseError("Docker stats container name does not match Compose")
+        observed_ids.add(compose_id)
+        sample["service"] = identity["service"]
+        samples.append(sample)
+    if observed_ids != set(containers):
+        raise CollectorParseError("Docker stats omitted a Compose experiment container")
+    return samples
 
 
 def collect_prometheus_snapshot(*, compose_file: Path) -> dict[str, PrometheusScrape]:

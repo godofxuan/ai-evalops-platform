@@ -39,6 +39,7 @@ from scripts.gate1_evidence import (
     merge_prometheus_evidence,
     reconcile_arm,
     summarize_arm,
+    summarize_worker_cluster_resources,
 )
 from scripts.gate1_finalization import finalize_gate1_run_evidence
 from scripts.gate1_image_evidence import build_gate1_image_binding
@@ -489,6 +490,7 @@ async def _collect_arm_samples(
     resource_samples: list[dict[str, Any]] = []
     postgres_samples: list[dict[str, Any]] = []
     missed_samples = 0
+    snapshot_index = 0
     with (
         JsonlEvidenceWriter(arm_directory / "resources.jsonl") as resources_writer,
         JsonlEvidenceWriter(arm_directory / "postgres_samples.jsonl") as postgres_writer,
@@ -496,6 +498,8 @@ async def _collect_arm_samples(
     ):
         while not stop_requested.is_set():
             sampled_at = datetime.now(UTC).isoformat()
+            current_snapshot_index = snapshot_index
+            snapshot_index += 1
             try:
                 resources = await asyncio.to_thread(
                     collect_docker_stats_snapshot,
@@ -504,6 +508,7 @@ async def _collect_arm_samples(
                 for sample in resources:
                     record = dict(sample)
                     record["sampled_at"] = sampled_at
+                    record["snapshot_index"] = current_snapshot_index
                     resources_writer.append(record)
                     resource_samples.append(record)
             except Exception as error:
@@ -754,9 +759,11 @@ async def _run_prepared_arm(
                 + sample["idle_in_transaction_connections"]
                 for sample in postgres_samples
             ],
-            "cpu_percent": [sample["cpu_percent"] for sample in resource_samples],
-            "rss_bytes": [sample["rss_bytes"] for sample in resource_samples],
         }
+        worker_cluster_resources = summarize_worker_cluster_resources(
+            resource_samples,
+            expected_workers=int(arm["workers"]),
+        )
         summary = summarize_arm(
             reconciliation=reconciliation,
             measurement_seconds=end_to_end_seconds,
@@ -765,6 +772,7 @@ async def _run_prepared_arm(
             case_results=database["case_results"],
             attempts=database["attempts"],
             collector_samples=collector_samples,
+            worker_cluster_resources=worker_cluster_resources,
         )
         prometheus_delta = summarize_prometheus_deltas(
             before=prometheus_before,
@@ -783,13 +791,14 @@ async def _run_prepared_arm(
             ).append(sample)
         summary["cpu_rss_by_container"] = {
             container: {
+                "service": str(samples[0]["service"]),
                 "sample_count": len(samples),
                 "cpu_percent_peak": max(float(sample["cpu_percent"]) for sample in samples),
                 "rss_bytes_peak": max(int(sample["rss_bytes"]) for sample in samples),
             }
             for container, samples in sorted(resources_by_container.items())
         }
-        if collector_evidence["missed_samples"]:
+        if collector_evidence["missed_samples"] or worker_cluster_resources["status"] != "VERIFIED":
             summary["valid_for_capacity_comparison"] = False
         write_report(
             arm_directory / "api.json",

@@ -273,7 +273,7 @@ def test_arm_summary_never_turns_missing_measurements_into_zero() -> None:
         "claim_latency_ms",
         "db_transaction_latency_ms",
         "db_lock_wait",
-        "cpu_rss",
+        "worker_cluster_resources",
         "postgres_connections",
         "redis_publish_failures",
     ):
@@ -286,6 +286,12 @@ def test_arm_summary_never_turns_missing_measurements_into_zero() -> None:
 
 
 def test_arm_summary_promotes_only_supplied_collector_samples() -> None:
+    worker_resources = {
+        "status": "VERIFIED",
+        "evidence": "VERIFIED",
+        "cpu_percent": {"peak": 30.0},
+        "rss_bytes": {"peak": 150},
+    }
     summary = summarize_arm(
         reconciliation={"valid_for_capacity_comparison": True, "retry_count": 1},
         measurement_seconds=1.0,
@@ -296,11 +302,10 @@ def test_arm_summary_promotes_only_supplied_collector_samples() -> None:
             "claim_latency_ms": [1.0, 3.0],
             "db_transaction_latency_ms": [2.0, 6.0],
             "db_lock_waiting_connections": [0, 2, 1],
-            "cpu_percent": [10.0, 30.0],
-            "rss_bytes": [100, 150],
             "postgres_connections": [3, 5, 4],
             "redis_publish_failures": [0, 1],
         },
+        worker_cluster_resources=worker_resources,
     )
 
     assert summary["claim_latency_ms"]["p50"] == 2.0
@@ -311,12 +316,7 @@ def test_arm_summary_promotes_only_supplied_collector_samples() -> None:
         "samples_with_waiters": 2,
         "peak_waiting_connections": 2,
     }
-    assert summary["cpu_rss"] == {
-        "evidence": "VERIFIED",
-        "sample_count": 2,
-        "cpu_percent_peak": 30.0,
-        "rss_bytes_peak": 150,
-    }
+    assert summary["worker_cluster_resources"] == worker_resources
     assert summary["postgres_connections"]["peak"] == 5
     assert summary["redis_publish_failures"]["delta"] == 1
 
@@ -446,6 +446,22 @@ def test_worker_cluster_resources_fail_duplicate_replica_sample() -> None:
     assert summary["reason"] == "duplicate_worker_sample"
     assert summary["cpu_percent"]["peak"] is None
     assert summary["rss_bytes"]["peak"] is None
+
+
+def test_arm_summary_invalidates_unverified_worker_cluster_resources() -> None:
+    worker_resources = summarize_worker_cluster_resources([], expected_workers=2)
+
+    summary = summarize_arm(
+        reconciliation={"valid_for_capacity_comparison": True, "retry_count": 0},
+        measurement_seconds=1.0,
+        end_to_end_ms=1000.0,
+        jobs=[],
+        case_results=[],
+        worker_cluster_resources=worker_resources,
+    )
+
+    assert worker_resources["status"] == "UNKNOWN"
+    assert summary["valid_for_capacity_comparison"] is False
 
 
 def test_missing_required_prometheus_evidence_invalidates_capacity_comparison() -> None:

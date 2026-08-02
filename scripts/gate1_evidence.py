@@ -1,3 +1,4 @@
+import math
 import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
@@ -7,7 +8,7 @@ from typing import Any
 
 from scripts.experiment_support import ExperimentError, percentile
 
-GATE1_RESULT_SCHEMA_VERSION = 3
+GATE1_RESULT_SCHEMA_VERSION = 4
 GATE1_GATE_POLICY_VERSION = 1
 GATE1_QUALITY_GATE_POLICY = "all_expected_arms_valid_for_capacity_comparison"
 
@@ -188,6 +189,152 @@ def _verified_distribution(values: list[float]) -> dict[str, Any]:
     }
 
 
+def _empty_worker_resource_distribution() -> dict[str, None]:
+    return {"p50": None, "p95": None, "p99": None, "peak": None}
+
+
+def _worker_resource_summary(
+    *,
+    status: str,
+    reason: str,
+    expected_workers: int,
+    snapshot_count: int,
+    complete_snapshot_count: int,
+    worker_containers: set[str],
+    cpu_totals: Sequence[float] = (),
+    rss_totals: Sequence[int] = (),
+) -> dict[str, Any]:
+    if status == "VERIFIED":
+        cpu_values = list(cpu_totals)
+        rss_values = list(rss_totals)
+        rss_percentile_values = [float(value) for value in rss_values]
+        cpu_distribution: dict[str, Any] = {
+            "p50": percentile(cpu_values, 0.50),
+            "p95": percentile(cpu_values, 0.95),
+            "p99": percentile(cpu_values, 0.99),
+            "peak": max(cpu_values),
+        }
+        rss_distribution: dict[str, Any] = {
+            "p50": percentile(rss_percentile_values, 0.50),
+            "p95": percentile(rss_percentile_values, 0.95),
+            "p99": percentile(rss_percentile_values, 0.99),
+            "peak": max(rss_values),
+        }
+    else:
+        cpu_distribution = _empty_worker_resource_distribution()
+        rss_distribution = _empty_worker_resource_distribution()
+    return {
+        "status": status,
+        "evidence": status,
+        "reason": reason,
+        "source": "docker_stats:compose_service=worker",
+        "expected_workers": expected_workers,
+        "snapshot_count": snapshot_count,
+        "complete_snapshot_count": complete_snapshot_count,
+        "worker_containers": sorted(worker_containers),
+        "cpu_percent": cpu_distribution,
+        "rss_bytes": rss_distribution,
+    }
+
+
+def summarize_worker_cluster_resources(
+    samples: Sequence[Mapping[str, Any]],
+    *,
+    expected_workers: int,
+) -> dict[str, Any]:
+    """Sum Worker replicas per Docker snapshot before deriving distributions."""
+    if type(expected_workers) is not int or expected_workers <= 0:
+        raise ExperimentError("expected_workers must be a positive integer")
+
+    snapshots: set[int] = set()
+    workers_by_snapshot: defaultdict[int, dict[str, tuple[float, int]]] = defaultdict(dict)
+    worker_containers: set[str] = set()
+    failure_reason: str | None = None
+    for sample in samples:
+        snapshot_index = sample.get("snapshot_index")
+        if type(snapshot_index) is not int or snapshot_index < 0:
+            failure_reason = failure_reason or "invalid_snapshot_index"
+            continue
+        snapshots.add(snapshot_index)
+        if sample.get("service") != "worker":
+            continue
+        container = sample.get("container")
+        cpu_percent = sample.get("cpu_percent")
+        rss_bytes = sample.get("rss_bytes")
+        if not isinstance(container, str) or not container:
+            failure_reason = failure_reason or "invalid_worker_sample"
+            continue
+        if isinstance(cpu_percent, bool) or not isinstance(cpu_percent, int | float):
+            failure_reason = failure_reason or "invalid_worker_sample"
+            continue
+        cpu_value = float(cpu_percent)
+        if not math.isfinite(cpu_value) or cpu_value < 0:
+            failure_reason = failure_reason or "invalid_worker_sample"
+            continue
+        if isinstance(rss_bytes, bool) or not isinstance(rss_bytes, int) or rss_bytes < 0:
+            failure_reason = failure_reason or "invalid_worker_sample"
+            continue
+        worker_containers.add(container)
+        if container in workers_by_snapshot[snapshot_index]:
+            failure_reason = "duplicate_worker_sample"
+            continue
+        workers_by_snapshot[snapshot_index][container] = (cpu_value, rss_bytes)
+
+    complete_snapshots = [
+        snapshot
+        for snapshot in sorted(snapshots)
+        if len(workers_by_snapshot[snapshot]) == expected_workers
+    ]
+    if any(len(workers_by_snapshot[snapshot]) > expected_workers for snapshot in snapshots):
+        failure_reason = failure_reason or "unexpected_worker_replica_count"
+    if failure_reason is not None:
+        return _worker_resource_summary(
+            status="FAILED",
+            reason=failure_reason,
+            expected_workers=expected_workers,
+            snapshot_count=len(snapshots),
+            complete_snapshot_count=len(complete_snapshots),
+            worker_containers=worker_containers,
+        )
+    if not snapshots:
+        return _worker_resource_summary(
+            status="UNKNOWN",
+            reason="worker_samples_missing",
+            expected_workers=expected_workers,
+            snapshot_count=0,
+            complete_snapshot_count=0,
+            worker_containers=worker_containers,
+        )
+    if len(complete_snapshots) != len(snapshots):
+        return _worker_resource_summary(
+            status="UNKNOWN",
+            reason="worker_snapshot_incomplete",
+            expected_workers=expected_workers,
+            snapshot_count=len(snapshots),
+            complete_snapshot_count=len(complete_snapshots),
+            worker_containers=worker_containers,
+        )
+
+    cpu_totals = [
+        sum(cpu for cpu, _rss in workers_by_snapshot[snapshot].values())
+        for snapshot in complete_snapshots
+    ]
+    rss_totals = [
+        sum(rss for _cpu, rss in workers_by_snapshot[snapshot].values())
+        for snapshot in complete_snapshots
+    ]
+    return _worker_resource_summary(
+        status="VERIFIED",
+        reason="worker_totals_summed_by_snapshot",
+        expected_workers=expected_workers,
+        snapshot_count=len(snapshots),
+        complete_snapshot_count=len(complete_snapshots),
+        worker_containers=worker_containers,
+        cpu_totals=cpu_totals,
+        rss_totals=rss_totals,
+    )
+
+
 def summarize_arm(
     *,
     reconciliation: dict[str, Any],
@@ -197,6 +344,7 @@ def summarize_arm(
     case_results: list[dict[str, Any]],
     attempts: Sequence[dict[str, Any]] = (),
     collector_samples: Mapping[str, Sequence[float | int]] | None = None,
+    worker_cluster_resources: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Summarize only measurements supported by supplied raw evidence."""
     terminal_jobs = [job for job in jobs if str(job["status"]) in TERMINAL_JOB_STATUSES]
@@ -245,7 +393,7 @@ def summarize_arm(
         "value": None,
         "reason": "required raw collector samples were not supplied",
     }
-    summary = {
+    summary: dict[str, Any] = {
         "valid_for_capacity_comparison": bool(reconciliation["valid_for_capacity_comparison"]),
         "throughput_cases_per_second": (
             len(terminal_jobs) / measurement_seconds if measurement_seconds > 0 else None
@@ -261,7 +409,22 @@ def summarize_arm(
         "claim_latency_ms": dict(unavailable),
         "db_transaction_latency_ms": dict(unavailable),
         "db_lock_wait": dict(unavailable),
-        "cpu_rss": dict(unavailable),
+        "worker_cluster_resources": (
+            dict(worker_cluster_resources)
+            if worker_cluster_resources is not None
+            else {
+                "status": "UNKNOWN",
+                "evidence": "UNKNOWN",
+                "reason": "required Worker Docker stats samples were not supplied",
+                "source": "docker_stats:compose_service=worker",
+                "expected_workers": None,
+                "snapshot_count": 0,
+                "complete_snapshot_count": 0,
+                "worker_containers": [],
+                "cpu_percent": _empty_worker_resource_distribution(),
+                "rss_bytes": _empty_worker_resource_distribution(),
+            }
+        ),
         "postgres_connections": dict(unavailable),
         "redis_publish_failures": dict(unavailable),
         "stale_submission_rejection": {
@@ -284,15 +447,6 @@ def summarize_arm(
             "samples_with_waiters": sum(value > 0 for value in lock_waiters),
             "peak_waiting_connections": max(lock_waiters),
         }
-    cpu_percent = [float(value) for value in samples.get("cpu_percent", ())]
-    rss_bytes = [int(value) for value in samples.get("rss_bytes", ())]
-    if cpu_percent and rss_bytes:
-        summary["cpu_rss"] = {
-            "evidence": "VERIFIED",
-            "sample_count": min(len(cpu_percent), len(rss_bytes)),
-            "cpu_percent_peak": max(cpu_percent),
-            "rss_bytes_peak": max(rss_bytes),
-        }
     connection_counts = [int(value) for value in samples.get("postgres_connections", ())]
     if connection_counts:
         summary["postgres_connections"] = {
@@ -307,6 +461,8 @@ def summarize_arm(
             "sample_count": len(redis_failures),
             "delta": redis_failures[-1] - redis_failures[0],
         }
+    if summary["worker_cluster_resources"]["status"] != "VERIFIED":
+        summary["valid_for_capacity_comparison"] = False
     return summary
 
 

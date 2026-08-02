@@ -18,7 +18,7 @@ from scripts.gate1_image_evidence import (
     gate1_image_binding_errors,
 )
 
-PREPARED_MANIFEST_SCHEMA_VERSION = 5
+PREPARED_MANIFEST_SCHEMA_VERSION = 6
 
 KEY_EXECUTION_SCRIPT_PATHS = (
     "scripts/experiment_support.py",

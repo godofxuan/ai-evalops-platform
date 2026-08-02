@@ -20,7 +20,8 @@ from scripts.gate1_collectors import (
 
 def test_docker_stats_parser_preserves_raw_values_and_normalizes_resources() -> None:
     sample = parse_docker_stats(
-        '{"Container":"worker-1","ID":"abc123","Name":"worker-1","CPUPerc":"12.50%","MemUsage":"64.5MiB / 2GiB","MemPerc":"3.15%"}'
+        '{"Container":"worker-1","ID":"abc123","Name":"worker-1",'
+        '"CPUPerc":"12.50%","MemUsage":"64.5MiB / 2GiB","MemPerc":"3.15%"}'
     )
 
     assert sample == {
@@ -86,7 +87,8 @@ def test_docker_stats_snapshot_binds_compose_service_identity(
 def test_docker_stats_parser_rejects_unknown_memory_unit() -> None:
     with pytest.raises(CollectorParseError, match="memory size"):
         parse_docker_stats(
-            '{"Container":"worker-1","ID":"abc123","Name":"worker-1","CPUPerc":"1.0%","MemUsage":"10frobs / 2GiB","MemPerc":"1.0%"}'
+            '{"Container":"worker-1","ID":"abc123","Name":"worker-1",'
+            '"CPUPerc":"1.0%","MemUsage":"10frobs / 2GiB","MemPerc":"1.0%"}'
         )
 
 

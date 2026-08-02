@@ -294,12 +294,15 @@ def _write_summary_csv(
                 "case_latency_p99_ms",
                 "end_to_end_ms",
                 "collector_missed_samples",
+                "worker_cluster_cpu_percent_peak",
+                "worker_cluster_rss_bytes_peak",
             ),
         )
         writer.writeheader()
         for record in summary_records:
             arm = record["arm"]
             summary = record["summary"]
+            worker_resources = summary["worker_cluster_resources"]
             writer.writerow(
                 {
                     "arm_id": arm["arm_id"],
@@ -312,6 +315,8 @@ def _write_summary_csv(
                     "case_latency_p99_ms": summary["case_latency_ms"]["p99"],
                     "end_to_end_ms": summary["end_to_end_ms"],
                     "collector_missed_samples": summary.get("collector_missed_samples"),
+                    "worker_cluster_cpu_percent_peak": worker_resources["cpu_percent"]["peak"],
+                    "worker_cluster_rss_bytes_peak": worker_resources["rss_bytes"]["peak"],
                 }
             )
 

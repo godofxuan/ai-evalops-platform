@@ -38,17 +38,7 @@ def _value(mapping: dict[str, Any], *keys: str) -> float | None:
 def _point(record: dict[str, Any]) -> dict[str, Any]:
     arm = record["arm"]
     summary = record["summary"]
-    resources = summary.get("cpu_rss_by_container", {})
-    cpu_peaks = [
-        float(container["cpu_percent_peak"])
-        for container in resources.values()
-        if container.get("cpu_percent_peak") is not None
-    ]
-    rss_peaks = [
-        int(container["rss_bytes_peak"])
-        for container in resources.values()
-        if container.get("rss_bytes_peak") is not None
-    ]
+    worker_resources = summary.get("worker_cluster_resources", {})
     return {
         "arm_id": str(arm["arm_id"]),
         "workload": str(arm["workload"]),
@@ -63,9 +53,17 @@ def _point(record: dict[str, Any]) -> dict[str, Any]:
         "claim_latency_ms": summary.get("claim_latency_ms"),
         "db_lock_wait": summary.get("db_lock_wait"),
         "postgres_connections": summary.get("postgres_connections"),
-        "cpu_percent_peak": max(cpu_peaks) if cpu_peaks else None,
-        "rss_bytes_peak": max(rss_peaks) if rss_peaks else None,
-        "resource_containers": sorted(resources),
+        "worker_cluster_cpu_percent_peak": _value(
+            worker_resources,
+            "cpu_percent",
+            "peak",
+        ),
+        "worker_cluster_rss_bytes_peak": _value(
+            worker_resources,
+            "rss_bytes",
+            "peak",
+        ),
+        "resource_containers": sorted(worker_resources.get("worker_containers", [])),
     }
 
 
@@ -137,7 +135,7 @@ def _select(*keys: str) -> Callable[[dict[str, Any]], float | None]:
 
 
 def _rss_mib(point: dict[str, Any]) -> float | None:
-    rss_bytes = _value(point, "rss_bytes_peak")
+    rss_bytes = _value(point, "worker_cluster_rss_bytes_peak")
     return None if rss_bytes is None else rss_bytes / (1024 * 1024)
 
 
@@ -260,23 +258,23 @@ def _database(points: Sequence[dict[str, Any]], path: Path) -> None:
 
 def _cpu_and_rss(points: Sequence[dict[str, Any]], path: Path) -> None:
     figure, cpu_axes = _new_figure(
-        title="Gate 1 per-container resource peaks — every repetition",
-        y_label="Peak CPU percent",
+        title="Gate 1 Worker-cluster resource peaks — every repetition",
+        y_label="Worker-cluster peak CPU percent",
     )
     rss_axes = cpu_axes.twinx()
-    rss_axes.set_ylabel("Peak RSS MiB")
+    rss_axes.set_ylabel("Worker-cluster peak RSS MiB")
     rss_axes.ticklabel_format(axis="y", style="plain", useOffset=False)
     has_cpu = _plot_series(
         cpu_axes,
         points,
-        label="maximum container CPU",
-        selector=lambda point: _value(point, "cpu_percent_peak"),
+        label="Worker-cluster CPU",
+        selector=lambda point: _value(point, "worker_cluster_cpu_percent_peak"),
         marker="o",
     )
     has_rss = _plot_series(
         rss_axes,
         points,
-        label="maximum container RSS",
+        label="Worker-cluster RSS",
         selector=_rss_mib,
         marker="s",
         linestyle="--",
