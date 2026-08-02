@@ -5,31 +5,34 @@
 Redis Pub/Sub 只传递可丢失的实时通知，PostgreSQL 始终是 Run、Job、Attempt 和 Result 的
 最终事实来源。客户端连接 `GET /api/v1/runs/{run_id}/events` 时，服务端先执行带 tenant
 条件的 Run 查询并发送 `snapshot`，再订阅该 tenant/run 的 Redis 频道。断线重连不尝试从
-Pub/Sub 回放，而是重新读取快照。
+Pub/Sub 回放，而是重新读取快照。Run/Job 状态和通知意图通过 PostgreSQL transactional
+outbox 原子提交；API relay 负责后续 Redis 发布。
 
 ## 为什么这样设计
 
 Redis Pub/Sub 是 at-most-once：订阅者不在线时消息不会保留。把它当状态总线会造成客户端
-永久漏进度，也会让 Redis 故障改变评测正确性。因此采用两层模型：
+永久漏进度，也会让 Redis 故障改变评测正确性。直接在数据库 commit 后 publish 还会留下
+进程崩溃窗口，因此采用三层模型：
 
 ```text
-PostgreSQL transaction commits durable state
+PostgreSQL transaction commits durable state + outbox intent
                  |
                  v
-best-effort Redis PUBLISH
+API relay leases pending row -> Redis PUBLISH -> fenced acknowledgement
                  |
                  v
-SSE live notification
+SSE live notification; reconnect always starts from PostgreSQL snapshot
 ```
 
-发布失败只记录事件类型、tenant/run ID 和异常类型，不记录 Redis URL、密码或业务 payload。
-Worker、Reaper 和取消 API 都在数据库提交完成后发布。
+发布失败只记录安全错误码/异常类型，不记录 Redis URL、密码或业务 payload。失败行释放租约并按
+有界指数退避重试。Worker、Reaper 和取消 API 不再直接连接 publisher；它们只在原状态事务中
+写 Outbox。
 
 ## 事件结构
 
 每条 `ProgressEvent` 都有：
 
-- `event_id`：随机 UUID，仅用于本次实时通知标识；
+- `event_id`：由状态事务创建的稳定 UUID；重试和崩溃接管时保持不变；
 - `event_type`：受限枚举；
 - `run_id`、`tenant_id`：服务端路由和二次隔离检查；
 - `timestamp`：带时区时间；
@@ -79,17 +82,21 @@ SSE 帧包含 `id`、`event` 和单行 JSON `data`。响应使用 `Cache-Control
 - 没变化时发送来源为 `postgresql_fallback` 的 heartbeat。
 
 readiness 仍把 Redis 不可用报告为 503，因为完整实时能力不可用；但 Worker 的持久化正确性
-不依赖 readiness 或 Redis 发布成功。这是“服务完整可用”和“领域状态仍能正确推进”两个不同
-合同。
+不依赖 readiness 或 Redis 发布成功。发布失败时 Outbox row 保持 pending；API relay/Redis
+恢复后重新尝试。这是“服务完整可用”和“领域状态仍能正确推进”两个不同合同。
 
 ## 重连与重复
 
-当前不承诺事件回放，也不使用 `Last-Event-ID` 恢复 Pub/Sub 历史。客户端应把每次连接的
-首条 snapshot 当作权威基线，后续事件只作为刷新提示。Worker/Reaper 可能发布重复通知，
-客户端不能用事件数量推导最终计数。
+当前不承诺客户端历史回放，也不使用 `Last-Event-ID` 恢复 Pub/Sub 历史。客户端应把每次连接
+的首条 snapshot 当作权威基线，后续事件只作为刷新提示。
 
-如果未来需要完整事件历史，应在 PostgreSQL outbox 或 Redis Streams 上另建有持久化和消费
-确认的合同，不能假装 Pub/Sub 已具备这些语义。
+Outbox relay 是 at-least-once：Redis 已接受事件但进程在 `mark_published` 前退出时，租约过期后
+另一 relay 会用同一个 `event_id` 重放。客户端可以按 SSE `id` 去重，但不能用事件数量推导
+最终计数，也不能假定只会看到一次。
+
+当前 Outbox 保存的是平台待发布/已发布意图，不是每个 SSE 客户端的消费日志。如果未来需要
+完整客户端历史，应另建消费 offset、保留和回放合同，不能假装 Pub/Sub 或现有 Outbox 已具备
+这些语义。
 
 ## 已验证与未验证
 
@@ -101,8 +108,13 @@ readiness 仍把 Redis 不可用报告为 503，因为完整实时能力不可�
 - snapshot 先于实时事件；
 - Redis 失败转 PostgreSQL polling；
 - 关闭流释放 PubSub；
-- Redis publish 异常不让已完成 Worker 路径失败；
+- 成功、失败、重试、Claim、Reaper 和取消在状态事务内写通知意图；
+- 多 relay `SKIP LOCKED` 认领、owner fencing、超时和有界退避；
+- Redis publish 异常不让已完成 Worker 路径失败，并保留 pending row；
+- publish 成功但 ack 丢失时以相同 event ID 重放；
 - SSE 鉴权 Principal 传递和响应 headers。
 
-真实 Redis publish/subscribe 合同已写入 integration 测试。本机没有启用真实 Redis，
-因此结果是 skipped，不算通过。
+真实 PostgreSQL/Redis integration 覆盖事务回滚、跨 tenant FK、双 relay 认领、失败重试和
+ack 丢失重放。本机没有启用真实服务，因此结果是 skipped；GitHub Actions #28 已实际通过。
+完整过程和残余风险见
+[`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md)。

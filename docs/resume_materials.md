@@ -71,8 +71,8 @@ soak 或生产环境的真实数字。
    result/failure commit 再检查 owner/version/expiry。
 4. **恢复**：Reaper 回收过期 lease，旧 Worker 失去 fencing token；唯一 CaseResult
    防第二个最终结果。
-5. **实时性**：提交后 best-effort Redis publish；SSE snapshot-first，所以丢事件不丢
-   最终状态。
+5. **实时性**：状态和通知意图同事务写 PostgreSQL Outbox；API relay 有租约重试并发布
+   Redis；SSE snapshot-first，交付是 at-least-once 而非 exactly-once。
 6. **可复现性**：Run 固定 Dataset hash、target/evaluator config hash/version 和 source
    commit，结果支持指标与 case-level diff。
 7. **证据边界**：本地逻辑测试与远端真实服务/Compose 合同通过，但正式并发容量 Gate 尚未执行。

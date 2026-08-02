@@ -635,3 +635,35 @@ RED/GREEN、补丁上下文失败、工具超时、schema 影响和回滚见
 application image、完整 Compose topology、readiness 与 hardening inspect 实际执行。该 CI 没有
 创建或修改正式 `docs/results/`，没有运行 500-case/32-arm，没有资源曲线、容量拐点或部署
 Worker 数结论。
+
+## 15. P2-7 PostgreSQL transactional outbox
+
+状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
+
+旧 Worker、Reaper 与 cancel route 在状态事务提交后直接 best-effort Redis publish；进程若在
+commit 与 publish 之间退出，通知意图没有持久恢复入口。本阶段用连续 RED 提交冻结 ORM/migration、
+同事务写入、禁止直发、有界 relay、lifespan 和 observability 合同，再由 `9c0820a` 实现：
+
+- migration `20260802_0013` 新增 tenant/run 复合 FK 的 `progress_event_outbox`；
+- Claim、Result、Failure、Reaper、Cancellation 在原状态事务写稳定 event ID；
+- API relay 以 `FOR UPDATE SKIP LOCKED` 和短租约认领，事务外发布 Redis，再 fenced ack；
+- failure/timeout 释放 owner 并有界指数退避；publish-before-ack crash 会以同一 ID 重放；
+- Worker/Reaper 移除 Redis 直连，`progress.publish` span 改由真正执行 publish 的 API relay 拥有；
+- SSE 保持 snapshot-first；交付是 at-least-once，不是 exactly-once，也没有 Pub/Sub 历史回放。
+
+GitHub Actions #27 中新增 Outbox integration 本身通过，但原有双 Reaper 场景暴露真实 PostgreSQL
+外键锁升级死锁：两个事务先插 Outbox 取得同一 Run key-share，再同时升级 Run `FOR UPDATE`。
+RED `45d3354` 固定“聚合前无 Outbox”，修复 `2174324` 改为先 flush Job、按固定 Run ID 顺序聚合
+并取得更新锁，再插入 Job/Run Outbox。绑定该 head 的
+[GitHub Actions #28](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30738964791)
+最终两个 job success，真实双 Reaper、Outbox rollback/FK/双 relay/retry/replay、migration
+round-trip、image、完整 Compose/readiness/hardening 均成功。
+
+最终本地全量 `488 passed, 9 deselected`；锁 70 packages、Ruff 259 files、lint 与 119-source
+strict mypy 通过。真实 Outbox integration 本机因无服务 `1 skipped`。详细方案比较、全部
+RED/GREEN、#27 失败锁图、回滚顺序与 retention/backlog 等残余风险见
+[`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md)。
+
+本阶段没有创建/修改正式 `docs/results/`，没有运行 500-case/32-arm，没有 throughput、p95/p99、
+容量 knee、资源曲线或 adoption 结论。source/migration head 已变化，旧 prepared bundle 只能保留
+历史只读，正式执行前必须从最终干净提交重新 prepare。

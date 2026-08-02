@@ -753,3 +753,26 @@ files、mypy 117 source files、70-package lock 全通过。组合聚焦命令�
 最终 success；步骤级结果确认真实 PostgreSQL/Redis、全部 integration、P2 migration
 round-trip、image build、Compose migration/readiness/hardening 实际执行。正式 500-case/32-arm、
 资源曲线、容量 knee 和 adoption 均未运行或得出。
+
+## P2-7 更新：PostgreSQL transactional outbox
+
+状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
+
+审计确认旧状态事务与 Redis publish 是不可原子双写：数据库已提交后进程退出会永久丢失通知
+意图。实现新增 migration `0013` 和 tenant/run 复合 FK Outbox；Claim、成功、失败、重试、
+Reaper、取消都在原事务写通知，API relay 用 `SKIP LOCKED` 租约、事务外 publish、fenced ack 与
+有界退避。Worker/Reaper/cancel route 不再直发；真实 `progress.publish` span 迁移到 API relay。
+
+真实集成覆盖事务 rollback、跨 tenant FK、两个 relay 仅一个认领、publish failure 后持久重试、
+publish-before-ack crash 后同 event ID 重放。语义明确为 at-least-once；SSE 仍以 PostgreSQL
+snapshot 恢复，Pub/Sub 不是历史日志。
+
+首轮远端 #27 的 Outbox step 成功，但双 Reaper 旧测试发现新增外键锁升级死锁。根因是两个事务
+先插 Outbox 获得同一 Run key-share，再都升级 `FOR UPDATE`；修复为先按固定 Run ID 顺序聚合/
+锁父行，再插 Outbox。#28 两个 job 最终 success，真实并发、Outbox、migration、image、Compose
+全部通过。完整提交链、RED/GREEN、工具误用/超时、锁图、部署回滚与残余 GC/metrics 风险见
+[`p2_7_transactional_outbox_log.md`](p2_7_transactional_outbox_log.md)。
+
+最终本地全量 `488 passed, 9 deselected`，Ruff/lint、119-source strict mypy、70-package lock
+通过；真实服务本机 skipped。正式 Gate、容量、exactly-once、客户端历史回放和生产认证均未
+宣称完成。

@@ -939,3 +939,43 @@ Python 与配置
 必须叠加 egress policy。没有 Docker/真实服务/渗透测试证据，因此不声称完整 SSRF 防护、
 生产安全认证或正式 Gate 通过。完整逐条记录见
 `docs/reviews/p1_6_http_target_security_log.md`。
+
+## 2026-08-02 — P2-7：事务型 Outbox（完成实现与真实 CI）
+
+### 判断与设计
+
+- 旧 DB commit 后 Redis publish 存在不可恢复崩溃窗口；内存重试不能解决进程退出。
+- PostgreSQL 同事务保存状态与通知意图；Redis 继续只做低延迟 Pub/Sub，不成为第二事实源。
+- API 复用现有 DB/Redis 连接承担 relay；用短租约、`SKIP LOCKED`、网络 I/O 事务外执行、
+  owner fencing ack 和有界指数退避。
+- event ID 在状态事务生成并跨重试保持；publish-before-ack crash 会重放同 ID，明确
+  at-least-once。
+- Worker/Reaper/cancel route 移除直发；`progress.publish` span 迁移到 API relay。
+
+### 关键问题
+
+- RED 分别证明模块/migration 缺失、三处直发、五条状态路径无 Outbox、relay 配置/循环/lifespan
+  缺失和 relay span 缺失。
+- 本地真实 integration 因无服务 skipped；不能当作通过。
+- #27 的新 Outbox integration 成功，但旧双 Reaper 场景真实死锁：外键 insert 的 Run key-share
+  与后续 Run `FOR UPDATE` 升级形成环。
+- 新 RED 要求 aggregate 前无 Outbox；修复为按固定 Run ID 先锁/聚合、后插 Outbox。#28 全绿。
+- 一次把 CI YAML 传给 Ruff 产生大量伪 Python syntax error，按工具边界排除，没有修改 YAML 来
+  “修复”伪问题。
+- 非集成测试与静态检查并行时外层超时；单独运行得到 488 passed、9 deselected。
+
+### 证据与边界
+
+| 检查 | 结果 |
+|---|---|
+| 最终本地非 integration | 488 passed，9 deselected |
+| Outbox 本地真实 integration | 1 skipped |
+| Ruff / lint / strict mypy / lock | 259 files / passed / 119 sources / 70 packages |
+| GitHub Actions #27 | Outbox step 成功；双 Reaper deadlock，整体 failure |
+| GitHub Actions #28 | quality-and-integration + compose-smoke success |
+| migration | head 0013；P2 downgrade/re-upgrade remote passed |
+| 正式 500-case/32-arm | NOT_RUN |
+
+仍未解决 delivered-row GC、pending backlog/age metrics、dead-letter、客户端 offset/history、
+多区域/长时间 soak 和生产容量。完整记录见
+`docs/reviews/p2_7_transactional_outbox_log.md`。

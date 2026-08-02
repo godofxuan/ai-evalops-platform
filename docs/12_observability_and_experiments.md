@@ -50,7 +50,11 @@ carrier，不保存 baggage、tracestate、HTTP header 全集、凭据或请求�
 Worker 的每次 `job.process` 仍创建独立 root trace，并用 Span Link 指向 Run 创建 span；
 retry 通过不同 `attempt.id`、`attempt.number` 和 root trace 区分。Reaper batch 可能包含多个
 Run，所以 batch span 不绑定单个来源；每个 `reaper.job.recovered` 创建独立 linked root，
-event publish 是其 child。`job.claim` 在知道 claim 结果前开始，同样保持独立。
+`job.claim` 在知道 claim 结果前开始，同样保持独立。
+
+`progress.publish` 不再由 Worker/Reaper 创建。状态事务只写 Outbox；真正调用 Redis 的 API
+relay 为每次 publish 建该 span，并附 tenant/run/event type。这样 span 名称仍表示真实网络
+边界，不会把“写通知意图”误记成“已经发布”。
 
 这是刻意选择的异步 fan-out 语义，不是把数小时排队/retry 伪装成一个同步 parent-child 大
 trace。tenant/run/job/attempt/worker ID 仍是 durable identity，Span Link 只用于 observability，
@@ -108,7 +112,7 @@ API、Worker、Reaper 是不同操作系统进程，Python 全局内存不共享
 | `worker_heartbeat_age` | Gauge | API durable refresh | 最老活跃 heartbeat 秒数 |
 | `case_duration` | Histogram | Worker | Target + Evaluator 秒数 |
 | `sse_connections` | Gauge | SSE generator | 当前打开的 SSE iterator |
-| `redis_publish_failures_total` | Counter | Redis publisher | best-effort 发布失败 |
+| `redis_publish_failures_total` | Counter | API Outbox Redis publisher | relay 发布失败；Outbox 保持 pending 并重试 |
 
 Prometheus Python Client 会为 Counter 暴露 `_total` 后缀，因此逻辑名称
 `redis_publish_failures` 的文本格式名称是 `redis_publish_failures_total`。

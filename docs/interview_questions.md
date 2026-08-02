@@ -192,10 +192,10 @@ Run ID。
 
 ### 32. 当前最值得继续做什么？
 
-先完成 transactional outbox，使数据库事实与 best-effort Redis 通知之间的故障窗口有可恢复合同；
-随后在单独授权下用已验证的加固 Compose 运行正式四组扩容实验，保存 PostgreSQL lock wait、
-Worker 集群资源、OOM/throttling 和所有失败结果，再决定 resource limit、索引、batch claim、
-连接池或 Worker 数，而不是先猜优化。
+transactional outbox 已完成并由真实 PostgreSQL/Redis CI 验证。下一步先补 delivered-row retention、
+pending backlog/oldest-age 指标和告警；正式容量工作仍必须在单独授权下，用已验证的加固 Compose
+运行四组扩容实验，保存 PostgreSQL lock wait、Worker 集群资源、OOM/throttling 和所有失败结果，
+再决定 resource limit、索引、batch claim、连接池或 Worker 数，而不是先猜优化。
 
 ### 33. 自动 quality gate 为什么没有自动 adoption？
 
@@ -210,3 +210,11 @@ READY_FOR_HUMAN_REVIEW，adoption 仍是 NOT_RUN，selected Worker 仍为 null�
 Docker stats 调用形成一个 snapshot，在 snapshot 内求和全部 Worker replicas，再在 snapshot
 totals 上计算 p50/p95/p99/peak。缺副本不能按 0 补齐，而应让证据 UNKNOWN；重复或无效样本应
 FAILED。
+
+### 35. Transactional outbox 为什么仍不是 exactly-once？
+
+数据库状态与 Outbox intent 可以在一个 PostgreSQL 事务中原子提交，但 Redis publish 与
+`mark_published` 仍是两个动作。若 Redis 已接受、进程在 ack 前退出，租约过期后另一 relay 必须
+重放，否则会静默丢通知。因此正确合同是以稳定 event ID 提供 at-least-once，消费者可去重；
+不能承诺 exactly-once。新增外键还会改变锁图，所以 Reaper 必须先按固定顺序锁 Run、再插
+Outbox，不能只依赖 `SKIP LOCKED` 就假设没有死锁。

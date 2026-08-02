@@ -4,7 +4,8 @@
 flowchart LR
     C["Client / CI / Experiment scripts"]
     API["FastAPI API<br/>auth · idempotency · query"]
-    PG[("PostgreSQL<br/>durable source of truth")]
+    RELAY["API Outbox relay<br/>lease · publish · fenced ack"]
+    PG[("PostgreSQL<br/>durable state + outbox")]
     REDIS[("Redis Pub/Sub<br/>ephemeral progress")]
     ART["Content-addressed<br/>local artifacts"]
     W["Worker replicas<br/>claim · heartbeat · evaluate"]
@@ -14,17 +15,17 @@ flowchart LR
     OTEL["OpenTelemetry Collector<br/>(optional, not bundled)"]
 
     C -->|"Bearer API key + Idempotency-Key"| API
-    API -->|"Run/Job transaction<br/>tenant-scoped queries"| PG
+    API -->|"Run/cancel state + outbox<br/>tenant-scoped transaction"| PG
     API --> ART
     API -->|"snapshot first"| SSE
     REDIS -->|"live events"| API
     API -->|"SSE stream"| SSE
 
-    W -->|"FOR UPDATE SKIP LOCKED"| PG
-    W -->|"fenced result/failure commit"| PG
-    W -.->|"best-effort event"| REDIS
-    R -->|"SKIP LOCKED expired lease scan"| PG
-    R -.->|"best-effort recovery event"| REDIS
+    W -->|"claim/result/failure<br/>state + outbox"| PG
+    R -->|"lease recovery + outbox<br/>ordered Run locks"| PG
+    RELAY -->|"claim pending SKIP LOCKED"| PG
+    RELAY -->|"Redis publish"| REDIS
+    RELAY -->|"fenced ack / retry"| PG
 
     PROM -->|"GET /metrics"| API
     PROM -->|"each replica :9101"| W
@@ -34,8 +35,9 @@ flowchart LR
     R -.->|"OTLP/HTTP spans"| OTEL
 ```
 
-实线是领域正确性所需路径，虚线是可丢失或可选的观测路径。Redis、Prometheus 和
-OpenTelemetry 均不能覆盖 PostgreSQL 中的最终状态。
+API 与 Outbox relay 是同一 API 进程中的不同职责，不是额外 Compose 服务。PostgreSQL 是最终
+状态和待发布意图的持久边界；Redis 仍是可丢失的在线通知层。Prometheus 和 OpenTelemetry
+不能覆盖 PostgreSQL 中的最终状态。
 
 ## Job 生命周期
 
@@ -45,10 +47,12 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant T as Target
     participant E as Evaluator
+    participant O as API Outbox relay
     participant R as Redis
 
     W->>DB: claim with SKIP LOCKED
-    DB-->>W: Job + Attempt + lease/version
+    W->>DB: same transaction adds running event intent
+    DB-->>W: committed Job + Attempt + lease/version
     loop before lease expiry
         W->>DB: heartbeat(owner, version)
         DB-->>W: new fencing version / cancellation
@@ -57,13 +61,21 @@ sequenceDiagram
     T-->>W: answer/evidence or classified error
     W->>E: evaluator.evaluate
     E-->>W: automatic metrics
-    W->>DB: fenced result.persist
-    DB-->>W: committed Job/Attempt/Run aggregate
-    W-->>R: progress.publish (best effort)
+    W->>DB: fenced result + Run aggregate + event intent
+    DB-->>W: state and Outbox commit atomically
+    O->>DB: lease pending Outbox row
+    DB-->>O: stable event_id + payload
+    O->>R: progress.publish
+    alt publish succeeds within lease
+        O->>DB: fenced mark_published
+    else failure or timeout
+        O->>DB: release lease + bounded retry delay
+    end
 ```
 
-Redis 箭头发生在数据库提交之后。发布失败只影响实时通知，不能回滚已经提交的
-CaseResult。
+Redis 网络调用发生在短认领事务提交之后，不持有 PostgreSQL claim lock。发布失败只影响实时
+通知并留下 pending row，不能回滚已提交的 CaseResult。Redis 已接受但数据库确认前崩溃时，
+租约过期后会以同一 event ID 重放，所以是 at-least-once，不是 exactly-once。
 
 ## 崩溃恢复
 

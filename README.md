@@ -455,15 +455,17 @@ Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则
 
 - Worker CLI 已运行 claim、执行期 heartbeat、Target、Evaluator 与 fenced commit 循环；
 - Reaper 使用 `SKIP LOCKED` 小批量扫描并回收过期 lease；
+- Job/Run 状态与 progress notification intent 在同一 PostgreSQL 事务写入 Outbox；
+- API relay 使用短租约、`SKIP LOCKED`、fenced acknowledgement 与有界退避发布 Redis；
 - transient failure 使用带 jitter 的有界指数退避，permanent failure 不重试；
 - cooperative cancellation 由 heartbeat 观察，陈旧 Worker 不能提交结果或失败；
 - Run 创建已使用 canonical request hash、Idempotency-Key 和 PostgreSQL 唯一约束；
 - 相同 key/请求返回同一 Run，不同请求返回 409；
 - 真实 PostgreSQL 并发合同存在，但本机因无数据库而 skipped。
 
-因此当前仓库能证明幂等与租约的代码/SQL 合同，但本机无 PostgreSQL，不能证明真实行锁并发
-成功；成功、失败、重试、Reaper 与取消已有代码合同，但本机仍不能给出真实服务下
-at-least-once 执行和崩溃恢复的实验结论。
+本机无 PostgreSQL/Redis，所以真实行锁和 Outbox integration 在本地仍明确 skipped；GitHub
+Actions #28 已验证双 Reaper 并发、双 relay 认领、失败重试和 publish-before-ack 重放。这里的
+事件交付是 at-least-once，同一 `event_id` 可重复；它不证明 exactly-once 或 Pub/Sub 历史回放。
 
 ## 实验结果
 
@@ -489,6 +491,8 @@ Gate 1 自动质量检查、人工采纳边界、schema 升级和旧证据影响
 [P2-5 Gate 自动化记录](docs/reviews/p2_5_gate_automation_log.md)。
 Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具超时和 schema v6/v4 影响见
 [P2-6 Worker 集群资源记录](docs/reviews/p2_6_worker_cluster_resources_log.md)。
+状态/通知双写窗口、Outbox migration、relay 租约与退避、真实 CI 死锁及锁顺序修复见
+[P2-7 事务型 Outbox 记录](docs/reviews/p2_7_transactional_outbox_log.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
@@ -528,6 +532,19 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 [Phase 9 环境与阻塞](docs/results/phase_9_environment_and_blockers.md)。本 README 不提供
 吞吐/p50/p95 数字，因为本机没有产生这些证据。
 
+2026-08-02 P2-7 事务型 Outbox 验证结果：
+
+| 检查 | 结果 |
+|---|---|
+| lock / format / lint | 70 packages；259 Python files；All checks passed |
+| strict mypy | app + scripts + integration/concurrency，119 source files |
+| 最终 pytest 非集成 | 488 passed，9 deselected |
+| 本机 Outbox integration | 1 skipped；本机未启用真实 PostgreSQL/Redis |
+| Alembic | 唯一 head `20260802_0013`；远端 downgrade/re-upgrade 通过 |
+| GitHub Actions #27 | Outbox step 通过，但旧双 Reaper 场景发现并发死锁；整体 failure |
+| GitHub Actions #28 | 锁顺序修复后两个 job success；Outbox/并发/image/Compose 全部执行 |
+| 正式 500-case/32-arm | NOT_RUN |
+
 ## 当前限制
 
 - tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
@@ -550,6 +567,8 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 - 任意 JSONB metric 排序没有表达式索引，尚无大 Run query plan/容量证据；
 - artifact 支持已知 SHA 的无引用清理，但尚无定时全盘扫描/对象存储生命周期 GC；
 - SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
+- Outbox 是 at-least-once，同一 event ID 可能重放；尚无 delivered-row retention、pending
+  backlog/oldest-age 指标、dead-letter 或客户端消费 offset；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
 ## 面试展示路径（Phase 9）
@@ -572,8 +591,8 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 15. 解释失败分类、指数退避+jitter，以及未知内部错误为何只保存安全摘要。
 16. 展示取消如何从 running 进入 cancelling，并由 heartbeat 驱动协作式停止。
 17. 展示 Reaper 如何把过期 Attempt 标成 `lease_expired`，再决定重试、失败或取消。
-18. 解释为什么 PostgreSQL snapshot 必须先于 Redis 订阅，以及断线窗口意味着什么。
-19. 展示 Redis publish 失败为何不会改变已提交 Job，并如何退化为 PostgreSQL polling。
+18. 解释为什么 PostgreSQL snapshot 必须先于 Redis 订阅，以及 Pub/Sub 断线不能历史回放。
+19. 展示状态与 Outbox 如何同事务提交，API relay 如何租约认领、失败退避和 fenced ack。
 20. 展示 heartbeat 后结果提交必须使用最新 lease version 的回归测试。
 21. 解释 keyset cursor 为什么绑定 query contract，以及为什么它仍不是授权凭据。
 22. 展示 bool/NaN 为什么不能进入自动指标，p95 采用哪种插值定义。
@@ -588,5 +607,7 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
     继续一个跨排队/retry 的超大 parent-child trace。
 31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
 32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
-33. 明确区分本机 235 passed、CI 6 个真实服务合同 passed 和 NOT-RUN 容量实验，拒绝把
+33. 明确区分本机 488 passed、远端真实服务/Compose 合同通过和 NOT-RUN 容量实验，拒绝把
     合同当成性能实测结果。
+34. 展示 #27 外键 key-share 锁升级死锁、先锁 Run 后插 Outbox 的修复，以及为什么交付仍是
+    at-least-once 而不是 exactly-once。
