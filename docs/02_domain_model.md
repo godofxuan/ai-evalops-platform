@@ -210,6 +210,19 @@ P1-7 migration 保留所有旧 reference UUID，按 SHA 合并物理元数据。
 互相冲突，upgrade 失败；若新库已有旧模型不能无损表达的多 owner references，downgrade 失败，
 禁止静默丢失所有权。
 
+P2-1 migration 给 `dataset_versions` 增加从 Dataset 回填的 `tenant_id`，并把以下冗余归属
+事实改成数据库可验证的复合关系：
+
+- Dataset Version 的 Dataset 与 Artifact Reference tenant 相同；
+- Run 的 Dataset Version、creator API Key 与 `evaluation_runs.tenant_id` 相同；
+- Run-owned Artifact Reference 的 Run 与 reference tenant 相同；
+- Case Result 和 Human Review Task 的 `job_id`/`run_id` 指向同一 Evaluation Job；
+- Review Task、Submission 与 Adjudication 的父记录和 actor API Key 都与行内 tenant 相同。
+
+`evaluation_jobs`、`job_attempts` 和 `run_metrics` 等只有一条不可歧义父链的表没有机械复制
+tenant 列。`audit_events` 的多态 resource/actor 字符串也不伪装成只能覆盖部分事件的 FK。
+这批复合约束是应用 tenant-scoped 查询之外的纵深防御，不等于 PostgreSQL RLS。
+
 ## 8. 当前能证明与不能证明
 
 能证明：

@@ -2113,3 +2113,34 @@ git revert de1a44b659ea1edc88d97ab7aec0eccb41868240
 
 因为该提交含 `0009` migration，已升级环境必须先确认 downgrade guard 允许无损回退并执行
 Alembic downgrade；如果已有多 owner references，不能直接回退代码或强行折叠所有权。
+
+## P2-1：跨表 tenant 一致性约束
+
+### 阶段判断与实现
+
+- 起始 SHA：`397c5ccffa8bc1521e71b421785067f7aeac6d4d`；
+- 状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`；
+- 没有给所有子表机械复制 tenant，只加固同一行已经保存多份归属/父链事实的关系；
+- 新增 `20260802_0010`，给 Dataset Version 回填 tenant，并用复合 FK 绑定
+  Dataset/Artifact/Version/Run/API Key/Human Review；
+- Case Result 与 Human Review Task 用 `(job_id, run_id)` 保证同一 Job/Run lineage；
+- upgrade guard 遇到旧数据矛盾时事务失败，不自动重归属；downgrade 恢复旧单列 FK；
+- `audit_events` 多态字符串、只有单父链的表和 `case_id` 内容一致性不在本项内；没有 RLS。
+
+### 本地证据
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| ORM/query/migration 定向 | 19 passed；migration 合并 4 passed | `VERIFIED` |
+| 非 integration 全量 | 429 passed，8 deselected | `VERIFIED` |
+| Ruff format/lint | 241 files / All checks passed | `VERIFIED` |
+| strict mypy | 116 source files | `VERIFIED` |
+| uv lock | 70 packages resolved | `VERIFIED` |
+| 新 PostgreSQL constraint test | 本机 1 skipped | `NOT_RUN_LOCAL` |
+| GitHub migration/integration/Compose | 尚未推送本次 head | `PENDING` |
+| 正式 500-case/32-arm | 未运行 | `NOT_RUN` |
+
+完整逐步记录见
+[`p2_1_cross_table_tenant_consistency_log.md`](p2_1_cross_table_tenant_consistency_log.md)。普通
+CI 即使成功也只证明列出的 schema/integration/Compose 合同，不等于容量、RLS、生产安全
+或正式 Gate 通过。

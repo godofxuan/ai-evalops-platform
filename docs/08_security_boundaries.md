@@ -29,8 +29,14 @@
 - Dataset/version get 和 upload 同时过滤 tenant ID 与资源 ID。
 - 跨 tenant 与不存在都返回 404。
 - 本阶段没有管理员跨 tenant API。
+- Dataset Version、Run、Run-owned Artifact Reference 和人工复核记录使用包含 tenant 的
+  复合外键，防止单列父 ID 与行内 tenant 来自不同租户。
+- Case Result 与 Human Review Task 使用 `(job_id, run_id)` 复合外键，防止同 tenant 内也
+  把记录挂到错误 Run 的 Job 上。
 
-当前是应用层隔离，不是 PostgreSQL RLS。未来新增 repository 方法时必须有跨 tenant 负面测试。
+应用仍先执行 tenant-scoped 查询，数据库复合外键提供第二道写入完整性防线。当前不是
+PostgreSQL RLS：复合外键阻止矛盾归属行，却不会自动给任意 SELECT 注入 tenant 条件。
+未来新增 repository 方法时仍必须有跨 tenant 负面测试。
 
 ## 4. 上传边界
 

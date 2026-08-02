@@ -383,8 +383,19 @@ P1-7 migration `20260802_0009`：
 - 保留旧 Artifact UUID，并把 `dataset_versions.artifact_id` 无损切到 reference；
 - 同 tenant 的不同 Run 和不同 tenant 都可以分别拥有同一 blob，授权不再由物理去重键决定。
 
+P2-1 migration `20260802_0010`：
+
+- 给 `dataset_versions` 增加由 Dataset 派生的非空 `tenant_id`；
+- 用包含 tenant 的复合外键约束 Dataset、Artifact Reference、Dataset Version、Run、
+  API Key 与人工复核记录必须属于同一租户；
+- 用 `(job_id, run_id)` 复合外键约束 Case Result 和 Human Review Task 必须引用同一条
+  Job/Run 父链；
+- upgrade 在加约束前检查历史矛盾并失败关闭，不会擅自改写归属；downgrade 恢复旧单列
+  外键并移除可派生的 Dataset Version tenant 列。
+
 所有已实现的 dataset/version 和 artifact reference 读取先过滤服务端 tenant 与资源 ID，再
-解析 blob；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
+解析 blob。跨表复合外键提供数据库纵深防御，但当前仍未启用 PostgreSQL RLS；两者不是
+同一种隔离机制。
 
 Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
 [状态机合同](docs/03_state_machines.md)。

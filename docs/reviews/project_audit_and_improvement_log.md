@@ -569,3 +569,22 @@ Docker/PostgreSQL/Redis，正式 500-case 矩阵及正式数据图仍为 `NOT_RU
 Worker 结论。完整的逐步判断、RED→GREEN、问题与效果记录见：
 
 - [Gate 1 execution log](../gate_1_execution_log.md)
+
+## P2-1 更新：跨表 tenant 与 Job/Run 一致性
+
+状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+
+审计确认正常服务路径大多从 principal 派生 tenant，但旧数据库只用单列 FK，仍允许
+Dataset、Artifact、Run、API Key 与人工复核记录分别存在却来自不同 tenant，也允许 Case
+Result/Review Task 的 Job 和 Run 不同源。新增 migration `20260802_0010`：
+
+- 给 Dataset Version 增加从 Dataset 回填的 tenant；
+- 用 tenant 复合 FK 绑定 Dataset/Artifact/Version/Run/API Key/Review lineage；
+- 用 `(job_id, run_id)` 绑定 Result/Review Task 的 Job/Run lineage；
+- upgrade 对历史矛盾失败关闭，downgrade 恢复旧 FK 和可派生列；
+- CI 增加 13 类真实 PostgreSQL 非法插入与 `0010→0009→0010` round-trip。
+
+本地 `429 passed, 8 deselected`，Ruff 241 files、mypy 116 source files、70-package lock 与
+4 个离线 migration 合同均通过；真实 PostgreSQL 测试本机明确 skipped，远端结果不能提前
+写成成功。完整适用性判断、RED/GREEN、63 字符 constraint 名问题、uv cache 问题和残余
+边界见 [`p2_1_cross_table_tenant_consistency_log.md`](p2_1_cross_table_tenant_consistency_log.md)。
