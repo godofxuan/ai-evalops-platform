@@ -298,3 +298,42 @@ Task 创建，用仍包含 `0011` 的当前 release 执行 `alembic downgrade 20
 删除权限列，再部署 revert 后的代码。该 downgrade 不删除 API Key、Task 或 review history，
 但会恢复“所有同 tenant 有效 key 都能创建 Task”的旧宽松行为，因此只能在明确接受安全退回时
 执行。文档提交和远端 CI 证据将分别记录，不与本实现提交混淆。
+
+## 10. 推送与远端真实服务证据
+
+- 文档提交：`bbbf7a3995e770724ef79d715370ed9d771f38ca`；
+- 推送分支：`codex/gate1-evidence-hardening`；
+- 远端 Run：
+  [GitHub Actions Run #17](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30730652470)；
+- 绑定 head：`bbbf7a3995e770724ef79d715370ed9d771f38ca`；
+- workflow：`completed / success`；
+- `quality-and-integration`：`completed / success`；
+- `compose-smoke`：`completed / success`。
+
+公开 GitHub API 的 step 级结果明确显示：
+
+| 远端 step | 结果 |
+|---|---|
+| Run tests without external services | `completed / success` |
+| Apply migrations | `completed / success` |
+| Integration - blinded human review | `completed / success` |
+| Migration - P2 downgrade and re-upgrade | `completed / success` |
+| Build application image | `completed / success` |
+| Build the complete current topology | `completed / success` |
+| Start and wait for PostgreSQL and Redis | `completed / success` |
+| Apply migrations in the Compose topology | `completed / success` |
+| Start API, Worker, and Reaper | `completed / success` |
+| Verify readiness through the published API port | `completed / success` |
+
+因此，`0011` 的真实 PostgreSQL upgrade、Human Review 权限矩阵、实际 downgrade/re-upgrade、
+镜像构建和 Compose readiness 均从 `REMOTE_PENDING` 提升为 `VERIFIED`。当前阶段结论更新为
+`LOCAL_AND_REMOTE_CONTRACT_VERIFIED / FORMAL_GATE_NOT_RUN`。
+
+轮询时有两次本地 PowerShell 只读查询失败：把 `foreach (...) { ... }` 的输出直接接到
+`Format-Table` 管道，解析器报告 empty pipe element。第一次修正了一个查询，第二个轮询模板
+却重复使用了同类写法；最终统一改成先构造 `$Rows=@(...)` 再格式化。两次错误都发生在本地
+公开 API 展示脚本中，没有修改仓库、没有取消/重跑 CI，也不代表远端 step 失败。保留这条记录
+是为了避免以后把“证据读取工具失败”误写成“被验证系统失败”。
+
+Run #17 是普通 CI 合同证据，不是正式 500-case/32-arm、容量、RLS、RBAC、灾难恢复或生产
+安全验证。形式化 Gate 1 继续保持 `NOT_RUN`。

@@ -597,7 +597,7 @@ Result/Review Task 的 Job 和 Run 不同源。新增 migration `20260802_0010`�
 
 ## P2-2 更新：Human Review Task 创建权限
 
-状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`LOCAL_AND_REMOTE_CONTRACT_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 审计确认旧 `POST /runs/{run_id}/review-tasks` 只校验 Run tenant，没有能力检查；任何同 tenant
 有效 key 都能扩大 review cohort 并触发 packet artifact。直接复用 `can_review` 会让每个
@@ -621,3 +621,9 @@ RED/GREEN、为什么不用 `can_review`、lint 跟进、升级兼容性和回�
 
 该修改仍不是通用 RBAC、自然人认证、组织审批或数据库 RLS；管理员必须轮换/创建新 creator
 credential。正式 500-case/32-arm Gate 未启动，普通权限 CI 不改变其 `NOT_RUN`。
+
+后续远端证据已产生：绑定 head `bbbf7a3995e770724ef79d715370ed9d771f38ca` 的
+[GitHub Actions Run #17](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30730652470)
+最终为 success。`quality-and-integration` 与 `compose-smoke` 均成功，且 step 级结果确认真实
+Human Review、migration downgrade/re-upgrade、image、Compose migration 与 readiness 都
+实际执行。这解决了本节的远端 pending，但仍不支持形式化 Gate、通用 RBAC 或生产安全结论。

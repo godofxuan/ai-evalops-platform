@@ -2156,7 +2156,7 @@ integration 和实际 `0010→0009→0010` 也明确执行成功。正式 Gate �
 
 - 起始 SHA：`687cf903ae75b849155ce8ca6855404587fe9f60`；
 - 实现提交：`7aab279cdb95a2e1a615d6c982ffddee333db240`；
-- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`；
+- 当前状态：`LOCAL_AND_REMOTE_CONTRACT_VERIFIED / FORMAL_GATE_NOT_RUN`；
 - 没有把创建权复用或自动绑定到 `can_review`，而是新增默认 false 的独立
   `can_create_review_tasks`；
 - service 在打开 transaction、查询 Run 或写 packet artifact 前失败关闭；
@@ -2179,9 +2179,16 @@ integration 和实际 `0010→0009→0010` 也明确执行成功。正式 Gate �
 | uv lock / Alembic | 70 packages；唯一 head `0011` | `VERIFIED` |
 | 全部离线 migration tests | 6 passed | `VERIFIED` |
 | Human Review PostgreSQL 权限矩阵 | 本机 1 skipped | `NOT_RUN_LOCAL` |
-| GitHub Actions / Compose | 尚未推送本阶段提交 | `REMOTE_PENDING` |
+| GitHub Actions Run #17 | 两个 job、Human Review、migration round-trip、image、Compose success | `VERIFIED` |
 | 正式 500-case/32-arm | 未运行 | `NOT_RUN` |
 
 升级会让所有既有 key 默认失去 Task 创建权，管理员必须显式创建 creator credential；这是
 预期的 fail-closed 兼容性变化。普通 CI 即使成功也只能证明列出的 migration、真实服务和
 Compose 合同，不会把 Boolean capability 提升为通用 RBAC，也不改变正式 Gate 的 `NOT_RUN`。
+
+远端证据绑定 head `bbbf7a3995e770724ef79d715370ed9d771f38ca`：
+[GitHub Actions Run #17](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30730652470)
+为 `completed / success`，两个 job 均成功。公开 step 结果明确确认 blinded Human Review、
+实际 P2 downgrade/re-upgrade、应用 image，以及 Compose 构建、migration、API/Worker/Reaper
+与 readiness 全部执行成功。该证据把远端普通合同从 pending 提升为 `VERIFIED`，形式化 Gate
+仍为 `NOT_RUN`。
