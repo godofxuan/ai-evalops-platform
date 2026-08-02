@@ -35,9 +35,18 @@ x-app-service: &app-service
     context: ..
     dockerfile: Dockerfile
   image: ai-evalops-platform:phase9
+  user: "10001:10001"
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - "no-new-privileges:true"
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cpus: "${EVALOPS_APP_CPUS:-1.0}"
+  mem_limit: "${EVALOPS_APP_MEMORY_LIMIT:-512m}"
+  pids_limit: "${EVALOPS_APP_PIDS_LIMIT:-256}"
   environment: *app-environment
-  volumes:
-    - artifact_data:/data/artifacts
 
 x-ready-dependencies: &ready-dependencies
   postgres:
@@ -50,6 +59,18 @@ x-ready-dependencies: &ready-dependencies
 services:
   postgres:
     image: postgres:18.4-alpine3.24
+    user: postgres
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/run/postgresql:size=16m,mode=3777
+    cpus: "${EVALOPS_POSTGRES_CPUS:-1.0}"
+    mem_limit: "${EVALOPS_POSTGRES_MEMORY_LIMIT:-512m}"
+    pids_limit: "${EVALOPS_POSTGRES_PIDS_LIMIT:-256}"
     environment:
       POSTGRES_DB: evalops
       POSTGRES_USER: evalops
@@ -67,6 +88,17 @@ services:
 
   redis:
     image: redis:8.8.1-alpine3.23
+    user: redis
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cpus: "${EVALOPS_REDIS_CPUS:-0.5}"
+    mem_limit: "${EVALOPS_REDIS_MEMORY_LIMIT:-256m}"
+    pids_limit: "${EVALOPS_REDIS_PIDS_LIMIT:-128}"
     command: ["redis-server", "--appendonly", "yes", "--loglevel", "warning"]
     ports:
       - "127.0.0.1:${EVALOPS_REDIS_PORT:-6379}:6379"
@@ -102,6 +134,8 @@ services:
       ]
     ports:
       - "127.0.0.1:${EVALOPS_API_PORT:-8000}:8000"
+    volumes:
+      - artifact_data:/data/artifacts
     depends_on: *ready-dependencies
     healthcheck:
       test:
@@ -121,6 +155,8 @@ services:
     command: ["python", "-m", "app.cli", "worker"]
     expose:
       - "9101"
+    volumes:
+      - artifact_data:/data/artifacts
     depends_on: *ready-dependencies
 
   reaper:
