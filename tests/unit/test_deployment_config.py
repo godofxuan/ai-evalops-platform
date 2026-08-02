@@ -24,6 +24,26 @@ def test_http_target_registry_is_documented_and_forwarded_to_services() -> None:
     )
 
 
+def test_outbox_runtime_settings_are_documented_and_forwarded_to_services() -> None:
+    env_example = Path(".env.example").read_text(encoding="utf-8")
+    environment = _load_compose()["x-app-environment"]
+    expected = {
+        "EVALOPS_OUTBOX_POLL_SECONDS": "0.5",
+        "EVALOPS_OUTBOX_BATCH_SIZE": "50",
+        "EVALOPS_OUTBOX_LEASE_SECONDS": "30",
+        "EVALOPS_OUTBOX_PUBLISH_TIMEOUT_SECONDS": "5",
+        "EVALOPS_OUTBOX_RETRY_BASE_SECONDS": "1",
+        "EVALOPS_OUTBOX_RETRY_MAX_SECONDS": "60",
+        "EVALOPS_OUTBOX_RETENTION_SECONDS": "604800",
+        "EVALOPS_OUTBOX_CLEANUP_INTERVAL_SECONDS": "60",
+        "EVALOPS_OUTBOX_CLEANUP_BATCH_SIZE": "500",
+    }
+
+    for name, default in expected.items():
+        assert f"{name}={default}" in env_example
+        assert environment[name] == f"${{{name}:-{default}}}"
+
+
 def test_every_compose_service_has_an_explicit_non_root_user() -> None:
     services = _load_compose()["services"]
 
