@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -12,6 +12,7 @@ from app.events.outbox import (
     ClaimedOutboxEvent,
     OutboxDispatcher,
     OutboxDispatchResult,
+    build_cleanup_outbox_statement,
     build_claim_outbox_statement,
     enqueue_progress_event,
     outbox_retry_delay_seconds,
@@ -137,6 +138,27 @@ def test_outbox_claim_statement_is_due_ordered_and_skip_locked() -> None:
     assert "ORDER BY progress_event_outbox.available_at ASC" in sql
     assert "FOR UPDATE OF progress_event_outbox SKIP LOCKED" in sql
     assert "LIMIT 25" in sql
+
+
+def test_outbox_cleanup_statement_only_selects_expired_published_rows() -> None:
+    sql = str(
+        build_cleanup_outbox_statement(
+            published_before=NOW - timedelta(days=7),
+            limit=25,
+        ).compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "progress_event_outbox.published_at IS NOT NULL" in sql
+    assert "progress_event_outbox.published_at <" in sql
+    assert "ORDER BY progress_event_outbox.published_at ASC" in sql
+    assert "progress_event_outbox.id ASC" in sql
+    assert "FOR UPDATE OF progress_event_outbox SKIP LOCKED" in sql
+    assert "LIMIT 25" in sql
+    assert "DELETE FROM progress_event_outbox" in sql
+    assert "RETURNING progress_event_outbox.id" in sql
 
 
 async def test_dispatcher_publishes_original_event_id_then_fenced_acknowledges() -> None:
