@@ -20,11 +20,14 @@ from app.events.outbox import (
     ClaimedOutboxEvent,
     OutboxDispatcher,
     OutboxDispatchResult,
+    SQLAlchemyOutboxMaintenance,
     SQLAlchemyOutboxStore,
     enqueue_progress_event,
 )
 from app.events.publisher import RedisEventPublisher
 from app.events.subscriber import RedisEventSubscriber
+from app.observability.durable import refresh_durable_outbox_gauges
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.orm_models import (
     APIKey,
@@ -170,6 +173,9 @@ async def test_real_transactional_outbox_claim_retry_and_at_least_once_delivery(
     concurrent_event_id = uuid4()
     retry_event_id = uuid4()
     replay_event_id = uuid4()
+    old_published_ids = (uuid4(), uuid4())
+    recent_published_id = uuid4()
+    old_pending_id = uuid4()
     blob_sha256 = hashlib.sha256(tenant_id.bytes).hexdigest()
     subscriber = RedisEventSubscriber(redis_client, poll_timeout_seconds=0.05)
     stream = subscriber.listen(tenant_id=tenant_id, run_id=run_id)
@@ -429,6 +435,88 @@ async def test_real_transactional_outbox_claim_retry_and_at_least_once_delivery(
             assert replay_row.published_at == clock.now()
             assert replay_row.attempt_count == 2
             assert replay_row.lease_owner is None
+
+        retention_now = clock.now()
+        old_timestamp = retention_now - timedelta(days=8)
+        recent_timestamp = retention_now - timedelta(days=1)
+
+        def retention_row(
+            event_id: UUID,
+            *,
+            created_at: datetime,
+            published_at: datetime | None,
+        ) -> ProgressEventOutbox:
+            return ProgressEventOutbox(
+                id=event_id,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                event_type=EventType.JOB_PROGRESS.value,
+                payload_json={"status": "retention-integration"},
+                occurred_at=created_at,
+                available_at=created_at,
+                attempt_count=1 if published_at is not None else 0,
+                published_at=published_at,
+                created_at=created_at,
+            )
+
+        async with session_factory.begin() as session:
+            session.add_all(
+                [
+                    *(
+                        retention_row(
+                            event_id,
+                            created_at=old_timestamp,
+                            published_at=old_timestamp,
+                        )
+                        for event_id in old_published_ids
+                    ),
+                    retention_row(
+                        recent_published_id,
+                        created_at=recent_timestamp,
+                        published_at=recent_timestamp,
+                    ),
+                    retention_row(
+                        old_pending_id,
+                        created_at=old_timestamp,
+                        published_at=None,
+                    ),
+                ]
+            )
+
+        cleanup_results = await asyncio.gather(
+            SQLAlchemyOutboxMaintenance(
+                session_factory,
+                retention_seconds=7 * 24 * 60 * 60,
+                clock=clock,
+            ).cleanup_once(limit=1),
+            SQLAlchemyOutboxMaintenance(
+                session_factory,
+                retention_seconds=7 * 24 * 60 * 60,
+                clock=clock,
+            ).cleanup_once(limit=1),
+        )
+        assert sorted(cleanup_results) == [1, 1]
+        async with session_factory() as session:
+            assert all(
+                [
+                    await session.get(ProgressEventOutbox, event_id) is None
+                    for event_id in old_published_ids
+                ]
+            )
+            assert await session.get(ProgressEventOutbox, recent_published_id) is not None
+            assert await session.get(ProgressEventOutbox, old_pending_id) is not None
+
+        metrics = PlatformMetrics()
+        gauges = await refresh_durable_outbox_gauges(
+            session_factory=session_factory,
+            metrics=metrics,
+            now=retention_now,
+        )
+        assert gauges.pending == 1
+        assert gauges.oldest_pending_age_seconds(retention_now) == 8 * 24 * 60 * 60
+        rendered = metrics.render().decode("utf-8")
+        assert "outbox_pending 1.0" in rendered
+        assert "outbox_oldest_pending_age_seconds 691200.0" in rendered
     finally:
         if pending is not None and not pending.done():
             pending.cancel()
