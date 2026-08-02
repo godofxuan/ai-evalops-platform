@@ -19,8 +19,8 @@ at-least-once Job 执行、崩溃恢复、幂等结果持久化、SSE 进度、R
   pagination、指标聚合和同/跨版本 Run diff。
 - 实现双 reviewer 盲评、不可变 submission、Task 行锁和第三方 adjudication，明确
   can_review 只是管理员信任边界，不冒充真人身份认证。
-- 接入 Prometheus 与 OpenTelemetry，设计低基数指标、W3C trace context、Worker
-  业务 span、Redis/SSE 故障指标和可复现实验结果保存。
+- 接入 Prometheus 与 OpenTelemetry，设计低基数指标、W3C trace context、持久化 Run carrier
+  与 Worker/Reaper 异步 Span Link、Redis/SSE 故障指标和可复现实验结果保存。
 - 建立 unit/API/真实 PostgreSQL/Redis/concurrency/failure-injection 四层合同；本地
   231 个非集成测试通过，真实服务合同因当前环境无 Docker 明确标记为 skipped。
 

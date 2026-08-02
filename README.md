@@ -109,7 +109,7 @@ Phase 9 已建立：
 - API/Worker/Reaper 独立 Prometheus registry 与低基数指标；
 - API `/metrics`、Worker 9101、Reaper 9102 抓取入口；
 - API request、Run 创建、claim、Target、Evaluator、result、Reaper、SSE 业务 span；
-- W3C `traceparent` 延续，以及 request/trace/tenant/run/job/attempt/worker 日志关联；
+- W3C `traceparent` API 延续、Run 来源 carrier 持久化，以及 Worker/Reaper 异步 Span Link；
 - question/answer/evidence/credential 等敏感字段脱敏；
 - Redis/数据库单轮故障、SSE 断连和观测资源生命周期回归；
 - 20 个并发幂等请求、10 Worker/100 Jobs、2 Reaper 的真实 PostgreSQL 测试合同；
@@ -414,6 +414,14 @@ P2-2 migration `20260802_0011`：
 - creator-only key 可以创建 Task，但不会因此获得 list/submit/adjudicate reviewer 权限；
 - 权限只从数据库认证记录进入 Principal，请求 body/query/header 不能自我提权。
 
+P2-3 migration `20260802_0012`：
+
+- `evaluation_runs.origin_traceparent` 保存首次创建 Run 的平台 `run.create` span carrier；
+- 每次 Worker attempt 保持独立 root trace，通过 Span Link 指向 Run 创建 span；
+- Reaper batch 保持独立，每个 recovered Job 产生自己的 linked root span；
+- 历史 Run、禁用 telemetry 和 malformed carrier 安全退化为无 Link，不影响业务状态；
+- 只保存 W3C `traceparent`，不持久化 baggage、tracestate、凭据或请求内容。
+
 所有已实现的 dataset/version 和 artifact reference 读取先过滤服务端 tenant 与资源 ID，再
 解析 blob。跨表复合外键提供数据库纵深防御，但当前仍未启用 PostgreSQL RLS；两者不是
 同一种隔离机制。
@@ -509,7 +517,8 @@ P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RE
 - HTTP Target 已固定经过验证的数值公网 IP，并在读取正文前校验实际 peer；仍依赖当前
   HTTPX/HTTPCore transport 元数据合同和部署级 egress 控制，不声称完全消除 SSRF；
 - 已有 Prometheus 指标和 OpenTelemetry SDK span，但本机未配置 Prometheus/Collector；
-- API 与 Worker 当前通过领域 ID 关联不同 trace，尚未持久化跨进程 parent context；
+- API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
+  Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
 - can_create_review_tasks 与 can_review 独立且都默认关闭；当前仍不是通用 RBAC/scope 系统；
@@ -551,7 +560,8 @@ P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RE
 27. 展示为什么 task/reviewer unique 仍需要 Task `FOR UPDATE`。
 28. 解释 observed/expected agreement、kappa 和单类别分母为零。
 29. 展示为什么 tenant/run/job ID 进入 trace/log 而不是 Prometheus label。
-30. 展示 API 如何延续 W3C traceparent，以及为什么 Worker 目前是新的 trace。
+30. 展示 API 如何延续 W3C traceparent，以及为什么 Worker 用新 trace + Span Link，而不是
+    继续一个跨排队/retry 的超大 parent-child trace。
 31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
 32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
 33. 明确区分本机 235 passed、CI 6 个真实服务合同 passed 和 NOT-RUN 容量实验，拒绝把

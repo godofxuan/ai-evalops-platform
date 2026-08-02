@@ -2192,3 +2192,39 @@ Compose 合同，不会把 Boolean capability 提升为通用 RBAC，也不改�
 实际 P2 downgrade/re-upgrade、应用 image，以及 Compose 构建、migration、API/Worker/Reaper
 与 readiness 全部执行成功。该证据把远端普通合同从 pending 提升为 `VERIFIED`，形式化 Gate
 仍为 `NOT_RUN`。
+
+## P2-3：API → Worker/Reaper 异步 Span Link
+
+### 阶段判断与实现
+
+- 起始 SHA：`68fffc239e27da7b6c612944e4963a73513edcdb`；
+- 实现提交：`c1cd6074463a6820fa1a7cb8d12f620eb3a4a1a3`；
+- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`；
+- 没有让长时间 fan-out/retry Worker 继续 API parent，而选择“每 attempt 新 root + Span Link”；
+- `20260802_0012` 在 Run 保存首次平台 `run.create` traceparent，历史行保持 NULL；
+- claim/reaper 复用现有 Run join，无 Job 字段复制或额外查询；
+- Worker attempt 与逐 Job Reaper recovery 建立 Link，batch claim/reaper span 保持独立；
+- 只保存 traceparent，不保存 baggage/tracestate/凭据，且不参与 tenant、授权、幂等或调度；
+- missing/invalid/disabled/propagator failure 都安全退化，不阻断业务。
+
+完整方案比较、调用链地图、逐条 RED/GREEN、format/import/Optional/propagator 问题、prepared
+bundle 影响和回滚顺序见
+[`p2_3_async_trace_link_log.md`](p2_3_async_trace_link_log.md)。
+
+### 本地证据与边界
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| P2-3 聚焦 | 59 passed | `VERIFIED` |
+| 非 integration 全量 | 446 passed，8 deselected | `VERIFIED` |
+| Ruff format/lint | 247 files / All checks passed | `VERIFIED` |
+| strict mypy | 116 source files | `VERIFIED` |
+| uv lock / Alembic | 70 packages；唯一 head `0012` | `VERIFIED` |
+| 全部离线 migration tests | 8 passed | `VERIFIED` |
+| PostgreSQL claim/reap carrier 合同 | 本机 1 skipped | `NOT_RUN_LOCAL` |
+| GitHub Actions / image / Compose | 尚未推送本阶段提交 | `REMOTE_PENDING` |
+| Collector/backend 与正式 Gate | 未运行 | `NOT_RUN` |
+
+当前只能证明 SDK 与本地数据流合同。没有 Collector/backend，因此不能声称 Span Link 已在生产
+UI、采样和保留策略中验证；普通远端 CI 即使成功也不等于容量或正式 Gate。旧 prepared bundle
+因 source/migration 变化必须重新 prepare，历史 evidence 不覆盖。

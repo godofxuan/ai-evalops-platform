@@ -39,12 +39,23 @@ trace 都不能反向决定领域状态。
 - `failure.persist`
 - `progress.publish`
 - `reaper.recover_expired_leases`
+- `reaper.job.recovered`
 - `sse.connection`
 
 API middleware 从 `traceparent` 提取 W3C Trace Context，所以调用方传入的合法
-trace ID 会延续到 API 子 span 和日志。Worker/Reaper 是独立进程，目前没有把
-父 trace context 持久化到 Job，因此它们创建新的 trace，并通过 tenant/run/job/
-attempt ID 与领域记录关联。这里不能声称已经实现跨队列端到端单 trace。
+trace ID 会延续到 API 子 span 和日志。首次创建 Run 时，平台把当前 `run.create` span
+注入的 version 00 `traceparent` 保存到 `evaluation_runs.origin_traceparent`。只保存这个
+carrier，不保存 baggage、tracestate、HTTP header 全集、凭据或请求内容。
+
+Worker 的每次 `job.process` 仍创建独立 root trace，并用 Span Link 指向 Run 创建 span；
+retry 通过不同 `attempt.id`、`attempt.number` 和 root trace 区分。Reaper batch 可能包含多个
+Run，所以 batch span 不绑定单个来源；每个 `reaper.job.recovered` 创建独立 linked root，
+event publish 是其 child。`job.claim` 在知道 claim 结果前开始，同样保持独立。
+
+这是刻意选择的异步 fan-out 语义，不是把数小时排队/retry 伪装成一个同步 parent-child 大
+trace。tenant/run/job/attempt/worker ID 仍是 durable identity，Span Link 只用于 observability，
+不能参与授权、tenant、claim、retry 或幂等判断。历史 Run、disabled telemetry 和非法 carrier
+安全退化为无 Link，业务继续执行。
 
 ### 2.2 为什么 Prometheus 不使用 tenant_id/run_id/job_id 标签
 
@@ -212,7 +223,8 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 
 - 指标名称、label 边界和文本暴露有自动化测试；
 - W3C 传入 trace ID 能进入 API 日志；
-- Worker 关键业务 span 存在父子关系；
+- Run 创建 carrier 只保存平台 span 的 traceparent，幂等 replay 不覆盖首次来源；
+- Worker/Reaper linked root 和内部业务 span 父子关系有 in-memory exporter 自动化测试；
 - SSE 关闭会归零连接 Gauge 并关闭底层 subscriber；
 - Redis 第一次失败、恢复后第二次发布可继续；
 - 数据库单次迭代异常被记录后 Worker loop 可继续下一轮；
@@ -223,7 +235,8 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 - 本机没有 Docker/PostgreSQL/Redis，真实并发和容量结果未执行；
 - 没有 Collector/trace backend，无法证明 OTLP 网络导出和后端查询；
 - 没有 Prometheus server，无法证明多副本 service discovery 和告警规则；
-- 没有跨 Job 持久化 parent trace context，API 与 Worker 不是同一个 trace；
+- API 与 Worker/Reaper 按设计不是同一个 trace；没有真实 backend 证据证明 Span Link 在目标
+  UI、采样和保留策略下可查询，历史 NULL carrier 也不会被反向补齐；
 - 没有生产流量、长时间 soak test、DB lock wait 和资源上限数据；
 - 项目没有通过生产可靠性、安全或性能认证。
 
@@ -232,6 +245,8 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 - **只用日志**：无法低成本做百分位、趋势和告警。
 - **只用自动框架埋点**：看不到业务流水线内部边界。
 - **tenant/run/job 作为指标标签**：高基数风险不可接受。
+- **Worker 继续 API parent**：会把长时间排队、fan-out 和 retry 合并成超大 trace；采用新
+  root + Span Link 表达异步因果。
 - **Redis 保存 durable 指标状态**：违反 PostgreSQL 最终事实来源。
 - **在本机伪造负载结果**：脚本存在不等于实验执行，违反证据要求。
 

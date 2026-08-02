@@ -99,10 +99,13 @@ queue/running/heartbeat Gauge 在 API scrape 时直接从 PostgreSQL 刷新。
 SDK 仍生成 trace ID，可关联本进程日志和单元测试，但 span 不会持久化到后端。不能
 声称已经具备生产 trace 查询能力。
 
-### 18. 为什么 API 和 Worker 不是同一个 trace？
+### 18. 为什么 API 和 Worker 不继续同一个 trace？
 
-异步边界没有持久化 W3C parent context。当前用 run/job/attempt attributes 关联不同
-process trace。下一步可在 Job 保存 traceparent，并让 Worker 创建 child 或 Span Link。
+Run 会 fan-out 成多个 Job，可能排队很久并多次 retry；继续 parent 会形成跨小时、超大且由
+最初请求采样决定的 trace。系统在 Run 保存平台 `run.create` traceparent，每次 Worker attempt
+创建新 root trace并用 Span Link 表达来源，Reaper 也按 recovered Job 单独 link。领域 ID 仍
+负责 durable identity，trace context 不参与授权或调度。没有真实 Collector/backend 时，只能
+证明 SDK span/link 合同，不能声称生产查询已验证。
 
 ### 19. SSE connection Gauge 为什么容易泄漏？
 

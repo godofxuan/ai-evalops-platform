@@ -230,6 +230,11 @@ P2-2 migration 新增 `api_keys.can_create_review_tasks`，默认 false。该 ca
 `human_review_tasks.created_by` 记录实际 creator，并由 P2-1 复合 FK 保证同 tenant；创建瞬间
 的 capability 则由 service 在任何数据库/文件写入前校验。
 
+P2-3 migration 给 `evaluation_runs` 增加 nullable `origin_traceparent`。它只保存首次成功创建
+Run 时平台 `run.create` span 注入的 55 字符 W3C carrier，供每次 Worker attempt 和 Reaper
+recovery 创建 Span Link；历史 Run 不伪造 backfill。该字段不是 tenant、授权、幂等或调度事实，
+也不保存 baggage、tracestate 或凭据。Job/Reaper 已经 join Run，因此不在每个 Job 重复该值。
+
 ## 8. 当前能证明与不能证明
 
 能证明：

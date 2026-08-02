@@ -627,3 +627,29 @@ credential。正式 500-case/32-arm Gate 未启动，普通权限 CI 不改变�
 最终为 success。`quality-and-integration` 与 `compose-smoke` 均成功，且 step 级结果确认真实
 Human Review、migration downgrade/re-upgrade、image、Compose migration 与 readiness 都
 实际执行。这解决了本节的远端 pending，但仍不支持形式化 Gate、通用 RBAC 或生产安全结论。
+
+## P2-3 更新：API → Worker/Reaper 异步 Span Link
+
+状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`。
+
+审计确认 API middleware 能延续入站 W3C context，但 Run transaction 不保存来源；Worker 每次
+attempt 与 Reaper 都创建新 trace，只能靠领域 ID 人工关联。直接继续 API parent 会把长时间
+排队、fan-out 和 retry 合并成超大 trace，因此实现提交
+`c1cd6074463a6820fa1a7cb8d12f620eb3a4a1a3` 选择异步 Span Link：
+
+- Run 新增 nullable `origin_traceparent`，只保存首次平台 `run.create` span carrier；
+- idempotent replay 不捕获或覆盖新 context，历史 Run 不伪造 backfill；
+- claim/reaper 通过现有 joined Run 传播，Worker attempt 和逐 Job recovery 分别建立 linked root；
+- API 来源 span、Worker/Reaper span 都携带 run/job/attempt 等领域 attributes；
+- baggage/tracestate/凭据不保存，trace 不参与 tenant、授权、调度、retry 或幂等；
+- malformed、disabled 和 propagator exception 安全降级为无 Link；
+- migration `0012` upgrade/downgrade 只增删 nullable 55 字符列。
+
+本地最终为 `446 passed, 8 deselected`；聚焦 59 passed、真实 PostgreSQL 1 skipped；Ruff 247
+files、mypy 116 source files、70-package lock、唯一 head `0012` 与 8 migration tests 全部通过。
+远端真实 PostgreSQL propagation、migration round-trip、image 与 Compose 尚未执行。完整过程见
+[`p2_3_async_trace_link_log.md`](p2_3_async_trace_link_log.md)。
+
+没有 Collector/trace backend，所以不能声称 Link UI、采样、保留或生产 OTLP 已验证；API 与
+Worker 按设计不是同一 trace。旧 prepared bundle 因 source/migration 变化必须重新 prepare，
+正式 500-case/32-arm Gate 继续 `NOT_RUN`。
