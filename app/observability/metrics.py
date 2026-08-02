@@ -119,6 +119,11 @@ class PlatformMetrics:
             "Unix timestamp of the most recent successful durable Outbox metrics refresh.",
             registry=self.registry,
         )
+        self._outbox_metrics_refresh_failures = Counter(
+            "outbox_metrics_refresh_failures",
+            "Durable Outbox metrics refreshes that failed in this process.",
+            registry=self.registry,
+        )
         self._outbox_retry_scheduled = Counter(
             "outbox_retry_scheduled",
             "Durable progress publications rescheduled after a failed attempt.",
@@ -200,6 +205,9 @@ class PlatformMetrics:
 
     def record_outbox_metrics_refresh_success(self, observed_at: datetime) -> None:
         self._outbox_metrics_last_success_timestamp.set(observed_at.timestamp())
+
+    def record_outbox_metrics_refresh_failure(self) -> None:
+        self._outbox_metrics_refresh_failures.inc()
 
     def record_outbox_retry_scheduled(self, count: int = 1) -> None:
         if count > 0:
