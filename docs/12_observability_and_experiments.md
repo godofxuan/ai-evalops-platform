@@ -181,7 +181,14 @@ uv run python -m scripts.run_load_test
 - case latency p50/p95；
 - duplicate case count；
 - retry count；
-- failure count。
+- failure count；
+- 每个 Docker stats 快照内全部 Worker 副本的 CPU/RSS 总量，以及快照总量的
+  p50/p95/p99/peak。
+
+Worker 身份来自 Compose `Service` metadata 与完整 Docker container ID 的唯一绑定，不从容器名
+猜测。API、Reaper、PostgreSQL 和 Redis 不进入 Worker 集群总量；每容器 peak 仅保留用于诊断。
+缺 Worker 副本时资源证据为 `UNKNOWN`，重复或无效样本为 `FAILED`，两者都使该 arm 不能参与
+容量比较。不能把不同时间的每容器 peak 相加冒充集群 peak。
 
 ### 幂等并发
 
@@ -229,6 +236,8 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 - Redis 第一次失败、恢复后第二次发布可继续；
 - 数据库单次迭代异常被记录后 Worker loop 可继续下一轮；
 - 20 并发幂等和 100 Job/10 Worker/2 Reaper 的真实 PostgreSQL 测试合同已编码。
+- Worker 集群 CPU/RSS 按同一快照聚合、Compose 身份绑定和缺失/重复 fail-closed 语义已有
+  自动化合同。
 
 不能证明：
 
@@ -238,6 +247,7 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 - API 与 Worker/Reaper 按设计不是同一个 trace；没有真实 backend 证据证明 Span Link 在目标
   UI、采样和保留策略下可查询，历史 NULL carrier 也不会被反向补齐；
 - 没有生产流量、长时间 soak test、DB lock wait 和资源上限数据；
+- 正式 500-case/32-arm 尚未运行，因此没有真实 Worker 集群资源曲线或部署 sizing 结论；
 - 项目没有通过生产可靠性、安全或性能认证。
 
 ## 8. 未采用的方案

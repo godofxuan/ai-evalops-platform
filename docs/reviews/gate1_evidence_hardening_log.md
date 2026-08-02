@@ -2323,3 +2323,44 @@ prepared bundle 因 schema 与执行脚本 hash 变化必须重新 prepare。CLI
 最终 success。质量 job 的静态检查、非 integration、全部真实服务 integration、P2 migration
 round-trip 和 image build 成功；Compose job 的完整拓扑、依赖、migration、API/Worker/Reaper、
 readiness 与 effective hardening inspect 也成功。正式 Gate 仍为 `NOT_RUN`。
+
+## P2-6：Worker 集群总 CPU/RSS 证据
+
+### 阶段判断与实现
+
+- 起始 SHA：`a325f85d1cdf407b950976bebb7ea12f46a7df9f`；
+- RED 提交：`646e43b`；
+- 实现提交：`c3128a5`；
+- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`；
+- Docker stats ID/Name 唯一绑定 Compose ID/Name/Service；
+- 同一次 stats 调用写同一 `snapshot_index`；
+- 每个快照只求和 Worker replicas，再计算 cluster p50/p95/p99/peak；
+- 缺副本返回 UNKNOWN/null，重复、无效或超预期返回 FAILED/null；
+- 非 VERIFIED Worker 资源证据使 arm 不可参与容量比较；
+- per-container peak 保留诊断，plots/CSV 改读 cluster total；
+- prepared schema v6、result schema v4，final bundle v1、Prometheus evidence v2 不变。
+
+旧方案的 `max(per-container peak)` 不是集群总量；`sum(per-container peak)` 又可能把不同时间的
+峰值相加。最终选择 `sum within snapshot -> percentile/peak across snapshot totals`。Worker 身份
+来自 Compose metadata，不使用容器名 pattern。完整方案、数据形状、RED/GREEN、首次大补丁上下文
+失败、组合测试超时、Ruff/mypy 修正、旧证据影响和 rollback 见
+[`p2_6_worker_cluster_resources_log.md`](p2_6_worker_cluster_resources_log.md)。
+
+### 本地证据与边界
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| RED | 聚合函数 import 不存在；collector 两项合同失败 | `VERIFIED_RED` |
+| evidence/collector/plots | 55 passed | `VERIFIED` |
+| prepared evidence | 34 passed | `VERIFIED` |
+| experiment scripts | 15 项分组通过 | `VERIFIED` |
+| Gate 1 完整集合 | 138 passed | `VERIFIED` |
+| 最终非 integration 全量 | 469 passed，8 deselected | `VERIFIED` |
+| Ruff / mypy / lock | 251 files / 117 source files / 70 packages | `VERIFIED` |
+| 本机 Docker | 未运行 | `NOT_RUN_LOCAL` |
+| GitHub Actions | 等待 push 后精确 head run | `PENDING_REMOTE` |
+| 正式 500-case/32-arm/soak | 未运行 | `NOT_RUN` |
+
+本项没有 migration，没有运行或覆盖正式 artifact。prepared v1–v5、result v1–v3 和历史
+`docs/results/` 保持只读。当前自动化只证明资源证据计算合同，不证明真实 CPU/RSS 曲线、生产
+sizing、最佳 Worker 数或用户拥有的 adoption thresholds。

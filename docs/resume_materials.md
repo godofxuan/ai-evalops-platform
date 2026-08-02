@@ -25,8 +25,10 @@ at-least-once Job 执行、崩溃恢复、幂等结果持久化、SSE 进度、R
   CPU/memory/PID limit 与最小写路径，并在 CI 用 Docker inspect 验证有效 HostConfig。
 - 将实验授权、客观质量门和人工采纳分层：prepared manifest 冻结 expected-arm 策略，结果自动
   区分 VERIFIED/FAILED/UNKNOWN，但不自动选择 Worker 或编造性能阈值。
+- 修正扩容实验资源统计单位：Docker 完整 ID 绑定 Compose service，同一快照内求和全部 Worker
+  副本后计算集群 CPU/RSS 分布，缺失或重复样本 fail-closed。
 - 建立 unit/API/真实 PostgreSQL/Redis/concurrency/failure-injection 四层合同；本地
-  463 个非集成测试通过，远端 CI 的真实 PostgreSQL/Redis、migration、镜像与加固 Compose
+  469 个非集成测试通过，远端 CI 的真实 PostgreSQL/Redis、migration、镜像与加固 Compose
   smoke 通过；正式容量 Gate 仍未执行。
 
 最后一条必须保留“正式容量 Gate 未执行”的限定。普通 CI 合同不能替代 500-case、32-arm、
@@ -54,6 +56,9 @@ soak 或生产环境的真实数字。
   them.
 - Separated run authorization, automatic objective-quality checks, and human-owned
   adoption so incomplete evidence cannot silently recommend a Worker count.
+- Corrected scaling-resource semantics by binding full Docker identities to Compose
+  services and aggregating all Worker replicas within each snapshot before deriving
+  cluster CPU/RSS distributions.
 
 不要写 “production-grade”、“exactly once”、“zero duplicates” 或未经执行的吞吐数字。
 

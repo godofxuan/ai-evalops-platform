@@ -602,3 +602,32 @@ prepared v1–v4 和 result v1–v2 只读，不迁移、不覆盖；必须从�
 最终 success。两个 job 均成功，步骤级结果确认全部真实服务 integration、P2 migration
 round-trip、application image、完整 Compose topology、readiness 与 hardening inspect 实际执行。
 该证据不包含正式 500-case/32-arm，不改变 adoption `NOT_RUN`。
+
+## 14. P2-6 Worker 集群资源按快照聚合
+
+状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+
+旧实现把 API、Worker、Reaper、PostgreSQL、Redis 的 CPU/RSS 样本压平，summary 和图表实际
+展示最大单容器 peak；它不是 Worker cluster total。直接把各容器跨时间 peak 相加也不正确，
+因为峰值可能发生在不同快照。
+
+本阶段用 RED `646e43b` 和 GREEN `c3128a5` 冻结以下合同：
+
+- Docker stats 完整 ID/Name 必须唯一绑定 Compose ID/Name/Service，不能靠容器名猜 Worker；
+- 每轮采集写明确 `snapshot_index`；同一快照内只求和 `service=worker` 副本；
+- 对快照总量计算 CPU/RSS p50/p95/p99/peak；
+- 缺副本为 `UNKNOWN`，重复、无效或超出预期为 `FAILED`，数值保持 null；
+- 任何非 VERIFIED Worker 资源证据使 arm 失去容量比较资格；
+- 每容器 peak 仍作为带 service 的诊断字段保留，但图表和 CSV 只消费 Worker cluster 值；
+- prepared schema 升为 v6，result schema 升为 v4；final-bundle v1 与 Prometheus evidence v2
+  语义未变，保持原版本。
+
+本地最终证据：Gate 1 相关 `138 passed`；非 integration 全量
+`469 passed, 8 deselected`；Ruff 251 files、lint、117-source strict mypy 与 70-package lock
+全部通过。首次组合聚焦测试在 184 秒被外层工具终止，拆分后 55 + 34 + 15 项全部通过；首次
+静态检查暴露长行和 strict 类型收窄问题，均通过显式修正解决，没有降低规则。详细方案比较、
+RED/GREEN、补丁上下文失败、工具超时、schema 影响和回滚见
+[`reviews/p2_6_worker_cluster_resources_log.md`](reviews/p2_6_worker_cluster_resources_log.md)。
+
+本机没有运行 Docker stats/Compose，本阶段精确提交的远端 CI 仍待 push 后验证。没有创建或修改
+正式 `docs/results/`，没有运行 500-case/32-arm，没有资源曲线、容量拐点或部署 Worker 数结论。

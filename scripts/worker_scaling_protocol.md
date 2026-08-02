@@ -27,13 +27,13 @@ must never overwrite another run.
 
 ## Prepared evidence gate
 
-Only manifest schema v5 is executable. Before any service or arm interaction, the
+Only manifest schema v6 is executable. Before any service or arm interaction, the
 executor must revalidate the source commit, strict Git state, Docker build-context
 safety, configuration, measurement and warm-up datasets, dataset hash record, protocol,
 arm plan, Compose file, Dockerfile, `.dockerignore`, every key execution script, and the
 Docker build-context fingerprint.
 
-Schema v5 also freezes result schema v3 and quality policy v1,
+Schema v6 also freezes result schema v4 and quality policy v1,
 `all_expected_arms_valid_for_capacity_comparison`, as automatic and non-waivable. The
 adoption decision, performance thresholds, and deployed Worker count remain human-owned.
 The `--confirm-quality-gate` and `--confirm-adoption-gate` switches authorize a formal
@@ -93,7 +93,7 @@ induced is `NOT_RUN`; sampled lock waits without continuous timing are `DIRECTIO
 
 ## Prometheus evidence semantics
 
-New Gate 1 result artifacts use result schema v3. Embedded Prometheus evidence continues
+New Gate 1 result artifacts use result schema v4. Embedded Prometheus evidence continues
 to use its independent schema v2: every Prometheus-derived metric records `status`,
 `observation`, `value`, `reason`, `source`, and `sample_count`; the legacy `evidence`
 field remains present for evidence strength and read compatibility.
@@ -119,6 +119,25 @@ Endpoint failures are preserved beside raw `.prom` files as machine-readable rea
 codes. Result schema v1 artifacts remain read-only: a historical `VERIFIED 0` cannot be
 reliably migrated because v1 did not retain whether the source series was observed.
 
+## Worker cluster resource semantics
+
+Every Docker stats call is one explicit snapshot. The collector must bind the full Docker
+container ID and actual name to Compose `ID`, `Name`, and `Service` metadata; service
+identity must never be inferred from a container-name pattern. A snapshot is complete only
+when every Compose experiment container is returned exactly once with a matching identity.
+
+Within each snapshot, CPU percent and RSS bytes are summed only across containers whose
+Compose service is `worker`. Distributions and peaks are then derived from those snapshot
+totals. Per-container peaks may be retained for diagnosis, but they must never be summed
+across different timestamps or used as the Worker-cluster value. API, Reaper, PostgreSQL,
+and Redis samples must not contribute to Worker-cluster totals.
+
+The frozen arm plan supplies the expected Worker count. A missing Worker replica makes
+resource evidence `UNKNOWN` with null values; a duplicate, invalid, or over-counted Worker
+sample makes it `FAILED` with null values. Any non-`VERIFIED` Worker resource evidence makes
+the arm ineligible for capacity comparison. Missing evidence must never be converted to
+zero.
+
 ## Frozen plots
 
 The formal finalization step must create all five PNG files together:
@@ -127,9 +146,10 @@ The formal finalization step must create all five PNG files together:
 line grouping, evidence state, renderer version, non-interactive backend, and DPI.
 
 Lines are grouped by workload and repetition, ordered by Worker count, and never connect
-different repetitions. Case latency and end-to-end duration use separate y axes. CPU and
-RSS use separate y axes. Missing values remain absent/`UNKNOWN`, not zero. Plot files and
-the manifest are create-new evidence and must never be partially overwritten.
+different repetitions. Case latency and end-to-end duration use separate y axes. Worker-
+cluster CPU and RSS peaks use separate y axes. Missing values remain absent/`UNKNOWN`, not
+zero. Plot files and the manifest are create-new evidence and must never be partially
+overwritten.
 
 The renderer is the Matplotlib version resolved by the run's source commit and `uv.lock`,
 using the non-interactive `Agg` backend at 144 DPI. Matplotlib is a development dependency
@@ -142,7 +162,7 @@ evidence. Their presence does not mean that a formal result was published. The o
 published result is the complete `<run_id>/final/` directory.
 
 Finalization uses final-bundle schema v1 while the enclosed result artifacts use result
-schema v3. These are independent version axes: the bundle schema describes
+schema v4. These are independent version axes: the bundle schema describes
 layout, hashes, and publication; the result schema describes metric meaning.
 
 The finalizer must:

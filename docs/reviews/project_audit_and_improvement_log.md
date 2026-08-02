@@ -720,3 +720,32 @@ Ruff 250 files、mypy 117 source files、70-package lock 全通过。首轮完�
 最终 success。两个 job 均成功，步骤级结果确认静态质量、非 integration、全部真实服务
 integration、P2 migration round-trip、application image、完整 Compose topology、readiness 和
 hardening inspect 实际执行。该普通 CI 不包含正式 500-case/32-arm，adoption 继续 `NOT_RUN`。
+
+## P2-6 更新：Worker 集群总资源证据
+
+状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+
+审计确认旧 Gate 1 把五类服务的 Docker stats 压平成通用 CPU/RSS 数组，图表再取最大单容器
+peak。该值既混入非 Worker 服务，也不是 Worker 集群总成本；把每容器跨时间 peak 相加仍会
+制造从未同时发生的假峰值。
+
+RED 提交 `646e43b` 要求同快照 Worker 求和、缺副本 UNKNOWN、重复副本 FAILED、Compose service
+绑定、图表只读 cluster total 以及 schema v6/v4。GREEN 提交 `c3128a5`：
+
+- 用完整 Docker ID 与 Name 唯一绑定 Compose ID/Name/Service，并要求快照覆盖全部实验容器；
+- collector 给同一次 stats 调用的所有行写同一个单调 `snapshot_index`；
+- 只在同一快照内求和 `service=worker` 的 CPU/RSS，再计算 p50/p95/p99/peak；
+- 缺副本保持 UNKNOWN/null，重复、无效、超预期保持 FAILED/null；
+- 非 VERIFIED 资源证据使 arm 的容量比较资格失效；
+- 每容器 peak 只保留诊断用途，图表 manifest 与 CSV 改用 Worker cluster peak；
+- prepared/result 分别升为 v6/v4，final bundle v1 和 Prometheus evidence v2 不变。
+
+本地最终 Gate 1 相关 138 passed；非 integration 全量 `469 passed, 8 deselected`；Ruff 251
+files、mypy 117 source files、70-package lock 全通过。组合聚焦命令曾在 184 秒被外层工具终止，
+拆分后 55、34 和 15 项分别确认全绿；静态检查发现的长行、RSS percentile 类型和动态值收窄
+问题均被显式修正。完整记录见
+[`p2_6_worker_cluster_resources_log.md`](p2_6_worker_cluster_resources_log.md)。
+
+本项没有 migration，也没有修改历史 `docs/results/`。prepared v1–v5 与 result v1–v3 保持
+只读，旧 bundle 必须从最终干净提交重新 prepare。本机真实 Docker 未运行，精确提交的远端 CI
+仍 pending；正式 500-case/32-arm、资源曲线、容量 knee 和 adoption 均未运行或得出。
