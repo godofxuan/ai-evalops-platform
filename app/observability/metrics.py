@@ -113,6 +113,21 @@ class PlatformMetrics:
             "Age of the oldest durable unpublished progress event.",
             registry=self.registry,
         )
+        self._outbox_retry_scheduled = Counter(
+            "outbox_retry_scheduled",
+            "Durable progress publications rescheduled after a failed attempt.",
+            registry=self.registry,
+        )
+        self._outbox_lease_lost = Counter(
+            "outbox_lease_lost",
+            "Outbox publications whose acknowledgement or reschedule lost its lease.",
+            registry=self.registry,
+        )
+        self._outbox_cleanup_deleted = Counter(
+            "outbox_cleanup_deleted",
+            "Published Outbox rows deleted after the configured retention period.",
+            registry=self.registry,
+        )
 
     def observe_api_request(
         self,
@@ -176,6 +191,18 @@ class PlatformMetrics:
 
     def set_outbox_oldest_pending_age(self, seconds: float) -> None:
         self._outbox_oldest_pending_age.set(max(seconds, 0.0))
+
+    def record_outbox_retry_scheduled(self, count: int = 1) -> None:
+        if count > 0:
+            self._outbox_retry_scheduled.inc(count)
+
+    def record_outbox_lease_lost(self, count: int = 1) -> None:
+        if count > 0:
+            self._outbox_lease_lost.inc(count)
+
+    def record_outbox_cleanup_deleted(self, count: int) -> None:
+        if count > 0:
+            self._outbox_cleanup_deleted.inc(count)
 
     def render(self) -> bytes:
         return generate_latest(self.registry)
