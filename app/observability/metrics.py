@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from socketserver import BaseServer
 from threading import Thread
 
@@ -113,6 +114,11 @@ class PlatformMetrics:
             "Age of the oldest durable unpublished progress event.",
             registry=self.registry,
         )
+        self._outbox_metrics_last_success_timestamp = Gauge(
+            "outbox_metrics_last_success_timestamp_seconds",
+            "Unix timestamp of the most recent successful durable Outbox metrics refresh.",
+            registry=self.registry,
+        )
         self._outbox_retry_scheduled = Counter(
             "outbox_retry_scheduled",
             "Durable progress publications rescheduled after a failed attempt.",
@@ -191,6 +197,9 @@ class PlatformMetrics:
 
     def set_outbox_oldest_pending_age(self, seconds: float) -> None:
         self._outbox_oldest_pending_age.set(max(seconds, 0.0))
+
+    def record_outbox_metrics_refresh_success(self, observed_at: datetime) -> None:
+        self._outbox_metrics_last_success_timestamp.set(observed_at.timestamp())
 
     def record_outbox_retry_scheduled(self, count: int = 1) -> None:
         if count > 0:
