@@ -128,6 +128,7 @@ async def test_reaper_returns_origin_traceparent_and_expired_attempt_identity(
         assert run_id == RUN_ID
         assert now == NOW
         assert actor == "reaper-1"
+        assert not [item for item in session.added if isinstance(item, ProgressEventOutbox)]
         return RunAggregation(
             run_id=RUN_ID,
             status=RunStatus.RUNNING,
