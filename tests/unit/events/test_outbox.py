@@ -12,6 +12,7 @@ from app.events.outbox import (
     ClaimedOutboxEvent,
     OutboxDispatcher,
     OutboxDispatchResult,
+    SQLAlchemyOutboxMaintenance,
     build_claim_outbox_statement,
     build_cleanup_outbox_statement,
     enqueue_progress_event,
@@ -159,6 +160,69 @@ def test_outbox_cleanup_statement_only_selects_expired_published_rows() -> None:
     assert "LIMIT 25" in sql
     assert "DELETE FROM progress_event_outbox" in sql
     assert "RETURNING progress_event_outbox.id" in sql
+
+
+async def test_outbox_maintenance_deletes_one_bounded_retention_batch() -> None:
+    deleted_ids = (
+        EVENT_ID,
+        UUID("00000000-0000-0000-0000-000000000902"),
+    )
+
+    class DeletedRows:
+        def scalars(self) -> "DeletedRows":
+            return self
+
+        def all(self) -> tuple[UUID, ...]:
+            return deleted_ids
+
+    class RecordingSession:
+        def __init__(self) -> None:
+            self.statement: object | None = None
+
+        async def execute(self, statement: object) -> DeletedRows:
+            self.statement = statement
+            return DeletedRows()
+
+    class Transaction:
+        def __init__(self, session: RecordingSession) -> None:
+            self._session = session
+
+        async def __aenter__(self) -> RecordingSession:
+            return self._session
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class SessionFactory:
+        def __init__(self) -> None:
+            self.session = RecordingSession()
+
+        def begin(self) -> Transaction:
+            return Transaction(self.session)
+
+    class FixedClock:
+        def now(self) -> datetime:
+            return NOW
+
+    session_factory = SessionFactory()
+    maintenance = SQLAlchemyOutboxMaintenance(
+        session_factory,  # type: ignore[arg-type]
+        retention_seconds=7 * 24 * 60 * 60,
+        clock=FixedClock(),
+    )
+
+    deleted = await maintenance.cleanup_once(limit=25)
+
+    assert deleted == 2
+    assert session_factory.session.statement is not None
+    sql = str(
+        session_factory.session.statement.compile(  # type: ignore[union-attr]
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "2026-07-26 12:00:00+00:00" in sql
+    assert "LIMIT 25" in sql
 
 
 async def test_dispatcher_publishes_original_event_id_then_fenced_acknowledges() -> None:
