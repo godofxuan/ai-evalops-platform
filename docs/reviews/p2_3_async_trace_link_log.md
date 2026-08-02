@@ -328,10 +328,20 @@ GREEN 结果：Telemetry + RunService `19 passed`；2 files formatted；Ruff 通
 - trace context 不进入 API response、日志正文、Prometheus label、授权或调度判断；
 - `0012` 可独立 upgrade/downgrade，历史 Run 不伪造 backfill。
 
+远端 CI 已进一步证明：
+
+- 绑定文档提交 `5c5d199b1f639826c60406626e8a04223803ffe1` 的
+  [GitHub Actions Run #19](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30732220588)
+  最终为 `success`；
+- `quality-and-integration` 的真实 PostgreSQL claim/reap carrier、`0012` upgrade、P2
+  downgrade/re-upgrade、非 integration 测试、Ruff、mypy 与 application image build 均为
+  `success`；
+- `compose-smoke` 的全拓扑 build、PostgreSQL/Redis 健康等待、Compose migration、
+  API/Worker/Reaper 启动与 API readiness 均为 `success`。
+
 仍未证明：
 
-- 本机没有真实 PostgreSQL/Redis/Docker，carrier 的真实 migration、100 claim/99 reap 传播与
-  Compose 等待远端 CI，当前状态只能是 `LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING`；
+- 本机仍没有 PostgreSQL/Redis/Docker；真实服务与镜像证据来自上述远端 CI，而不是本机；
 - 没有 Collector/trace backend，不能证明 OTLP 网络导出、Span Link UI、查询、采样或保留；
 - API 与 Worker/Reaper 按设计不是同一个 trace，不应宣传成“端到端单 trace”；
 - 不保存 tracestate/baggage，因此不会延续 vendor-specific routing；这是最小数据和安全选择；
@@ -358,10 +368,12 @@ git revert c1cd6074463a6820fa1a7cb8d12f620eb3a4a1a3
 评审数据；业务退回领域 ID 关联。旧代码可忽略数据库里暂存的额外 nullable 列，但不能先删除
 migration 文件后再尝试 downgrade。
 
-## 11. 推送前状态
+## 11. 提交、推送与远端状态
 
-- 实现：已本地提交；
-- 文档：待独立提交；
-- GitHub Actions 真实 PostgreSQL/Redis/image/Compose：`REMOTE_PENDING`；
+- 实现提交：`c1cd6074463a6820fa1a7cb8d12f620eb3a4a1a3`；
+- 首轮文档提交：`5c5d199b1f639826c60406626e8a04223803ffe1`；
+- 两个提交均已推送到 `origin/codex/gate1-evidence-hardening`；
+- GitHub Actions 真实 PostgreSQL/Redis/image/Compose：Run #19，`VERIFIED`；
+- 当前阶段状态：`REMOTE_CI_VERIFIED / FORMAL_GATE_NOT_RUN`；
 - PR/merge：未创建；
 - 正式 Gate：`NOT_RUN`。

@@ -2199,7 +2199,7 @@ Compose 合同，不会把 Boolean capability 提升为通用 RBAC，也不改�
 
 - 起始 SHA：`68fffc239e27da7b6c612944e4963a73513edcdb`；
 - 实现提交：`c1cd6074463a6820fa1a7cb8d12f620eb3a4a1a3`；
-- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`；
+- 当前状态：`REMOTE_CI_VERIFIED / FORMAL_GATE_NOT_RUN`；
 - 没有让长时间 fan-out/retry Worker 继续 API parent，而选择“每 attempt 新 root + Span Link”；
 - `20260802_0012` 在 Run 保存首次平台 `run.create` traceparent，历史行保持 NULL；
 - claim/reaper 复用现有 Run join，无 Job 字段复制或额外查询；
@@ -2221,10 +2221,20 @@ bundle 影响和回滚顺序见
 | strict mypy | 116 source files | `VERIFIED` |
 | uv lock / Alembic | 70 packages；唯一 head `0012` | `VERIFIED` |
 | 全部离线 migration tests | 8 passed | `VERIFIED` |
-| PostgreSQL claim/reap carrier 合同 | 本机 1 skipped | `NOT_RUN_LOCAL` |
-| GitHub Actions / image / Compose | 尚未推送本阶段提交 | `REMOTE_PENDING` |
+| PostgreSQL claim/reap carrier 合同 | 本机 1 skipped；Run #19 真实 PostgreSQL step success | `VERIFIED_REMOTE` |
+| GitHub Actions / image / Compose | Run #19；两个 job 及关键 steps success | `VERIFIED` |
 | Collector/backend 与正式 Gate | 未运行 | `NOT_RUN` |
 
 当前只能证明 SDK 与本地数据流合同。没有 Collector/backend，因此不能声称 Span Link 已在生产
 UI、采样和保留策略中验证；普通远端 CI 即使成功也不等于容量或正式 Gate。旧 prepared bundle
 因 source/migration 变化必须重新 prepare，历史 evidence 不覆盖。
+
+### 远端验证补记
+
+绑定 head `5c5d199b1f639826c60406626e8a04223803ffe1` 的
+[GitHub Actions Run #19](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30732220588)
+最终为 `success`。`quality-and-integration` 与 `compose-smoke` 两个 job 均成功；步骤级检查确认
+真实 PostgreSQL claim/reap trace propagation、`0012` migration、P2 downgrade/re-upgrade、
+application image build、Compose 全拓扑 build、依赖健康、Compose migration、
+API/Worker/Reaper 启动和 readiness 均实际执行并成功。该证据解决 P2-3 的远端 pending，但不改变
+Collector/backend 与正式 Gate 的 `NOT_RUN`。

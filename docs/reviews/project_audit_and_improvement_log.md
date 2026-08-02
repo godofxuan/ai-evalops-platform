@@ -630,7 +630,7 @@ Human Review、migration downgrade/re-upgrade、image、Compose migration 与 re
 
 ## P2-3 更新：API → Worker/Reaper 异步 Span Link
 
-状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`REMOTE_CI_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 审计确认 API middleware 能延续入站 W3C context，但 Run transaction 不保存来源；Worker 每次
 attempt 与 Reaper 都创建新 trace，只能靠领域 ID 人工关联。直接继续 API parent 会把长时间
@@ -647,8 +647,14 @@ attempt 与 Reaper 都创建新 trace，只能靠领域 ID 人工关联。直接
 
 本地最终为 `446 passed, 8 deselected`；聚焦 59 passed、真实 PostgreSQL 1 skipped；Ruff 247
 files、mypy 116 source files、70-package lock、唯一 head `0012` 与 8 migration tests 全部通过。
-远端真实 PostgreSQL propagation、migration round-trip、image 与 Compose 尚未执行。完整过程见
+完整过程见
 [`p2_3_async_trace_link_log.md`](p2_3_async_trace_link_log.md)。
+
+后续远端证据已产生：绑定 head `5c5d199b1f639826c60406626e8a04223803ffe1` 的
+[GitHub Actions Run #19](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30732220588)
+最终为 `success`。两个 job 均成功，步骤级结果确认真实 PostgreSQL claim/reap trace
+propagation、`0012` migration、P2 downgrade/re-upgrade、image build、Compose migration、
+API/Worker/Reaper 启动与 readiness 均实际执行。这解决了 P2-3 的远端 pending。
 
 没有 Collector/trace backend，所以不能声称 Link UI、采样、保留或生产 OTLP 已验证；API 与
 Worker 按设计不是同一 trace。旧 prepared bundle 因 source/migration 变化必须重新 prepare，
