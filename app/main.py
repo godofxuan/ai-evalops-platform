@@ -150,6 +150,7 @@ def create_app(
             publish_timeout_seconds=runtime_settings.outbox_publish_timeout_seconds,
             retry_base_seconds=runtime_settings.outbox_retry_base_seconds,
             retry_max_seconds=runtime_settings.outbox_retry_max_seconds,
+            telemetry=telemetry,
         )
         outbox_dispatcher_task = asyncio.create_task(
             run_outbox_dispatch_loop(

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock, SystemClock
 from app.core.logging import get_logger
+from app.core.telemetry import Telemetry
 from app.events.models import EventType, ProgressEvent
 from app.events.publisher import EventPublisher
 from app.persistence.database import AsyncSessionFactory
@@ -237,6 +238,7 @@ class OutboxDispatcher:
         publish_timeout_seconds: float,
         retry_base_seconds: float,
         retry_max_seconds: float,
+        telemetry: Telemetry | None = None,
     ) -> None:
         if publish_timeout_seconds <= 0:
             raise ValueError("outbox publish timeout must be positive")
@@ -250,6 +252,7 @@ class OutboxDispatcher:
         self._publish_timeout_seconds = publish_timeout_seconds
         self._retry_base_seconds = retry_base_seconds
         self._retry_max_seconds = retry_max_seconds
+        self._telemetry = telemetry
 
     async def dispatch_once(self, *, limit: int) -> OutboxDispatchResult:
         claimed = await self._store.claim_batch(limit=limit)
@@ -266,10 +269,24 @@ class OutboxDispatcher:
     async def _dispatch_one(self, message: ClaimedOutboxEvent) -> str:
         error_code: str | None = None
         try:
-            published = await asyncio.wait_for(
-                self._publisher.publish(message.event),
-                timeout=self._publish_timeout_seconds,
-            )
+            if self._telemetry is None:
+                published = await asyncio.wait_for(
+                    self._publisher.publish(message.event),
+                    timeout=self._publish_timeout_seconds,
+                )
+            else:
+                with self._telemetry.start_as_current_span(
+                    "progress.publish",
+                    attributes={
+                        "tenant.id": str(message.event.tenant_id),
+                        "run.id": str(message.event.run_id),
+                        "event.type": message.event.event_type.value,
+                    },
+                ):
+                    published = await asyncio.wait_for(
+                        self._publisher.publish(message.event),
+                        timeout=self._publish_timeout_seconds,
+                    )
             if not published:
                 error_code = "publish_returned_false"
         except Exception as error:
