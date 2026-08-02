@@ -379,12 +379,38 @@ class OutboxDispatchIteration(Protocol):
         """Dispatch at most one bounded batch."""
 
 
+class OutboxCleanupIteration(Protocol):
+    async def cleanup_once(self, *, limit: int) -> int:
+        """Delete at most one bounded batch of retained published rows."""
+
+
 class OutboxLoopLogger(Protocol):
     def info(self, event: str, **values: object) -> object:
         """Record a successful nonempty batch."""
 
     def error(self, event: str, **values: object) -> object:
         """Record a sanitized iteration failure."""
+
+
+async def run_outbox_cleanup_loop(
+    maintenance: OutboxCleanupIteration,
+    *,
+    stop_requested: asyncio.Event,
+    interval_seconds: float,
+    batch_size: int,
+    metrics: PlatformMetrics,
+) -> None:
+    if interval_seconds <= 0:
+        raise ValueError("outbox cleanup interval_seconds must be positive")
+    if not 1 <= batch_size <= 10_000:
+        raise ValueError("outbox cleanup batch_size must be between 1 and 10000")
+    while not stop_requested.is_set():
+        deleted = await maintenance.cleanup_once(limit=batch_size)
+        metrics.record_outbox_cleanup_deleted(deleted)
+        if stop_requested.is_set():
+            break
+        with suppress(TimeoutError):
+            await asyncio.wait_for(stop_requested.wait(), timeout=interval_seconds)
 
 
 async def run_outbox_dispatch_loop(
