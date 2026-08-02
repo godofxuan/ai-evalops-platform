@@ -72,3 +72,18 @@ def test_outbox_backlog_gauges_are_global_and_low_cardinality() -> None:
     assert "tenant_id=" not in rendered
     assert "run_id=" not in rendered
     assert "event_id=" not in rendered
+
+
+def test_outbox_operation_counters_record_bounded_global_totals() -> None:
+    metrics = PlatformMetrics()
+
+    metrics.record_outbox_retry_scheduled(2)
+    metrics.record_outbox_lease_lost(1)
+    metrics.record_outbox_cleanup_deleted(5)
+
+    rendered = metrics.render().decode("utf-8")
+    assert "outbox_retry_scheduled_total 2.0" in rendered
+    assert "outbox_lease_lost_total 1.0" in rendered
+    assert "outbox_cleanup_deleted_total 5.0" in rendered
+    assert "tenant_id=" not in rendered
+    assert "event_id=" not in rendered
