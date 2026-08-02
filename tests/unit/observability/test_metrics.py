@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from app.observability.metrics import PlatformMetrics
 
 
@@ -69,6 +71,18 @@ def test_outbox_backlog_gauges_are_global_and_low_cardinality() -> None:
     rendered = metrics.render().decode("utf-8")
     assert "outbox_pending 3.0" in rendered
     assert "outbox_oldest_pending_age_seconds 42.5" in rendered
+    assert "tenant_id=" not in rendered
+    assert "run_id=" not in rendered
+    assert "event_id=" not in rendered
+
+
+def test_outbox_metrics_refresh_success_timestamp_is_global_and_low_cardinality() -> None:
+    metrics = PlatformMetrics()
+
+    metrics.record_outbox_metrics_refresh_success(datetime.fromtimestamp(123.5, tz=UTC))
+
+    rendered = metrics.render().decode("utf-8")
+    assert "outbox_metrics_last_success_timestamp_seconds 123.5" in rendered
     assert "tenant_id=" not in rendered
     assert "run_id=" not in rendered
     assert "event_id=" not in rendered
