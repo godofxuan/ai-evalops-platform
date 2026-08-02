@@ -111,6 +111,38 @@ def build_cleanup_outbox_statement(
     )
 
 
+class SQLAlchemyOutboxMaintenance:
+    def __init__(
+        self,
+        session_factory: AsyncSessionFactory,
+        *,
+        retention_seconds: float,
+        clock: Clock | None = None,
+    ) -> None:
+        if retention_seconds <= 0:
+            raise ValueError("outbox retention_seconds must be positive")
+        self._session_factory = session_factory
+        self._retention_seconds = retention_seconds
+        self._clock = clock or SystemClock()
+
+    async def cleanup_once(self, *, limit: int) -> int:
+        published_before = self._clock.now() - timedelta(seconds=self._retention_seconds)
+        async with self._session_factory.begin() as session:
+            deleted_ids = (
+                (
+                    await session.execute(
+                        build_cleanup_outbox_statement(
+                            published_before=published_before,
+                            limit=limit,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return len(deleted_ids)
+
+
 @dataclass(frozen=True, slots=True)
 class ClaimedOutboxEvent:
     event: ProgressEvent
