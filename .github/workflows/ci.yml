@@ -121,6 +121,12 @@ jobs:
           uv run --no-sync pytest tests/integration/test_redis_events.py
           --junitxml=/tmp/junit-redis-events.xml
 
+      - name: Integration - transactional outbox delivery and replay
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_transactional_outbox.py
+          --junitxml=/tmp/junit-transactional-outbox.xml
+
       - name: Integration - Run idempotency and tenant boundary
         if: ${{ !cancelled() }}
         run: >-
@@ -144,6 +150,7 @@ jobs:
           /tmp/junit-tenant-consistency.xml
           /tmp/junit-readiness.xml
           /tmp/junit-redis-events.xml
+          /tmp/junit-transactional-outbox.xml
           /tmp/junit-run-idempotency.xml
 
       - name: Build application image
