@@ -103,6 +103,16 @@ class PlatformMetrics:
             "Best-effort Redis progress publications that failed.",
             registry=self.registry,
         )
+        self._outbox_pending = Gauge(
+            "outbox_pending",
+            "Durable progress events awaiting successful publication.",
+            registry=self.registry,
+        )
+        self._outbox_oldest_pending_age = Gauge(
+            "outbox_oldest_pending_age_seconds",
+            "Age of the oldest durable unpublished progress event.",
+            registry=self.registry,
+        )
 
     def observe_api_request(
         self,
@@ -160,6 +170,12 @@ class PlatformMetrics:
 
     def record_redis_publish_failure(self) -> None:
         self._redis_publish_failures.inc()
+
+    def set_outbox_pending(self, value: int) -> None:
+        self._outbox_pending.set(max(value, 0))
+
+    def set_outbox_oldest_pending_age(self, seconds: float) -> None:
+        self._outbox_oldest_pending_age.set(max(seconds, 0.0))
 
     def render(self) -> bytes:
         return generate_latest(self.registry)
