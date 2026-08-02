@@ -45,7 +45,9 @@ from app.datasets.service import (
 from app.datasets.validation import DatasetValidationError, JSONLValidationLimits
 from app.events.outbox import (
     OutboxDispatcher,
+    SQLAlchemyOutboxMaintenance,
     SQLAlchemyOutboxStore,
+    run_outbox_cleanup_loop,
     run_outbox_dispatch_loop,
 )
 from app.events.publisher import RedisEventPublisher
@@ -161,8 +163,24 @@ def create_app(
             ),
             name="outbox-dispatcher",
         )
+        outbox_maintenance = SQLAlchemyOutboxMaintenance(
+            session_factory,
+            retention_seconds=runtime_settings.outbox_retention_seconds,
+        )
+        outbox_cleanup_task = asyncio.create_task(
+            run_outbox_cleanup_loop(
+                outbox_maintenance,
+                stop_requested=outbox_stop_requested,
+                interval_seconds=runtime_settings.outbox_cleanup_interval_seconds,
+                batch_size=runtime_settings.outbox_cleanup_batch_size,
+                metrics=metrics,
+            ),
+            name="outbox-cleanup",
+        )
         application.state.outbox_dispatcher = outbox_dispatcher
         application.state.outbox_dispatcher_task = outbox_dispatcher_task
+        application.state.outbox_maintenance = outbox_maintenance
+        application.state.outbox_cleanup_task = outbox_cleanup_task
         application.state.run_event_stream = RunEventStream(
             run_service=application.state.run_service,
             subscriber=RedisEventSubscriber(
@@ -194,7 +212,7 @@ def create_app(
         finally:
             outbox_stop_requested.set()
             try:
-                await outbox_dispatcher_task
+                await asyncio.gather(outbox_dispatcher_task, outbox_cleanup_task)
             finally:
                 await redis_client.aclose()
                 await engine.dispose()
@@ -218,6 +236,8 @@ def create_app(
     application.state.review_service = None
     application.state.outbox_dispatcher = None
     application.state.outbox_dispatcher_task = None
+    application.state.outbox_maintenance = None
+    application.state.outbox_cleanup_task = None
     application.state.run_event_stream = None
     application.state.cancellation_service = None
     application.include_router(health_router)
