@@ -6,7 +6,7 @@ from sqlalchemy import Select, func, select
 from app.domain.enums import JobStatus
 from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
-from app.persistence.orm_models import EvaluationJob
+from app.persistence.orm_models import EvaluationJob, ProgressEventOutbox
 
 _QUEUED_STATUSES = (JobStatus.QUEUED, JobStatus.RETRY_WAIT)
 _RUNNING_STATUSES = (JobStatus.RUNNING, JobStatus.CANCELLING)
@@ -35,6 +35,17 @@ def build_durable_job_gauges_statement() -> Select[tuple[int, int, datetime | No
         func.min(EvaluationJob.heartbeat_at)
         .filter(EvaluationJob.status.in_(_RUNNING_STATUSES))
         .label("oldest_heartbeat_at"),
+    )
+
+
+def build_durable_outbox_gauges_statement() -> Select[tuple[int, datetime | None]]:
+    return select(
+        func.count(ProgressEventOutbox.id)
+        .filter(ProgressEventOutbox.published_at.is_(None))
+        .label("pending"),
+        func.min(ProgressEventOutbox.created_at)
+        .filter(ProgressEventOutbox.published_at.is_(None))
+        .label("oldest_pending_at"),
     )
 
 
