@@ -1,12 +1,16 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from sqlalchemy.dialects import postgresql
 
 from app.observability.durable import (
     DurableJobGauges,
+    DurableOutboxGauges,
     build_durable_job_gauges_statement,
     build_durable_outbox_gauges_statement,
+    refresh_durable_outbox_gauges,
 )
+from app.observability.metrics import PlatformMetrics
 
 
 def test_durable_job_gauge_query_counts_queue_running_and_oldest_heartbeat() -> None:
@@ -48,3 +52,40 @@ def test_durable_outbox_gauge_query_counts_pending_and_oldest_created_at() -> No
     assert "min(progress_event_outbox.created_at) FILTER" in sql
     assert "tenant_id" not in sql
     assert "GROUP BY" not in sql
+
+
+async def test_refresh_durable_outbox_gauges_updates_metrics_from_one_snapshot() -> None:
+    oldest_pending_at = datetime(2026, 7, 29, 11, 59, 15, tzinfo=UTC)
+
+    class Result:
+        def one(self) -> SimpleNamespace:
+            return SimpleNamespace(pending=3, oldest_pending_at=oldest_pending_at)
+
+    class Session:
+        async def execute(self, _statement: object) -> Result:
+            return Result()
+
+        async def __aenter__(self) -> "Session":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class SessionFactory:
+        def __call__(self) -> Session:
+            return Session()
+
+    metrics = PlatformMetrics()
+    gauges = await refresh_durable_outbox_gauges(
+        session_factory=SessionFactory(),  # type: ignore[arg-type]
+        metrics=metrics,
+        now=datetime(2026, 7, 29, 12, 0, tzinfo=UTC),
+    )
+
+    assert gauges == DurableOutboxGauges(
+        pending=3,
+        oldest_pending_at=oldest_pending_at,
+    )
+    rendered = metrics.render().decode("utf-8")
+    assert "outbox_pending 3.0" in rendered
+    assert "outbox_oldest_pending_age_seconds 45.0" in rendered
