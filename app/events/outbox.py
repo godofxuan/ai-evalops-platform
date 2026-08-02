@@ -16,6 +16,7 @@ from app.core.logging import get_logger
 from app.core.telemetry import Telemetry
 from app.events.models import EventType, ProgressEvent
 from app.events.publisher import EventPublisher
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import ProgressEventOutbox
 
@@ -300,6 +301,7 @@ class OutboxDispatcher:
         retry_base_seconds: float,
         retry_max_seconds: float,
         telemetry: Telemetry | None = None,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         if publish_timeout_seconds <= 0:
             raise ValueError("outbox publish timeout must be positive")
@@ -314,18 +316,22 @@ class OutboxDispatcher:
         self._retry_base_seconds = retry_base_seconds
         self._retry_max_seconds = retry_max_seconds
         self._telemetry = telemetry
+        self._metrics = metrics
 
     async def dispatch_once(self, *, limit: int) -> OutboxDispatchResult:
         claimed = await self._store.claim_batch(limit=limit)
         if not claimed:
             return OutboxDispatchResult(0, 0, 0, 0)
         outcomes = await asyncio.gather(*(self._dispatch_one(message) for message in claimed))
-        return OutboxDispatchResult(
+        result = OutboxDispatchResult(
             claimed=len(claimed),
             published=sum(outcome == "published" for outcome in outcomes),
             retry_scheduled=sum(outcome == "retry_scheduled" for outcome in outcomes),
             lease_lost=sum(outcome == "lease_lost" for outcome in outcomes),
         )
+        if self._metrics is not None:
+            self._metrics.record_outbox_retry_scheduled(result.retry_scheduled)
+        return result
 
     async def _dispatch_one(self, message: ClaimedOutboxEvent) -> str:
         error_code: str | None = None
