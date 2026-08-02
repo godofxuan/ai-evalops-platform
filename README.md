@@ -543,6 +543,7 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 | Alembic | 唯一 head `20260802_0013`；远端 downgrade/re-upgrade 通过 |
 | GitHub Actions #27 | Outbox step 通过，但旧双 Reaper 场景发现并发死锁；整体 failure |
 | GitHub Actions #28 | 锁顺序修复后两个 job success；Outbox/并发/image/Compose 全部执行 |
+| GitHub Actions #29 | 最终 P2-7 head `5092f49` 两个 job success；tracing 与文档也纳入验证 |
 | 正式 500-case/32-arm | NOT_RUN |
 
 ## 当前限制

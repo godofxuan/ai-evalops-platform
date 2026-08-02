@@ -115,6 +115,7 @@ Outbox relay 是 at-least-once：Redis 已接受事件但进程在 `mark_publish
 - SSE 鉴权 Principal 传递和响应 headers。
 
 真实 PostgreSQL/Redis integration 覆盖事务回滚、跨 tenant FK、双 relay 认领、失败重试和
-ack 丢失重放。本机没有启用真实服务，因此结果是 skipped；GitHub Actions #28 已实际通过。
+ack 丢失重放。本机没有启用真实服务，因此结果是 skipped；GitHub Actions #28 与最终
+#29 均已实际通过。
 完整过程和残余风险见
 [`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md)。

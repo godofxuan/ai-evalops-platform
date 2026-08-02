@@ -28,6 +28,7 @@
 | `2174324` | 修复 CI 暴露的双 Reaper 外键锁升级死锁 |
 | `4eba918` | RED：要求 `progress.publish` span 迁移到 relay |
 | `63644f8` | GREEN：API relay 对真实 Redis publish 建 span |
+| `5092f49` | 文档：记录完整 P2-7 设计、问题、证据和残余风险 |
 
 ## 2. 为什么 P2-7 合适，为什么此时做
 
@@ -320,7 +321,7 @@ TypeError: OutboxDispatcher.__init__() got an unexpected keyword argument 'telem
 8. lease 过期后另一 dispatcher 重放相同 event ID 并成功确认，明确证明 at-least-once。
 
 本机无 Docker/PostgreSQL/Redis，所以该测试为 `1 skipped`，没有写成通过。GitHub Actions
-#27 与 #28 中该独立步骤均实际通过。
+#27、#28 与最终 #29 中该独立步骤均实际通过。
 
 ## 10. 实际遇到的问题、判断和处理
 
@@ -407,6 +408,7 @@ deadlock retry会降低出现概率，但会保留错误锁顺序，因此未采
 | 本地真实 Outbox integration | 1 skipped；无本地服务 | `NOT_RUN_LOCAL` |
 | GitHub Actions #27 | Outbox/Compose 成功；双 Reaper deadlock，整体 failure | `VALUABLE_FAILURE` |
 | GitHub Actions #28 | 两个 job success；并发/Outbox/migration/image/Compose success | `VERIFIED_REMOTE` |
+| GitHub Actions #29 | head `5092f49` 两个 job success；最终 tracing/文档也在验证范围 | `VERIFIED_REMOTE_FINAL` |
 | 正式 500-case/32-arm/soak | 未授权、未运行 | `NOT_RUN` |
 
 Run #27：
@@ -414,6 +416,11 @@ Run #27：
 
 Run #28（绑定 head `21743246d3c0a57b3686c3c47aa75a839da9b672`）：
 [GitHub Actions #28](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30738964791)。
+
+Run #29（绑定 head `5092f49eccc504b3d13a960e872305eb08c010b9`）：
+[GitHub Actions #29](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30739846288)。两个 job
+均 success；步骤级确认非集成回归、全部 PostgreSQL/Redis integration、P2 migration
+downgrade/re-upgrade、application image 与完整 Compose smoke 均实际执行。
 
 ## 12. Migration、部署与回滚
 

@@ -659,6 +659,12 @@ RED `45d3354` 固定“聚合前无 Outbox”，修复 `2174324` 改为先 flush
 最终两个 job success，真实双 Reaper、Outbox rollback/FK/双 relay/retry/replay、migration
 round-trip、image、完整 Compose/readiness/hardening 均成功。
 
+补齐 relay `progress.publish` tracing 和本阶段文档后，绑定 head
+`5092f49eccc504b3d13a960e872305eb08c010b9` 的
+[GitHub Actions #29](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30739846288)
+再次得到两个 job success；非集成回归、全部真实服务集成、migration、image 与 Compose 均执行，
+因此最终 P2-7 代码/文档 head 不是沿用 #28 的旧成功结论。
+
 最终本地全量 `488 passed, 9 deselected`；锁 70 packages、Ruff 259 files、lint 与 119-source
 strict mypy 通过。真实 Outbox integration 本机因无服务 `1 skipped`。详细方案比较、全部
 RED/GREEN、#27 失败锁图、回滚顺序与 retention/backlog 等残余风险见

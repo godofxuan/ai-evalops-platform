@@ -973,6 +973,7 @@ Python 与配置
 | Ruff / lint / strict mypy / lock | 259 files / passed / 119 sources / 70 packages |
 | GitHub Actions #27 | Outbox step 成功；双 Reaper deadlock，整体 failure |
 | GitHub Actions #28 | quality-and-integration + compose-smoke success |
+| GitHub Actions #29 | 最终 P2-7 head `5092f49` 两个 job success |
 | migration | head 0013；P2 downgrade/re-upgrade remote passed |
 | 正式 500-case/32-arm | NOT_RUN |
 

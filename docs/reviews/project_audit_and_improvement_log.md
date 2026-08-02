@@ -773,6 +773,10 @@ snapshot 恢复，Pub/Sub 不是历史日志。
 全部通过。完整提交链、RED/GREEN、工具误用/超时、锁图、部署回滚与残余 GC/metrics 风险见
 [`p2_7_transactional_outbox_log.md`](p2_7_transactional_outbox_log.md)。
 
+随后补齐 relay tracing 与文档，绑定 head `5092f49eccc504b3d13a960e872305eb08c010b9` 的
+[GitHub Actions #29](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30739846288)
+再次两个 job success；这次结果覆盖最终 P2-7 代码、迁移、测试和首版证据文档。
+
 最终本地全量 `488 passed, 9 deselected`，Ruff/lint、119-source strict mypy、70-package lock
 通过；真实服务本机 skipped。正式 Gate、容量、exactly-once、客户端历史回放和生产认证均未
 宣称完成。
