@@ -228,6 +228,16 @@ curl http://127.0.0.1:8000/health/ready
 
 Compose 会启动 PostgreSQL、Redis、一次性 migration、API、Worker 和 Reaper。默认开发端口只绑定到 `127.0.0.1`。
 
+六个服务都显式使用非 root 用户、只读镜像根文件系统、`cap_drop: ALL` 与
+`no-new-privileges`，并设置 CPU、内存和 PID 上限。需要写入的目录只通过命名 volume 或有界
+tmpfs 开放：PostgreSQL/Redis 写各自数据卷，API/Worker 写 artifact 卷；migrate/Reaper 不挂载
+artifact 卷。CI 还会用 `docker inspect` 验证 Docker 的有效 HostConfig，而不只解析 YAML。
+
+默认 limit 是开发/CI containment，不是生产容量结论。可通过 `.env.example` 中的
+`EVALOPS_APP_*`、`EVALOPS_POSTGRES_*` 和 `EVALOPS_REDIS_*` 调整；修改前应使用真实负载观察
+OOM、CPU throttling、PID 和尾延迟。升级基础镜像或改用 host bind mount 后必须重跑 fresh-volume
+Compose smoke，并确认宿主目录 ownership。
+
 停止并删除开发数据卷：
 
 ```bash

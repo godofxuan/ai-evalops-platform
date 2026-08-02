@@ -2238,3 +2238,44 @@ UI、采样和保留策略中验证；普通远端 CI 即使成功也不等于�
 application image build、Compose 全拓扑 build、依赖健康、Compose migration、
 API/Worker/Reaper 启动和 readiness 均实际执行并成功。该证据解决 P2-3 的远端 pending，但不改变
 Collector/backend 与正式 Gate 的 `NOT_RUN`。
+
+## P2-4：Compose 运行时边界加固
+
+### 阶段判断与实现
+
+- 起始 SHA：`b0e637a4ec29ec538c1fdc257ac08fb634e0bd1f`；
+- 实现提交：`6c84cd92257e5cbe7c4722e37c1acdfe7a9fa5fa`；
+- 当前状态：`REMOTE_CI_VERIFIED / FORMAL_GATE_NOT_RUN`；
+- 六个服务显式非 root、read-only rootfs、`cap_drop: ALL`、no-new-privileges；
+- 六个服务都有可配置的正数 CPU、memory 和 PID limit；
+- PostgreSQL/Redis 用官方镜像用户，必要 temp/socket 使用 tmpfs；
+- API/Worker 保留 artifact volume，migrate/Reaper 不再获得无关写权限；
+- CI 对五个常驻容器读取 Docker inspect，fail-closed 校验有效 HostConfig。
+
+只加固应用容器会留下数据库 root entrypoint；自定义数据库 wrapper 镜像又会扩大供应链维护面，
+所以选择“官方 named user + named volume/tmpfs + fresh-volume smoke”。完整方案比较、逐条
+RED/GREEN、官方 entrypoint 判断、工具超时、mypy stub 边界、残余风险与 rollback 见
+[`p2_4_compose_hardening_log.md`](p2_4_compose_hardening_log.md)。
+
+### 本地与远端证据
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| Compose/inspect 聚焦 | 10 passed | `VERIFIED` |
+| Gate prepared/preflight/experiment 相关 | 60 passed | `VERIFIED` |
+| 非 integration 全量 | 455 passed，8 deselected | `VERIFIED` |
+| Ruff format/lint | 249 files / All checks passed | `VERIFIED` |
+| strict mypy / uv lock | 117 source files / 70 packages | `VERIFIED` |
+| 本机 Docker | CLI 不存在 | `NOT_RUN_LOCAL` |
+| GitHub Actions Run #21 | 两个 job、真实服务、image、加固 Compose 与 inspect success | `VERIFIED` |
+| 正式 500-case/32-arm/soak | 未运行 | `NOT_RUN` |
+
+绑定实现 head `6c84cd92257e5cbe7c4722e37c1acdfe7a9fa5fa` 的
+[GitHub Actions Run #21](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30733050517)
+最终为 `completed / success`。Compose step 级证据确认 fresh-volume PostgreSQL/Redis、migration、
+API/Worker/Reaper、readiness 和 effective container hardening verifier 全部成功；质量 job 也完成
+全部真实服务 integration、P2 downgrade/re-upgrade 与 application image build。
+
+该证据只绑定当前 pinned images 与普通 CI 环境。资源默认值没有正式容量数据，且本项没有提供
+rootless Docker、seccomp/AppArmor、网络分段或宿主机安全证明。Compose/source hash 已变化，旧
+prepared bundle 必须重新 prepare；没有 migration，也没有覆盖历史 evidence。

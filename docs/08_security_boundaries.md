@@ -105,7 +105,24 @@ PostgreSQL RLS：复合外键阻止矛盾归属行，却不会自动给任意 SE
 这是应用层纵深防御，不是“完全防 SSRF”证明。生产部署仍需防火墙、NetworkPolicy、安全组或
 等价 egress policy，并在 HTTPX/HTTPCore 升级时重跑 peer 合同测试。
 
-## 8. 未完成的安全能力
+## 8. Compose 容器运行边界
+
+`deploy/compose.yaml` 对 PostgreSQL、Redis、migrate、API、Worker 和 Reaper 统一要求：
+
+- 显式非 root user；
+- read-only 镜像根文件系统；
+- 丢弃全部 Linux capability；
+- `no-new-privileges`；
+- 正数 CPU、memory 与 PID limit；
+- 只为 `/tmp`、PostgreSQL socket、数据库数据和 API/Worker artifact 声明必要的可写
+  tmpfs/volume。
+
+CI 在 fresh named volume 上启动完整拓扑后读取 `docker inspect`，校验有效 HostConfig，而不是把
+YAML 字段存在当成运行时证据。默认资源值只用于开发/CI containment，未经过正式容量实验；
+read-only root FS 也不代表业务 volume 只读。本边界不能替代 rootless Docker、user namespace、
+seccomp/AppArmor、NetworkPolicy、secret manager 或宿主机安全。
+
+## 9. 未完成的安全能力
 
 - 请求速率限制；
 - PostgreSQL RLS；

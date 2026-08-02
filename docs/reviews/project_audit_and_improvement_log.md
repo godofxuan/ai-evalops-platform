@@ -659,3 +659,31 @@ API/Worker/Reaper 启动与 readiness 均实际执行。这解决了 P2-3 的远
 没有 Collector/trace backend，所以不能声称 Link UI、采样、保留或生产 OTLP 已验证；API 与
 Worker 按设计不是同一 trace。旧 prepared bundle 因 source/migration 变化必须重新 prepare，
 正式 500-case/32-arm Gate 继续 `NOT_RUN`。
+
+## P2-4 更新：Compose 运行时边界加固
+
+状态：`REMOTE_CI_VERIFIED / FORMAL_GATE_NOT_RUN`。
+
+审计确认应用 `Dockerfile` 虽已有 UID/GID 10001，但 Compose 六个服务没有显式锁定 user、
+read-only rootfs、capability、no-new-privileges 或资源上限；migrate/Reaper 还继承了不需要的
+artifact 写 volume。实现提交 `6c84cd92257e5cbe7c4722e37c1acdfe7a9fa5fa`：
+
+- application roles 显式 `10001:10001`，PostgreSQL/Redis 使用官方 named user；
+- 六服务 read-only、drop ALL、no-new-privileges，设置可配置 CPU/memory/PID limit；
+- 用 tmpfs 开放 `/tmp` 与 PostgreSQL socket，只保留各角色必要命名 volume；
+- 新增 fail-closed inspect verifier，并在 Compose CI 对五个常驻容器验证有效 HostConfig。
+
+本地 RED 依次复现静态配置缺失、校验器不存在和 CI step 不存在；最终聚焦 10 passed、Gate 相关
+60 passed、全量 `455 passed, 8 deselected`，Ruff 249 files、mypy 117 source files、70-package
+lock 全通过。首轮 60 项命令不是断言失败，而是 180 秒外层 timeout；保持测试集合并提高工具
+上限后 219.95 秒通过。额外将 unit YAML test 纳入 mypy 暴露缺少 `types-PyYAML`，正式 CI 范围
+从未包含 unit tests，因此没有为超范围命令新增依赖或降低规则。
+
+绑定实现 head 的
+[GitHub Actions Run #21](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30733050517)
+最终 success。fresh-volume PostgreSQL/Redis、migration、API/Worker/Reaper、readiness、Docker
+inspect hardening、真实 integration、P2 migration round-trip 和 image build 均实际成功。完整过程
+见 [`p2_4_compose_hardening_log.md`](p2_4_compose_hardening_log.md)。
+
+默认限额仍不是生产 sizing；没有 rootless/user namespace/seccomp/AppArmor/NetworkPolicy/宿主机
+安全证明。Compose/source hash 改变使旧 prepared bundle 失效，正式 Gate 继续 `NOT_RUN`。

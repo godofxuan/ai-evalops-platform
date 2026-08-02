@@ -82,6 +82,14 @@ Registry 的 `target_id`；代码要求 HTTPS 443、不跟随重定向、验证�
 关闭。它仍依赖 HTTPX/HTTPCore、操作系统和部署网络的行为，所以生产环境还必须有 egress
 policy、依赖升级回归和审计，不能声称完全防 SSRF。
 
+### 14A. Dockerfile 已经写了 USER，为什么还要加固 Compose？
+
+`Dockerfile USER` 只约束应用镜像的默认进程，不能证明 PostgreSQL/Redis 或 Compose override
+仍非 root，也不限制根文件系统、capability 和资源。项目对六个服务显式设置 user、read-only、
+drop ALL、no-new-privileges 与 CPU/memory/PID limit，再用远端 `docker inspect` 验证有效
+HostConfig。数据库所需数据目录和 socket 通过命名 volume/tmpfs 开放。它是纵深防御，不等于
+rootless Docker、生产 sizing 或完整容器安全审计。
+
 ## 指标与可观测性
 
 ### 15. 为什么 run_id 不作为 Prometheus label？
@@ -164,10 +172,11 @@ serializer 也只接受盲化 packet。三层边界减少未来重构误泄露�
 
 ## 实验与证据
 
-### 29. 231 passed 能证明性能好吗？
+### 29. 455 passed 能证明性能好吗？
 
-不能。它证明纯逻辑/API 合同没有回归。真实 PostgreSQL/Redis 测试在本机 skipped，
-500-case 扩容实验因 Docker 缺失未执行。
+不能。它证明本地逻辑/API 合同没有回归；远端真实 PostgreSQL/Redis、migration、image 与
+Compose 合同也已通过。但正式 500-case、32-arm、soak 和生产容量仍未执行，不能从测试数量
+推导吞吐或扩展性。
 
 ### 30. 如何判断扩容有效？
 
@@ -181,5 +190,6 @@ Run ID。
 
 ### 32. 当前最值得继续做什么？
 
-在有 Docker 的环境运行真实合同和四组扩容实验；保存 PostgreSQL lock wait、资源利用
-和所有失败结果；随后再决定索引、batch claim、连接池或 Worker 数，而不是先猜优化。
+用已验证的加固 Compose 运行正式四组扩容实验；保存 PostgreSQL lock wait、资源利用、
+OOM/throttling 和所有失败结果；随后再决定资源 limit、索引、batch claim、连接池或 Worker 数，
+而不是先猜优化。
