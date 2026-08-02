@@ -88,6 +88,18 @@ def test_outbox_metrics_refresh_success_timestamp_is_global_and_low_cardinality(
     assert "event_id=" not in rendered
 
 
+def test_outbox_metrics_refresh_failures_are_global_and_low_cardinality() -> None:
+    metrics = PlatformMetrics()
+
+    metrics.record_outbox_metrics_refresh_failure()
+
+    rendered = metrics.render().decode("utf-8")
+    assert "outbox_metrics_refresh_failures_total 1.0" in rendered
+    assert "tenant_id=" not in rendered
+    assert "run_id=" not in rendered
+    assert "event_id=" not in rendered
+
+
 def test_outbox_operation_counters_record_bounded_global_totals() -> None:
     metrics = PlatformMetrics()
 
