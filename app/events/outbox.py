@@ -331,6 +331,7 @@ class OutboxDispatcher:
         )
         if self._metrics is not None:
             self._metrics.record_outbox_retry_scheduled(result.retry_scheduled)
+            self._metrics.record_outbox_lease_lost(result.lease_lost)
         return result
 
     async def _dispatch_one(self, message: ClaimedOutboxEvent) -> str:
