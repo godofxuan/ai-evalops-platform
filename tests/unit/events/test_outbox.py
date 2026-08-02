@@ -448,9 +448,7 @@ async def test_cleanup_loop_logs_only_error_type_then_recovers() -> None:
     )
 
     assert maintenance.calls == 2
-    assert logger.errors == [
-        ("outbox_cleanup_iteration_failed", {"error_type": "ConnectionError"})
-    ]
+    assert logger.errors == [("outbox_cleanup_iteration_failed", {"error_type": "ConnectionError"})]
 
 
 async def test_dispatch_loop_logs_only_error_type_then_recovers() -> None:

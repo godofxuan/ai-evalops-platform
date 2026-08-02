@@ -399,14 +399,28 @@ async def run_outbox_cleanup_loop(
     interval_seconds: float,
     batch_size: int,
     metrics: PlatformMetrics,
+    logger: OutboxLoopLogger | None = None,
 ) -> None:
     if interval_seconds <= 0:
         raise ValueError("outbox cleanup interval_seconds must be positive")
     if not 1 <= batch_size <= 10_000:
         raise ValueError("outbox cleanup batch_size must be between 1 and 10000")
+    active_logger = logger or get_logger(__name__, role="outbox_cleanup")
     while not stop_requested.is_set():
-        deleted = await maintenance.cleanup_once(limit=batch_size)
-        metrics.record_outbox_cleanup_deleted(deleted)
+        try:
+            deleted = await maintenance.cleanup_once(limit=batch_size)
+        except Exception as error:
+            active_logger.error(
+                "outbox_cleanup_iteration_failed",
+                error_type=type(error).__name__,
+            )
+        else:
+            metrics.record_outbox_cleanup_deleted(deleted)
+            if deleted:
+                active_logger.info(
+                    "outbox_cleanup_batch_completed",
+                    deleted=deleted,
+                )
         if stop_requested.is_set():
             break
         with suppress(TimeoutError):
