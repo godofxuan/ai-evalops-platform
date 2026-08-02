@@ -43,3 +43,21 @@ def test_offline_downgrade_removes_only_progress_event_outbox(
     sql = capsys.readouterr().out
     assert "DROP TABLE progress_event_outbox" in sql
     assert "DROP COLUMN origin_traceparent" not in sql
+
+
+def test_offline_upgrade_adds_partial_outbox_retention_index(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(
+        "EVALOPS_DATABASE_URL",
+        "postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops",
+    )
+    config = Config(PROJECT_ROOT / "alembic.ini")
+
+    command.upgrade(config, "head", sql=True)
+
+    sql = capsys.readouterr().out
+    assert "CREATE INDEX ix_progress_event_outbox_published_retention" in sql
+    assert "ON progress_event_outbox (published_at, id)" in sql
+    assert "WHERE published_at IS NOT NULL" in sql
