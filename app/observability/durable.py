@@ -24,6 +24,17 @@ class DurableJobGauges:
         return max((now - self.oldest_heartbeat_at).total_seconds(), 0.0)
 
 
+@dataclass(frozen=True, slots=True)
+class DurableOutboxGauges:
+    pending: int
+    oldest_pending_at: datetime | None
+
+    def oldest_pending_age_seconds(self, now: datetime) -> float:
+        if self.oldest_pending_at is None:
+            return 0.0
+        return max((now - self.oldest_pending_at).total_seconds(), 0.0)
+
+
 def build_durable_job_gauges_statement() -> Select[tuple[int, int, datetime | None]]:
     return select(
         func.count(EvaluationJob.id)
@@ -65,4 +76,21 @@ async def refresh_durable_job_gauges(
     metrics.set_job_queue_depth(gauges.queue_depth)
     metrics.set_job_running(gauges.running)
     metrics.set_worker_heartbeat_age(gauges.heartbeat_age_seconds(now))
+    return gauges
+
+
+async def refresh_durable_outbox_gauges(
+    *,
+    session_factory: AsyncSessionFactory,
+    metrics: PlatformMetrics,
+    now: datetime,
+) -> DurableOutboxGauges:
+    async with session_factory() as session:
+        row = (await session.execute(build_durable_outbox_gauges_statement())).one()
+    gauges = DurableOutboxGauges(
+        pending=int(row.pending),
+        oldest_pending_at=row.oldest_pending_at,
+    )
+    metrics.set_outbox_pending(gauges.pending)
+    metrics.set_outbox_oldest_pending_age(gauges.oldest_pending_age_seconds(now))
     return gauges
