@@ -134,6 +134,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                 DatasetVersion(
                     id=version_id,
                     dataset_id=dataset_id,
+                    tenant_id=tenant_id,
                     artifact_id=artifact_id,
                     version=1,
                     schema_version="1",

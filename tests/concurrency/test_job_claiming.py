@@ -111,6 +111,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 DatasetVersion(
                     id=version_id,
                     dataset_id=dataset_id,
+                    tenant_id=tenant_id,
                     artifact_id=artifact_id,
                     version=1,
                     schema_version="1",

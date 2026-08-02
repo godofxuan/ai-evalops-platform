@@ -49,6 +49,7 @@ def test_get_version_statement_filters_full_resource_chain_and_tenant() -> None:
     assert "join datasets on datasets.id = dataset_versions.dataset_id" in sql
     assert f"dataset_versions.id = '{VERSION_ID}'" in sql
     assert f"dataset_versions.dataset_id = '{DATASET_ID}'" in sql
+    assert f"dataset_versions.tenant_id = '{TENANT_ID}'" in sql
     assert f"datasets.tenant_id = '{TENANT_ID}'" in sql
 
 

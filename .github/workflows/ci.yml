@@ -102,6 +102,13 @@ jobs:
           uv run --no-sync pytest tests/integration/test_artifact_references.py
           --junitxml=/tmp/junit-artifact-references.xml
 
+      - name: Integration - cross-table tenant consistency constraints
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest
+          tests/integration/test_tenant_consistency_constraints.py
+          --junitxml=/tmp/junit-tenant-consistency.xml
+
       - name: Integration - readiness dependencies
         if: ${{ !cancelled() }}
         run: >-
@@ -120,6 +127,12 @@ jobs:
           uv run --no-sync pytest tests/integration/test_run_idempotency.py
           --junitxml=/tmp/junit-run-idempotency.xml
 
+      - name: Migration - P2-1 downgrade and re-upgrade
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --no-sync alembic downgrade 20260802_0009
+          uv run --no-sync alembic upgrade head
+
       - name: Annotate integration failures
         if: ${{ failure() && !cancelled() }}
         run: >-
@@ -128,6 +141,7 @@ jobs:
           /tmp/junit-human-reviews.xml
           /tmp/junit-identity-datasets.xml
           /tmp/junit-artifact-references.xml
+          /tmp/junit-tenant-consistency.xml
           /tmp/junit-readiness.xml
           /tmp/junit-redis-events.xml
           /tmp/junit-run-idempotency.xml

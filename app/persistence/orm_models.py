@@ -10,6 +10,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     MetaData,
     String,
@@ -128,6 +129,7 @@ class Tenant(Base):
 class APIKey(Base):
     __tablename__ = "api_keys"
     __table_args__ = (
+        UniqueConstraint("id", "tenant_id", name="uq_api_keys_id_tenant_id"),
         UniqueConstraint("key_prefix", name="uq_api_keys_key_prefix"),
         CheckConstraint("char_length(name) > 0", name="name_not_empty"),
         Index("ix_api_keys_tenant_id_status", "tenant_id", "status"),
@@ -167,6 +169,7 @@ class APIKey(Base):
 class Dataset(Base):
     __tablename__ = "datasets"
     __table_args__ = (
+        UniqueConstraint("id", "tenant_id", name="uq_datasets_id_tenant_id"),
         UniqueConstraint("tenant_id", "name", name="uq_datasets_tenant_id_name"),
         CheckConstraint("char_length(name) > 0", name="name_not_empty"),
         Index("ix_datasets_tenant_id_id", "tenant_id", "id"),
@@ -213,6 +216,12 @@ class ArtifactBlob(Base):
 class ArtifactReference(Base):
     __tablename__ = "artifact_references"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_artifact_references_run_id_tenant_id_evaluation_runs",
+            ondelete="CASCADE",
+        ),
         CheckConstraint(
             "(artifact_type = 'dataset_source' AND run_id IS NULL) OR "
             "(artifact_type <> 'dataset_source' AND run_id IS NOT NULL)",
@@ -224,6 +233,11 @@ class ArtifactReference(Base):
             "artifact_type",
             "blob_sha256",
             name="uq_artifact_references_owner_type_blob",
+        ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            name="uq_artifact_references_id_tenant_id",
         ),
         Index(
             "ix_artifact_references_tenant_id_created_at",
@@ -248,10 +262,7 @@ class ArtifactReference(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
-    run_id: Mapped[UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
-    )
+    run_id: Mapped[UUID | None] = mapped_column(Uuid)
     artifact_type: Mapped[ArtifactType] = mapped_column(
         artifact_type_enum,
         nullable=False,
@@ -267,6 +278,23 @@ class ArtifactReference(Base):
 class DatasetVersion(Base):
     __tablename__ = "dataset_versions"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["dataset_id", "tenant_id"],
+            ["datasets.id", "datasets.tenant_id"],
+            name="fk_dataset_versions_dataset_id_tenant_id_datasets",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["artifact_id", "tenant_id"],
+            ["artifact_references.id", "artifact_references.tenant_id"],
+            name=("fk_dataset_versions_artifact_id_tenant_id_artifact_references"),
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            name="uq_dataset_versions_id_tenant_id",
+        ),
         UniqueConstraint(
             "dataset_id",
             "version",
@@ -283,16 +311,9 @@ class DatasetVersion(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    dataset_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("datasets.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    artifact_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("artifact_references.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    dataset_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    artifact_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     version: Mapped[int] = mapped_column(nullable=False)
     schema_version: Mapped[str] = mapped_column(
         String(32),
@@ -312,6 +333,23 @@ class DatasetVersion(Base):
 class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["dataset_version_id", "tenant_id"],
+            ["dataset_versions.id", "dataset_versions.tenant_id"],
+            name="fk_evaluation_runs_dataset_version_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["created_by", "tenant_id"],
+            ["api_keys.id", "api_keys.tenant_id"],
+            name="fk_evaluation_runs_created_by_tenant_id_api_keys",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            name="uq_evaluation_runs_id_tenant_id",
+        ),
         UniqueConstraint(
             "tenant_id",
             "idempotency_key",
@@ -338,11 +376,7 @@ class EvaluationRun(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
-    dataset_version_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("dataset_versions.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    dataset_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     dataset_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -365,11 +399,7 @@ class EvaluationRun(Base):
     succeeded_jobs: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     failed_jobs: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     cancelled_jobs: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
-    created_by: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("api_keys.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -384,6 +414,11 @@ class EvaluationRun(Base):
 class EvaluationJob(Base):
     __tablename__ = "evaluation_jobs"
     __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "run_id",
+            name="uq_evaluation_jobs_id_run_id",
+        ),
         UniqueConstraint(
             "run_id",
             "case_id",
@@ -472,6 +507,12 @@ class JobAttempt(Base):
 class CaseResult(Base):
     __tablename__ = "case_results"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["job_id", "run_id"],
+            ["evaluation_jobs.id", "evaluation_jobs.run_id"],
+            name="fk_case_results_job_id_run_id_evaluation_jobs",
+            ondelete="CASCADE",
+        ),
         UniqueConstraint("job_id", name="uq_case_results_job_id"),
         UniqueConstraint(
             "run_id",
@@ -491,16 +532,8 @@ class CaseResult(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    job_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("evaluation_jobs.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    run_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     case_id: Mapped[str] = mapped_column(String(200), nullable=False)
     answer_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -549,6 +582,29 @@ class RunMetric(Base):
 class HumanReviewTask(Base):
     __tablename__ = "human_review_tasks"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_human_review_tasks_run_id_tenant_id_evaluation_runs",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["job_id", "run_id"],
+            ["evaluation_jobs.id", "evaluation_jobs.run_id"],
+            name="fk_human_review_tasks_job_id_run_id_evaluation_jobs",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["created_by", "tenant_id"],
+            ["api_keys.id", "api_keys.tenant_id"],
+            name="fk_human_review_tasks_created_by_tenant_id_api_keys",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            name="uq_human_review_tasks_id_tenant_id",
+        ),
         UniqueConstraint(
             "run_id",
             "case_id",
@@ -568,16 +624,8 @@ class HumanReviewTask(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
-    run_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("evaluation_runs.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    job_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("evaluation_jobs.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     case_id: Mapped[str] = mapped_column(String(200), nullable=False)
     packet_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[ReviewTaskStatus] = mapped_column(
@@ -586,11 +634,7 @@ class HumanReviewTask(Base):
         default=ReviewTaskStatus.OPEN,
         server_default=ReviewTaskStatus.OPEN.value,
     )
-    created_by: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("api_keys.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -601,6 +645,18 @@ class HumanReviewTask(Base):
 class HumanReviewSubmission(Base):
     __tablename__ = "human_review_submissions"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["task_id", "tenant_id"],
+            ["human_review_tasks.id", "human_review_tasks.tenant_id"],
+            name="fk_human_review_submissions_task_tenant",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["reviewer_id", "tenant_id"],
+            ["api_keys.id", "api_keys.tenant_id"],
+            name="fk_human_review_submissions_reviewer_tenant",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "task_id",
             "reviewer_id",
@@ -619,16 +675,8 @@ class HumanReviewSubmission(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
-    task_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("human_review_tasks.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    reviewer_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("api_keys.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    task_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    reviewer_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     labels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     comment: Mapped[str | None] = mapped_column(String(1_000))
     created_at: Mapped[datetime] = mapped_column(
@@ -641,6 +689,18 @@ class HumanReviewSubmission(Base):
 class HumanReviewAdjudication(Base):
     __tablename__ = "human_review_adjudications"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["task_id", "tenant_id"],
+            ["human_review_tasks.id", "human_review_tasks.tenant_id"],
+            name="fk_human_review_adjudications_task_tenant",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["adjudicator_id", "tenant_id"],
+            ["api_keys.id", "api_keys.tenant_id"],
+            name="fk_human_review_adjudications_adjudicator_tenant",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "task_id",
             name="uq_human_review_adjudications_task_id",
@@ -658,16 +718,8 @@ class HumanReviewAdjudication(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
-    task_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("human_review_tasks.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    adjudicator_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("api_keys.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    task_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    adjudicator_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     labels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     rationale: Mapped[str] = mapped_column(String(2_000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

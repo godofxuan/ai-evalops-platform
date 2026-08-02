@@ -62,6 +62,7 @@ def build_get_dataset_version_statement(
         .where(
             DatasetVersion.id == version_id,
             DatasetVersion.dataset_id == dataset_id,
+            DatasetVersion.tenant_id == tenant_id,
             Dataset.tenant_id == tenant_id,
         )
     )
@@ -179,6 +180,7 @@ class SQLAlchemyDatasetService:
             duplicate_id = await session.scalar(
                 select(DatasetVersion.id).where(
                     DatasetVersion.dataset_id == dataset_id,
+                    DatasetVersion.tenant_id == principal.tenant_id,
                     DatasetVersion.sha256 == validated.sha256,
                 )
             )
@@ -194,11 +196,13 @@ class SQLAlchemyDatasetService:
             )
             current_version = await session.scalar(
                 select(func.coalesce(func.max(DatasetVersion.version), 0)).where(
-                    DatasetVersion.dataset_id == dataset_id
+                    DatasetVersion.dataset_id == dataset_id,
+                    DatasetVersion.tenant_id == principal.tenant_id,
                 )
             )
             dataset_version = DatasetVersion(
                 dataset_id=dataset_id,
+                tenant_id=principal.tenant_id,
                 artifact_id=artifact_reference.id,
                 version=int(current_version or 0) + 1,
                 schema_version="1",

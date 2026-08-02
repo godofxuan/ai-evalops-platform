@@ -1,4 +1,4 @@
-from sqlalchemy import CheckConstraint, Table, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Table, UniqueConstraint
 
 from app.persistence.orm_models import (
     APIKey,
@@ -32,6 +32,19 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
+def foreign_key_specs(
+    table: Table,
+) -> set[tuple[tuple[str, ...], tuple[str, ...]]]:
+    return {
+        (
+            tuple(element.parent.name for element in constraint.elements),
+            tuple(element.target_fullname for element in constraint.elements),
+        )
+        for constraint in table.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+    }
+
+
 def check_expressions(table: Table) -> set[str]:
     return {
         str(constraint.sqltext)
@@ -40,7 +53,7 @@ def check_expressions(table: Table) -> set[str]:
     }
 
 
-def test_orm_metadata_has_current_tables_through_p1_7() -> None:
+def test_orm_metadata_has_current_tables_through_p2_1() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
         "artifact_blobs",
@@ -92,7 +105,7 @@ def test_artifact_blob_and_reference_metadata_separate_content_from_ownership() 
     assert foreign_key_targets(ArtifactReference.__table__, "blob_sha256") == {
         "artifact_blobs.sha256"
     }
-    assert foreign_key_targets(ArtifactReference.__table__, "tenant_id") == {"tenants.id"}
+    assert "tenants.id" in foreign_key_targets(ArtifactReference.__table__, "tenant_id")
     assert foreign_key_targets(ArtifactReference.__table__, "run_id") == {"evaluation_runs.id"}
     assert {
         "id",
@@ -116,6 +129,78 @@ def test_artifact_blob_and_reference_metadata_separate_content_from_ownership() 
     }
 
 
+def test_dataset_artifact_and_run_share_one_tenant_lineage() -> None:
+    assert "tenant_id" in DatasetVersion.__table__.columns
+    assert not DatasetVersion.__table__.columns.tenant_id.nullable
+    assert frozenset({"id", "tenant_id"}) in unique_column_sets(Dataset.__table__)
+    assert frozenset({"id", "tenant_id"}) in unique_column_sets(ArtifactReference.__table__)
+    assert frozenset({"id", "tenant_id"}) in unique_column_sets(DatasetVersion.__table__)
+    assert frozenset({"id", "tenant_id"}) in unique_column_sets(EvaluationRun.__table__)
+
+    assert (
+        ("dataset_id", "tenant_id"),
+        ("datasets.id", "datasets.tenant_id"),
+    ) in foreign_key_specs(DatasetVersion.__table__)
+    assert (
+        ("artifact_id", "tenant_id"),
+        ("artifact_references.id", "artifact_references.tenant_id"),
+    ) in foreign_key_specs(DatasetVersion.__table__)
+    assert (
+        ("dataset_version_id", "tenant_id"),
+        ("dataset_versions.id", "dataset_versions.tenant_id"),
+    ) in foreign_key_specs(EvaluationRun.__table__)
+    assert (
+        ("run_id", "tenant_id"),
+        ("evaluation_runs.id", "evaluation_runs.tenant_id"),
+    ) in foreign_key_specs(ArtifactReference.__table__)
+
+
+def test_run_and_human_review_actors_share_the_record_tenant() -> None:
+    assert frozenset({"id", "tenant_id"}) in unique_column_sets(APIKey.__table__)
+    assert frozenset({"id", "tenant_id"}) in unique_column_sets(HumanReviewTask.__table__)
+
+    assert (
+        ("created_by", "tenant_id"),
+        ("api_keys.id", "api_keys.tenant_id"),
+    ) in foreign_key_specs(EvaluationRun.__table__)
+    assert (
+        ("run_id", "tenant_id"),
+        ("evaluation_runs.id", "evaluation_runs.tenant_id"),
+    ) in foreign_key_specs(HumanReviewTask.__table__)
+    assert (
+        ("created_by", "tenant_id"),
+        ("api_keys.id", "api_keys.tenant_id"),
+    ) in foreign_key_specs(HumanReviewTask.__table__)
+    assert (
+        ("task_id", "tenant_id"),
+        ("human_review_tasks.id", "human_review_tasks.tenant_id"),
+    ) in foreign_key_specs(HumanReviewSubmission.__table__)
+    assert (
+        ("reviewer_id", "tenant_id"),
+        ("api_keys.id", "api_keys.tenant_id"),
+    ) in foreign_key_specs(HumanReviewSubmission.__table__)
+    assert (
+        ("task_id", "tenant_id"),
+        ("human_review_tasks.id", "human_review_tasks.tenant_id"),
+    ) in foreign_key_specs(HumanReviewAdjudication.__table__)
+
+
+def test_case_results_and_review_tasks_share_their_jobs_run() -> None:
+    assert frozenset({"id", "run_id"}) in unique_column_sets(EvaluationJob.__table__)
+    assert (
+        ("job_id", "run_id"),
+        ("evaluation_jobs.id", "evaluation_jobs.run_id"),
+    ) in foreign_key_specs(CaseResult.__table__)
+    assert (
+        ("job_id", "run_id"),
+        ("evaluation_jobs.id", "evaluation_jobs.run_id"),
+    ) in foreign_key_specs(HumanReviewTask.__table__)
+    assert (
+        ("adjudicator_id", "tenant_id"),
+        ("api_keys.id", "api_keys.tenant_id"),
+    ) in foreign_key_specs(HumanReviewAdjudication.__table__)
+
+
 def test_run_metrics_are_unique_per_run_and_metric_name() -> None:
     assert frozenset({"run_id", "metric_name"}) in unique_column_sets(RunMetric.__table__)
     assert foreign_key_targets(RunMetric.__table__, "run_id") == {"evaluation_runs.id"}
@@ -133,7 +218,7 @@ def test_human_review_history_is_tenant_owned_and_immutable_by_constraint() -> N
         HumanReviewSubmission.__table__,
         HumanReviewAdjudication.__table__,
     ):
-        assert foreign_key_targets(table, "tenant_id") == {"tenants.id"}
+        assert "tenants.id" in foreign_key_targets(table, "tenant_id")
 
 
 def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> None:
@@ -142,7 +227,7 @@ def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> No
     assert frozenset({"tenant_id", "idempotency_key"}) in unique_column_sets(
         EvaluationRun.__table__
     )
-    assert foreign_key_targets(EvaluationRun.__table__, "tenant_id") == {"tenants.id"}
+    assert "tenants.id" in foreign_key_targets(EvaluationRun.__table__, "tenant_id")
     assert foreign_key_targets(EvaluationRun.__table__, "dataset_version_id") == {
         "dataset_versions.id"
     }
@@ -155,7 +240,7 @@ def test_case_result_is_unique_per_job_and_run_case() -> None:
     assert frozenset({"job_id"}) in unique_column_sets(CaseResult.__table__)
     assert frozenset({"run_id", "case_id"}) in unique_column_sets(CaseResult.__table__)
     assert foreign_key_targets(CaseResult.__table__, "job_id") == {"evaluation_jobs.id"}
-    assert foreign_key_targets(CaseResult.__table__, "run_id") == {"evaluation_runs.id"}
+    assert foreign_key_targets(CaseResult.__table__, "run_id") == {"evaluation_jobs.run_id"}
     assert "metrics_json" in CaseResult.__table__.columns
 
 

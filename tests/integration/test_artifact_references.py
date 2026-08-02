@@ -105,6 +105,7 @@ async def _seed_owner(
         DatasetVersion(
             id=dataset_version_id,
             dataset_id=dataset_id,
+            tenant_id=tenant_id,
             artifact_id=dataset_reference_id,
             version=1,
             schema_version="1",
