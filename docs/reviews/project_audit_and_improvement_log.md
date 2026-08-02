@@ -690,7 +690,7 @@ inspect hardening、真实 integration、P2 migration round-trip 和 image build
 
 ## P2-5 更新：Gate 1 quality/adoption flags 自动检查
 
-状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 审计确认两个 `--confirm-*` 开关只是内容为空的用户授权 Boolean；prepared manifest 没有冻结
 quality policy，aggregate 也只汇总当前存在的 summaries。它无法自动区分完整有效、已知无效和
@@ -712,5 +712,11 @@ Ruff 250 files、mypy 117 source files、70-package lock 全通过。首轮完�
 [`p2_5_gate_automation_log.md`](p2_5_gate_automation_log.md)。
 
 没有 migration，没有运行正式 500-case/32-arm，也没有用户数值 performance policy。因此没有
-吞吐、p95/p99、容量拐点或部署 Worker 数结论；远端真实服务/image/Compose 证据须在 push 后由
-CI 产生。
+吞吐、p95/p99、容量拐点或部署 Worker 数结论；本机未运行真实服务/image/Compose，远端证据见
+下文。
+
+后续远端证据已产生：绑定 head `fa526f7ad6ada27ba5f9e6492afb5a8ab368b5a6` 的
+[GitHub Actions Run #23](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30734753325)
+最终 success。两个 job 均成功，步骤级结果确认静态质量、非 integration、全部真实服务
+integration、P2 migration round-trip、application image、完整 Compose topology、readiness 和
+hardening inspect 实际执行。该普通 CI 不包含正式 500-case/32-arm，adoption 继续 `NOT_RUN`。

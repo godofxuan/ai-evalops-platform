@@ -9,7 +9,7 @@
 - GREEN 提交：`3ee4480`，`feat(gate1): evaluate quality readiness automatically`；
 - 数据库 migration：无；
 - 正式 500-case / 32-arm Gate：`NOT_RUN`；
-- 当前证据状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+- 当前证据状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 本日志记录的是实验工具合同改进，不是实验结果。文中的 `VERIFIED` 只表示列出的自动化测试和
 静态检查已通过，不能被转述为 Worker 扩展性、500-case 性能或生产容量已经验证。
@@ -310,8 +310,30 @@ ImportError: cannot import name 'evaluate_gate1_gate_flags'
 | Ruff lint | All checks passed | `VERIFIED` |
 | strict mypy | 117 source files，无问题 | `VERIFIED` |
 | uv lock | 70 packages | `VERIFIED` |
-| 真实 PostgreSQL/Redis、image、Compose | 本阶段本机未运行；等待远端 CI | `NOT_RUN_LOCAL` |
+| 本机真实 PostgreSQL/Redis、image、Compose | 本阶段本机未运行 | `NOT_RUN_LOCAL` |
+| GitHub Actions Run #23 | 两个 job、真实服务、migration、image、Compose 与 hardening inspect success | `VERIFIED_REMOTE` |
 | 正式 500-case/32-arm/soak | 未运行 | `NOT_RUN` |
+
+### 8.1 远端验证
+
+绑定文档头 `fa526f7ad6ada27ba5f9e6492afb5a8ab368b5a6` 的
+[GitHub Actions Run #23](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30734753325)
+最终为 `completed / success`。`quality-and-integration` 与 `compose-smoke` 两个 job 都成功。
+
+步骤级结果确认实际执行并成功：
+
+- lock、Ruff format/lint、strict mypy 和非 integration tests；
+- Alembic upgrade；
+- job claim/trace/lease fencing、blind review、tenant/dataset、artifact ownership、跨表 tenant
+  constraint、readiness、Redis event isolation 和 Run idempotency 的真实服务 integration；
+- P2 migration downgrade/re-upgrade；
+- application image build；
+- 完整 Compose topology build、fresh PostgreSQL/Redis、Compose migration、API/Worker/Reaper、
+  readiness 和 effective container hardening inspect。
+
+两个 failure-annotation step 因无失败而 skipped，这是 workflow 的预期条件分支，不是测试缺失。
+Run #23 仍是普通 CI，不包含正式 500-case/32-arm，因此只把远端代码/服务合同提升为
+`VERIFIED_REMOTE`，不改变 formal Gate 的 `NOT_RUN`。
 
 ## 9. 本次证明了什么
 
@@ -375,4 +397,3 @@ hash 或覆盖历史目录来“升级”证据。
 - “500-case 扩展性已经验证”；
 - “负扩展会自动阻止部署”；
 - “普通 CI 已证明生产容量”。
-

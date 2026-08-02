@@ -568,7 +568,7 @@ symlink、Dockerfile 专用 ignore、修改 Dockerfile、修改 `uv.lock`、非 
 
 ## 13. P2-5 quality/adoption flags 自动检查
 
-状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 修改前，`--confirm-quality-gate` 与 `--confirm-adoption-gate` 只是用户授权运行的 Boolean；
 aggregate 除固定 `automatic_adoption_decision=null` 外，没有根据冻结 arm plan 自动判断证据是否
@@ -596,3 +596,9 @@ prepared v1–v4 和 result v1–v2 只读，不迁移、不覆盖；必须从�
 
 这些结果只证明自动化合同。没有运行真实 500-case/32-arm，没有用户数值 performance policy，
 因此没有 throughput、p95/p99、容量 knee 或部署 Worker 数结论。
+
+后续远端证据：绑定 head `fa526f7ad6ada27ba5f9e6492afb5a8ab368b5a6` 的
+[GitHub Actions Run #23](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30734753325)
+最终 success。两个 job 均成功，步骤级结果确认全部真实服务 integration、P2 migration
+round-trip、application image、完整 Compose topology、readiness 与 hardening inspect 实际执行。
+该证据不包含正式 500-case/32-arm，不改变 adoption `NOT_RUN`。

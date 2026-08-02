@@ -2287,7 +2287,7 @@ prepared bundle 必须重新 prepare；没有 migration，也没有覆盖历史 
 - 起始 SHA：`b86bc898c27e1065ec649f091e2ae518e1f29511`；
 - RED 提交：`a9a1324`；
 - 实现提交：`3ee4480`；
-- 当前状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`；
+- 当前状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`；
 - prepared schema v5 冻结 result schema v3 与不可弱化 quality policy v1；
 - finalizer 必须显式接收冻结 expected arms，不能从 observed summaries 自证完整；
 - quality 自动输出 `VERIFIED`、`FAILED` 或 `UNKNOWN`，并保留 missing/invalid arm IDs；
@@ -2310,10 +2310,16 @@ rollback 见 [`p2_5_gate_automation_log.md`](p2_5_gate_automation_log.md)。
 | finalization 必需 expected arms | 16 passed | `VERIFIED` |
 | 非 integration 全量 | 463 passed，8 deselected | `VERIFIED` |
 | Ruff / mypy / lock | 250 files / 117 source files / 70 packages | `VERIFIED` |
-| 远端真实服务、image、Compose | 等待本提交 push 后 CI | `NOT_RUN_REMOTE` |
+| GitHub Actions Run #23 | 两个 job、真实服务、image、Compose 与 hardening inspect success | `VERIFIED_REMOTE` |
 | 正式 500-case/32-arm/soak | 未运行 | `NOT_RUN` |
 
 本项没有 migration。prepared v1–v4、result v1–v2 和所有历史 `docs/results/` 保持只读；旧
 prepared bundle 因 schema 与执行脚本 hash 变化必须重新 prepare。CLI 的两个 `--confirm-*`
 开关只是用户授权正式运行，不能被当成 gate 结果。没有用户批准的数值阈值，因此
 `READY_FOR_HUMAN_REVIEW` 也不等于采用建议。
+
+绑定 head `fa526f7ad6ada27ba5f9e6492afb5a8ab368b5a6` 的
+[GitHub Actions Run #23](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30734753325)
+最终 success。质量 job 的静态检查、非 integration、全部真实服务 integration、P2 migration
+round-trip 和 image build 成功；Compose job 的完整拓扑、依赖、migration、API/Worker/Reaper、
+readiness 与 effective hardening inspect 也成功。正式 Gate 仍为 `NOT_RUN`。
