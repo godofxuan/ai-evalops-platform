@@ -10,6 +10,8 @@ from app.core.clock import Clock, SystemClock
 from app.domain.enums import JobStatus, RunStatus
 from app.domain.job_state_machine import JobTransition, transition_job
 from app.domain.run_state_machine import transition_run
+from app.events.models import EventType
+from app.events.outbox import enqueue_progress_event
 from app.jobs.lease import LeasePolicy
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
@@ -193,6 +195,29 @@ class SQLAlchemyJobClaimer:
                                 },
                             )
                         )
+
+                if run_started_now:
+                    enqueue_progress_event(
+                        session,
+                        event_type=EventType.RUN_STARTED,
+                        tenant_id=run.tenant_id,
+                        run_id=run.id,
+                        timestamp=now,
+                        payload={"status": "running"},
+                    )
+                enqueue_progress_event(
+                    session,
+                    event_type=EventType.JOB_PROGRESS,
+                    tenant_id=run.tenant_id,
+                    run_id=run.id,
+                    timestamp=now,
+                    payload={
+                        "job_id": str(job.id),
+                        "case_id": job.case_id,
+                        "attempt_number": next_attempt_number,
+                        "status": "running",
+                    },
+                )
 
                 claims.append(
                     ClaimedJob(

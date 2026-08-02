@@ -1,5 +1,3 @@
-from contextlib import suppress
-from datetime import UTC, datetime
 from typing import Annotated, cast
 from uuid import UUID
 
@@ -8,8 +6,6 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
 from app.core.telemetry import Telemetry
-from app.events.models import EventType, ProgressEvent
-from app.events.publisher import EventPublisher
 from app.jobs.cancellation import CancellationService
 from app.runs.schemas import RunCreate, RunRead
 from app.runs.service import RunService
@@ -75,25 +71,4 @@ async def cancel_run(
     service = cast(CancellationService | None, request.app.state.cancellation_service)
     if service is None:
         raise RuntimeError("cancellation service is not configured")
-    snapshot = await service.cancel_run(principal=principal, run_id=run_id)
-    publisher = cast(EventPublisher | None, request.app.state.event_publisher)
-    if publisher is not None:
-        event_type = (
-            EventType.RUN_COMPLETED
-            if snapshot.status.value in {"cancelled", "failed", "partially_succeeded", "succeeded"}
-            else EventType.JOB_PROGRESS
-        )
-        with suppress(Exception):
-            await publisher.publish(
-                ProgressEvent(
-                    event_type=event_type,
-                    run_id=run_id,
-                    tenant_id=principal.tenant_id,
-                    timestamp=datetime.now(UTC),
-                    payload={
-                        "status": snapshot.status.value,
-                        "source": "cancel_request",
-                    },
-                )
-            )
-    return snapshot
+    return await service.cancel_run(principal=principal, run_id=run_id)

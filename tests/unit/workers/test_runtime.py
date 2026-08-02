@@ -5,7 +5,6 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from app.core.telemetry import Telemetry
 from app.domain.enums import JobStatus, RunStatus
-from app.events.models import ProgressEvent
 from app.jobs.reaper import ReapedJob
 from app.observability.metrics import PlatformMetrics
 from app.workers.runtime import handle_reaped_job, run_reaper_iteration
@@ -33,7 +32,7 @@ async def test_reaper_iteration_observes_database_operation_duration() -> None:
     )
 
 
-async def test_handle_reaped_job_emits_linked_span_and_terminal_events() -> None:
+async def test_handle_reaped_job_emits_linked_span_without_direct_publication() -> None:
     exporter = InMemorySpanExporter()
     telemetry = Telemetry(
         service_name="evalops-reaper-test",
@@ -58,24 +57,12 @@ async def test_handle_reaped_job_emits_linked_span_and_terminal_events() -> None
     )
     metrics = PlatformMetrics()
 
-    class ForbiddenPublisher:
-        def __init__(self) -> None:
-            self.events: list[ProgressEvent] = []
-
-        async def publish(self, event: ProgressEvent) -> bool:
-            self.events.append(event)
-            return True
-
-    publisher = ForbiddenPublisher()
-
     await handle_reaped_job(
         item,
         metrics=metrics,
         telemetry=telemetry,
-        event_publisher=publisher,
     )
 
-    assert publisher.events == []
     spans = exporter.get_finished_spans()
     recovered = next(span for span in spans if span.name == "reaper.job.recovered")
     assert recovered.parent is None

@@ -2,7 +2,7 @@ import asyncio
 import os
 import socket
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from time import perf_counter
 from typing import Protocol
 from uuid import uuid4
@@ -12,8 +12,6 @@ import structlog
 from app.core.config import Settings
 from app.core.logging import get_logger
 from app.core.telemetry import Telemetry, parse_otlp_headers
-from app.events.models import EventType, ProgressEvent
-from app.events.publisher import EventPublisher, RedisEventPublisher
 from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.failures import SQLAlchemyFailureCommitter
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
@@ -23,7 +21,6 @@ from app.jobs.results import SQLAlchemyResultCommitter
 from app.jobs.retry_policy import RetryPolicy
 from app.observability.metrics import PlatformMetrics, start_metrics_server
 from app.persistence.database import create_database_engine, create_session_factory
-from app.persistence.redis import create_redis_client
 from app.workers.lease_runner import LeaseHeartbeatRunner
 from app.workers.worker import EvaluationWorker
 
@@ -54,7 +51,6 @@ async def run_worker_process(
 ) -> None:
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
-    redis_client = create_redis_client(settings)
     retry_policy = _retry_policy(settings)
     worker_id = _worker_id()
     metrics = PlatformMetrics()
@@ -68,7 +64,6 @@ async def run_worker_process(
         if settings.metrics_enabled
         else None
     )
-    event_publisher = RedisEventPublisher(redis_client, metrics=metrics)
     worker = EvaluationWorker(
         claimer=SQLAlchemyJobClaimer(
             session_factory,
@@ -86,7 +81,6 @@ async def run_worker_process(
             ),
             heartbeat_interval_seconds=settings.worker_heartbeat_seconds,
         ),
-        event_publisher=event_publisher,
         metrics=metrics,
         telemetry=telemetry,
     )
@@ -107,7 +101,6 @@ async def run_worker_process(
         if metrics_server is not None:
             metrics_server.close()
         telemetry.shutdown()
-        await redis_client.aclose()
         await engine.dispose()
         logger.info("worker_stopped")
 
@@ -120,7 +113,6 @@ async def run_reaper_process(
 ) -> None:
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
-    redis_client = create_redis_client(settings)
     reaper_id = f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:8]}"
     metrics = PlatformMetrics()
     telemetry = _telemetry(settings, role="reaper", instance_id=reaper_id)
@@ -133,7 +125,6 @@ async def run_reaper_process(
         if settings.metrics_enabled
         else None
     )
-    event_publisher = RedisEventPublisher(redis_client, metrics=metrics)
     reaper = SQLAlchemyJobReaper(
         session_factory,
         retry_policy=_retry_policy(settings),
@@ -158,7 +149,6 @@ async def run_reaper_process(
                         item,
                         metrics=metrics,
                         telemetry=telemetry,
-                        event_publisher=event_publisher,
                     )
                 if reaped:
                     logger.info("reaper_batch_completed", count=len(reaped))
@@ -174,7 +164,6 @@ async def run_reaper_process(
         if metrics_server is not None:
             metrics_server.close()
         telemetry.shutdown()
-        await redis_client.aclose()
         await engine.dispose()
         logger.info("reaper_stopped")
 
@@ -200,7 +189,6 @@ async def handle_reaped_job(
     *,
     metrics: PlatformMetrics,
     telemetry: Telemetry,
-    event_publisher: EventPublisher,
 ) -> None:
     attributes: dict[str, str | int] = {
         "tenant.id": str(item.tenant_id),
@@ -223,56 +211,6 @@ async def handle_reaped_job(
             metrics.record_job_retry()
         elif item.action == "failed":
             metrics.record_job_failed()
-        event_type = EventType.JOB_RETRIED if item.action == "requeued" else EventType.JOB_FAILED
-        await _publish_reaper_event(
-            telemetry=telemetry,
-            event_publisher=event_publisher,
-            event=ProgressEvent(
-                event_type=event_type,
-                run_id=item.run_id,
-                tenant_id=item.tenant_id,
-                timestamp=datetime.now(UTC),
-                payload={
-                    "job_id": str(item.job_id),
-                    "status": item.status.value,
-                    "source": "reaper",
-                },
-            ),
-        )
-        if item.run_status is not None and item.run_status.value in {
-            "succeeded",
-            "partially_succeeded",
-            "failed",
-            "cancelled",
-        }:
-            await _publish_reaper_event(
-                telemetry=telemetry,
-                event_publisher=event_publisher,
-                event=ProgressEvent(
-                    event_type=EventType.RUN_COMPLETED,
-                    run_id=item.run_id,
-                    tenant_id=item.tenant_id,
-                    timestamp=datetime.now(UTC),
-                    payload={"status": item.run_status.value},
-                ),
-            )
-
-
-async def _publish_reaper_event(
-    *,
-    telemetry: Telemetry,
-    event_publisher: EventPublisher,
-    event: ProgressEvent,
-) -> None:
-    with telemetry.start_as_current_span(
-        "progress.publish",
-        attributes={
-            "tenant.id": str(event.tenant_id),
-            "run.id": str(event.run_id),
-            "event.type": event.event_type.value,
-        },
-    ):
-        await event_publisher.publish(event)
 
 
 def _retry_policy(settings: Settings) -> RetryPolicy:

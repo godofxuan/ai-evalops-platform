@@ -18,6 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -729,6 +730,63 @@ class HumanReviewAdjudication(Base):
     adjudicator_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     labels_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     rationale: Mapped[str] = mapped_column(String(2_000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class ProgressEventOutbox(Base):
+    __tablename__ = "progress_event_outbox"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_progress_event_outbox_run_id_tenant_id_evaluation_runs",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        CheckConstraint(
+            "(lease_owner IS NULL) = (lease_expires_at IS NULL)",
+            name="lease_fields_consistent",
+        ),
+        CheckConstraint(
+            "published_at IS NULL OR (lease_owner IS NULL AND lease_expires_at IS NULL)",
+            name="published_event_not_leased",
+        ),
+        CheckConstraint(
+            "event_type IN ('run_started', 'job_progress', 'job_failed', "
+            "'job_retried', 'run_completed')",
+            name="event_type_supported",
+        ),
+        Index(
+            "ix_progress_event_outbox_pending",
+            "available_at",
+            "created_at",
+            "id",
+            postgresql_where=text("published_at IS NULL"),
+        ),
+        Index(
+            "ix_progress_event_outbox_tenant_id_run_id_created_at",
+            "tenant_id",
+            "run_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

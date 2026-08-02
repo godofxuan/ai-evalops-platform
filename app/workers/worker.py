@@ -1,7 +1,6 @@
 import asyncio
 from collections.abc import Callable, Coroutine, Mapping
 from contextlib import AbstractContextManager, nullcontext
-from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any, Protocol, TypeVar, cast
 
@@ -15,8 +14,6 @@ from app.domain.evaluation import (
     TargetResult,
 )
 from app.evaluators.base import Evaluator, build_evaluator
-from app.events.models import EventType, ProgressEvent
-from app.events.publisher import EventPublisher
 from app.jobs.claiming import ClaimedJob
 from app.jobs.failures import FailureCommitReceipt
 from app.jobs.results import ResultCommitReceipt
@@ -82,7 +79,6 @@ class EvaluationWorker:
         lease_runner: LeaseRunner,
         target_factory: TargetFactory = build_target,
         evaluator_factory: EvaluatorFactory = build_evaluator,
-        event_publisher: EventPublisher | None = None,
         metrics: PlatformMetrics | None = None,
         telemetry: Telemetry | None = None,
     ) -> None:
@@ -92,7 +88,6 @@ class EvaluationWorker:
         self._lease_runner = lease_runner
         self._target_factory = target_factory
         self._evaluator_factory = evaluator_factory
-        self._event_publisher = event_publisher
         self._metrics = metrics
         self._telemetry = telemetry
 
@@ -136,22 +131,6 @@ class EvaluationWorker:
                 return await self._process_claim(claim)
 
     async def _process_claim(self, claim: ClaimedJob) -> bool:
-        if claim.run_started:
-            await self._publish(
-                claim,
-                event_type=EventType.RUN_STARTED,
-                payload={"status": "running"},
-            )
-        await self._publish(
-            claim,
-            event_type=EventType.JOB_PROGRESS,
-            payload={
-                "job_id": str(claim.job_id),
-                "case_id": claim.case_id,
-                "attempt_number": claim.attempt_number,
-                "status": "running",
-            },
-        )
         case = EvaluationCase.from_payload(claim.case_payload)
         context = ExecutionContext(
             run_id=claim.run_id,
@@ -194,7 +173,6 @@ class EvaluationWorker:
                 error=error.error,
             )
             self._record_failure_metric(failure_receipt)
-            await self._publish_failure(claim, failure_receipt)
             return True
         except Exception as error:
             failure_receipt = await self._commit_failure(
@@ -203,7 +181,6 @@ class EvaluationWorker:
                 error=error,
             )
             self._record_failure_metric(failure_receipt)
-            await self._publish_failure(claim, failure_receipt)
             return True
         finally:
             if self._metrics is not None:
@@ -211,7 +188,7 @@ class EvaluationWorker:
         result_started_at = perf_counter()
         try:
             with self._span("result.persist"):
-                result_receipt = await self._result_committer.commit_success(
+                await self._result_committer.commit_success(
                     claim=claim,
                     lease_version=lease_version,
                     target_result=target_result,
@@ -225,20 +202,6 @@ class EvaluationWorker:
                 )
         if self._metrics is not None:
             self._metrics.record_job_succeeded()
-        await self._publish(
-            claim,
-            event_type=EventType.JOB_PROGRESS,
-            payload={
-                "job_id": str(claim.job_id),
-                "case_id": claim.case_id,
-                "attempt_number": claim.attempt_number,
-                "status": "succeeded",
-            },
-        )
-        await self._publish_completed(
-            claim,
-            getattr(result_receipt, "run_status", None),
-        )
         return True
 
     async def _commit_failure(
@@ -270,62 +233,6 @@ class EvaluationWorker:
             self._metrics.record_job_retry()
         elif getattr(getattr(receipt, "status", None), "value", None) == "failed":
             self._metrics.record_job_failed()
-
-    async def _publish_failure(
-        self,
-        claim: ClaimedJob,
-        receipt: FailureCommitReceipt,
-    ) -> None:
-        if self._event_publisher is None:
-            return
-        retryable = receipt.retryable
-        await self._publish(
-            claim,
-            event_type=EventType.JOB_RETRIED if retryable else EventType.JOB_FAILED,
-            payload={
-                "job_id": str(claim.job_id),
-                "case_id": claim.case_id,
-                "attempt_number": claim.attempt_number,
-                "status": receipt.status.value,
-            },
-        )
-        await self._publish_completed(claim, receipt.run_status)
-
-    async def _publish_completed(
-        self,
-        claim: ClaimedJob,
-        run_status: object,
-    ) -> None:
-        value = getattr(run_status, "value", "")
-        if value not in {"succeeded", "partially_succeeded", "failed", "cancelled"}:
-            return
-        await self._publish(
-            claim,
-            event_type=EventType.RUN_COMPLETED,
-            payload={"status": value},
-        )
-
-    async def _publish(
-        self,
-        claim: ClaimedJob,
-        *,
-        event_type: EventType,
-        payload: dict[str, str | int],
-    ) -> None:
-        if self._event_publisher is None:
-            return
-        event = ProgressEvent(
-            event_type=event_type,
-            run_id=claim.run_id,
-            tenant_id=claim.tenant_id,
-            timestamp=datetime.now(UTC),
-            payload=payload,
-        )
-        try:
-            with self._span("progress.publish"):
-                await self._event_publisher.publish(event)
-        except Exception:
-            return
 
     def _span(
         self,

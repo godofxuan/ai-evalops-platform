@@ -2,6 +2,9 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
+from sqlalchemy.dialects import postgresql
+
+from app.events.models import EventType, ProgressEvent
 from app.events.outbox import (
     ClaimedOutboxEvent,
     OutboxDispatcher,
@@ -11,9 +14,6 @@ from app.events.outbox import (
     outbox_retry_delay_seconds,
     run_outbox_dispatch_loop,
 )
-from sqlalchemy.dialects import postgresql
-
-from app.events.models import EventType, ProgressEvent
 from app.persistence.orm_models import ProgressEventOutbox
 
 NOW = datetime(2026, 8, 2, 12, 0, tzinfo=UTC)

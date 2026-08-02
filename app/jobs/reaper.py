@@ -7,6 +7,8 @@ from sqlalchemy import Select, select
 from app.core.clock import Clock, SystemClock
 from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.job_state_machine import JobTransition, transition_job
+from app.events.models import EventType
+from app.events.outbox import enqueue_progress_event
 from app.jobs.retry_policy import FailureClassification, RetryPolicy
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
@@ -71,7 +73,7 @@ class SQLAlchemyJobReaper:
     async def reap(self, *, limit: int = 100) -> tuple[ReapedJob, ...]:
         now = self._clock.now()
         reaped: list[ReapedJob] = []
-        touched_run_ids: set[UUID] = set()
+        touched_runs: dict[UUID, UUID] = {}
         async with self._session_factory.begin() as session:
             rows = (await session.execute(build_expired_job_statement(now=now, limit=limit))).all()
             for job, run in rows:
@@ -163,7 +165,21 @@ class SQLAlchemyJobReaper:
                     now if target_status in {JobStatus.FAILED, JobStatus.CANCELLED} else None
                 )
                 job.version += 1
-                touched_run_ids.add(run.id)
+                touched_runs[run.id] = run.tenant_id
+                enqueue_progress_event(
+                    session,
+                    event_type=(
+                        EventType.JOB_RETRIED if action == "requeued" else EventType.JOB_FAILED
+                    ),
+                    tenant_id=run.tenant_id,
+                    run_id=run.id,
+                    timestamp=now,
+                    payload={
+                        "job_id": str(job.id),
+                        "status": target_status.value,
+                        "source": "reaper",
+                    },
+                )
                 reaped.append(
                     ReapedJob(
                         job_id=job.id,
@@ -180,7 +196,7 @@ class SQLAlchemyJobReaper:
                 )
             await session.flush()
             run_statuses: dict[UUID, RunStatus] = {}
-            for run_id in sorted(touched_run_ids, key=str):
+            for run_id in sorted(touched_runs, key=str):
                 aggregation = await aggregate_run_in_session(
                     session,
                     run_id=run_id,
@@ -188,6 +204,20 @@ class SQLAlchemyJobReaper:
                     actor=self._reaper_id,
                 )
                 run_statuses[run_id] = aggregation.status
+                if aggregation.status_changed and aggregation.status in {
+                    RunStatus.SUCCEEDED,
+                    RunStatus.PARTIALLY_SUCCEEDED,
+                    RunStatus.FAILED,
+                    RunStatus.CANCELLED,
+                }:
+                    enqueue_progress_event(
+                        session,
+                        event_type=EventType.RUN_COMPLETED,
+                        tenant_id=touched_runs[run_id],
+                        run_id=run_id,
+                        timestamp=now,
+                        payload={"status": aggregation.status.value},
+                    )
         return tuple(replace(item, run_status=run_statuses[item.run_id]) for item in reaped)
 
 

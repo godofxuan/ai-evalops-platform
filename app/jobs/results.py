@@ -9,6 +9,8 @@ from app.core.clock import Clock, SystemClock
 from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult
 from app.domain.job_state_machine import transition_job
+from app.events.models import EventType
+from app.events.outbox import enqueue_progress_event
 from app.jobs.claiming import ClaimedJob
 from app.jobs.heartbeat import LeaseLostError
 from app.persistence.database import AsyncSessionFactory
@@ -177,6 +179,33 @@ class SQLAlchemyResultCommitter:
                     now=now,
                     actor=claim.worker_id,
                 )
+                enqueue_progress_event(
+                    session,
+                    event_type=EventType.JOB_PROGRESS,
+                    tenant_id=claim.tenant_id,
+                    run_id=claim.run_id,
+                    timestamp=now,
+                    payload={
+                        "job_id": str(claim.job_id),
+                        "case_id": claim.case_id,
+                        "attempt_number": claim.attempt_number,
+                        "status": JobStatus.SUCCEEDED.value,
+                    },
+                )
+                if aggregation.status_changed and aggregation.status in {
+                    RunStatus.SUCCEEDED,
+                    RunStatus.PARTIALLY_SUCCEEDED,
+                    RunStatus.FAILED,
+                    RunStatus.CANCELLED,
+                }:
+                    enqueue_progress_event(
+                        session,
+                        event_type=EventType.RUN_COMPLETED,
+                        tenant_id=claim.tenant_id,
+                        run_id=claim.run_id,
+                        timestamp=now,
+                        payload={"status": aggregation.status.value},
+                    )
         except IntegrityError as error:
             if _constraint_name(error) in {
                 "uq_case_results_job_id",

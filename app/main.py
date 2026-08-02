@@ -1,5 +1,7 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -41,6 +43,11 @@ from app.datasets.service import (
     SQLAlchemyDatasetService,
 )
 from app.datasets.validation import DatasetValidationError, JSONLValidationLimits
+from app.events.outbox import (
+    OutboxDispatcher,
+    SQLAlchemyOutboxStore,
+    run_outbox_dispatch_loop,
+)
 from app.events.publisher import RedisEventPublisher
 from app.events.sse import RunEventStream
 from app.events.subscriber import RedisEventSubscriber
@@ -127,10 +134,34 @@ def create_app(
             metrics=metrics,
             telemetry=telemetry,
         )
-        application.state.event_publisher = RedisEventPublisher(
+        event_publisher = RedisEventPublisher(
             redis_client,
             metrics=metrics,
         )
+        outbox_stop_requested = asyncio.Event()
+        dispatcher_id = f"api:{uuid4().hex}"
+        outbox_dispatcher = OutboxDispatcher(
+            store=SQLAlchemyOutboxStore(
+                session_factory,
+                dispatcher_id=dispatcher_id,
+                lease_seconds=runtime_settings.outbox_lease_seconds,
+            ),
+            publisher=event_publisher,
+            publish_timeout_seconds=runtime_settings.outbox_publish_timeout_seconds,
+            retry_base_seconds=runtime_settings.outbox_retry_base_seconds,
+            retry_max_seconds=runtime_settings.outbox_retry_max_seconds,
+        )
+        outbox_dispatcher_task = asyncio.create_task(
+            run_outbox_dispatch_loop(
+                outbox_dispatcher,
+                stop_requested=outbox_stop_requested,
+                poll_seconds=runtime_settings.outbox_poll_seconds,
+                batch_size=runtime_settings.outbox_batch_size,
+            ),
+            name="outbox-dispatcher",
+        )
+        application.state.outbox_dispatcher = outbox_dispatcher
+        application.state.outbox_dispatcher_task = outbox_dispatcher_task
         application.state.run_event_stream = RunEventStream(
             run_service=application.state.run_service,
             subscriber=RedisEventSubscriber(
@@ -160,10 +191,14 @@ def create_app(
         try:
             yield
         finally:
-            await redis_client.aclose()
-            await engine.dispose()
-            telemetry.shutdown()
-            logger.info("application_stopped")
+            outbox_stop_requested.set()
+            try:
+                await outbox_dispatcher_task
+            finally:
+                await redis_client.aclose()
+                await engine.dispose()
+                telemetry.shutdown()
+                logger.info("application_stopped")
 
     application = FastAPI(
         title="AI EvalOps Platform",
@@ -180,7 +215,8 @@ def create_app(
     application.state.run_service = None
     application.state.result_service = None
     application.state.review_service = None
-    application.state.event_publisher = None
+    application.state.outbox_dispatcher = None
+    application.state.outbox_dispatcher_task = None
     application.state.run_event_stream = None
     application.state.cancellation_service = None
     application.include_router(health_router)

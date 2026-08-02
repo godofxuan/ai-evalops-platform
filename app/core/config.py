@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = Field(default=0.5, gt=0, le=60)
     reaper_interval_seconds: float = Field(default=5.0, gt=0, le=300)
     reaper_batch_size: int = Field(default=100, ge=1, le=1_000)
+    outbox_poll_seconds: float = Field(default=0.5, gt=0, le=60)
+    outbox_batch_size: int = Field(default=50, ge=1, le=1_000)
+    outbox_lease_seconds: float = Field(default=30, gt=0, le=3_600)
+    outbox_publish_timeout_seconds: float = Field(default=5, gt=0, le=30)
+    outbox_retry_base_seconds: float = Field(default=1, gt=0, le=300)
+    outbox_retry_max_seconds: float = Field(default=60, gt=0, le=3_600)
     retry_base_delay_seconds: float = Field(default=1.0, gt=0, le=300)
     retry_max_delay_seconds: float = Field(default=60.0, gt=0, le=3_600)
     retry_jitter_ratio: float = Field(default=0.2, ge=0, le=1)
@@ -90,4 +96,8 @@ class Settings(BaseSettings):
             raise ValueError("worker heartbeat interval must be shorter than lease")
         if self.retry_base_delay_seconds > self.retry_max_delay_seconds:
             raise ValueError("retry base delay must not exceed maximum delay")
+        if self.outbox_retry_base_seconds > self.outbox_retry_max_seconds:
+            raise ValueError("outbox retry base delay must not exceed maximum delay")
+        if self.outbox_publish_timeout_seconds >= self.outbox_lease_seconds:
+            raise ValueError("outbox publish timeout must be shorter than lease")
         return self

@@ -8,6 +8,8 @@ from app.core.clock import Clock, SystemClock
 from app.domain.enums import JobStatus, RunStatus
 from app.domain.job_state_machine import transition_job
 from app.domain.run_state_machine import transition_run
+from app.events.models import EventType
+from app.events.outbox import enqueue_progress_event
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import AuditEvent, EvaluationJob, EvaluationRun
 from app.runs.aggregation import aggregate_run_in_session
@@ -65,6 +67,7 @@ class SQLAlchemyCancellationService:
     ) -> RunRead:
         now = self._clock.now()
         async with self._session_factory.begin() as session:
+            state_changed = False
             run = (
                 await session.execute(
                     select(EvaluationRun).where(
@@ -128,7 +131,10 @@ class SQLAlchemyCancellationService:
                     )
                 )
                 run.status = run_transition.current
-            run.cancel_requested_at = run.cancel_requested_at or now
+                state_changed = True
+            if run.cancel_requested_at is None:
+                run.cancel_requested_at = now
+                state_changed = True
             run.version += 1
 
             for job in jobs:
@@ -158,6 +164,7 @@ class SQLAlchemyCancellationService:
                 job.status = target
                 job.cancel_requested_at = now
                 job.next_attempt_at = None
+                state_changed = True
                 if target is JobStatus.CANCELLED:
                     job.finished_at = now
                     job.lease_owner = None
@@ -165,12 +172,33 @@ class SQLAlchemyCancellationService:
                     job.heartbeat_at = None
                     job.version += 1
             await session.flush()
-            await aggregate_run_in_session(
+            aggregation = await aggregate_run_in_session(
                 session,
                 run_id=run.id,
                 now=now,
                 actor=str(principal.api_key_id),
             )
+            if aggregation.status_changed and aggregation.status in _TERMINAL_RUN_STATUSES:
+                enqueue_progress_event(
+                    session,
+                    event_type=EventType.RUN_COMPLETED,
+                    tenant_id=principal.tenant_id,
+                    run_id=run.id,
+                    timestamp=now,
+                    payload={"status": aggregation.status.value},
+                )
+            elif state_changed:
+                enqueue_progress_event(
+                    session,
+                    event_type=EventType.JOB_PROGRESS,
+                    tenant_id=principal.tenant_id,
+                    run_id=run.id,
+                    timestamp=now,
+                    payload={
+                        "status": aggregation.status.value,
+                        "source": "cancel_request",
+                    },
+                )
             return _run_read(run)
 
 

@@ -7,6 +7,8 @@ from sqlalchemy import Select, select
 from app.core.clock import Clock, SystemClock
 from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.job_state_machine import JobTransition, transition_job
+from app.events.models import EventType
+from app.events.outbox import enqueue_progress_event
 from app.jobs.claiming import ClaimedJob
 from app.jobs.heartbeat import LeaseLostError
 from app.jobs.retry_policy import RetryDecision, RetryPolicy, classify_failure
@@ -170,6 +172,35 @@ class SQLAlchemyFailureCommitter:
                 now=now,
                 actor=claim.worker_id,
             )
+            enqueue_progress_event(
+                session,
+                event_type=(
+                    EventType.JOB_RETRIED if decision.should_retry else EventType.JOB_FAILED
+                ),
+                tenant_id=claim.tenant_id,
+                run_id=claim.run_id,
+                timestamp=now,
+                payload={
+                    "job_id": str(claim.job_id),
+                    "case_id": claim.case_id,
+                    "attempt_number": claim.attempt_number,
+                    "status": target_status.value,
+                },
+            )
+            if aggregation.status_changed and aggregation.status in {
+                RunStatus.SUCCEEDED,
+                RunStatus.PARTIALLY_SUCCEEDED,
+                RunStatus.FAILED,
+                RunStatus.CANCELLED,
+            }:
+                enqueue_progress_event(
+                    session,
+                    event_type=EventType.RUN_COMPLETED,
+                    tenant_id=claim.tenant_id,
+                    run_id=claim.run_id,
+                    timestamp=now,
+                    payload={"status": aggregation.status.value},
+                )
         return FailureCommitReceipt(
             job_id=claim.job_id,
             status=target_status,

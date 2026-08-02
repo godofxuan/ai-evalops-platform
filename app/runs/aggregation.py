@@ -50,6 +50,7 @@ class RunAggregation:
     succeeded_jobs: int
     failed_jobs: int
     cancelled_jobs: int
+    status_changed: bool = False
 
 
 async def aggregate_run_in_session(
@@ -83,7 +84,8 @@ async def aggregate_run_in_session(
     run.succeeded_jobs = int(counts.get(JobStatus.SUCCEEDED, 0))
     run.failed_jobs = int(counts.get(JobStatus.FAILED, 0))
     run.cancelled_jobs = int(counts.get(JobStatus.CANCELLED, 0))
-    if desired_status is not run.status:
+    status_changed = desired_status is not run.status
+    if status_changed:
         transition = transition_run(
             run.status,
             desired_status,
@@ -122,4 +124,5 @@ async def aggregate_run_in_session(
         succeeded_jobs=run.succeeded_jobs,
         failed_jobs=run.failed_jobs,
         cancelled_jobs=run.cancelled_jobs,
+        status_changed=status_changed,
     )
