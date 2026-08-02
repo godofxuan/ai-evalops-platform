@@ -132,6 +132,12 @@ def test_progress_event_outbox_is_tenant_scoped_leased_and_append_only() -> None
         "attempt_count >= 0" in expression
         for expression in check_expressions(ProgressEventOutbox.__table__)
     )
+    indexes = {index.name: index for index in ProgressEventOutbox.__table__.indexes}
+    retention_index = indexes["ix_progress_event_outbox_published_retention"]
+    assert tuple(column.name for column in retention_index.columns) == ("published_at", "id")
+    assert str(retention_index.dialect_options["postgresql"]["where"]) == (
+        "published_at IS NOT NULL"
+    )
 
 
 def test_dataset_and_version_constraints_encode_identity_and_immutability() -> None:
