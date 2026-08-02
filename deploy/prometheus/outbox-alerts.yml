@@ -1,0 +1,20 @@
+groups:
+  - name: ai-evalops-outbox
+    rules:
+      - alert: AIEvalOpsOutboxDeliveryStalled
+        expr: outbox_pending > 0 and outbox_oldest_pending_age_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: AI EvalOps Outbox delivery is stalled
+          description: The oldest unpublished progress event has remained pending.
+
+      - alert: AIEvalOpsOutboxLeaseLoss
+        expr: increase(outbox_lease_lost_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AI EvalOps Outbox relay lost a lease
+          description: A relay could not fence an acknowledgement or retry update.
