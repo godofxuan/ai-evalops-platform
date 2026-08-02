@@ -14,6 +14,7 @@ from app.reviews.service import (
     ReviewConflictError,
     ReviewNotFoundError,
     ReviewPermissionError,
+    ReviewTaskCreationPermissionError,
 )
 from app.runs.service import (
     IdempotencyConflictError,
@@ -235,6 +236,23 @@ async def handle_review_permission(
             "error": {
                 "code": "human_reviewer_required",
                 "message": "This credential is not authorized for human review.",
+            }
+        },
+    )
+
+
+async def handle_review_task_creation_permission(
+    _request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    if not isinstance(exception, ReviewTaskCreationPermissionError):
+        raise exception
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": {
+                "code": "review_task_creator_required",
+                "message": "This credential cannot create human review tasks.",
             }
         },
     )

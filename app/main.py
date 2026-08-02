@@ -18,6 +18,7 @@ from app.api.errors import (
     handle_review_conflict,
     handle_review_not_found,
     handle_review_permission,
+    handle_review_task_creation_permission,
     handle_run_not_found,
 )
 from app.api.middleware import RequestContextMiddleware
@@ -57,6 +58,7 @@ from app.reviews.service import (
     ReviewConflictError,
     ReviewNotFoundError,
     ReviewPermissionError,
+    ReviewTaskCreationPermissionError,
     SQLAlchemyReviewService,
 )
 from app.runs.repository import SQLAlchemyRunRepository
@@ -213,6 +215,10 @@ def create_app(
     application.add_exception_handler(RunNotFoundError, handle_run_not_found)
     application.add_exception_handler(ReviewNotFoundError, handle_review_not_found)
     application.add_exception_handler(ReviewPermissionError, handle_review_permission)
+    application.add_exception_handler(
+        ReviewTaskCreationPermissionError,
+        handle_review_task_creation_permission,
+    )
     application.add_exception_handler(ReviewConflictError, handle_review_conflict)
     application.add_exception_handler(
         RunDatasetVersionNotFoundError,

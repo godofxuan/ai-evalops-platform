@@ -9,6 +9,7 @@ from app.auth.principals import Principal
 from app.domain.enums import ReviewTaskStatus
 from app.main import create_app
 from app.reviews.schemas import ReviewPacket, ReviewTaskRead
+from app.reviews.service import ReviewTaskCreationPermissionError, SQLAlchemyReviewService
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
@@ -52,6 +53,11 @@ class RecordingReviewService:
         ]
 
 
+class DenyingTaskCreationReviewService:
+    async def create_tasks(self, **_kwargs: object) -> list[ReviewTaskRead]:
+        raise ReviewTaskCreationPermissionError
+
+
 async def test_reviewer_task_packet_is_tenant_scoped_and_blinded() -> None:
     service = RecordingReviewService()
     application = create_app()
@@ -77,3 +83,46 @@ async def test_reviewer_task_packet_is_tenant_scoped_and_blinded() -> None:
     assert "reviewer_id" not in encoded
     assert "other_submission" not in encoded
     assert service.called_with == (REVIEWER, RUN_ID)
+
+
+async def test_review_task_creation_permission_has_distinct_403_error() -> None:
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: REVIEWER
+    application.state.review_service = DenyingTaskCreationReviewService()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"/api/v1/runs/{RUN_ID}/review-tasks",
+            json={"sample_size": 20},
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "error": {
+            "code": "review_task_creator_required",
+            "message": "This credential cannot create human review tasks.",
+        }
+    }
+
+
+async def test_request_data_cannot_self_grant_review_task_creation_permission() -> None:
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: REVIEWER
+    application.state.review_service = SQLAlchemyReviewService(None)  # type: ignore[arg-type]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"/api/v1/runs/{RUN_ID}/review-tasks",
+            params={"can_create_review_tasks": "true"},
+            headers={"X-Can-Create-Review-Tasks": "true"},
+            json={"sample_size": 20, "can_create_review_tasks": True},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "review_task_creator_required"

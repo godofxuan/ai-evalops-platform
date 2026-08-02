@@ -76,10 +76,23 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
 def test_api_key_metadata_never_defines_a_plaintext_secret_column() -> None:
     columns = set(APIKey.__table__.columns.keys())
 
-    assert {"key_prefix", "key_hash", "status", "expires_at", "last_used_at"} <= columns
+    assert {
+        "key_prefix",
+        "key_hash",
+        "status",
+        "expires_at",
+        "last_used_at",
+        "can_create_review_tasks",
+    } <= columns
     assert {"plaintext", "secret", "api_key"} & columns == set()
     assert frozenset({"key_prefix"}) in unique_column_sets(APIKey.__table__)
     assert foreign_key_targets(APIKey.__table__, "tenant_id") == {"tenants.id"}
+    task_creator = APIKey.__table__.columns.can_create_review_tasks
+    assert not task_creator.nullable
+    assert task_creator.default is not None
+    assert task_creator.default.arg is False
+    assert task_creator.server_default is not None
+    assert str(task_creator.server_default.arg) == "false"
 
 
 def test_dataset_and_version_constraints_encode_identity_and_immutability() -> None:

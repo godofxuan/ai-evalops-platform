@@ -44,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Mark this credential as eligible for human review endpoints.",
     )
+    parser.add_argument(
+        "--review-task-creator",
+        action="store_true",
+        help="Allow this credential to create or expand human review tasks.",
+    )
     return parser
 
 
@@ -72,6 +77,7 @@ async def create_key(
     key_name: str,
     expires_in_days: int | None,
     can_review: bool = False,
+    can_create_review_tasks: bool = False,
 ) -> tuple[GeneratedAPIKey, UUID]:
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
@@ -101,6 +107,7 @@ async def create_key(
                     key_hash=generated.key_hash,
                     expires_at=expires_at,
                     can_review=can_review,
+                    can_create_review_tasks=can_create_review_tasks,
                 )
             )
             await session.flush()
@@ -120,6 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             key_name=arguments.key_name,
             expires_in_days=arguments.expires_in_days,
             can_review=arguments.human_reviewer,
+            can_create_review_tasks=arguments.review_task_creator,
         )
     )
     print(

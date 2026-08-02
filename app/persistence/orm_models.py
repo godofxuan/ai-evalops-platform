@@ -150,6 +150,12 @@ class APIKey(Base):
         default=False,
         server_default="false",
     )
+    can_create_review_tasks: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     status: Mapped[APIKeyStatus] = mapped_column(
         api_key_status_enum,
         nullable=False,

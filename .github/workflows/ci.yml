@@ -127,7 +127,7 @@ jobs:
           uv run --no-sync pytest tests/integration/test_run_idempotency.py
           --junitxml=/tmp/junit-run-idempotency.xml
 
-      - name: Migration - P2-1 downgrade and re-upgrade
+      - name: Migration - P2 downgrade and re-upgrade
         if: ${{ !cancelled() }}
         run: |
           uv run --no-sync alembic downgrade 20260802_0009

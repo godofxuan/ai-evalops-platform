@@ -50,6 +50,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
         alembic_config_path=PROJECT_ROOT / "alembic.ini",
     )
     tenant_id = uuid4()
+    ordinary_id = uuid4()
     creator_id = uuid4()
     reviewer_a_id = uuid4()
     reviewer_b_id = uuid4()
@@ -58,6 +59,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
     artifact_id = uuid4()
     version_id = uuid4()
     run_id = uuid4()
+    ordinary_key = generate_api_key()
     creator_key = generate_api_key()
     reviewer_a_key = generate_api_key()
     reviewer_b_key = generate_api_key()
@@ -78,12 +80,22 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
             session.add_all(
                 [
                     APIKey(
+                        id=ordinary_id,
+                        tenant_id=tenant_id,
+                        name="ordinary",
+                        key_prefix=ordinary_key.prefix,
+                        key_hash=ordinary_key.key_hash,
+                        can_review=False,
+                        can_create_review_tasks=False,
+                    ),
+                    APIKey(
                         id=creator_id,
                         tenant_id=tenant_id,
                         name="creator",
                         key_prefix=creator_key.prefix,
                         key_hash=creator_key.key_hash,
                         can_review=False,
+                        can_create_review_tasks=True,
                     ),
                     APIKey(
                         id=reviewer_a_id,
@@ -92,6 +104,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                         key_prefix=reviewer_a_key.prefix,
                         key_hash=reviewer_a_key.key_hash,
                         can_review=True,
+                        can_create_review_tasks=False,
                     ),
                     APIKey(
                         id=reviewer_b_id,
@@ -100,6 +113,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                         key_prefix=reviewer_b_key.prefix,
                         key_hash=reviewer_b_key.key_hash,
                         can_review=True,
+                        can_create_review_tasks=False,
                     ),
                     APIKey(
                         id=adjudicator_id,
@@ -108,6 +122,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                         key_prefix=adjudicator_key.prefix,
                         key_hash=adjudicator_key.key_hash,
                         can_review=True,
+                        can_create_review_tasks=False,
                     ),
                 ]
             )
@@ -217,6 +232,29 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                 transport=ASGITransport(app=application),
                 base_url="http://test",
             ) as client:
+                for denied_key in (ordinary_key, reviewer_a_key):
+                    denied = await client.post(
+                        f"/api/v1/runs/{run_id}/review-tasks",
+                        headers=headers(denied_key),
+                        json={"sample_size": 2},
+                    )
+                    assert denied.status_code == 403
+                    assert denied.json()["error"]["code"] == "review_task_creator_required"
+                async with session_factory() as session:
+                    denied_task_count = await session.scalar(
+                        select(func.count(HumanReviewTask.id)).where(
+                            HumanReviewTask.run_id == run_id
+                        )
+                    )
+                    denied_artifact_count = await session.scalar(
+                        select(func.count(ArtifactReference.id)).where(
+                            ArtifactReference.run_id == run_id,
+                            ArtifactReference.artifact_type == ArtifactType.HUMAN_REVIEW_PACKET,
+                        )
+                    )
+                assert denied_task_count == 0
+                assert denied_artifact_count == 0
+
                 created = await client.post(
                     f"/api/v1/runs/{run_id}/review-tasks",
                     headers=headers(creator_key),
@@ -235,12 +273,13 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                     )
                 assert packet_artifacts == 1
 
-                ordinary_submit = await client.post(
+                creator_submit = await client.post(
                     f"/api/v1/review-tasks/{task_ids[0]}/submissions",
                     headers=headers(creator_key),
                     json={"labels": labels_a},
                 )
-                assert ordinary_submit.status_code == 403
+                assert creator_submit.status_code == 403
+                assert creator_submit.json()["error"]["code"] == "human_reviewer_required"
 
                 for task_id in task_ids:
                     first = await client.post(

@@ -38,6 +38,10 @@ class ReviewPermissionError(Exception):
     """The authenticated credential is not designated for human review."""
 
 
+class ReviewTaskCreationPermissionError(Exception):
+    """The credential cannot create or expand human review tasks."""
+
+
 class ReviewNotFoundError(Exception):
     """Hide absent and cross-tenant review resources."""
 
@@ -180,6 +184,7 @@ class SQLAlchemyReviewService:
         run_id: UUID,
         sample_size: int,
     ) -> list[ReviewTaskRead]:
+        _require_task_creator(principal)
         async with self._session_factory.begin() as session:
             await _require_run(
                 session,
@@ -499,6 +504,11 @@ def serialize_review_packet_artifact(
 def _require_reviewer(principal: Principal) -> None:
     if not principal.can_review:
         raise ReviewPermissionError
+
+
+def _require_task_creator(principal: Principal) -> None:
+    if not principal.can_create_review_tasks:
+        raise ReviewTaskCreationPermissionError
 
 
 async def _require_run(

@@ -9,6 +9,7 @@ from app.domain.enums import ReviewTaskStatus
 from app.reviews.schemas import ReviewLabels, ReviewPacket, ReviewTaskRead
 from app.reviews.service import (
     ReviewPermissionError,
+    ReviewTaskCreationPermissionError,
     SQLAlchemyReviewService,
     build_lock_review_task_statement,
     build_review_candidates_statement,
@@ -46,6 +47,23 @@ async def test_service_rejects_ordinary_api_key_before_database_access() -> None
             task_id=TASK_ID,
             labels=_labels(5),
             comment=None,
+        )
+
+
+async def test_reviewer_cannot_create_tasks_without_creator_permission() -> None:
+    service = SQLAlchemyReviewService(None)  # type: ignore[arg-type]
+    reviewer = Principal(
+        tenant_id=TENANT_ID,
+        api_key_id=UUID("00000000-0000-0000-0000-000000000111"),
+        key_prefix="evk_111122334455",
+        can_review=True,
+    )
+
+    with pytest.raises(ReviewTaskCreationPermissionError):
+        await service.create_tasks(
+            principal=reviewer,
+            run_id=UUID("00000000-0000-0000-0000-000000000601"),
+            sample_size=20,
         )
 
 

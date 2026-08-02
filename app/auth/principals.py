@@ -8,3 +8,4 @@ class Principal:
     api_key_id: UUID
     key_prefix: str
     can_review: bool = False
+    can_create_review_tasks: bool = False
