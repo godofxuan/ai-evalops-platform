@@ -2,8 +2,11 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from sqlalchemy.dialects import postgresql
 
+from app.core.telemetry import Telemetry
 from app.events.models import EventType, ProgressEvent
 from app.events.outbox import (
     ClaimedOutboxEvent,
@@ -139,12 +142,18 @@ def test_outbox_claim_statement_is_due_ordered_and_skip_locked() -> None:
 async def test_dispatcher_publishes_original_event_id_then_fenced_acknowledges() -> None:
     store = RecordingStore((ClaimedOutboxEvent(event=_event(), attempt_count=1),))
     publisher = RecordingPublisher()
+    exporter = InMemorySpanExporter()
+    telemetry = Telemetry(
+        service_name="evalops-outbox-test",
+        span_processors=(SimpleSpanProcessor(exporter),),
+    )
     dispatcher = OutboxDispatcher(
         store=store,
         publisher=publisher,
         publish_timeout_seconds=1,
         retry_base_seconds=2,
         retry_max_seconds=10,
+        telemetry=telemetry,
     )
 
     result = await dispatcher.dispatch_once(limit=10)
@@ -158,6 +167,11 @@ async def test_dispatcher_publishes_original_event_id_then_fenced_acknowledges()
     assert publisher.events == [_event()]
     assert store.published == [EVENT_ID]
     assert store.retries == []
+    span = next(span for span in exporter.get_finished_spans() if span.name == "progress.publish")
+    assert span.attributes is not None
+    assert span.attributes["tenant.id"] == str(TENANT_ID)
+    assert span.attributes["run.id"] == str(RUN_ID)
+    assert span.attributes["event.type"] == "job_progress"
 
 
 async def test_dispatcher_reschedules_failed_publish_without_acknowledging() -> None:
