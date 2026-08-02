@@ -63,6 +63,11 @@ async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
     dispatcher_stopped = asyncio.Event()
     cleanup_started = asyncio.Event()
     cleanup_stopped = asyncio.Event()
+    dispatcher_arguments: dict[str, object] = {}
+
+    class RecordingDispatcher:
+        def __init__(self, **values: object) -> None:
+            dispatcher_arguments.update(values)
 
     class RecordingMaintenance:
         def __init__(
@@ -106,6 +111,11 @@ async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
         await stop_requested.wait()
         cleanup_stopped.set()
 
+    monkeypatch.setattr(
+        main_module,
+        "OutboxDispatcher",
+        RecordingDispatcher,
+    )
     monkeypatch.setattr(
         main_module,
         "run_outbox_dispatch_loop",
@@ -174,6 +184,7 @@ async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
         await asyncio.wait_for(cleanup_started.wait(), timeout=1)
         assert application.state.outbox_dispatcher_task.done() is False
         assert application.state.outbox_cleanup_task.done() is False
+        assert dispatcher_arguments["metrics"] is application.state.metrics
         with pytest.raises(RunDatasetVersionNotFoundError):
             await application.state.run_service.create_run(
                 principal=principal,
