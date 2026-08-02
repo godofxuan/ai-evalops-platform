@@ -189,7 +189,7 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
             "seed",
         )
     } == {
-        "schema_version": 4,
+        "schema_version": 5,
         "experiment": "worker_scaling",
         "run_id": "gate1-contract",
         "status": "prepared",
@@ -265,7 +265,19 @@ def test_load_prepare_mode_creates_run_scoped_manifest(tmp_path: Path) -> None:
     assert manifest["dataset"]["hashes_path"] == "dataset/hashes.json"
     assert manifest["dataset"]["hashes_sha256"] == hashlib.sha256(dataset_hashes_bytes).hexdigest()
     assert manifest["arm_plan"]["sha256"] == hashlib.sha256(arm_plan_bytes).hexdigest()
-    assert manifest["adoption_gate"]["automatic_worker_count_change"] is False
+    assert manifest["result_schema_version"] == 3
+    assert manifest["quality_gate"] == {
+        "automatic_evaluation": True,
+        "policy": "all_expected_arms_valid_for_capacity_comparison",
+        "policy_version": 1,
+        "non_waivable": True,
+    }
+    assert manifest["adoption_gate"] == {
+        "automatic_worker_count_change": False,
+        "automatic_adoption_decision": False,
+        "decision_owner": "human",
+        "performance_thresholds_owner": "human",
+    }
 
 
 def test_load_prepare_mode_rejects_run_id_path_traversal(tmp_path: Path) -> None:

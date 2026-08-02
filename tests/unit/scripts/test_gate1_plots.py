@@ -271,7 +271,11 @@ def test_gate1_finalization_publishes_one_complete_hashed_bundle(
     records = _summary_records()
     _write_working_evidence(tmp_path, records)
 
-    finalize_gate1_run_evidence(tmp_path, records)
+    finalize_gate1_run_evidence(
+        tmp_path,
+        records,
+        expected_arms=[record["arm"] for record in records],
+    )
 
     final_directory = tmp_path / "final"
     assert (final_directory / "raw" / "io-w1-r1" / "jobs.json").is_file()
@@ -281,7 +285,14 @@ def test_gate1_finalization_publishes_one_complete_hashed_bundle(
     aggregate = json.loads(
         (final_directory / "summary" / "aggregate.json").read_text(encoding="utf-8")
     )
-    assert aggregate["schema_version"] == 2
+    assert aggregate["schema_version"] == 3
+    assert aggregate["gate_evaluation"]["quality_gate"]["status"] == "VERIFIED"
+    assert aggregate["gate_evaluation"]["adoption_gate"]["status"] == "NOT_RUN"
+    assert (
+        aggregate["gate_evaluation"]["adoption_gate"]["review_readiness"]
+        == "READY_FOR_HUMAN_REVIEW"
+    )
+    assert aggregate["gate_evaluation"]["adoption_gate"]["selected_worker_count"] is None
     assert (final_directory / "summary" / "arms.csv").is_file()
     assert (final_directory / "plots" / "manifest.json").is_file()
     assert len(list((final_directory / "plots").glob("*.png"))) == 5
@@ -294,7 +305,7 @@ def test_gate1_finalization_publishes_one_complete_hashed_bundle(
         if path.is_file() and path != manifest_path
     }
     assert manifest["schema_version"] == 1
-    assert manifest["result_schema_version"] == 2
+    assert manifest["result_schema_version"] == 3
     assert manifest["status"] == "complete"
     assert manifest["hash_algorithm"] == "sha256"
     assert manifest["publication_method"] == "same_filesystem_atomic_directory_rename"

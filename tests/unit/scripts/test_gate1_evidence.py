@@ -1,5 +1,9 @@
+import pytest
+
+from scripts.experiment_support import ExperimentError
 from scripts.gate1_evidence import (
     aggregate_arm_summaries,
+    evaluate_gate1_gate_flags,
     merge_prometheus_evidence,
     reconcile_arm,
     summarize_arm,
@@ -439,3 +443,97 @@ def test_aggregate_keeps_every_repetition_and_negative_scaling() -> None:
         }
     ]
     assert aggregate["automatic_adoption_decision"] is None
+
+
+def _gate_record(
+    *,
+    arm_id: str,
+    workers: int,
+    valid: bool = True,
+    throughput: float = 10.0,
+) -> dict[str, object]:
+    return {
+        "arm": {
+            "arm_id": arm_id,
+            "workload": "io_latency_v1",
+            "workers": workers,
+            "repetition": 1,
+        },
+        "summary": {
+            "valid_for_capacity_comparison": valid,
+            "throughput_cases_per_second": throughput,
+        },
+    }
+
+
+def test_gate_flags_verify_complete_valid_evidence_without_automating_adoption() -> None:
+    records = [
+        _gate_record(arm_id="w1-r1", workers=1, throughput=12.0),
+        _gate_record(arm_id="w2-r1", workers=2, throughput=9.0),
+    ]
+
+    aggregate = aggregate_arm_summaries(
+        records,
+        expected_arms=[record["arm"] for record in records],
+    )
+
+    assert aggregate["negative_scaling"]
+    assert aggregate["gate_evaluation"]["quality_gate"] == {
+        "status": "VERIFIED",
+        "policy": "all_expected_arms_valid_for_capacity_comparison",
+        "expected_arm_count": 2,
+        "observed_arm_count": 2,
+        "expected_arms_complete": True,
+        "missing_arm_ids": [],
+        "invalid_arm_ids": [],
+    }
+    assert aggregate["gate_evaluation"]["adoption_gate"] == {
+        "status": "NOT_RUN",
+        "review_readiness": "READY_FOR_HUMAN_REVIEW",
+        "decision_owner": "human",
+        "performance_thresholds_owner": "human",
+        "automatic_worker_count_change": False,
+        "automatic_adoption_decision": None,
+        "selected_worker_count": None,
+        "blocked_by": [],
+    }
+
+
+def test_gate_flags_mark_missing_expected_arm_unknown_and_block_review() -> None:
+    observed = _gate_record(arm_id="w1-r1", workers=1)
+    missing = _gate_record(arm_id="w2-r1", workers=2)
+
+    flags = evaluate_gate1_gate_flags(
+        [observed],
+        expected_arms=[observed["arm"], missing["arm"]],
+    )
+
+    assert flags["quality_gate"]["status"] == "UNKNOWN"
+    assert flags["quality_gate"]["missing_arm_ids"] == ["w2-r1"]
+    assert flags["adoption_gate"]["review_readiness"] == "BLOCKED"
+    assert flags["adoption_gate"]["blocked_by"] == ["quality_gate_unknown"]
+
+
+def test_gate_flags_fail_invalid_arm_and_block_review() -> None:
+    record = _gate_record(arm_id="w1-r1", workers=1, valid=False)
+
+    flags = evaluate_gate1_gate_flags([record], expected_arms=[record["arm"]])
+
+    assert flags["quality_gate"]["status"] == "FAILED"
+    assert flags["quality_gate"]["invalid_arm_ids"] == ["w1-r1"]
+    assert flags["adoption_gate"]["review_readiness"] == "BLOCKED"
+    assert flags["adoption_gate"]["blocked_by"] == ["quality_gate_failed"]
+
+
+@pytest.mark.parametrize("contract_problem", ["duplicate", "unexpected"])
+def test_gate_flags_fail_closed_on_untrusted_arm_contract(contract_problem: str) -> None:
+    record = _gate_record(arm_id="w1-r1", workers=1)
+    records = [record, record] if contract_problem == "duplicate" else [record]
+    expected_arms = (
+        [record["arm"]]
+        if contract_problem == "duplicate"
+        else [_gate_record(arm_id="w2-r1", workers=2)["arm"]]
+    )
+
+    with pytest.raises(ExperimentError, match="arm"):
+        evaluate_gate1_gate_flags(records, expected_arms=expected_arms)

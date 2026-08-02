@@ -226,6 +226,27 @@ def test_prepared_evidence_rejects_mutated_arm_plan(
     assert "arm_plan_hash_matches" in result["blockers"]
 
 
+def test_prepared_evidence_rejects_mutated_automatic_quality_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, run_directory = _prepare_bundle(tmp_path, monkeypatch)
+    manifest_path = run_directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["quality_gate"]["policy"] = "user_can_waive_invalid_arms"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = prepared_evidence.verify_prepared_evidence(
+        run_directory=run_directory,
+        repository=repository,
+        compose_file=repository / "deploy" / "compose.yaml",
+    )
+
+    assert result["status"] == "MANIFEST_INVALID"
+    assert result["ready"] is False
+    assert "quality_gate.policy" in result["details"]["manifest_errors"]
+
+
 def test_prepared_evidence_rejects_mutated_execution_script(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
