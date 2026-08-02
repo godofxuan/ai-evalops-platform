@@ -768,6 +768,12 @@ class ProgressEventOutbox(Base):
             postgresql_where=text("published_at IS NULL"),
         ),
         Index(
+            "ix_progress_event_outbox_published_retention",
+            "published_at",
+            "id",
+            postgresql_where=text("published_at IS NOT NULL"),
+        ),
+        Index(
             "ix_progress_event_outbox_tenant_id_run_id_created_at",
             "tenant_id",
             "run_id",
