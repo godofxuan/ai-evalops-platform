@@ -58,6 +58,14 @@ def test_outbox_dispatch_settings_have_bounded_operational_defaults() -> None:
     assert settings.outbox_retry_max_seconds == 60
 
 
+def test_outbox_cleanup_settings_have_bounded_operational_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.outbox_retention_seconds == 7 * 24 * 60 * 60
+    assert settings.outbox_cleanup_interval_seconds == 60
+    assert settings.outbox_cleanup_batch_size == 500
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
