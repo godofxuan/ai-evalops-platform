@@ -2064,3 +2064,45 @@ repo-local basetemp；删除该 `addopts` 后，默认聚焦与 412 项全量通
 `git revert 049e59e0760a50377e0cb8b53c61d166ee7dc224`。两个提交都没有 schema 或正式 artifact
 副作用；回滚主实现后，新的 `target_id` HTTP 请求将失去 Registry 支持，旧的不安全 tenant URL
 合同会恢复，因此只能在明确接受安全回退时执行。
+
+## P1-7：Artifact blob 去重与 tenant/Run reference 分离
+
+### 阶段判断与实现
+
+- 起始 SHA：`ca2a893af24572445a6de4359d24f44c65350ee8`；
+- 实现提交：`de1a44b659ea1edc88d97ab7aec0eccb41868240`；
+- 正式 Gate、500-case、32-arm、破坏性实验：`NOT_RUN`。
+
+审计确认旧 `artifacts` 行同时承载物理 SHA/path/size 与 tenant/Run 所有权，唯一键
+`(tenant_id, artifact_type, sha256)` 会使同 tenant 的两个 Run 无法各自引用相同内容。P1-7
+新增 `artifact_blobs` 与 `artifact_references`，用 migration `20260802_0009` 保留旧 UUID、按
+SHA backfill blob、切换 Dataset Version FK，再删除旧表。upgrade 遇到物理 metadata 或 owner
+shape 冲突时失败；downgrade 无法无损表达多 owner 时也失败。
+
+所有注册调用点共用 blob/reference upsert；读取与删除必须精确匹配 tenant/reference，并要求
+Run 精确相等，省略 Run 只允许 Dataset reference。最后 reference 才删除 blob metadata 和经过
+摘要校验的本地文件。详细 RED/GREEN、迁移/rollback、命令超时和残余风险见
+[`p1_7_artifact_ownership_log.md`](p1_7_artifact_ownership_log.md)。
+
+### 本地验证与边界
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| P1-7 定向回归 | 61 passed | `VERIFIED` |
+| 非 integration 全量 | 424 passed，7 deselected | `VERIFIED` |
+| Alembic offline upgrade/downgrade | 2 passed，SQL 人工筛查通过 | `VERIFIED` |
+| Ruff / mypy 115 files / lock / diff | 全部通过 | `VERIFIED` |
+| 新真实 PostgreSQL ownership test | 本机 1 skipped | `NOT_RUN_LOCAL` |
+
+当前仍不能证明本地 store 适合多 API 主机，也不能把数据库 transaction 与文件 unlink 写成
+分布式原子提交。已知 SHA orphan 可在数据库确认无 reference 后清理，但没有定时全盘扫描 GC。
+`docs/results/`、prepared bundle 和正式实验 schema 均未修改；正式 Gate 1 继续 `NOT_RUN`。
+
+实现回滚入口是：
+
+```text
+git revert de1a44b659ea1edc88d97ab7aec0eccb41868240
+```
+
+因为该提交含 `0009` migration，已升级环境必须先确认 downgrade guard 允许无损回退并执行
+Alembic downgrade；如果已有多 owner references，不能直接回退代码或强行折叠所有权。

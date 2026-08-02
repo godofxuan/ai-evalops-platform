@@ -441,6 +441,26 @@ operator 管理、tenant 只提交 `target_id`、强制 HTTPS 443、不跟随重
 Pytest 隔离修复推送后的 GitHub CI Run #11（`30713653240`）两个 job 均成功，包括 migration、
 6 个真实服务合同和 image build；这仍是普通 CI 证据，不是正式 Gate 5 或 SSRF 渗透结论。
 
+## P1-7 更新：Artifact 内容去重与所有权分离
+
+状态：`LOCAL_IMPLEMENTATION_VERIFIED / REMOTE_INTEGRATION_PENDING`。
+
+旧 `artifacts` 表把 blob SHA/path/size 与 tenant/Run owner 放在一行，且唯一键不含 Run；同一
+tenant 的两个 Run 若得到相同 type/SHA，第二个 Run 不能创建自己的 reference。实现提交
+`de1a44b659ea1edc88d97ab7aec0eccb41868240` 新增：
+
+- `artifact_blobs`：全局 content-addressed 物理事实；
+- `artifact_references`：tenant、精确可选 Run、类型和 media type；
+- `20260802_0009`：冲突保护、UUID 保留 backfill、Dataset FK 切换和有损 downgrade guard；
+- tenant/reference/Run scoped read/delete、最后 reference 清理和已知 orphan 维护路径；
+- 真实 PostgreSQL 同 tenant 双 Run、跨 tenant、并发同 SHA、缺文件与 rollback orphan 合同。
+
+最新本地非 integration 为 424 passed、7 deselected；Ruff、mypy 115 files、uv lock、offline
+migration 和 diff check 通过。真实 PostgreSQL 测试在本机明确 skipped，等待 GitHub CI，不能
+提前写成通过。完整过程见
+[`p1_7_artifact_ownership_log.md`](p1_7_artifact_ownership_log.md)。本修改不运行或覆盖正式
+Gate 1 artifact；多主机文件生命周期和跨系统原子删除仍未解决。
+
 ## Gate 6 协议草案：异步 Trace 关联
 
 状态：`DRAFT / NOT_RUN`。
