@@ -43,6 +43,7 @@ class ClaimedJob:
     evaluator_config: dict[str, Any]
     evaluator_version: str
     run_started: bool = False
+    origin_traceparent: str | None = None
 
 
 def validate_claim_request(*, worker_id: str, limit: int) -> None:
@@ -212,6 +213,7 @@ class SQLAlchemyJobClaimer:
                         evaluator_config=dict(run.evaluator_config_json),
                         evaluator_version=run.evaluator_version,
                         run_started=run_started_now,
+                        origin_traceparent=run.origin_traceparent,
                     )
                 )
         return tuple(claims)

@@ -117,8 +117,10 @@ class EvaluationWorker:
                 "run.id": str(claim.run_id),
                 "job.id": str(claim.job_id),
                 "attempt.id": str(claim.attempt_id),
+                "attempt.number": claim.attempt_number,
                 "worker.id": worker_id,
             },
+            origin_traceparent=claim.origin_traceparent,
         ):
             trace_id = None if self._telemetry is None else self._telemetry.current_trace_id()
             log_context = {
@@ -329,12 +331,18 @@ class EvaluationWorker:
         self,
         name: str,
         attributes: Mapping[str, Any] | None = None,
+        *,
+        origin_traceparent: str | None = None,
     ) -> AbstractContextManager[object]:
         if self._telemetry is None:
             return nullcontext()
         return cast(
             AbstractContextManager[object],
-            self._telemetry.start_as_current_span(name, attributes=attributes),
+            self._telemetry.start_as_current_span(
+                name,
+                attributes=attributes,
+                links=self._telemetry.links_from_traceparent(origin_traceparent),
+            ),
         )
 
 

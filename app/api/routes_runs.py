@@ -40,12 +40,14 @@ async def create_run(
     with telemetry.start_as_current_span(
         "run.create",
         attributes={"tenant.id": str(principal.tenant_id)},
-    ):
-        return await service.create_run(
+    ) as span:
+        created = await service.create_run(
             principal=principal,
             idempotency_key=idempotency_key,
             request=payload,
         )
+        span.set_attribute("run.id", str(created.id))
+        return created
 
 
 @router.get("/{run_id}", response_model=RunRead)

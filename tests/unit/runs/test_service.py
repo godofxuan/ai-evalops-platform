@@ -4,8 +4,11 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from app.auth.principals import Principal
+from app.core.telemetry import Telemetry
 from app.domain.enums import RunStatus
 from app.observability.metrics import PlatformMetrics
 from app.runs.idempotency import canonical_request_hash
@@ -215,6 +218,36 @@ async def test_create_run_snapshots_validated_cases_and_reproducibility_hashes()
         "case-1",
         "case-2",
     )
+    assert repository.new_run.origin_traceparent is None
+
+
+async def test_create_run_snapshots_current_platform_traceparent() -> None:
+    content = (
+        b'{"case_id":"case-1","question":"q1","expected_answer":"a1","metadata":{}}\n'
+        b'{"case_id":"case-2","question":"q2","expected_answer":"a2","metadata":{}}'
+    )
+    repository = RecordingRunRepository(hashlib.sha256(content).hexdigest())
+    telemetry = Telemetry(
+        service_name="evalops-api-test",
+        span_processors=(SimpleSpanProcessor(InMemorySpanExporter()),),
+    )
+    service = SQLAlchemyRunService(
+        repository=repository,
+        artifact_store=StaticArtifactStore(content),
+        telemetry=telemetry,
+    )
+
+    with telemetry.start_as_current_span("run.create"):
+        expected_traceparent = telemetry.capture_traceparent()
+        await service.create_run(
+            principal=PRINCIPAL,
+            idempotency_key="create-rag-v1",
+            request=make_run_request(),
+        )
+
+    assert expected_traceparent is not None
+    assert repository.new_run is not None
+    assert repository.new_run.origin_traceparent == expected_traceparent
 
 
 async def test_create_run_replays_same_request_without_recreating_jobs() -> None:
@@ -233,9 +266,15 @@ async def test_create_run_replays_same_request_without_recreating_jobs() -> None
         started_at=None,
         finished_at=None,
     )
+
+    class TelemetryThatMustNotCapture:
+        def capture_traceparent(self) -> str:
+            raise AssertionError("an idempotent replay must preserve the first trace context")
+
     service = SQLAlchemyRunService(
         repository=ReplayRunRepository(snapshot),
         artifact_store=ArtifactStoreThatMustNotRead(),
+        telemetry=TelemetryThatMustNotCapture(),  # type: ignore[arg-type]
     )
 
     replayed = await service.create_run(

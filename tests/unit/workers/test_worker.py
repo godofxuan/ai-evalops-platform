@@ -290,6 +290,16 @@ async def test_progress_publisher_failure_does_not_fail_completed_job() -> None:
 
 
 async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
+    exporter = InMemorySpanExporter()
+    telemetry = Telemetry(
+        service_name="evalops-worker-test",
+        span_processors=(SimpleSpanProcessor(exporter),),
+    )
+    with telemetry.start_as_current_span("run.create") as origin_span:
+        origin_context = origin_span.get_span_context()
+        origin_traceparent = telemetry.capture_traceparent()
+    assert origin_traceparent is not None
+
     claimed_job = ClaimedJob(
         job_id=JOB_ID,
         run_id=RUN_ID,
@@ -307,11 +317,7 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
         evaluator_type="execution",
         evaluator_config={},
         evaluator_version="v1",
-    )
-    exporter = InMemorySpanExporter()
-    telemetry = Telemetry(
-        service_name="evalops-worker-test",
-        span_processors=(SimpleSpanProcessor(exporter),),
+        origin_traceparent=origin_traceparent,
     )
     metrics = PlatformMetrics()
 
@@ -334,7 +340,8 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
 
     assert await worker.process_one(worker_id="worker-1") is True
 
-    span_names = {span.name for span in exporter.get_finished_spans()}
+    spans = exporter.get_finished_spans()
+    span_names = {span.name for span in spans}
     assert {
         "job.claim",
         "job.process",
@@ -343,6 +350,14 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
         "result.persist",
         "progress.publish",
     } <= span_names
+    process_span = next(span for span in spans if span.name == "job.process")
+    assert process_span.parent is None
+    assert process_span.context.trace_id != origin_context.trace_id
+    assert len(process_span.links) == 1
+    assert process_span.links[0].context.trace_id == origin_context.trace_id
+    assert process_span.links[0].context.span_id == origin_context.span_id
+    assert process_span.attributes is not None
+    assert process_span.attributes["attempt.number"] == 1
     rendered = metrics.render().decode("utf-8")
     assert "job_succeeded_total 1.0" in rendered
     assert "case_duration_count 1.0" in rendered

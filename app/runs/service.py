@@ -112,6 +112,9 @@ class SQLAlchemyRunService:
             raise RunInputIntegrityError
 
         evaluator_config = dict(request.evaluator.config)
+        origin_traceparent = (
+            None if self._telemetry is None else self._telemetry.capture_traceparent()
+        )
         new_run = NewRun(
             tenant_id=principal.tenant_id,
             created_by=principal.api_key_id,
@@ -130,6 +133,7 @@ class SQLAlchemyRunService:
             source_commit=request.source_commit,
             max_attempts=max_attempts,
             cases=tuple(case.model_dump(mode="json") for case in validated.cases),
+            origin_traceparent=origin_traceparent,
         )
         if self._telemetry is None:
             snapshot = await self._repository.create_or_replay(new_run)

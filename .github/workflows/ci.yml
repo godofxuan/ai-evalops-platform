@@ -78,7 +78,7 @@ jobs:
       - name: Apply migrations
         run: uv run --no-sync alembic upgrade head
 
-      - name: Integration - concurrent job claiming and lease fencing
+      - name: Integration - job claiming, trace propagation, and lease fencing
         if: ${{ !cancelled() }}
         run: >-
           uv run --no-sync pytest tests/concurrency/test_job_claiming.py

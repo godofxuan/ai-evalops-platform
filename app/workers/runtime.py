@@ -13,7 +13,7 @@ from app.core.config import Settings
 from app.core.logging import get_logger
 from app.core.telemetry import Telemetry, parse_otlp_headers
 from app.events.models import EventType, ProgressEvent
-from app.events.publisher import RedisEventPublisher
+from app.events.publisher import EventPublisher, RedisEventPublisher
 from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.failures import SQLAlchemyFailureCommitter
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
@@ -154,49 +154,12 @@ async def run_reaper_process(
                         )
                 metrics.record_job_lease_expired(len(reaped))
                 for item in reaped:
-                    if item.action == "requeued":
-                        metrics.record_job_retry()
-                    elif item.action == "failed":
-                        metrics.record_job_failed()
-                    event_type = (
-                        EventType.JOB_RETRIED if item.action == "requeued" else EventType.JOB_FAILED
+                    await handle_reaped_job(
+                        item,
+                        metrics=metrics,
+                        telemetry=telemetry,
+                        event_publisher=event_publisher,
                     )
-                    with telemetry.start_as_current_span(
-                        "progress.publish",
-                        attributes={
-                            "tenant.id": str(item.tenant_id),
-                            "run.id": str(item.run_id),
-                            "job.id": str(item.job_id),
-                        },
-                    ):
-                        await event_publisher.publish(
-                            ProgressEvent(
-                                event_type=event_type,
-                                run_id=item.run_id,
-                                tenant_id=item.tenant_id,
-                                timestamp=datetime.now(UTC),
-                                payload={
-                                    "job_id": str(item.job_id),
-                                    "status": item.status.value,
-                                    "source": "reaper",
-                                },
-                            )
-                        )
-                    if item.run_status is not None and item.run_status.value in {
-                        "succeeded",
-                        "partially_succeeded",
-                        "failed",
-                        "cancelled",
-                    }:
-                        await event_publisher.publish(
-                            ProgressEvent(
-                                event_type=EventType.RUN_COMPLETED,
-                                run_id=item.run_id,
-                                tenant_id=item.tenant_id,
-                                timestamp=datetime.now(UTC),
-                                payload={"status": item.run_status.value},
-                            )
-                        )
                 if reaped:
                     logger.info("reaper_batch_completed", count=len(reaped))
             except Exception as error:
@@ -230,6 +193,86 @@ async def run_reaper_iteration(
             operation="reaper",
             duration_seconds=perf_counter() - started_at,
         )
+
+
+async def handle_reaped_job(
+    item: ReapedJob,
+    *,
+    metrics: PlatformMetrics,
+    telemetry: Telemetry,
+    event_publisher: EventPublisher,
+) -> None:
+    attributes: dict[str, str | int] = {
+        "tenant.id": str(item.tenant_id),
+        "run.id": str(item.run_id),
+        "job.id": str(item.job_id),
+        "attempt.number": item.attempt_number,
+        "reaper.action": item.action,
+    }
+    if item.attempt_id is not None:
+        attributes["attempt.id"] = str(item.attempt_id)
+    if item.previous_worker is not None:
+        attributes["worker.previous.id"] = item.previous_worker
+
+    with telemetry.start_as_current_span(
+        "reaper.job.recovered",
+        attributes=attributes,
+        links=telemetry.links_from_traceparent(item.origin_traceparent),
+    ):
+        if item.action == "requeued":
+            metrics.record_job_retry()
+        elif item.action == "failed":
+            metrics.record_job_failed()
+        event_type = EventType.JOB_RETRIED if item.action == "requeued" else EventType.JOB_FAILED
+        await _publish_reaper_event(
+            telemetry=telemetry,
+            event_publisher=event_publisher,
+            event=ProgressEvent(
+                event_type=event_type,
+                run_id=item.run_id,
+                tenant_id=item.tenant_id,
+                timestamp=datetime.now(UTC),
+                payload={
+                    "job_id": str(item.job_id),
+                    "status": item.status.value,
+                    "source": "reaper",
+                },
+            ),
+        )
+        if item.run_status is not None and item.run_status.value in {
+            "succeeded",
+            "partially_succeeded",
+            "failed",
+            "cancelled",
+        }:
+            await _publish_reaper_event(
+                telemetry=telemetry,
+                event_publisher=event_publisher,
+                event=ProgressEvent(
+                    event_type=EventType.RUN_COMPLETED,
+                    run_id=item.run_id,
+                    tenant_id=item.tenant_id,
+                    timestamp=datetime.now(UTC),
+                    payload={"status": item.run_status.value},
+                ),
+            )
+
+
+async def _publish_reaper_event(
+    *,
+    telemetry: Telemetry,
+    event_publisher: EventPublisher,
+    event: ProgressEvent,
+) -> None:
+    with telemetry.start_as_current_span(
+        "progress.publish",
+        attributes={
+            "tenant.id": str(event.tenant_id),
+            "run.id": str(event.run_id),
+            "event.type": event.event_type.value,
+        },
+    ):
+        await event_publisher.publish(event)
 
 
 def _retry_policy(settings: Settings) -> RetryPolicy:

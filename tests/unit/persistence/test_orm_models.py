@@ -95,6 +95,15 @@ def test_api_key_metadata_never_defines_a_plaintext_secret_column() -> None:
     assert str(task_creator.server_default.arg) == "false"
 
 
+def test_evaluation_run_origin_traceparent_is_nullable_and_bounded() -> None:
+    origin_traceparent = EvaluationRun.__table__.columns.origin_traceparent
+
+    assert origin_traceparent.nullable
+    assert origin_traceparent.type.length == 55
+    assert origin_traceparent.default is None
+    assert origin_traceparent.server_default is None
+
+
 def test_dataset_and_version_constraints_encode_identity_and_immutability() -> None:
     assert frozenset({"tenant_id", "name"}) in unique_column_sets(Dataset.__table__)
     assert foreign_key_targets(Dataset.__table__, "tenant_id") == {"tenants.id"}

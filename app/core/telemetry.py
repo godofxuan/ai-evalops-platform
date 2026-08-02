@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from typing import Any
 
@@ -9,7 +9,7 @@ from opentelemetry.propagators.textmap import CarrierT
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import NoOpTracerProvider, Span
+from opentelemetry.trace import Link, NoOpTracerProvider, Span
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 
@@ -53,11 +53,13 @@ class Telemetry:
         *,
         attributes: Mapping[str, Any] | None = None,
         context: Context | None = None,
+        links: Sequence[Link] | None = None,
     ) -> AbstractContextManager[Span]:
         return self._tracer.start_as_current_span(
             name,
             attributes=attributes,
             context=context,
+            links=links,
         )
 
     def current_trace_id(self) -> str | None:
@@ -65,6 +67,29 @@ class Telemetry:
         if not span_context.is_valid:
             return None
         return f"{span_context.trace_id:032x}"
+
+    def capture_traceparent(self) -> str | None:
+        span_context = trace.get_current_span().get_span_context()
+        if not span_context.is_valid:
+            return None
+        carrier: dict[str, str] = {}
+        try:
+            TraceContextTextMapPropagator().inject(carrier=carrier)
+        except Exception:
+            return None
+        return carrier.get("traceparent")
+
+    def links_from_traceparent(self, traceparent: str | None) -> tuple[Link, ...]:
+        if traceparent is None:
+            return ()
+        try:
+            context = TraceContextTextMapPropagator().extract(carrier={"traceparent": traceparent})
+            span_context = trace.get_current_span(context).get_span_context()
+        except Exception:
+            return ()
+        if not span_context.is_valid:
+            return ()
+        return (Link(span_context),)
 
     def extract_context(self, carrier: CarrierT) -> Context:
         return TraceContextTextMapPropagator().extract(carrier=carrier)

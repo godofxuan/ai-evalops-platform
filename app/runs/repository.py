@@ -46,6 +46,7 @@ class NewRun:
     source_commit: str | None
     max_attempts: int
     cases: tuple[dict[str, Any], ...]
+    origin_traceparent: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +200,7 @@ class SQLAlchemyRunRepository:
             target_version=new_run.target_version,
             evaluator_version=new_run.evaluator_version,
             source_commit=new_run.source_commit,
+            origin_traceparent=new_run.origin_traceparent,
             status=RunStatus.QUEUED,
             total_jobs=len(new_run.cases),
             succeeded_jobs=0,

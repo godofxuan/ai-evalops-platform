@@ -47,6 +47,9 @@ class FixedRandom:
         return 0.5
 
 
+ORIGIN_TRACEPARENT = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+
+
 @pytest.mark.integration
 async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected(
     tmp_path: object,
@@ -136,6 +139,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     evaluator_config_hash="d" * 64,
                     target_version="v1",
                     evaluator_version="v1",
+                    origin_traceparent=ORIGIN_TRACEPARENT,
                     status=RunStatus.QUEUED,
                     total_jobs=100,
                     created_by=api_key_id,
@@ -168,6 +172,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
 
         assert len(claims) == 100
         assert len({claim.job_id for claim in claims}) == 100
+        assert {claim.origin_traceparent for claim in claims} == {ORIGIN_TRACEPARENT}
         async with session_factory() as session:
             attempt_count = await session.scalar(
                 select(func.count(JobAttempt.id))
@@ -258,6 +263,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
         assert len(reaped) == 99
         assert len({item.job_id for item in reaped}) == 99
         assert all(item.status is JobStatus.RETRY_WAIT for item in reaped)
+        assert {item.origin_traceparent for item in reaped} == {ORIGIN_TRACEPARENT}
         async with session_factory() as session:
             retry_wait_count = await session.scalar(
                 select(func.count(EvaluationJob.id)).where(
@@ -313,6 +319,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 )
             )
         race_claim = (await claimer.claim(worker_id="race-worker", limit=1))[0]
+        assert race_claim.origin_traceparent is None
         cancellation = SQLAlchemyCancellationService(
             session_factory,
             clock=clock,

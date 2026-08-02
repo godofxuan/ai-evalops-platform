@@ -2,9 +2,12 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from httpx import ASGITransport, AsyncClient
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
+from app.core.telemetry import Telemetry
 from app.main import create_app
 from app.runs.schemas import RunCreate, RunRead
 from app.runs.service import (
@@ -123,6 +126,66 @@ async def test_create_run_passes_server_principal_and_idempotency_key() -> None:
     assert principal == PRINCIPAL
     assert idempotency_key == "create-rag-v1"
     assert request.dataset_version_id == UUID("00000000-0000-0000-0000-000000000401")
+
+
+async def test_create_run_span_records_persisted_run_identity() -> None:
+    exporter = InMemorySpanExporter()
+    telemetry = Telemetry(
+        service_name="evalops-api-test",
+        span_processors=(SimpleSpanProcessor(exporter),),
+    )
+
+    class TraceCapturingRunService(RecordingRunService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.origin_traceparent: str | None = None
+
+        async def create_run(
+            self,
+            *,
+            principal: Principal,
+            idempotency_key: str,
+            request: RunCreate,
+        ) -> RunRead:
+            self.origin_traceparent = telemetry.capture_traceparent()
+            return await super().create_run(
+                principal=principal,
+                idempotency_key=idempotency_key,
+                request=request,
+            )
+
+    service = TraceCapturingRunService()
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.run_service = service
+    application.state.telemetry = telemetry
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/runs",
+            headers={
+                "Idempotency-Key": "create-rag-v1",
+                "traceparent": ("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"),
+            },
+            json={
+                "dataset_version_id": "00000000-0000-0000-0000-000000000401",
+                "target": {"type": "mock"},
+                "evaluator": {"type": "basic_answer"},
+            },
+        )
+
+    assert response.status_code == 202
+    run_span = next(span for span in exporter.get_finished_spans() if span.name == "run.create")
+    assert run_span.attributes is not None
+    assert run_span.attributes["run.id"] == "00000000-0000-0000-0000-000000000601"
+    assert service.origin_traceparent is not None
+    _, trace_id, span_id, _ = service.origin_traceparent.split("-")
+    assert trace_id == "0af7651916cd43dd8448eb211c80319c"
+    assert span_id == f"{run_span.context.span_id:016x}"
+    assert span_id != "b7ad6b7169203331"
 
 
 async def test_get_run_passes_server_principal_to_service() -> None:

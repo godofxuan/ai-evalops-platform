@@ -395,6 +395,7 @@ class EvaluationRun(Base):
     target_version: Mapped[str] = mapped_column(String(128), nullable=False)
     evaluator_version: Mapped[str] = mapped_column(String(128), nullable=False)
     source_commit: Mapped[str | None] = mapped_column(String(128))
+    origin_traceparent: Mapped[str | None] = mapped_column(String(55))
     status: Mapped[RunStatus] = mapped_column(
         run_status_enum,
         nullable=False,

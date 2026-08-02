@@ -48,6 +48,9 @@ class ReapedJob:
     action: str
     status: JobStatus
     next_attempt_at: datetime | None
+    attempt_id: UUID | None
+    attempt_number: int
+    origin_traceparent: str | None
     run_status: RunStatus | None = None
 
 
@@ -170,6 +173,9 @@ class SQLAlchemyJobReaper:
                         action=action,
                         status=target_status,
                         next_attempt_at=next_attempt_at,
+                        attempt_id=None if attempt is None else attempt.id,
+                        attempt_number=job.attempt_count,
+                        origin_traceparent=run.origin_traceparent,
                     )
                 )
             await session.flush()
