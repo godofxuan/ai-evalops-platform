@@ -302,6 +302,29 @@ async def test_dispatcher_records_scheduled_retry_metric() -> None:
     assert "outbox_retry_scheduled_total 1.0" in metrics.render().decode("utf-8")
 
 
+async def test_dispatcher_records_lost_lease_metric() -> None:
+    class LeaseLostStore(RecordingStore):
+        async def mark_published(self, *, event_id: UUID) -> bool:
+            self.published.append(event_id)
+            return False
+
+    store = LeaseLostStore((ClaimedOutboxEvent(event=_event(), attempt_count=1),))
+    metrics = PlatformMetrics()
+    dispatcher = OutboxDispatcher(
+        store=store,
+        publisher=RecordingPublisher(),
+        publish_timeout_seconds=1,
+        retry_base_seconds=2,
+        retry_max_seconds=10,
+        metrics=metrics,
+    )
+
+    result = await dispatcher.dispatch_once(limit=10)
+
+    assert result.lease_lost == 1
+    assert "outbox_lease_lost_total 1.0" in metrics.render().decode("utf-8")
+
+
 async def test_dispatcher_records_only_exception_type_and_bounds_timeout() -> None:
     class HangingPublisher:
         async def publish(self, _event: ProgressEvent) -> bool:
