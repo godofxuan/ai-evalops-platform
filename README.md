@@ -332,6 +332,12 @@ uv run python -m scripts.run_comparison_experiment
 uv run python -m scripts.run_failure_scenarios --allow-service-disruption
 ```
 
+Gate 1 prepared manifest schema v5 会冻结 result schema v3、expected arm plan 和不可弱化的
+quality policy。最终 aggregate 自动将客观质量标为 `VERIFIED`、`FAILED` 或 `UNKNOWN`；只有完整
+有效时才标记 `READY_FOR_HUMAN_REVIEW`。adoption 始终由人决定，工具不会自动选择或修改 Worker
+数。`--confirm-quality-gate` / `--confirm-adoption-gate` 只是授权开始正式运行，不能代替结果
+检查或用户拥有的性能阈值。
+
 实验密钥从 `EVALOPS_EXPERIMENT_API_KEY` 读取。failure 脚本会 stop/kill 开发 Compose
 服务，只能在独占开发环境执行。结果默认写入 `docs/results/` 且拒绝覆盖。完整合同见
 [可观测性与实验](docs/12_observability_and_experiments.md)和
@@ -477,6 +483,8 @@ Target 与自动指标边界见 [评测语义](docs/09_evaluation_semantics.md)�
 
 P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RED/GREEN、环境问题和
 残余风险见 [HTTP Target 安全加固记录](docs/reviews/p1_6_http_target_security_log.md)。
+Gate 1 自动质量检查、人工采纳边界、schema 升级和旧证据影响见
+[P2-5 Gate 自动化记录](docs/reviews/p2_5_gate_automation_log.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
@@ -530,6 +538,8 @@ P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RE
 - API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
   Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
+- Gate 1 能自动检查客观质量和 expected-arm 完整性，但没有用户数值 performance policy；
+  `READY_FOR_HUMAN_REVIEW` 不等于 adoption，正式 500-case/32-arm 仍未运行；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
 - can_create_review_tasks 与 can_review 独立且都默认关闭；当前仍不是通用 RBAC/scope 系统；
 - review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；

@@ -565,3 +565,34 @@ symlink、Dockerfile 专用 ignore、修改 Dockerfile、修改 `uv.lock`、非 
 - 没有创建新的 `docs/results/` bundle，没有运行 500-case/32-arm，没有容量结论。
 
 本阶段没有 push、没有 PR。后续阶段必须另行确认；正式 Gate 1 仍不能启动。
+
+## 13. P2-5 quality/adoption flags 自动检查
+
+状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+
+修改前，`--confirm-quality-gate` 与 `--confirm-adoption-gate` 只是用户授权运行的 Boolean；
+aggregate 除固定 `automatic_adoption_decision=null` 外，没有根据冻结 arm plan 自动判断证据是否
+完整或有效。Boolean 确认不能被当成结果证据。
+
+本阶段用 RED `a9a1324` 和 GREEN `3ee4480` 冻结以下边界：
+
+- prepared manifest 升为 schema v5，声明 result schema v3 和不可弱化的 quality policy v1；
+- finalizer 必须显式接收启动前读取的 expected arm plan；
+- expected/observed arm 重复、unexpected 或身份不一致 fail-closed；
+- 任一 invalid arm 使 quality 为 `FAILED`；缺 arm 且没有已知 invalid 时为 `UNKNOWN`；全部
+  expected arms 完整有效时为 `VERIFIED`；
+- quality 通过只产生 `READY_FOR_HUMAN_REVIEW`，adoption 本身保持 `NOT_RUN`；
+- `automatic_worker_count_change=false`、`automatic_adoption_decision=null`、
+  `selected_worker_count=null`；
+- 负扩展保留为证据，不自动判 quality 失败，也不自动选择 Worker。
+
+schema 轴保持独立：prepared v5、result v3、final-bundle v1、Prometheus evidence v2。旧
+prepared v1–v4 和 result v1–v2 只读，不迁移、不覆盖；必须从新的干净提交重新 prepare。
+
+本地最终证据：Gate 1 相关 132 passed；finalization 收紧 16 passed；非 integration 全量
+`463 passed, 8 deselected`；Ruff 250 files、lint、117-source strict mypy 与 70-package lock
+全部通过。详细 RED/GREEN、方案比较、遇到的问题、schema 影响和回滚见
+[`reviews/p2_5_gate_automation_log.md`](reviews/p2_5_gate_automation_log.md)。
+
+这些结果只证明自动化合同。没有运行真实 500-case/32-arm，没有用户数值 performance policy，
+因此没有 throughput、p95/p99、容量 knee 或部署 Worker 数结论。

@@ -23,8 +23,10 @@ at-least-once Job 执行、崩溃恢复、幂等结果持久化、SSE 进度、R
   与 Worker/Reaper 异步 Span Link、Redis/SSE 故障指标和可复现实验结果保存。
 - 加固六服务 Compose 拓扑：显式非 root、read-only rootfs、drop ALL、no-new-privileges、
   CPU/memory/PID limit 与最小写路径，并在 CI 用 Docker inspect 验证有效 HostConfig。
+- 将实验授权、客观质量门和人工采纳分层：prepared manifest 冻结 expected-arm 策略，结果自动
+  区分 VERIFIED/FAILED/UNKNOWN，但不自动选择 Worker 或编造性能阈值。
 - 建立 unit/API/真实 PostgreSQL/Redis/concurrency/failure-injection 四层合同；本地
-  455 个非集成测试通过，远端 CI 的真实 PostgreSQL/Redis、migration、镜像与加固 Compose
+  463 个非集成测试通过，远端 CI 的真实 PostgreSQL/Redis、migration、镜像与加固 Compose
   smoke 通过；正式容量 Gate 仍未执行。
 
 最后一条必须保留“正式容量 Gate 未执行”的限定。普通 CI 合同不能替代 500-case、32-arm、
@@ -50,6 +52,8 @@ soak 或生产环境的真实数字。
 - Created reproducible worker-scaling, idempotency, fault-injection, and Run
   comparison experiments that preserve negative results instead of overwriting
   them.
+- Separated run authorization, automatic objective-quality checks, and human-owned
+  adoption so incomplete evidence cannot silently recommend a Worker count.
 
 不要写 “production-grade”、“exactly once”、“zero duplicates” 或未经执行的吞吐数字。
 

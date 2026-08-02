@@ -2279,3 +2279,41 @@ API/Worker/Reaper、readiness 和 effective container hardening verifier 全部�
 该证据只绑定当前 pinned images 与普通 CI 环境。资源默认值没有正式容量数据，且本项没有提供
 rootless Docker、seccomp/AppArmor、网络分段或宿主机安全证明。Compose/source hash 已变化，旧
 prepared bundle 必须重新 prepare；没有 migration，也没有覆盖历史 evidence。
+
+## P2-5：Gate 1 quality/adoption flags 自动检查
+
+### 阶段判断与实现
+
+- 起始 SHA：`b86bc898c27e1065ec649f091e2ae518e1f29511`；
+- RED 提交：`a9a1324`；
+- 实现提交：`3ee4480`；
+- 当前状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`；
+- prepared schema v5 冻结 result schema v3 与不可弱化 quality policy v1；
+- finalizer 必须显式接收冻结 expected arms，不能从 observed summaries 自证完整；
+- quality 自动输出 `VERIFIED`、`FAILED` 或 `UNKNOWN`，并保留 missing/invalid arm IDs；
+- adoption 只输出人工评审就绪状态，本身保持 `NOT_RUN`；
+- performance thresholds 和最终 Worker 数继续由人决定；
+- 负扩展不删除、不自动判质量失败、不触发部署变更。
+
+直接按最高吞吐自动选择 Worker 会编造用户尚未定义的延迟/资源门槛；只重命名两个 CLI Boolean
+又不能发现缺 arm 或无效证据。因此选择“机器检查客观正确性和完整性 + 人工拥有 adoption”。
+完整方案比较、逐条 RED/GREEN、Ruff、schema 兼容断言、二次移除 finalizer 回退、旧证据影响与
+rollback 见 [`p2_5_gate_automation_log.md`](p2_5_gate_automation_log.md)。
+
+### 本地证据与边界
+
+| 检查 | 结果 | 状态 |
+|---|---|---|
+| RED | evaluator import 不存在，collection error | `VERIFIED_RED` |
+| 首轮 GREEN | 18 passed | `VERIFIED` |
+| Gate 1 完整集合 | 132 passed | `VERIFIED` |
+| finalization 必需 expected arms | 16 passed | `VERIFIED` |
+| 非 integration 全量 | 463 passed，8 deselected | `VERIFIED` |
+| Ruff / mypy / lock | 250 files / 117 source files / 70 packages | `VERIFIED` |
+| 远端真实服务、image、Compose | 等待本提交 push 后 CI | `NOT_RUN_REMOTE` |
+| 正式 500-case/32-arm/soak | 未运行 | `NOT_RUN` |
+
+本项没有 migration。prepared v1–v4、result v1–v2 和所有历史 `docs/results/` 保持只读；旧
+prepared bundle 因 schema 与执行脚本 hash 变化必须重新 prepare。CLI 的两个 `--confirm-*`
+开关只是用户授权正式运行，不能被当成 gate 结果。没有用户批准的数值阈值，因此
+`READY_FOR_HUMAN_REVIEW` 也不等于采用建议。

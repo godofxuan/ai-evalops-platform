@@ -172,7 +172,7 @@ serializer 也只接受盲化 packet。三层边界减少未来重构误泄露�
 
 ## 实验与证据
 
-### 29. 455 passed 能证明性能好吗？
+### 29. 463 passed 能证明性能好吗？
 
 不能。它证明本地逻辑/API 合同没有回归；远端真实 PostgreSQL/Redis、migration、image 与
 Compose 合同也已通过。但正式 500-case、32-arm、soak 和生产容量仍未执行，不能从测试数量
@@ -193,3 +193,10 @@ Run ID。
 用已验证的加固 Compose 运行正式四组扩容实验；保存 PostgreSQL lock wait、资源利用、
 OOM/throttling 和所有失败结果；随后再决定资源 limit、索引、batch claim、连接池或 Worker 数，
 而不是先猜优化。
+
+### 33. 自动 quality gate 为什么没有自动 adoption？
+
+quality 只检查冻结 expected arms 是否完整，以及每个 arm 的 correctness、必需指标和 collector
+证据是否有效；它能客观输出 VERIFIED、FAILED 或 UNKNOWN。adoption 还需要用户拥有的 throughput、
+p95/p99、数据库等待和资源余量阈值。仓库没有编造这些阈值，因此 quality 通过只表示
+READY_FOR_HUMAN_REVIEW，adoption 仍是 NOT_RUN，selected Worker 仍为 null。

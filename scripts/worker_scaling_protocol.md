@@ -27,11 +27,17 @@ must never overwrite another run.
 
 ## Prepared evidence gate
 
-Only manifest schema v4 is executable. Before any service or arm interaction, the
+Only manifest schema v5 is executable. Before any service or arm interaction, the
 executor must revalidate the source commit, strict Git state, Docker build-context
 safety, configuration, measurement and warm-up datasets, dataset hash record, protocol,
 arm plan, Compose file, Dockerfile, `.dockerignore`, every key execution script, and the
 Docker build-context fingerprint.
+
+Schema v5 also freezes result schema v3 and quality policy v1,
+`all_expected_arms_valid_for_capacity_comparison`, as automatic and non-waivable. The
+adoption decision, performance thresholds, and deployed Worker count remain human-owned.
+The `--confirm-quality-gate` and `--confirm-adoption-gate` switches authorize a formal
+run; they are not result evidence and cannot replace the automatic final evaluation.
 
 The strict Git gate rejects every tracked or staged change, including changes to paths
 excluded from Docker. Untracked and Git-ignored files block only when the root
@@ -71,7 +77,7 @@ The preflight outcome is one of `READY`, `HASH_MISMATCH`, `SOURCE_MISMATCH`,
 `IMAGE_IDENTITY_KIND_UNSUPPORTED`, `IMAGE_ID_MISMATCH`,
 `IMAGE_REVISION_LABEL_MISSING`, `IMAGE_REVISION_MISMATCH`,
 `COMPOSE_PROJECT_MISMATCH`, or `IMAGE_BUILD_INPUT_MISMATCH`, with all failed checks
-retained. Schema v1/v2/v3 bundles remain historical, read-only evidence and must be
+retained. Schema v1/v2/v3/v4 bundles remain historical, read-only evidence and must be
 prepared again rather than migrated or silently rewritten.
 
 ## Execution
@@ -87,9 +93,10 @@ induced is `NOT_RUN`; sampled lock waits without continuous timing are `DIRECTIO
 
 ## Prometheus evidence semantics
 
-New Gate 1 result artifacts use result schema v2. Every Prometheus-derived metric records
-`status`, `observation`, `value`, `reason`, `source`, and `sample_count`; the legacy
-`evidence` field remains present for evidence strength and read compatibility.
+New Gate 1 result artifacts use result schema v3. Embedded Prometheus evidence continues
+to use its independent schema v2: every Prometheus-derived metric records `status`,
+`observation`, `value`, `reason`, `source`, and `sample_count`; the legacy `evidence`
+field remains present for evidence strength and read compatibility.
 
 - `OBSERVED_ZERO` means the same finite series existed in paired before/after scrapes and
   its cumulative delta was exactly zero. It is `VERIFIED` with numeric value `0`.
@@ -134,8 +141,8 @@ Root-level `raw/<arm_id>/` and `summary/<arm_id>.json` are execution-time workin
 evidence. Their presence does not mean that a formal result was published. The only
 published result is the complete `<run_id>/final/` directory.
 
-Finalization uses final-bundle schema v1 while the enclosed metric artifacts continue to
-use result schema v2. These are independent version axes: the bundle schema describes
+Finalization uses final-bundle schema v1 while the enclosed result artifacts use result
+schema v3. These are independent version axes: the bundle schema describes
 layout, hashes, and publication; the result schema describes metric meaning.
 
 The finalizer must:
@@ -163,9 +170,17 @@ Attempt numbers matching `attempt_count`, Run counters matching a fresh Job grou
 unexplained nonterminal Job, and a Run terminal state consistent with Job aggregation.
 Any violation makes the arm ineligible for capacity comparison without deleting it.
 
+The final aggregate evaluates the frozen expected arm plan rather than only the summaries
+that happen to exist. Any invalid arm yields quality status `FAILED`; missing expected
+arms without a known invalid arm yield `UNKNOWN`; complete valid evidence yields
+`VERIFIED`. Duplicate, unexpected, or identity-mismatched arms fail closed. Negative
+scaling remains evidence for human review and does not by itself fail correctness.
+
 ## Adoption gate
 
 The harness never changes the deployed Worker count automatically. It reports all raw
-repetitions and candidate interpretations. A human must review correctness, evidence
-completeness, throughput, p95/p99 latency, database waits, and resource headroom before
-selecting a deployment value.
+repetitions and candidate interpretations. When objective quality is `VERIFIED`, it may
+mark the bundle `READY_FOR_HUMAN_REVIEW`; this is not an adoption decision. The adoption
+status remains `NOT_RUN`, and both the automatic decision and selected Worker count remain
+null. A human must review correctness, evidence completeness, throughput, p95/p99 latency,
+database waits, and resource headroom before selecting a deployment value.

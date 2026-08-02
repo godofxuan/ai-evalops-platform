@@ -687,3 +687,30 @@ inspect hardening、真实 integration、P2 migration round-trip 和 image build
 
 默认限额仍不是生产 sizing；没有 rootless/user namespace/seccomp/AppArmor/NetworkPolicy/宿主机
 安全证明。Compose/source hash 改变使旧 prepared bundle 失效，正式 Gate 继续 `NOT_RUN`。
+
+## P2-5 更新：Gate 1 quality/adoption flags 自动检查
+
+状态：`LOCAL_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+
+审计确认两个 `--confirm-*` 开关只是内容为空的用户授权 Boolean；prepared manifest 没有冻结
+quality policy，aggregate 也只汇总当前存在的 summaries。它无法自动区分完整有效、已知无效和
+缺失 arm，且 Boolean 容易被误读成正式 gate 结果。
+
+RED 提交 `a9a1324` 先要求完整/缺失/无效/重复/unexpected arm、负扩展不自动采纳、policy
+篡改和 schema 升级合同。GREEN 提交 `3ee4480`：
+
+- prepared manifest v5 冻结 result schema v3、quality policy v1 和 human-owned adoption；
+- expected arm plan 显式进入 finalizer，省略计划的兼容回退被移除；
+- quality 自动给出 `VERIFIED`、`FAILED`、`UNKNOWN` 及 missing/invalid arm IDs；
+- adoption 始终 `NOT_RUN`，仅在 quality VERIFIED 时标记可进入人工评审；
+- 不自动选择 Worker，不改部署，不把负扩展删掉或当成实验基础设施失败；
+- final-bundle v1 与 Prometheus evidence v2 因各自语义未变而不无意义升号。
+
+本地最终为 `463 passed, 8 deselected`；Gate 1 相关 132 passed、finalization 收紧 16 passed；
+Ruff 250 files、mypy 117 source files、70-package lock 全通过。首轮完整 Gate 回归的 3 个失败是
+测试仍期待 prepared schema 4；更新为 5 并补齐 v2/v3/v4 历史只读覆盖后通过。完整记录见
+[`p2_5_gate_automation_log.md`](p2_5_gate_automation_log.md)。
+
+没有 migration，没有运行正式 500-case/32-arm，也没有用户数值 performance policy。因此没有
+吞吐、p95/p99、容量拐点或部署 Worker 数结论；远端真实服务/image/Compose 证据须在 push 后由
+CI 产生。
