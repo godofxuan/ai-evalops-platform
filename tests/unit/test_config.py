@@ -47,6 +47,31 @@ def test_worker_heartbeat_must_be_shorter_than_lease() -> None:
         )
 
 
+def test_outbox_dispatch_settings_have_bounded_operational_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.outbox_poll_seconds == 0.5
+    assert settings.outbox_batch_size == 50
+    assert settings.outbox_lease_seconds == 30
+    assert settings.outbox_publish_timeout_seconds == 5
+    assert settings.outbox_retry_base_seconds == 1
+    assert settings.outbox_retry_max_seconds == 60
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"outbox_publish_timeout_seconds": 30, "outbox_lease_seconds": 30},
+        {"outbox_retry_base_seconds": 61, "outbox_retry_max_seconds": 60},
+    ],
+)
+def test_outbox_dispatch_settings_reject_unsafe_cross_field_timing(
+    overrides: dict[str, int],
+) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **overrides)
+
+
 def test_observability_settings_have_safe_bounded_defaults() -> None:
     settings = Settings(_env_file=None)
 

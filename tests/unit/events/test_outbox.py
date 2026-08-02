@@ -9,6 +9,7 @@ from app.events.outbox import (
     build_claim_outbox_statement,
     enqueue_progress_event,
     outbox_retry_delay_seconds,
+    run_outbox_dispatch_loop,
 )
 from sqlalchemy.dialects import postgresql
 
@@ -213,3 +214,69 @@ def test_outbox_retry_delay_is_exponential_and_bounded() -> None:
         )
         for attempt in (1, 2, 3, 100)
     ] == [2, 4, 5, 5]
+
+
+async def test_dispatch_loop_uses_bounded_batch_and_stops_cooperatively() -> None:
+    stop_requested = asyncio.Event()
+
+    class OneShotDispatcher:
+        def __init__(self) -> None:
+            self.limits: list[int] = []
+
+        async def dispatch_once(self, *, limit: int) -> OutboxDispatchResult:
+            self.limits.append(limit)
+            stop_requested.set()
+            return OutboxDispatchResult(0, 0, 0, 0)
+
+    dispatcher = OneShotDispatcher()
+
+    await run_outbox_dispatch_loop(
+        dispatcher,  # type: ignore[arg-type]
+        stop_requested=stop_requested,
+        poll_seconds=0.01,
+        batch_size=37,
+    )
+
+    assert dispatcher.limits == [37]
+
+
+async def test_dispatch_loop_logs_only_error_type_then_recovers() -> None:
+    stop_requested = asyncio.Event()
+
+    class FlappingDispatcher:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def dispatch_once(self, *, limit: int) -> OutboxDispatchResult:
+            assert limit == 5
+            self.calls += 1
+            if self.calls == 1:
+                raise ConnectionError("database-secret-must-not-be-logged")
+            stop_requested.set()
+            return OutboxDispatchResult(0, 0, 0, 0)
+
+    class RecordingLogger:
+        def __init__(self) -> None:
+            self.errors: list[tuple[str, dict[str, object]]] = []
+
+        def error(self, event: str, **values: object) -> None:
+            self.errors.append((event, values))
+
+        def info(self, event: str, **values: object) -> None:
+            del event, values
+
+    dispatcher = FlappingDispatcher()
+    logger = RecordingLogger()
+
+    await run_outbox_dispatch_loop(
+        dispatcher,  # type: ignore[arg-type]
+        stop_requested=stop_requested,
+        poll_seconds=0.001,
+        batch_size=5,
+        logger=logger,  # type: ignore[arg-type]
+    )
+
+    assert dispatcher.calls == 2
+    assert logger.errors == [
+        ("outbox_dispatch_iteration_failed", {"error_type": "ConnectionError"})
+    ]
