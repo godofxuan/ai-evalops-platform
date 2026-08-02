@@ -15,6 +15,7 @@ from app.persistence.orm_models import (
     HumanReviewSubmission,
     HumanReviewTask,
     JobAttempt,
+    ProgressEventOutbox,
     RunMetric,
 )
 
@@ -68,6 +69,7 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
         "human_review_submissions",
         "human_review_tasks",
         "job_attempts",
+        "progress_event_outbox",
         "run_metrics",
         "tenants",
     }
@@ -102,6 +104,34 @@ def test_evaluation_run_origin_traceparent_is_nullable_and_bounded() -> None:
     assert origin_traceparent.type.length == 55
     assert origin_traceparent.default is None
     assert origin_traceparent.server_default is None
+
+
+def test_progress_event_outbox_is_tenant_scoped_leased_and_append_only() -> None:
+    columns = ProgressEventOutbox.__table__.columns
+
+    assert set(columns.keys()) == {
+        "id",
+        "tenant_id",
+        "run_id",
+        "event_type",
+        "payload_json",
+        "occurred_at",
+        "available_at",
+        "attempt_count",
+        "lease_owner",
+        "lease_expires_at",
+        "published_at",
+        "last_error_code",
+        "created_at",
+    }
+    assert (
+        ("run_id", "tenant_id"),
+        ("evaluation_runs.id", "evaluation_runs.tenant_id"),
+    ) in foreign_key_specs(ProgressEventOutbox.__table__)
+    assert any(
+        "attempt_count >= 0" in expression
+        for expression in check_expressions(ProgressEventOutbox.__table__)
+    )
 
 
 def test_dataset_and_version_constraints_encode_identity_and_immutability() -> None:

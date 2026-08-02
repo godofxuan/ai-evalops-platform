@@ -14,7 +14,7 @@ from app.jobs.claiming import (
     validate_claim_request,
 )
 from app.jobs.lease import LeasePolicy
-from app.persistence.orm_models import EvaluationJob, EvaluationRun
+from app.persistence.orm_models import EvaluationJob, EvaluationRun, ProgressEventOutbox
 
 NOW = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
@@ -113,6 +113,15 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
 
     assert len(claims) == 1
     assert claims[0].origin_traceparent == ORIGIN_TRACEPARENT
+    events = [item for item in session.added if isinstance(item, ProgressEventOutbox)]
+    assert len(events) == 1
+    assert events[0].event_type == "job_progress"
+    assert events[0].payload_json == {
+        "job_id": str(JOB_ID),
+        "case_id": "case-1",
+        "attempt_number": 1,
+        "status": "running",
+    }
 
 
 @pytest.mark.parametrize(("worker_id", "limit"), [("", 1), ("worker-1", 0), ("worker-1", 101)])

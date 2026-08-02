@@ -9,7 +9,12 @@ from sqlalchemy.dialects import postgresql
 from app.domain.enums import JobStatus, RunStatus
 from app.jobs.reaper import SQLAlchemyJobReaper, build_expired_job_statement
 from app.jobs.retry_policy import RetryPolicy
-from app.persistence.orm_models import EvaluationJob, EvaluationRun, JobAttempt
+from app.persistence.orm_models import (
+    EvaluationJob,
+    EvaluationRun,
+    JobAttempt,
+    ProgressEventOutbox,
+)
 from app.runs.aggregation import RunAggregation
 
 NOW = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
@@ -150,3 +155,11 @@ async def test_reaper_returns_origin_traceparent_and_expired_attempt_identity(
     assert reaped[0].origin_traceparent == ORIGIN_TRACEPARENT
     assert reaped[0].attempt_id == ATTEMPT_ID
     assert reaped[0].attempt_number == 1
+    events = [item for item in session.added if isinstance(item, ProgressEventOutbox)]
+    assert len(events) == 1
+    assert events[0].event_type == "job_retried"
+    assert events[0].payload_json == {
+        "job_id": str(JOB_ID),
+        "status": "retry_wait",
+        "source": "reaper",
+    }
