@@ -4,7 +4,10 @@ from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.observability.durable import refresh_durable_job_gauges
+from app.observability.durable import (
+    refresh_durable_job_gauges,
+    refresh_durable_outbox_gauges,
+)
 from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 
@@ -21,11 +24,18 @@ async def get_metrics(request: Request) -> Response:
         request.app.state.session_factory,
     )
     if session_factory is not None:
+        now = datetime.now(UTC)
         with suppress(Exception):
             await refresh_durable_job_gauges(
                 session_factory=session_factory,
                 metrics=metrics,
-                now=datetime.now(UTC),
+                now=now,
+            )
+        with suppress(Exception):
+            await refresh_durable_outbox_gauges(
+                session_factory=session_factory,
+                metrics=metrics,
+                now=now,
             )
     return Response(
         content=metrics.render(),
