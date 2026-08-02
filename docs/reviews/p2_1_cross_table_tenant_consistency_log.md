@@ -391,3 +391,24 @@ lock check 首次使用 `uv lock --check` 失败，因为当前 PowerShell PATH 
 - 本机没有执行真实 PostgreSQL constraint test、migration round-trip、Docker image 或
   Compose；等待 GitHub Actions 后才能提升远端普通 CI 证据状态；
 - 普通 CI 通过也不等于正式 Gate 1、生产容量、灾难恢复或安全审计通过。
+
+## 9. 远端验证
+
+实现和初版文档推送到 head `87d85d0906ba3c42e2caf5185d5b034a6cd5f322` 后，
+[GitHub Actions Run #15](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30729735398)
+最终为 `completed / success`：
+
+- `quality-and-integration`：success；
+- `compose-smoke`：success；
+- 全量非 integration、format、lint、mypy、lock：success；
+- fresh database `alembic upgrade head`：success；
+- 新 `Integration - cross-table tenant consistency constraints`：success；
+- 所有既有 PostgreSQL/Redis integration：success；
+- 实际 `Migration - P2-1 downgrade and re-upgrade`：success；
+- application image build：success；
+- Compose build、migration、API/Worker/Reaper startup 与 readiness：success。
+
+查询过程中 run endpoint 已先返回 completed/success，而 jobs endpoint 短暂仍缓存 quality job
+为 in-progress；带 `Cache-Control: no-cache` 和 cache-busting 参数复查后，两个 job 都明确为
+`completed / success`。因此 P2-1 的远端普通 CI 合同可提升为 `VERIFIED`。这仍不改变正式
+500-case/32-arm Gate 1 的 `NOT_RUN`，也不证明 RLS、生产容量或灾难恢复。

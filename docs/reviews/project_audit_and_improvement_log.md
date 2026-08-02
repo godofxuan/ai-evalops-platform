@@ -572,7 +572,7 @@ Worker 结论。完整的逐步判断、RED→GREEN、问题与效果记录见�
 
 ## P2-1 更新：跨表 tenant 与 Job/Run 一致性
 
-状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`LOCAL_AND_REMOTE_CONTRACT_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 审计确认正常服务路径大多从 principal 派生 tenant，但旧数据库只用单列 FK，仍允许
 Dataset、Artifact、Run、API Key 与人工复核记录分别存在却来自不同 tenant，也允许 Case
@@ -588,3 +588,9 @@ Result/Review Task 的 Job 和 Run 不同源。新增 migration `20260802_0010`�
 4 个离线 migration 合同均通过；真实 PostgreSQL 测试本机明确 skipped，远端结果不能提前
 写成成功。完整适用性判断、RED/GREEN、63 字符 constraint 名问题、uv cache 问题和残余
 边界见 [`p2_1_cross_table_tenant_consistency_log.md`](p2_1_cross_table_tenant_consistency_log.md)。
+
+远端 head `87d85d0906ba3c42e2caf5185d5b034a6cd5f322` 的
+[GitHub Actions Run #15](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30729735398)
+最终为 success；两个 job、新 PostgreSQL constraint step、实际 migration downgrade/re-upgrade、
+全部既有 integration、image build 与 Compose readiness 都成功。该证据只提升普通 CI 合同，
+不改变正式 Gate 的 `NOT_RUN`。

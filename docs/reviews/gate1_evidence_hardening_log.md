@@ -2119,7 +2119,7 @@ Alembic downgrade；如果已有多 owner references，不能直接回退代码�
 ### 阶段判断与实现
 
 - 起始 SHA：`397c5ccffa8bc1521e71b421785067f7aeac6d4d`；
-- 状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`；
+- 状态：`LOCAL_AND_REMOTE_CONTRACT_VERIFIED / FORMAL_GATE_NOT_RUN`；
 - 没有给所有子表机械复制 tenant，只加固同一行已经保存多份归属/父链事实的关系；
 - 新增 `20260802_0010`，给 Dataset Version 回填 tenant，并用复合 FK 绑定
   Dataset/Artifact/Version/Run/API Key/Human Review；
@@ -2137,10 +2137,15 @@ Alembic downgrade；如果已有多 owner references，不能直接回退代码�
 | strict mypy | 116 source files | `VERIFIED` |
 | uv lock | 70 packages resolved | `VERIFIED` |
 | 新 PostgreSQL constraint test | 本机 1 skipped | `NOT_RUN_LOCAL` |
-| GitHub migration/integration/Compose | 尚未推送本次 head | `PENDING` |
+| GitHub Actions Run #15 | 两个 job、constraint integration、migration round-trip、image、Compose success | `VERIFIED` |
 | 正式 500-case/32-arm | 未运行 | `NOT_RUN` |
 
 完整逐步记录见
 [`p2_1_cross_table_tenant_consistency_log.md`](p2_1_cross_table_tenant_consistency_log.md)。普通
 CI 即使成功也只证明列出的 schema/integration/Compose 合同，不等于容量、RLS、生产安全
 或正式 Gate 通过。
+
+远端证据绑定 head `87d85d0906ba3c42e2caf5185d5b034a6cd5f322`：
+[GitHub Actions Run #15](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30729735398)
+为 `completed / success`，`quality-and-integration` 与 `compose-smoke` 均成功；新 constraint
+integration 和实际 `0010→0009→0010` 也明确执行成功。正式 Gate 继续 `NOT_RUN`。
