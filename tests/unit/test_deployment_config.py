@@ -104,3 +104,31 @@ def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
     command = matching_steps[0]["run"]
     assert "python3 scripts/verify_compose_hardening.py" in command
     assert "postgres redis api worker reaper" in command
+
+
+def test_outbox_alert_rules_cover_stalled_backlog_and_lease_loss() -> None:
+    rules_path = Path("deploy/prometheus/outbox-alerts.yml")
+    loaded = yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+    groups = loaded["groups"]
+    assert len(groups) == 1
+    assert groups[0]["name"] == "ai-evalops-outbox"
+    rules = {rule["alert"]: rule for rule in groups[0]["rules"]}
+
+    assert rules["AIEvalOpsOutboxDeliveryStalled"] == {
+        "alert": "AIEvalOpsOutboxDeliveryStalled",
+        "expr": "outbox_pending > 0 and outbox_oldest_pending_age_seconds > 300",
+        "for": "10m",
+        "labels": {"severity": "warning"},
+        "annotations": {
+            "summary": "AI EvalOps Outbox delivery is stalled",
+            "description": "The oldest unpublished progress event has remained pending.",
+        },
+    }
+    assert rules["AIEvalOpsOutboxLeaseLoss"]["expr"] == (
+        "increase(outbox_lease_lost_total[10m]) > 0"
+    )
+    assert rules["AIEvalOpsOutboxLeaseLoss"]["for"] == "5m"
+    serialized = rules_path.read_text(encoding="utf-8")
+    assert "tenant_id" not in serialized
+    assert "run_id" not in serialized
+    assert "event_id" not in serialized
