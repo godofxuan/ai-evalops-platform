@@ -58,3 +58,17 @@ def test_sse_connection_gauge_returns_to_zero_after_disconnect() -> None:
     metrics.sse_disconnected()
 
     assert "sse_connections 0.0" in metrics.render().decode("utf-8")
+
+
+def test_outbox_backlog_gauges_are_global_and_low_cardinality() -> None:
+    metrics = PlatformMetrics()
+
+    metrics.set_outbox_pending(3)
+    metrics.set_outbox_oldest_pending_age(42.5)
+
+    rendered = metrics.render().decode("utf-8")
+    assert "outbox_pending 3.0" in rendered
+    assert "outbox_oldest_pending_age_seconds 42.5" in rendered
+    assert "tenant_id=" not in rendered
+    assert "run_id=" not in rendered
+    assert "event_id=" not in rendered
