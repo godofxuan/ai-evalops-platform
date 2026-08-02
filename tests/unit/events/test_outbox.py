@@ -410,6 +410,49 @@ async def test_cleanup_loop_counts_bounded_batch_and_stops_cooperatively() -> No
     assert "outbox_cleanup_deleted_total 3.0" in metrics.render().decode("utf-8")
 
 
+async def test_cleanup_loop_logs_only_error_type_then_recovers() -> None:
+    stop_requested = asyncio.Event()
+
+    class FlappingMaintenance:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def cleanup_once(self, *, limit: int) -> int:
+            assert limit == 5
+            self.calls += 1
+            if self.calls == 1:
+                raise ConnectionError("database-secret-must-not-be-logged")
+            stop_requested.set()
+            return 0
+
+    class RecordingLogger:
+        def __init__(self) -> None:
+            self.errors: list[tuple[str, dict[str, object]]] = []
+
+        def error(self, event: str, **values: object) -> None:
+            self.errors.append((event, values))
+
+        def info(self, event: str, **values: object) -> None:
+            del event, values
+
+    maintenance = FlappingMaintenance()
+    logger = RecordingLogger()
+
+    await run_outbox_cleanup_loop(
+        maintenance,
+        stop_requested=stop_requested,
+        interval_seconds=0.001,
+        batch_size=5,
+        metrics=PlatformMetrics(),
+        logger=logger,  # type: ignore[arg-type]
+    )
+
+    assert maintenance.calls == 2
+    assert logger.errors == [
+        ("outbox_cleanup_iteration_failed", {"error_type": "ConnectionError"})
+    ]
+
+
 async def test_dispatch_loop_logs_only_error_type_then_recovers() -> None:
     stop_requested = asyncio.Event()
 
