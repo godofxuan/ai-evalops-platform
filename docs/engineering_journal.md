@@ -980,3 +980,46 @@ Python 与配置
 仍未解决 delivered-row GC、pending backlog/age metrics、dead-letter、客户端 offset/history、
 多区域/长时间 soak 和生产容量。完整记录见
 `docs/reviews/p2_7_transactional_outbox_log.md`。
+
+## 2026-08-03 — P2-8：Outbox retention 与运维可观测性
+
+### 选择与边界
+
+- P2-7 已解决状态/通知意图双写，但 delivered 行无限增长、pending backlog 不可见；因此先收口
+  retention/metrics，而不擅自改变 dead-letter/max-attempts 产品合同。
+- 正式 500-case/32-arm、强杀、破坏性故障和 soak 继续 `NOT_RUN`。
+- cleanup 只删除 `published_at IS NOT NULL` 且早于 cutoff 的行；pending、retry、leased 和业务
+  状态不进入候选。
+- API 内独立 maintenance task 使用有界 CTE、`published_at,id` 排序、`SKIP LOCKED` 和
+  `DELETE RETURNING`；默认保留 7 天、每 60 秒最多 500 行。
+- `0014` 新增 delivered partial index；downgrade 只删索引，不能恢复已清理的 delivered intent。
+
+### RED/GREEN 与遇到的问题
+
+- 19 组纵向 RED 分别证明 cleanup SQL/类/loop、durable query/Gauge/HTTP refresh、三个 Counter、
+  告警文件、Settings、Compose 转发、migration upgrade/downgrade、ORM metadata、lifespan 和
+  dispatcher metrics 接线缺失；对应 19 个最小 GREEN，合计 39 个提交含最终 integration 合同。
+- HTTP RED 在数据库 pending=3 时看到 `/metrics` 默认 `0.0`，防止“定义 Gauge 但没有 durable
+  refresh”再次冒充观察到零。
+- Compose RED 在第一个 Outbox 环境变量得到 KeyError，证明 `.env.example` 的 P2-7 参数没有
+  实际传进容器；修复后九个 dispatch/cleanup 参数都可覆盖。
+- 一次 `ruff format --check` 正确失败，但 PowerShell 对原生程序非零退出没有自动停止后续 commit；
+  GREEN 修正格式，后续每个命令显式检查 `$LASTEXITCODE`。该过程未隐藏或改写。
+- 本机真实 integration 仍 `1 skipped`；GitHub Actions #31 才是 PostgreSQL/Redis 实证。
+
+### 证据与限制
+
+| 检查 | 结果 |
+|---|---|
+| 本地非 integration | 504 passed，9 deselected，248.23 秒 |
+| 本地真实 Outbox integration | 1 skipped |
+| lock / Ruff / lint / strict mypy | 70 packages / 260 files / passed / 119 sources |
+| Alembic | 唯一 head `20260803_0014`；offline downgrade/upgrade passed |
+| GitHub Actions #31 | quality-and-integration + compose-smoke success |
+| 真实 retention | 两个 cleanup 各删一条旧 delivered；近期 delivered/旧 pending 保留 |
+| 告警 | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
+| 正式 500-case/32-arm | `NOT_RUN` |
+
+仍未解决 dead-letter/replay 权限、Gauge freshness、delivered overdue Gauge、真实告警链、普通
+`CREATE INDEX` 在大型表上的锁影响、cleanup throughput、归档/合规保留、多区域/soak 和生产容量。
+完整记录见 `docs/reviews/p2_8_outbox_operations_log.md`。

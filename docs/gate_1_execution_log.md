@@ -673,3 +673,36 @@ RED/GREEN、#27 失败锁图、回滚顺序与 retention/backlog 等残余风险
 本阶段没有创建/修改正式 `docs/results/`，没有运行 500-case/32-arm，没有 throughput、p95/p99、
 容量 knee、资源曲线或 adoption 结论。source/migration head 已变化，旧 prepared bundle 只能保留
 历史只读，正式执行前必须从最终干净提交重新 prepare。
+
+## 16. P2-8 Outbox retention 与运维可观测性
+
+状态：`LOCAL_AND_REMOTE_VERIFIED / ALERT_RUNTIME_NOT_RUN / FORMAL_GATE_NOT_RUN`。
+
+P2-7 后 delivered Outbox 行没有生命周期，pending 只能从日志推断。P2-8 用 19 组纵向
+RED→GREEN 冻结：
+
+- 只选择早于 retention cutoff 的 `published_at IS NOT NULL` 行；
+- CTE 按 `published_at,id` 排序、限定 batch、`FOR UPDATE SKIP LOCKED`，同事务 DELETE RETURNING；
+- API 独立 cleanup task 与 dispatcher 共享 stop、不共享 cadence；单轮异常只记录类型并恢复；
+- PostgreSQL durable refresh 输出无 label 的 pending 与 oldest-created age；
+- retry、lease-lost、cleanup 删除量使用每 API 进程的无 ID Counter；
+- `0014` 与 ORM metadata 新增 `(published_at,id) WHERE published_at IS NOT NULL`；
+- `.env.example` 与 Compose 显式转发六个 dispatcher、三个 cleanup 参数；
+- Prometheus 模板覆盖持续 oldest backlog 和 lease loss，但不声称已部署。
+
+真实 integration 建立两条 8 天前 delivered、一条近期 delivered 和一条 8 天 pending；两个
+maintenance 并发且 batch=1，合计只删除两条旧 delivered，近期 delivered/pending 保留，durable
+Gauge 为 pending=1、oldest=691200 秒。绑定 head
+`69cba416ed7c8254e4bc0eb4247568652c0f78e4` 的
+[GitHub Actions #31](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759184986)
+两个 job success；非 integration、全部真实服务 integration、P2 migration round-trip、image、
+完整 Compose/readiness/hardening 均实际执行。
+
+本地最终 `504 passed, 9 deselected in 248.23s`；70-package lock、260-file Ruff format、lint 与
+119-source strict mypy 通过；本地真实 integration `1 skipped`。详细 RED 失败、PowerShell
+`$LASTEXITCODE` 问题、方案比较、部署/回滚和残余风险见
+[`reviews/p2_8_outbox_operations_log.md`](reviews/p2_8_outbox_operations_log.md)。
+
+本阶段没有创建或修改正式 `docs/results/`。source、Compose 和 migration head 已变化，旧
+prepared bundle 只能历史只读，正式 Gate 前必须从最终干净提交重新 prepare。没有吞吐、p95/p99、
+容量 knee、资源曲线或 adoption 结论。

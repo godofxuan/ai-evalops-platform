@@ -4,7 +4,7 @@
 flowchart LR
     C["Client / CI / Experiment scripts"]
     API["FastAPI API<br/>auth · idempotency · query"]
-    RELAY["API Outbox relay<br/>lease · publish · fenced ack"]
+    RELAY["API Outbox runtime<br/>relay · fenced ack · retention cleanup"]
     PG[("PostgreSQL<br/>durable state + outbox")]
     REDIS[("Redis Pub/Sub<br/>ephemeral progress")]
     ART["Content-addressed<br/>local artifacts"]
@@ -26,6 +26,8 @@ flowchart LR
     RELAY -->|"claim pending SKIP LOCKED"| PG
     RELAY -->|"Redis publish"| REDIS
     RELAY -->|"fenced ack / retry"| PG
+    RELAY -->|"bounded retained delivered cleanup"| PG
+    API -->|"durable backlog metrics snapshot"| PG
 
     PROM -->|"GET /metrics"| API
     PROM -->|"each replica :9101"| W
@@ -35,9 +37,9 @@ flowchart LR
     R -.->|"OTLP/HTTP spans"| OTEL
 ```
 
-API 与 Outbox relay 是同一 API 进程中的不同职责，不是额外 Compose 服务。PostgreSQL 是最终
-状态和待发布意图的持久边界；Redis 仍是可丢失的在线通知层。Prometheus 和 OpenTelemetry
-不能覆盖 PostgreSQL 中的最终状态。
+API、Outbox relay 与 retention cleanup 是同一 API 进程中的不同职责，不是额外 Compose 服务。
+dispatcher 与 cleanup 使用独立 cadence 和 task；PostgreSQL 是最终状态和待发布意图的持久边界；
+Redis 仍是可丢失的在线通知层。Prometheus 和 OpenTelemetry 不能覆盖 PostgreSQL 中的最终状态。
 
 ## Job 生命周期
 
@@ -76,6 +78,10 @@ sequenceDiagram
 Redis 网络调用发生在短认领事务提交之后，不持有 PostgreSQL claim lock。发布失败只影响实时
 通知并留下 pending row，不能回滚已提交的 CaseResult。Redis 已接受但数据库确认前崩溃时，
 租约过期后会以同一 event ID 重放，所以是 at-least-once，不是 exactly-once。
+
+独立 cleanup task 只选择超过 retention 的 `published_at IS NOT NULL` 行，按 `published_at,id`
+稳定排序、限定 batch 并 `SKIP LOCKED` 删除。pending 行不参与；migration downgrade 只能移除
+查询索引，不能恢复 maintenance 已经删除的 delivered intent。
 
 ## 崩溃恢复
 

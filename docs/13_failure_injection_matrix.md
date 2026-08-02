@@ -24,6 +24,7 @@
 | SSE 客户端断开 | 提前关闭 async generator | subscriber 关闭；连接 Gauge 回零 | `PASS-local` |
 | SSE Redis 断开 | subscriber 抛 ConnectionError | 先有 PG snapshot；随后 PG polling；Run 不失败 | `PASS-local` |
 | Job 成功但发布失败 | Outbox publisher 返回 false/抛异常 | CaseResult/Job 与通知意图同事务保留；relay 后续重试 | local contract + GitHub Actions #28 integration `PASS` |
+| Outbox cleanup 数据库单轮失败 | maintenance fake 首轮 ConnectionError | 只记录异常类型；task 不退出；下一轮继续 | `CONTRACT-pass` |
 | running 中途取消 | heartbeat 观察 cancellation | cooperative stop；旧 lease 不能继续写 | `PASS-local` unit；真实 `NOT-RUN` |
 
 ## 并发矩阵
@@ -35,6 +36,7 @@
 | 2 Reaper 回收 99 个剩余 lease | 每个 Job 只被一个 Reaper 回收；先按序锁 Run、后插 Outbox | GitHub Actions #28 真实 PG passed；本机 skipped |
 | 2 Outbox relay 竞争同一事件 | 合计一个 claim/publish；`SKIP LOCKED` 不重复持有 | GitHub Actions #28 真实 PG/Redis passed；本机 skipped |
 | publish 成功、ack 前崩溃 | lease 过期后以相同 event ID 重放并 fenced ack | GitHub Actions #28 真实 PG/Redis passed；明确 at-least-once |
+| 2 Outbox cleanup、batch=1 | 两条过期 delivered 各删一次；近期 delivered 与旧 pending 保留 | GitHub Actions #31 真实 PG passed；本机 skipped |
 | stale heartbeat | owner/version 不匹配都拒绝 | 真实 PG 测试存在；本机 skipped |
 | stale result writer | 第二次/旧 lease commit 拒绝；CaseResult 数为 1 | 真实 PG 测试存在；本机 skipped |
 | cancel/result race | 最终状态必须是显式状态机允许的终态，只产生一个 CaseResult | 真实 PG 并发合同已编码；本机 skipped |

@@ -493,6 +493,8 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 [P2-6 Worker 集群资源记录](docs/reviews/p2_6_worker_cluster_resources_log.md)。
 状态/通知双写窗口、Outbox migration、relay 租约与退避、真实 CI 死锁及锁顺序修复见
 [P2-7 事务型 Outbox 记录](docs/reviews/p2_7_transactional_outbox_log.md)。
+delivered retention、durable backlog 指标、告警模板、Compose 转发与真实并发 cleanup 见
+[P2-8 Outbox 运维记录](docs/reviews/p2_8_outbox_operations_log.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
@@ -546,6 +548,19 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 | GitHub Actions #29 | 最终 P2-7 head `5092f49` 两个 job success；tracing 与文档也纳入验证 |
 | 正式 500-case/32-arm | NOT_RUN |
 
+2026-08-03 P2-8 Outbox retention 与运维可观测性验证结果：
+
+| 检查 | 结果 |
+|---|---|
+| lock / format / lint | 70 packages；260 Python files；All checks passed |
+| strict mypy | app + scripts + integration/concurrency，119 source files |
+| 最终 pytest 非集成 | 504 passed，9 deselected |
+| 本机 Outbox integration | 1 skipped；本机未启用真实 PostgreSQL/Redis |
+| Alembic | 唯一 head `20260803_0014`；offline 与远端 downgrade/re-upgrade 通过 |
+| GitHub Actions #31 | head `69cba41` 两个 job success；真实 retention/metrics/migration/Compose 通过 |
+| Prometheus alert rules | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
+| 正式 500-case/32-arm | NOT_RUN |
+
 ## 当前限制
 
 - tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
@@ -568,8 +583,9 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 - 任意 JSONB metric 排序没有表达式索引，尚无大 Run query plan/容量证据；
 - artifact 支持已知 SHA 的无引用清理，但尚无定时全盘扫描/对象存储生命周期 GC；
 - SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
-- Outbox 是 at-least-once，同一 event ID 可能重放；尚无 delivered-row retention、pending
-  backlog/oldest-age 指标、dead-letter 或客户端消费 offset；
+- Outbox 是 at-least-once，同一 event ID 可能重放；已有 delivered-row retention、pending
+  backlog/oldest-age 指标与告警模板，但尚无 dead-letter、客户端消费 offset/history、真实告警链
+  或大型表在线建索引/清理容量证据；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
 ## 面试展示路径（Phase 9）
@@ -608,7 +624,9 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
     继续一个跨排队/retry 的超大 parent-child trace。
 31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
 32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
-33. 明确区分本机 488 passed、远端真实服务/Compose 合同通过和 NOT-RUN 容量实验，拒绝把
+33. 明确区分本机 504 passed、远端真实服务/Compose 合同通过和 NOT-RUN 容量实验，拒绝把
     合同当成性能实测结果。
 34. 展示 #27 外键 key-share 锁升级死锁、先锁 Run 后插 Outbox 的修复，以及为什么交付仍是
     at-least-once 而不是 exactly-once。
+35. 展示 retention CTE 为什么只删除过期已发布行、如何用 `SKIP LOCKED` 并发维护，以及为什么
+    migration downgrade 不能恢复已按策略删除的 delivered intent。

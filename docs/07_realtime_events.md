@@ -85,6 +85,17 @@ readiness 仍把 Redis 不可用报告为 503，因为完整实时能力不可�
 不依赖 readiness 或 Redis 发布成功。发布失败时 Outbox row 保持 pending；API relay/Redis
 恢复后重新尝试。这是“服务完整可用”和“领域状态仍能正确推进”两个不同合同。
 
+## 保留策略与运维观测
+
+API 内独立 cleanup task 默认每 60 秒删除一批最多 500 条“已确认发布且 `published_at` 早于
+7 天 cutoff”的行。候选查询按 `published_at,id` 排序并使用 `FOR UPDATE SKIP LOCKED`；pending、
+retry 和尚未 fenced acknowledgement 的行不会进入删除集合。多个 API 副本可以并发维护。
+
+`/metrics` 从 PostgreSQL 刷新 `outbox_pending` 和 `outbox_oldest_pending_age_seconds`；后者从
+最早 pending 的 `created_at` 计算，使长期 retry 不会被未来 `available_at` 隐藏。retry、lease
+loss 和实际 cleanup 删除量分别有全局 Counter。`deploy/prometheus/outbox-alerts.yml` 是告警规则
+模板，不代表真实 Prometheus/Alertmanager 已部署或验证。
+
 ## 重连与重复
 
 当前不承诺客户端历史回放，也不使用 `Last-Event-ID` 恢复 Pub/Sub 历史。客户端应把每次连接
@@ -112,10 +123,14 @@ Outbox relay 是 at-least-once：Redis 已接受事件但进程在 `mark_publish
 - 多 relay `SKIP LOCKED` 认领、owner fencing、超时和有界退避；
 - Redis publish 异常不让已完成 Worker 路径失败，并保留 pending row；
 - publish 成功但 ack 丢失时以相同 event ID 重放；
+- 两个 maintenance 并发、每轮一条时只删除两条过期 delivered 行；近期 delivered 和旧 pending
+  保留；
+- durable pending=1 与 oldest age=8 天的真实 PostgreSQL Gauge 快照；
 - SSE 鉴权 Principal 传递和响应 headers。
 
 真实 PostgreSQL/Redis integration 覆盖事务回滚、跨 tenant FK、双 relay 认领、失败重试和
-ack 丢失重放。本机没有启用真实服务，因此结果是 skipped；GitHub Actions #28 与最终
-#29 均已实际通过。
+ack 丢失重放；P2-8 还覆盖并发 retention 与 durable Gauge。本机没有启用真实服务，因此结果
+是 skipped；GitHub Actions #28、#29 和 #31 已实际通过对应合同。
 完整过程和残余风险见
-[`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md)。
+[`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md) 与
+[`reviews/p2_8_outbox_operations_log.md`](reviews/p2_8_outbox_operations_log.md)。

@@ -780,3 +780,27 @@ snapshot 恢复，Pub/Sub 不是历史日志。
 最终本地全量 `488 passed, 9 deselected`，Ruff/lint、119-source strict mypy、70-package lock
 通过；真实服务本机 skipped。正式 Gate、容量、exactly-once、客户端历史回放和生产认证均未
 宣称完成。
+
+## P2-8 更新：Outbox retention 与运维可观测性
+
+状态：`LOCAL_AND_REMOTE_VERIFIED / ALERT_RUNTIME_NOT_RUN / FORMAL_GATE_NOT_RUN`。
+
+审计确认 P2-7 delivered 行永久保留，pending/oldest age、retry/lease-lost/cleanup 指标和告警规则
+均不存在；Compose 也未转发已记录在 `.env.example` 的 dispatcher 参数。P2-8 采用 API 内独立
+maintenance，而不是在 `/metrics` 产生删除副作用、耦合 dispatcher cadence 或增加独立服务。
+
+实现只删除超过 retention 的已发布行：候选 CTE 稳定排序、限定 batch、`SKIP LOCKED`，再
+`DELETE RETURNING`；pending 和业务状态不进入候选。新 `0014` partial index 与 ORM metadata
+一致，downgrade 只删索引。API `/metrics` 从 PostgreSQL 刷新全局 pending/oldest age，dispatcher
+与 cleanup 写无 ID Counter；九个 Outbox 参数进入 Compose；两条 Prometheus rules 作为未部署模板。
+
+真实 PostgreSQL integration 用两个 cleanup、batch=1 删除两条 8 天 delivered，同时保留近期
+delivered 与旧 pending，并得到 pending=1、oldest=691200 秒。绑定 head `69cba41` 的
+[GitHub Actions #31](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759184986)
+两个 job success，覆盖全部 integration、migration、image 和 Compose。本地 `504 passed,
+9 deselected`，260-file Ruff、119-source mypy、70-package lock 全通过；本地 integration skipped。
+
+一次 RED 提交前 Ruff format 非零，但 PowerShell 未自动停止后续原生命令；下一 GREEN 修正，
+之后显式检查每个 `$LASTEXITCODE`。告警真实评估、dead-letter/replay 权限、Gauge freshness、大型表
+在线建索引、cleanup 容量、归档/合规、soak 和正式 Gate 仍未完成。详细记录见
+[`p2_8_outbox_operations_log.md`](p2_8_outbox_operations_log.md)。

@@ -192,10 +192,10 @@ Run ID。
 
 ### 32. 当前最值得继续做什么？
 
-transactional outbox 已完成并由真实 PostgreSQL/Redis CI 验证。下一步先补 delivered-row retention、
-pending backlog/oldest-age 指标和告警；正式容量工作仍必须在单独授权下，用已验证的加固 Compose
-运行四组扩容实验，保存 PostgreSQL lock wait、Worker 集群资源、OOM/throttling 和所有失败结果，
-再决定 resource limit、索引、batch claim、连接池或 Worker 数，而不是先猜优化。
+transactional outbox retention、pending/oldest-age 指标和告警模板已完成并由真实 PostgreSQL CI
+验证。下一步先由 operator 冻结通知 SLO、dead-letter/replay 权限、真实告警阈值和 7 天 retention
+是否符合业务/合规；正式容量工作仍必须单独授权，用加固 Compose 运行四组扩容实验并保存全部
+负面结果，再决定 resource limit、索引、batch claim、连接池或 Worker 数，而不是先猜优化。
 
 ### 33. 自动 quality gate 为什么没有自动 adoption？
 
@@ -218,3 +218,10 @@ FAILED。
 重放，否则会静默丢通知。因此正确合同是以稳定 event ID 提供 at-least-once，消费者可去重；
 不能承诺 exactly-once。新增外键还会改变锁图，所以 Reaper 必须先按固定顺序锁 Run、再插
 Outbox，不能只依赖 `SKIP LOCKED` 就假设没有死锁。
+
+### 36. Outbox retention 为什么不只是写一个定时 DELETE？
+
+必须一起定义 eligibility、cutoff、批量上限、稳定排序、并发锁、索引、指标和 rollback。当前只删
+超过 retention 的已发布行，pending 不进入候选；CTE 用 `SKIP LOCKED` 让多 API 副本处理不同批次，
+`RETURNING` 提供实际删除数。migration downgrade 能删索引，但不能恢复 cleanup 已经删除的
+delivered intent，所以保留期是不可逆的数据生命周期合同，不只是性能优化。

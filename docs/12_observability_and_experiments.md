@@ -113,9 +113,15 @@ API、Worker、Reaper 是不同操作系统进程，Python 全局内存不共享
 | `case_duration` | Histogram | Worker | Target + Evaluator 秒数 |
 | `sse_connections` | Gauge | SSE generator | 当前打开的 SSE iterator |
 | `redis_publish_failures_total` | Counter | API Outbox Redis publisher | relay 发布失败；Outbox 保持 pending 并重试 |
+| `outbox_pending` | Gauge | API durable refresh | PostgreSQL 中全部未发布通知意图 |
+| `outbox_oldest_pending_age_seconds` | Gauge | API durable refresh | 最早 pending `created_at` 到 scrape 的秒数 |
+| `outbox_retry_scheduled_total` | Counter | API Outbox dispatcher | 成功安排的 durable publish retry |
+| `outbox_lease_lost_total` | Counter | API Outbox dispatcher | ack/reschedule 未通过 owner/lease fencing |
+| `outbox_cleanup_deleted_total` | Counter | API Outbox cleanup | 超过 retention 且已发布的实际删除行数 |
 
-Prometheus Python Client 会为 Counter 暴露 `_total` 后缀，因此逻辑名称
-`redis_publish_failures` 的文本格式名称是 `redis_publish_failures_total`。
+Prometheus Python Client 会为 Counter 暴露 `_total` 后缀，因此代码中的逻辑名称会以
+`redis_publish_failures_total`、`outbox_retry_scheduled_total`、`outbox_lease_lost_total` 和
+`outbox_cleanup_deleted_total` 出现在文本格式中。
 
 ## 4. 日志合同
 
@@ -150,6 +156,9 @@ EVALOPS_METRICS_ENABLED=true
 EVALOPS_METRICS_HOST=0.0.0.0
 EVALOPS_WORKER_METRICS_PORT=9101
 EVALOPS_REAPER_METRICS_PORT=9102
+EVALOPS_OUTBOX_RETENTION_SECONDS=604800
+EVALOPS_OUTBOX_CLEANUP_INTERVAL_SECONDS=60
+EVALOPS_OUTBOX_CLEANUP_BATCH_SIZE=500
 EVALOPS_OTEL_ENABLED=true
 EVALOPS_OTEL_SERVICE_NAME=ai-evalops-platform
 EVALOPS_OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318/v1/traces
@@ -166,6 +175,10 @@ curl http://127.0.0.1:8000/metrics
 ```
 
 Worker/Reaper 端口只在 Compose 网络中 `expose`，默认不发布到宿主机。
+
+告警模板位于 `deploy/prometheus/outbox-alerts.yml`。它覆盖持续 backlog age 和 lease loss，规则
+只有 `severity` 有界 label。当前 Compose 没有捆绑 Prometheus/Alertmanager，因此文件解析和表达式
+合同是 `CONTRACT_VERIFIED`，真实 rule evaluation、通知路由和 on-call 演练是 `NOT_RUN`。
 
 ## 6. 可复现实验入口
 
@@ -238,6 +251,9 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 - Worker/Reaper linked root 和内部业务 span 父子关系有 in-memory exporter 自动化测试；
 - SSE 关闭会归零连接 Gauge 并关闭底层 subscriber；
 - Redis 第一次失败、恢复后第二次发布可继续；
+- Outbox pending/oldest-age 从 PostgreSQL 刷新，不把未刷新默认值冒充 durable 零；
+- retry、lease-lost 和 retention cleanup 使用无 ID label 的聚合 Counter；
+- 两个 cleanup 实例在真实 PostgreSQL 中保留 pending/近期 delivered 并删除过期 delivered；
 - 数据库单次迭代异常被记录后 Worker loop 可继续下一轮；
 - 20 并发幂等和 100 Job/10 Worker/2 Reaper 的真实 PostgreSQL 测试合同已编码。
 - Worker 集群 CPU/RSS 按同一快照聚合、Compose 身份绑定和缺失/重复 fail-closed 语义已有
@@ -247,7 +263,7 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 
 - 本机没有 Docker/PostgreSQL/Redis，真实并发和容量结果未执行；
 - 没有 Collector/trace backend，无法证明 OTLP 网络导出和后端查询；
-- 没有 Prometheus server，无法证明多副本 service discovery 和告警规则；
+- 没有 Prometheus server，无法证明多副本 service discovery、规则真实评估和 Alertmanager 路由；
 - API 与 Worker/Reaper 按设计不是同一个 trace；没有真实 backend 证据证明 Span Link 在目标
   UI、采样和保留策略下可查询，历史 NULL carrier 也不会被反向补齐；
 - 没有生产流量、长时间 soak test、DB lock wait 和资源上限数据；
