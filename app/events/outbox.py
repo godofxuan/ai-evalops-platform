@@ -7,8 +7,9 @@ from typing import Protocol
 from uuid import UUID
 
 from pydantic import JsonValue
-from sqlalchemy import Select, or_, select, update
+from sqlalchemy import Select, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.dml import ReturningDelete
 
 from app.core.clock import Clock, SystemClock
 from app.core.logging import get_logger
@@ -79,6 +80,34 @@ def build_claim_outbox_statement(
         )
         .limit(limit)
         .with_for_update(of=ProgressEventOutbox, skip_locked=True)
+    )
+
+
+def build_cleanup_outbox_statement(
+    *,
+    published_before: datetime,
+    limit: int,
+) -> ReturningDelete[tuple[UUID]]:
+    if not 1 <= limit <= 10_000:
+        raise ValueError("outbox cleanup limit must be between 1 and 10000")
+    candidates = (
+        select(ProgressEventOutbox.id)
+        .where(
+            ProgressEventOutbox.published_at.is_not(None),
+            ProgressEventOutbox.published_at < published_before,
+        )
+        .order_by(
+            ProgressEventOutbox.published_at.asc(),
+            ProgressEventOutbox.id.asc(),
+        )
+        .limit(limit)
+        .with_for_update(of=ProgressEventOutbox, skip_locked=True)
+        .cte("outbox_cleanup_candidates")
+    )
+    return (
+        delete(ProgressEventOutbox)
+        .where(ProgressEventOutbox.id.in_(select(candidates.c.id)))
+        .returning(ProgressEventOutbox.id)
     )
 
 
