@@ -799,6 +799,9 @@ delivered 与旧 pending，并得到 pending=1、oldest=691200 秒。绑定 head
 [GitHub Actions #31](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759184986)
 两个 job success，覆盖全部 integration、migration、image 和 Compose。本地 `504 passed,
 9 deselected`，260-file Ruff、119-source mypy、70-package lock 全通过；本地 integration skipped。
+代码与首版证据文档 head `5b374d2` 又由
+[GitHub Actions #32](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759680786)
+完成两个 job，证明记录阶段没有破坏同一套验证链。
 
 一次 RED 提交前 Ruff format 非零，但 PowerShell 未自动停止后续原生命令；下一 GREEN 修正，
 之后显式检查每个 `$LASTEXITCODE`。告警真实评估、dead-letter/replay 权限、Gauge freshness、大型表

@@ -557,7 +557,8 @@ delivered retention、durable backlog 指标、告警模板、Compose 转发与�
 | 最终 pytest 非集成 | 504 passed，9 deselected |
 | 本机 Outbox integration | 1 skipped；本机未启用真实 PostgreSQL/Redis |
 | Alembic | 唯一 head `20260803_0014`；offline 与远端 downgrade/re-upgrade 通过 |
-| GitHub Actions #31 | head `69cba41` 两个 job success；真实 retention/metrics/migration/Compose 通过 |
+| GitHub Actions #31 | 实现 head `69cba41` 两个 job success；真实 retention/metrics/migration/Compose 通过 |
+| GitHub Actions #32 | 代码与首版证据文档 head `5b374d2` 两个 job success；确认文档提交未破坏同一完整流水线 |
 | Prometheus alert rules | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
 | 正式 500-case/32-arm | NOT_RUN |
 

@@ -7,11 +7,14 @@
 - 起始分支：`codex/gate1-evidence-hardening`。
 - 起始提交：`762bcf9aa61d4859b5564da022b264ece782c6a1`。
 - 首轮实现/真实服务验证提交：`69cba416ed7c8254e4bc0eb4247568652c0f78e4`。
+- 代码与首版证据文档验证提交：`5b374d22fd9fdc48d93b14103b405b31dd0dd3bb`。
 - 数据库 migration：`20260803_0014_outbox_retention_index`，父版本
   `20260802_0013_transactional_outbox`。
 - GitHub Actions：
   [Run #31](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759184986)，
-  两个 job 均为 `success`。
+  绑定实现 head；
+  [Run #32](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759680786)，
+  绑定代码与首版证据文档 head。两次运行的两个 job 均为 `success`。
 - 正式 500-case/32-arm Gate：`NOT_RUN`。本阶段没有生成或修改正式实验结果、吞吐、p95/p99、
   容量拐点或 Worker adoption 结论。
 - 最终结论：已发布且超过保留期的 Outbox 行现在可由 API 内独立 maintenance task 以有界
@@ -322,6 +325,7 @@ upgrade 和 downgrade 分开做 RED/GREEN，是为了明确证明回滚不是空
 | 提交 | 类型 | 结果 |
 |---|---|---|
 | `69cba41` | integration contract | 本机 `1 skipped`；Ruff/mypy passed；GitHub Actions #31 真实执行成功 |
+| `5b374d2` | code + evidence docs | GitHub Actions #32 两个 job success，首版证据文档已进入远端验证头 |
 
 真实 integration 在原 Outbox 场景后增加：
 
@@ -370,7 +374,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 本机 `tests/integration/test_transactional_outbox.py` 输出 `1 skipped`，原因是没有设置
 `EVALOPS_RUN_INTEGRATION=1` 和 migrated PostgreSQL/Redis。它被记录为 `NOT_RUN_LOCAL`，没有写成
-PASS。真实结果来自绑定准确 head 的 GitHub Actions #31。
+PASS。实现 head 的真实结果来自 GitHub Actions #31，代码与首版证据文档 head 又由 #32 验证。
 
 ### 8.3 Compose 参数转发缺失
 
@@ -400,7 +404,8 @@ image 和 Compose 均成功。本阶段不能虚构一个 CI 故障；有价值�
 | 本地非 integration 全量 | 504 passed, 9 deselected in 248.23s | `VERIFIED` |
 | 本地真实 Outbox integration | 1 skipped | `NOT_RUN_LOCAL` |
 | Alembic | 唯一 head `20260803_0014`；offline upgrade/downgrade passed | `VERIFIED` |
-| GitHub Actions #31 | 两个 job success | `VERIFIED_REMOTE` |
+| GitHub Actions #31 | 实现 head 两个 job success | `VERIFIED_REMOTE` |
+| GitHub Actions #32 | 代码与首版证据文档 head 两个 job success | `VERIFIED_REMOTE` |
 | Prometheus rule YAML | parse/contract passed | `CONTRACT_VERIFIED` |
 | 真实 Prometheus/Alertmanager rule evaluation | 未部署、未触发 | `NOT_RUN` |
 | 正式 500-case/32-arm/soak | 未授权、未运行 | `NOT_RUN` |
@@ -416,6 +421,11 @@ image 和 Compose 均成功。本阶段不能虚构一个 CI 故障；有价值�
 - P2 downgrade/re-upgrade；
 - application image；
 - 完整 Compose topology、迁移、readiness 和 hardening。
+
+[GitHub Actions #32](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759680786)
+绑定 head `5b374d22fd9fdc48d93b14103b405b31dd0dd3bb`，同样由
+`quality-and-integration` 与 `compose-smoke` 两个 job 成功完成。它验证的是代码、CI 步骤命名和
+首版 P2-8 证据文档共同存在时，完整流水线仍保持通过。
 
 ## 10. Migration 与部署顺序
 

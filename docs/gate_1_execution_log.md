@@ -696,7 +696,10 @@ Gauge 为 pending=1、oldest=691200 秒。绑定 head
 `69cba416ed7c8254e4bc0eb4247568652c0f78e4` 的
 [GitHub Actions #31](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759184986)
 两个 job success；非 integration、全部真实服务 integration、P2 migration round-trip、image、
-完整 Compose/readiness/hardening 均实际执行。
+完整 Compose/readiness/hardening 均实际执行。随后绑定代码与首版证据文档 head
+`5b374d22fd9fdc48d93b14103b405b31dd0dd3bb` 的
+[GitHub Actions #32](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30759680786)
+也由 `quality-and-integration` 与 `compose-smoke` 两个 job 成功完成，确认文档收口没有破坏流水线。
 
 本地最终 `504 passed, 9 deselected in 248.23s`；70-package lock、260-file Ruff format、lint 与
 119-source strict mypy 通过；本地真实 integration `1 skipped`。详细 RED 失败、PowerShell

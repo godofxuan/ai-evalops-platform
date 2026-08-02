@@ -1005,7 +1005,8 @@ Python 与配置
   实际传进容器；修复后九个 dispatch/cleanup 参数都可覆盖。
 - 一次 `ruff format --check` 正确失败，但 PowerShell 对原生程序非零退出没有自动停止后续 commit；
   GREEN 修正格式，后续每个命令显式检查 `$LASTEXITCODE`。该过程未隐藏或改写。
-- 本机真实 integration 仍 `1 skipped`；GitHub Actions #31 才是 PostgreSQL/Redis 实证。
+- 本机真实 integration 仍 `1 skipped`；GitHub Actions #31 是实现 head 的 PostgreSQL/Redis 实证，
+  #32 又验证了代码与首版证据文档 head。
 
 ### 证据与限制
 
@@ -1015,7 +1016,8 @@ Python 与配置
 | 本地真实 Outbox integration | 1 skipped |
 | lock / Ruff / lint / strict mypy | 70 packages / 260 files / passed / 119 sources |
 | Alembic | 唯一 head `20260803_0014`；offline downgrade/upgrade passed |
-| GitHub Actions #31 | quality-and-integration + compose-smoke success |
+| GitHub Actions #31 | 实现 head `69cba41`：quality-and-integration + compose-smoke success |
+| GitHub Actions #32 | 代码与首版文档 head `5b374d2`：两个 job success |
 | 真实 retention | 两个 cleanup 各删一条旧 delivered；近期 delivered/旧 pending 保留 |
 | 告警 | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
 | 正式 500-case/32-arm | `NOT_RUN` |
