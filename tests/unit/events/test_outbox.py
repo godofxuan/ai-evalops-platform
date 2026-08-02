@@ -17,6 +17,7 @@ from app.events.outbox import (
     build_cleanup_outbox_statement,
     enqueue_progress_event,
     outbox_retry_delay_seconds,
+    run_outbox_cleanup_loop,
     run_outbox_dispatch_loop,
 )
 from app.observability.metrics import PlatformMetrics
@@ -380,6 +381,33 @@ async def test_dispatch_loop_uses_bounded_batch_and_stops_cooperatively() -> Non
     )
 
     assert dispatcher.limits == [37]
+
+
+async def test_cleanup_loop_counts_bounded_batch_and_stops_cooperatively() -> None:
+    stop_requested = asyncio.Event()
+
+    class OneShotMaintenance:
+        def __init__(self) -> None:
+            self.limits: list[int] = []
+
+        async def cleanup_once(self, *, limit: int) -> int:
+            self.limits.append(limit)
+            stop_requested.set()
+            return 3
+
+    maintenance = OneShotMaintenance()
+    metrics = PlatformMetrics()
+
+    await run_outbox_cleanup_loop(
+        maintenance,
+        stop_requested=stop_requested,
+        interval_seconds=60,
+        batch_size=37,
+        metrics=metrics,
+    )
+
+    assert maintenance.limits == [37]
+    assert "outbox_cleanup_deleted_total 3.0" in metrics.render().decode("utf-8")
 
 
 async def test_dispatch_loop_logs_only_error_type_then_recovers() -> None:
