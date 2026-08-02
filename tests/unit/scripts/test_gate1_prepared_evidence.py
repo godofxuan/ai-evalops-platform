@@ -456,7 +456,7 @@ def test_prepared_evidence_rejects_unsupported_manifest_schema(
     assert result["checks"]["manifest_valid"] is False
     assert "schema_version" in result["details"]["manifest_errors"]
     assert result["details"]["manifest_schema"] == {
-        "expected": 4,
+        "expected": 5,
         "observed": 999,
     }
 
@@ -780,14 +780,16 @@ def test_prepared_evidence_reports_unavailable_git_state_as_environment_blocked(
     assert "git_repository_available" in result["blockers"]
 
 
-def test_prepared_evidence_keeps_historical_schema_v3_bundle_read_only(
+@pytest.mark.parametrize("historical_schema", [2, 3, 4])
+def test_prepared_evidence_keeps_superseded_schema_bundle_read_only(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    historical_schema: int,
 ) -> None:
     repository, run_directory = _prepare_bundle(tmp_path, monkeypatch)
     manifest_path = run_directory / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["schema_version"] = 3
+    manifest["schema_version"] = historical_schema
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -801,8 +803,8 @@ def test_prepared_evidence_keeps_historical_schema_v3_bundle_read_only(
 
     assert result["status"] == "MANIFEST_INVALID"
     assert result["details"]["manifest_schema"] == {
-        "expected": 4,
-        "observed": 3,
+        "expected": 5,
+        "observed": historical_schema,
     }
 
 
@@ -823,7 +825,7 @@ def test_prepared_evidence_keeps_historical_schema_v1_bundle_read_only(
 
     assert result["status"] == "MANIFEST_INVALID"
     assert result["details"]["manifest_schema"] == {
-        "expected": 4,
+        "expected": 5,
         "observed": 1,
     }
 

@@ -7,13 +7,18 @@ from pathlib import Path
 from typing import Any
 
 from scripts.experiment_support import ExperimentError
+from scripts.gate1_evidence import (
+    GATE1_GATE_POLICY_VERSION,
+    GATE1_QUALITY_GATE_POLICY,
+    GATE1_RESULT_SCHEMA_VERSION,
+)
 from scripts.gate1_image_evidence import (
     audit_gate1_build_context,
     compute_docker_build_context_binding,
     gate1_image_binding_errors,
 )
 
-PREPARED_MANIFEST_SCHEMA_VERSION = 4
+PREPARED_MANIFEST_SCHEMA_VERSION = 5
 
 KEY_EXECUTION_SCRIPT_PATHS = (
     "scripts/experiment_support.py",
@@ -129,6 +134,17 @@ def _required_manifest_errors(
         errors.append("status")
     if manifest.get("formal_run_started") is not False:
         errors.append("formal_run_started")
+    if manifest.get("result_schema_version") != GATE1_RESULT_SCHEMA_VERSION:
+        errors.append("result_schema_version")
+    expected_quality_gate = {
+        "quality_gate.automatic_evaluation": True,
+        "quality_gate.policy": GATE1_QUALITY_GATE_POLICY,
+        "quality_gate.policy_version": GATE1_GATE_POLICY_VERSION,
+        "quality_gate.non_waivable": True,
+    }
+    for dotted_path, expected_value in expected_quality_gate.items():
+        if _optional_manifest_value(manifest, dotted_path) != expected_value:
+            errors.append(dotted_path)
     if (
         _optional_manifest_value(manifest, "adoption_gate.automatic_worker_count_change")
         is not False
@@ -136,6 +152,10 @@ def _required_manifest_errors(
         errors.append("adoption_gate.automatic_worker_count_change")
     if _optional_manifest_value(manifest, "adoption_gate.decision_owner") != "human":
         errors.append("adoption_gate.decision_owner")
+    if _optional_manifest_value(manifest, "adoption_gate.automatic_adoption_decision") is not False:
+        errors.append("adoption_gate.automatic_adoption_decision")
+    if _optional_manifest_value(manifest, "adoption_gate.performance_thresholds_owner") != "human":
+        errors.append("adoption_gate.performance_thresholds_owner")
     if _optional_manifest_value(manifest, "provenance.execution_scripts.algorithm") != "sha256":
         errors.append("provenance.execution_scripts.algorithm")
     if _optional_manifest_value(manifest, "dataset.algorithm") != "sha256":

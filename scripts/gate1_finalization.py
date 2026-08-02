@@ -73,6 +73,7 @@ def _validate_summary_cross_references(
     bundle_directory: Path,
     summary_records: Sequence[dict[str, Any]],
     arm_ids: Sequence[str],
+    expected_arms: Sequence[Mapping[str, Any]],
 ) -> None:
     expected_records = dict(zip(arm_ids, summary_records, strict=True))
     for arm_id in arm_ids:
@@ -106,7 +107,7 @@ def _validate_summary_cross_references(
     if (
         len(aggregate_arm_ids) != len(arm_ids)
         or set(aggregate_arm_ids) != set(arm_ids)
-        or aggregate != aggregate_arm_summaries(summary_records)
+        or aggregate != aggregate_arm_summaries(summary_records, expected_arms=expected_arms)
     ):
         raise ExperimentError("Gate 1 aggregate summary cross-reference validation failed")
 
@@ -165,6 +166,8 @@ def _validate_plot_cross_references(
 def validate_gate1_final_bundle(
     bundle_directory: Path,
     summary_records: Sequence[dict[str, Any]],
+    *,
+    expected_arms: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Re-read and verify a staged Gate 1 bundle before atomic publication."""
     from scripts.gate1_plots import PLOT_FILENAMES
@@ -240,6 +243,7 @@ def validate_gate1_final_bundle(
         bundle_directory=bundle_directory,
         summary_records=summary_records,
         arm_ids=arm_ids,
+        expected_arms=expected_arms,
     )
     _validate_plot_cross_references(
         bundle_directory=bundle_directory,
@@ -318,6 +322,7 @@ def _build_staged_bundle(
     staging_directory: Path,
     summary_records: Sequence[dict[str, Any]],
     arm_ids: Sequence[str],
+    expected_arms: Sequence[Mapping[str, Any]],
 ) -> None:
     from scripts.gate1_plots import generate_gate1_plots
 
@@ -335,7 +340,7 @@ def _build_staged_bundle(
 
     write_report(
         staging_directory / "summary" / "aggregate.json",
-        aggregate_arm_summaries(summary_records),
+        aggregate_arm_summaries(summary_records, expected_arms=expected_arms),
     )
     _write_summary_csv(
         staging_directory / "summary" / "arms.csv",
@@ -369,10 +374,12 @@ def finalize_gate1_run_evidence(
     run_directory: Path,
     summary_records: Sequence[dict[str, Any]],
     *,
+    expected_arms: Sequence[Mapping[str, Any]],
     staging_parent: Path | None = None,
 ) -> None:
     """Stage, validate, and atomically publish one complete Gate 1 evidence bundle."""
     arm_ids = _arm_ids(summary_records)
+    aggregate_arm_summaries(summary_records, expected_arms=expected_arms)
     final_directory = run_directory / GATE1_FINAL_DIRECTORY_NAME
     if final_directory.exists() or final_directory.is_symlink():
         raise ExperimentError(
@@ -413,8 +420,13 @@ def finalize_gate1_run_evidence(
                 staging_directory=staging_directory,
                 summary_records=summary_records,
                 arm_ids=arm_ids,
+                expected_arms=expected_arms,
             )
-            validate_gate1_final_bundle(staging_directory, summary_records)
+            validate_gate1_final_bundle(
+                staging_directory,
+                summary_records,
+                expected_arms=expected_arms,
+            )
             if final_directory.exists() or final_directory.is_symlink():
                 raise ExperimentError(
                     f"refusing to overwrite existing Gate 1 final evidence: {final_directory}"

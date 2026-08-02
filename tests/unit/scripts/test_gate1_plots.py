@@ -20,7 +20,7 @@ from scripts.gate1_plots import generate_gate1_plots
 def _summary_records() -> list[dict[str, object]]:
     return [
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "arm": {
                 "arm_id": f"io-w{workers}-r1",
                 "workload": "io_latency_v1",
@@ -99,6 +99,19 @@ def _write_working_evidence(
         )
 
 
+def _finalize(
+    run_directory: Path,
+    records: list[dict[str, object]],
+    **kwargs: Any,
+) -> None:
+    finalize_gate1_run_evidence(
+        run_directory,
+        records,
+        expected_arms=[record["arm"] for record in records],
+        **kwargs,
+    )
+
+
 def _file_snapshot(root: Path) -> dict[str, bytes]:
     return {
         path.relative_to(root).as_posix(): path.read_bytes()
@@ -148,7 +161,7 @@ def test_gate1_finalization_plot_failure_leaves_working_evidence_unchanged(
         OSError,
         match=f"injected failure after {completed_plot_count} plots",
     ):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert save_count == failure_save_number
     assert not (tmp_path / "final").exists()
@@ -177,7 +190,7 @@ def test_gate1_finalization_summary_write_failure_leaves_no_formal_bundle(
     monkeypatch.setattr(Path, "open", fail_aggregate_write)
 
     with pytest.raises(OSError, match="injected summary write failure"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert not (tmp_path / "final").exists()
     assert _file_snapshot(tmp_path) == before
@@ -205,7 +218,7 @@ def test_gate1_finalization_plot_manifest_write_failure_leaves_no_formal_bundle(
     monkeypatch.setattr(Path, "open", fail_plot_manifest_write)
 
     with pytest.raises(OSError, match="injected plot manifest write failure"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert not (tmp_path / "final").exists()
     assert _file_snapshot(tmp_path) == before
@@ -236,7 +249,7 @@ def test_gate1_plot_bundle_preserves_every_arm_as_auditable_png_evidence(
         (output_directory / "manifest.json").read_text(encoding="utf-8")
     )
     assert persisted_manifest == manifest
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest["arm_ids"] == ["io-w1-r1", "io-w2-r1"]
     assert manifest["plots"] == sorted(expected_pngs)
     assert manifest["renderer"] == {
@@ -332,7 +345,7 @@ def test_gate1_finalization_refuses_an_existing_partial_formal_target(
     before = _file_snapshot(tmp_path / "final")
 
     with pytest.raises(ExperimentError, match="refusing to overwrite"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert _file_snapshot(tmp_path / "final") == before
     _assert_no_finalization_transients(tmp_path)
@@ -343,11 +356,11 @@ def test_gate1_finalization_repeated_call_refuses_existing_complete_bundle(
 ) -> None:
     records = _summary_records()
     _write_working_evidence(tmp_path, records)
-    finalize_gate1_run_evidence(tmp_path, records)
+    _finalize(tmp_path, records)
     before = _file_snapshot(tmp_path / "final")
 
     with pytest.raises(ExperimentError, match="refusing to overwrite"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert _file_snapshot(tmp_path / "final") == before
     _assert_no_finalization_transients(tmp_path)
@@ -375,7 +388,7 @@ def test_gate1_finalization_rejects_cross_filesystem_staging_before_writing(
     monkeypatch.setattr(os, "stat", report_foreign_device)
 
     with pytest.raises(ExperimentError, match="same filesystem"):
-        finalize_gate1_run_evidence(
+        _finalize(
             tmp_path,
             records,
             staging_parent=foreign_staging_parent,
@@ -410,7 +423,7 @@ def test_gate1_finalization_rehashes_every_payload_before_publish(
     monkeypatch.setattr(gate1_finalization, "sha256_file", report_changed_hash)
 
     with pytest.raises(ExperimentError, match="SHA-256"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert target_hash_calls == 2
     assert not (tmp_path / "final").exists()
@@ -446,7 +459,7 @@ def test_gate1_finalization_detects_incomplete_file_count_before_publish(
     monkeypatch.setattr(Path, "read_text", remove_payload_before_validation)
 
     with pytest.raises(ExperimentError, match="file count"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert payload_removed
     assert not (tmp_path / "final").exists()
@@ -470,7 +483,7 @@ def test_gate1_finalization_rejects_summary_arm_cross_reference_mismatch(
     before = _file_snapshot(tmp_path)
 
     with pytest.raises(ExperimentError, match="summary cross-reference"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert not (tmp_path / "final").exists()
     assert _file_snapshot(tmp_path) == before
@@ -491,7 +504,7 @@ def test_gate1_finalization_rejects_per_arm_summary_schema_mismatch(
     before = _file_snapshot(tmp_path)
 
     with pytest.raises(ExperimentError, match="summary cross-reference"):
-        finalize_gate1_run_evidence(tmp_path, records)
+        _finalize(tmp_path, records)
 
     assert not (tmp_path / "final").exists()
     assert _file_snapshot(tmp_path) == before
@@ -508,7 +521,7 @@ def test_gate1_finalization_concurrent_calls_publish_exactly_one_bundle(
     def finalize_after_barrier() -> BaseException | None:
         start.wait()
         try:
-            finalize_gate1_run_evidence(tmp_path, records)
+            _finalize(tmp_path, records)
         except BaseException as error:
             return error
         return None

@@ -1,12 +1,15 @@
+import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from statistics import median
 from typing import Any
 
-from scripts.experiment_support import percentile
+from scripts.experiment_support import ExperimentError, percentile
 
-GATE1_RESULT_SCHEMA_VERSION = 2
+GATE1_RESULT_SCHEMA_VERSION = 3
+GATE1_GATE_POLICY_VERSION = 1
+GATE1_QUALITY_GATE_POLICY = "all_expected_arms_valid_for_capacity_comparison"
 
 JOB_STATUSES = (
     "queued",
@@ -325,9 +328,126 @@ def merge_prometheus_evidence(
     return merged
 
 
+def _arm_contract(arm: object, *, label: str) -> tuple[str, str, int, int]:
+    if not isinstance(arm, Mapping):
+        raise ExperimentError(f"Gate 1 {label} arm must be an object")
+    arm_id = arm.get("arm_id")
+    workload = arm.get("workload")
+    workers = arm.get("workers")
+    repetition = arm.get("repetition")
+    if (
+        not isinstance(arm_id, str)
+        or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", arm_id) is None
+        or not isinstance(workload, str)
+        or not workload
+        or type(workers) is not int
+        or workers < 1
+        or type(repetition) is not int
+        or repetition < 1
+    ):
+        raise ExperimentError(f"Gate 1 {label} arm contract is invalid")
+    return arm_id, workload, workers, repetition
+
+
+def _index_expected_arms(
+    expected_arms: Sequence[Mapping[str, Any]],
+) -> dict[str, tuple[str, str, int, int]]:
+    indexed: dict[str, tuple[str, str, int, int]] = {}
+    coordinates: set[tuple[str, int, int]] = set()
+    for arm in expected_arms:
+        contract = _arm_contract(arm, label="expected")
+        arm_id, workload, workers, repetition = contract
+        coordinate = (workload, workers, repetition)
+        if arm_id in indexed or coordinate in coordinates:
+            raise ExperimentError("Gate 1 expected arm contract contains duplicates")
+        indexed[arm_id] = contract
+        coordinates.add(coordinate)
+    if not indexed:
+        raise ExperimentError("Gate 1 expected arm contract must not be empty")
+    return indexed
+
+
+def evaluate_gate1_gate_flags(
+    records: Sequence[dict[str, Any]],
+    *,
+    expected_arms: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Evaluate objective quality evidence without making a deployment decision."""
+    expected = _index_expected_arms(expected_arms)
+    observed: dict[str, tuple[str, str, int, int]] = {}
+    valid_by_arm_id: dict[str, bool] = {}
+    for record in records:
+        contract = _arm_contract(record.get("arm"), label="observed")
+        arm_id = contract[0]
+        if arm_id in observed:
+            raise ExperimentError("Gate 1 observed arm contract contains duplicates")
+        summary = record.get("summary")
+        valid = (
+            summary.get("valid_for_capacity_comparison") if isinstance(summary, Mapping) else None
+        )
+        if type(valid) is not bool:
+            raise ExperimentError("Gate 1 observed arm quality flag is invalid")
+        observed[arm_id] = contract
+        valid_by_arm_id[arm_id] = valid
+
+    unexpected = sorted(set(observed) - set(expected))
+    if unexpected:
+        raise ExperimentError(f"Gate 1 observed unexpected arm_ids: {', '.join(unexpected)}")
+    mismatched = sorted(
+        arm_id for arm_id, contract in observed.items() if contract != expected[arm_id]
+    )
+    if mismatched:
+        raise ExperimentError(f"Gate 1 observed arm contract mismatch: {', '.join(mismatched)}")
+
+    missing = [arm_id for arm_id in expected if arm_id not in observed]
+    invalid = [arm_id for arm_id in expected if valid_by_arm_id.get(arm_id) is False]
+    if invalid:
+        quality_status = "FAILED"
+        blocked_by = ["quality_gate_failed"]
+    elif missing:
+        quality_status = "UNKNOWN"
+        blocked_by = ["quality_gate_unknown"]
+    else:
+        quality_status = "VERIFIED"
+        blocked_by = []
+    return {
+        "policy_version": GATE1_GATE_POLICY_VERSION,
+        "quality_gate": {
+            "status": quality_status,
+            "policy": GATE1_QUALITY_GATE_POLICY,
+            "expected_arm_count": len(expected),
+            "observed_arm_count": len(observed),
+            "expected_arms_complete": not missing,
+            "missing_arm_ids": missing,
+            "invalid_arm_ids": invalid,
+        },
+        "adoption_gate": {
+            "status": "NOT_RUN",
+            "review_readiness": (
+                "READY_FOR_HUMAN_REVIEW" if quality_status == "VERIFIED" else "BLOCKED"
+            ),
+            "decision_owner": "human",
+            "performance_thresholds_owner": "human",
+            "automatic_worker_count_change": False,
+            "automatic_adoption_decision": None,
+            "selected_worker_count": None,
+            "blocked_by": blocked_by,
+        },
+    }
+
+
 def aggregate_arm_summaries(
     records: Sequence[dict[str, Any]],
+    *,
+    expected_arms: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    resolved_expected_arms = (
+        expected_arms if expected_arms is not None else [record["arm"] for record in records]
+    )
+    gate_evaluation = evaluate_gate1_gate_flags(
+        records,
+        expected_arms=resolved_expected_arms,
+    )
     grouped: defaultdict[tuple[str, int], list[dict[str, Any]]] = defaultdict(list)
     for record in records:
         arm = record["arm"]
@@ -388,5 +508,6 @@ def aggregate_arm_summaries(
         "schema_version": GATE1_RESULT_SCHEMA_VERSION,
         "groups": groups,
         "negative_scaling": negative_scaling,
+        "gate_evaluation": gate_evaluation,
         "automatic_adoption_decision": None,
     }

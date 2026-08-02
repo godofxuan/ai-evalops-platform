@@ -421,7 +421,7 @@ def test_aggregate_keeps_every_repetition_and_negative_scaling() -> None:
         ]
     )
 
-    assert aggregate["schema_version"] == 2
+    assert aggregate["schema_version"] == 3
     assert aggregate["groups"][0]["throughput_cases_per_second"] == {
         "points": [10.0, 12.0],
         "median": 11.0,

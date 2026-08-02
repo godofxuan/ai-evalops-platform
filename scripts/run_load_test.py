@@ -33,6 +33,8 @@ from scripts.gate1_database import (
     collect_reconciliation_bundle,
 )
 from scripts.gate1_evidence import (
+    GATE1_GATE_POLICY_VERSION,
+    GATE1_QUALITY_GATE_POLICY,
     GATE1_RESULT_SCHEMA_VERSION,
     merge_prometheus_evidence,
     reconcile_arm,
@@ -173,6 +175,7 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
             "run_id": run_id,
             "status": "prepared",
             "formal_run_started": False,
+            "result_schema_version": GATE1_RESULT_SCHEMA_VERSION,
             "seed": args.seed,
             "protocol": {
                 "path": "protocol.md",
@@ -189,9 +192,17 @@ def prepare_load_experiment(args: argparse.Namespace) -> Path:
                     "files": execution_script_hashes,
                 },
             },
+            "quality_gate": {
+                "automatic_evaluation": True,
+                "policy": GATE1_QUALITY_GATE_POLICY,
+                "policy_version": GATE1_GATE_POLICY_VERSION,
+                "non_waivable": True,
+            },
             "adoption_gate": {
                 "automatic_worker_count_change": False,
+                "automatic_adoption_decision": False,
                 "decision_owner": "human",
+                "performance_thresholds_owner": "human",
             },
             "configuration": {
                 "values": configuration_values,
@@ -868,7 +879,11 @@ async def _run_prepared(args: argparse.Namespace) -> dict[str, Any]:
         )
         for arm in arm_plan["arms"]
     ]
-    finalize_gate1_run_evidence(run_directory, summary_records)
+    finalize_gate1_run_evidence(
+        run_directory,
+        summary_records,
+        expected_arms=arm_plan["arms"],
+    )
     write_report(run_directory / "failures" / "index.json", {"failures": []})
     execution["status"] = "completed"
     execution["finished_at"] = datetime.now(UTC).isoformat()
