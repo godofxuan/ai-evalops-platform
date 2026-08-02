@@ -19,6 +19,7 @@ from app.events.outbox import (
     outbox_retry_delay_seconds,
     run_outbox_dispatch_loop,
 )
+from app.observability.metrics import PlatformMetrics
 from app.persistence.orm_models import ProgressEventOutbox
 
 NOW = datetime(2026, 8, 2, 12, 0, tzinfo=UTC)
@@ -281,6 +282,24 @@ async def test_dispatcher_reschedules_failed_publish_without_acknowledging() -> 
     )
     assert store.published == []
     assert store.retries == [(EVENT_ID, "publish_returned_false", 2)]
+
+
+async def test_dispatcher_records_scheduled_retry_metric() -> None:
+    store = RecordingStore((ClaimedOutboxEvent(event=_event(), attempt_count=1),))
+    metrics = PlatformMetrics()
+    dispatcher = OutboxDispatcher(
+        store=store,
+        publisher=RecordingPublisher(result=False),
+        publish_timeout_seconds=1,
+        retry_base_seconds=2,
+        retry_max_seconds=10,
+        metrics=metrics,
+    )
+
+    result = await dispatcher.dispatch_once(limit=10)
+
+    assert result.retry_scheduled == 1
+    assert "outbox_retry_scheduled_total 1.0" in metrics.render().decode("utf-8")
 
 
 async def test_dispatcher_records_only_exception_type_and_bounds_timeout() -> None:
