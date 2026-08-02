@@ -46,7 +46,7 @@ class ClosableRedis:
         return None
 
 
-async def test_app_lifespan_wires_operator_http_target_registry(
+async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -61,6 +61,17 @@ async def test_app_lifespan_wires_operator_http_target_registry(
     monkeypatch.setattr(main_module, "create_redis_client", lambda _settings: redis)
     dispatcher_started = asyncio.Event()
     dispatcher_stopped = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    cleanup_stopped = asyncio.Event()
+
+    class RecordingMaintenance:
+        def __init__(
+            self,
+            _session_factory: object,
+            *,
+            retention_seconds: float,
+        ) -> None:
+            assert retention_seconds == 7_200
 
     async def record_outbox_loop(
         _dispatcher: object,
@@ -77,10 +88,40 @@ async def test_app_lifespan_wires_operator_http_target_registry(
         await stop_requested.wait()
         dispatcher_stopped.set()
 
+    async def record_cleanup_loop(
+        maintenance: object,
+        *,
+        stop_requested: asyncio.Event,
+        interval_seconds: float,
+        batch_size: int,
+        metrics: object,
+        logger: object | None = None,
+    ) -> None:
+        del logger
+        assert isinstance(maintenance, RecordingMaintenance)
+        assert interval_seconds == 3
+        assert batch_size == 17
+        assert metrics is application.state.metrics
+        cleanup_started.set()
+        await stop_requested.wait()
+        cleanup_stopped.set()
+
     monkeypatch.setattr(
         main_module,
         "run_outbox_dispatch_loop",
         record_outbox_loop,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "SQLAlchemyOutboxMaintenance",
+        RecordingMaintenance,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        main_module,
+        "run_outbox_cleanup_loop",
+        record_cleanup_loop,
         raising=False,
     )
     monkeypatch.setattr(
@@ -93,6 +134,9 @@ async def test_app_lifespan_wires_operator_http_target_registry(
         artifact_root=tmp_path,
         metrics_enabled=False,
         otel_enabled=False,
+        outbox_retention_seconds=7_200,
+        outbox_cleanup_interval_seconds=3,
+        outbox_cleanup_batch_size=17,
         http_target_registry={
             "rag-production": {
                 "version": "rag-v1",
@@ -127,7 +171,9 @@ async def test_app_lifespan_wires_operator_http_target_registry(
 
     async with application.router.lifespan_context(application):
         await asyncio.wait_for(dispatcher_started.wait(), timeout=1)
+        await asyncio.wait_for(cleanup_started.wait(), timeout=1)
         assert application.state.outbox_dispatcher_task.done() is False
+        assert application.state.outbox_cleanup_task.done() is False
         with pytest.raises(RunDatasetVersionNotFoundError):
             await application.state.run_service.create_run(
                 principal=principal,
@@ -136,4 +182,6 @@ async def test_app_lifespan_wires_operator_http_target_registry(
             )
 
     assert dispatcher_stopped.is_set()
+    assert cleanup_stopped.is_set()
     assert application.state.outbox_dispatcher_task.done() is True
+    assert application.state.outbox_cleanup_task.done() is True
