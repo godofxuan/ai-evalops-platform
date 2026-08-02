@@ -2331,7 +2331,7 @@ readiness 与 effective hardening inspect 也成功。正式 Gate 仍为 `NOT_RU
 - 起始 SHA：`a325f85d1cdf407b950976bebb7ea12f46a7df9f`；
 - RED 提交：`646e43b`；
 - 实现提交：`c3128a5`；
-- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`；
+- 当前状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`；
 - Docker stats ID/Name 唯一绑定 Compose ID/Name/Service；
 - 同一次 stats 调用写同一 `snapshot_index`；
 - 每个快照只求和 Worker replicas，再计算 cluster p50/p95/p99/peak；
@@ -2358,9 +2358,15 @@ readiness 与 effective hardening inspect 也成功。正式 Gate 仍为 `NOT_RU
 | 最终非 integration 全量 | 469 passed，8 deselected | `VERIFIED` |
 | Ruff / mypy / lock | 251 files / 117 source files / 70 packages | `VERIFIED` |
 | 本机 Docker | 未运行 | `NOT_RUN_LOCAL` |
-| GitHub Actions | 等待 push 后精确 head run | `PENDING_REMOTE` |
+| GitHub Actions Run #25 | 两个 job、真实服务、image、Compose success | `VERIFIED_REMOTE` |
 | 正式 500-case/32-arm/soak | 未运行 | `NOT_RUN` |
 
 本项没有 migration，没有运行或覆盖正式 artifact。prepared v1–v5、result v1–v3 和历史
 `docs/results/` 保持只读。当前自动化只证明资源证据计算合同，不证明真实 CPU/RSS 曲线、生产
 sizing、最佳 Worker 数或用户拥有的 adoption thresholds。
+
+绑定 head `4ad310a66b226122515be9683fe60ae3c1a183d2` 的
+[GitHub Actions Run #25](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30737106451)
+最终 success。质量 job 完成静态检查、非 integration、全部真实服务 integration、P2 migration
+round-trip 和 image build；Compose job 完成全拓扑 build、依赖、migration、API/Worker/Reaper、
+readiness 与 hardening inspect。该证据仍不包含正式 500-case/32-arm。

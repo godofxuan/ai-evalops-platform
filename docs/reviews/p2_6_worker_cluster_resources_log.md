@@ -6,7 +6,7 @@
 - 起始提交：`a325f85d1cdf407b950976bebb7ea12f46a7df9f`。
 - RED 提交：`646e43b1168c6282b8a4805e9a4808cb7c99a3a0`。
 - GREEN 提交：`c3128a5c0499d4e510dd7304c36a974d965daf13`。
-- 当前状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+- 当前状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
 - prepared manifest：schema v6。
 - Gate 1 result：schema v4。
 - final bundle：仍为 schema v1。
@@ -277,12 +277,19 @@ ImportError: cannot import name 'summarize_worker_cluster_resources'
 | Ruff lint | All checks passed | `VERIFIED` |
 | strict mypy | 117 source files | `VERIFIED` |
 | 本机 Docker stats/Compose | Docker CLI 不可用，本阶段未运行 | `NOT_RUN_LOCAL` |
-| GitHub Actions | 等待 push 后新 run | `PENDING_REMOTE` |
+| GitHub Actions Run #25 | 两个 job、真实服务、migration、image、Compose success | `VERIFIED_REMOTE` |
 | 正式 500-case/32-arm/soak | 未授权、未运行 | `NOT_RUN` |
 
-`8 deselected` 是带 integration marker、需要真实服务的测试，不应写成通过。此前远端 CI 已能执行
-真实 PostgreSQL/Redis、image 和 Compose；P2-6 精确提交仍要等待新的远端 run，不能借用旧 run
-冒充当前实现证据。
+`8 deselected` 是带 integration marker、需要真实服务的测试，不应写成本地通过。绑定 head
+`4ad310a66b226122515be9683fe60ae3c1a183d2` 的
+[GitHub Actions Run #25](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30737106451)
+最终 `completed / success`。`quality-and-integration` 的 lock、Ruff、mypy、非 integration、全部
+真实 PostgreSQL/Redis integration、P2 migration downgrade/re-upgrade 和 application image build
+成功；`compose-smoke` 的完整拓扑 build、依赖启动、migration、API/Worker/Reaper、readiness 与
+effective hardening inspect 也成功。失败注释步骤因前序成功而按设计 skipped。
+
+该远端证据验证当前源代码能经过真实服务和 Compose CI 合同，但 CI 没有运行正式
+500-case/32-arm，也没有采集可用于 adoption 的 Worker cluster resource curve。
 
 ## 9. schema 与旧证据影响
 

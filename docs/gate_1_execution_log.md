@@ -605,7 +605,7 @@ round-trip、application image、完整 Compose topology、readiness 与 hardeni
 
 ## 14. P2-6 Worker 集群资源按快照聚合
 
-状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 旧实现把 API、Worker、Reaper、PostgreSQL、Redis 的 CPU/RSS 样本压平，summary 和图表实际
 展示最大单容器 peak；它不是 Worker cluster total。直接把各容器跨时间 peak 相加也不正确，
@@ -629,5 +629,9 @@ round-trip、application image、完整 Compose topology、readiness 与 hardeni
 RED/GREEN、补丁上下文失败、工具超时、schema 影响和回滚见
 [`reviews/p2_6_worker_cluster_resources_log.md`](reviews/p2_6_worker_cluster_resources_log.md)。
 
-本机没有运行 Docker stats/Compose，本阶段精确提交的远端 CI 仍待 push 后验证。没有创建或修改
-正式 `docs/results/`，没有运行 500-case/32-arm，没有资源曲线、容量拐点或部署 Worker 数结论。
+本机没有运行 Docker stats/Compose。绑定 head `4ad310a66b226122515be9683fe60ae3c1a183d2` 的
+[GitHub Actions Run #25](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30737106451)
+最终 success；两个 job 的步骤级结果确认全部真实服务 integration、P2 migration round-trip、
+application image、完整 Compose topology、readiness 与 hardening inspect 实际执行。该 CI 没有
+创建或修改正式 `docs/results/`，没有运行 500-case/32-arm，没有资源曲线、容量拐点或部署
+Worker 数结论。

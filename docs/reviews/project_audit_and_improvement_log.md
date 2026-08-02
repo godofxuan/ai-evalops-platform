@@ -723,7 +723,7 @@ hardening inspect 实际执行。该普通 CI 不包含正式 500-case/32-arm，
 
 ## P2-6 更新：Worker 集群总资源证据
 
-状态：`LOCAL_CONTRACT_VERIFIED / REMOTE_CI_PENDING / FORMAL_GATE_NOT_RUN`。
+状态：`LOCAL_AND_REMOTE_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 审计确认旧 Gate 1 把五类服务的 Docker stats 压平成通用 CPU/RSS 数组，图表再取最大单容器
 peak。该值既混入非 Worker 服务，也不是 Worker 集群总成本；把每容器跨时间 peak 相加仍会
@@ -747,5 +747,9 @@ files、mypy 117 source files、70-package lock 全通过。组合聚焦命令�
 [`p2_6_worker_cluster_resources_log.md`](p2_6_worker_cluster_resources_log.md)。
 
 本项没有 migration，也没有修改历史 `docs/results/`。prepared v1–v5 与 result v1–v3 保持
-只读，旧 bundle 必须从最终干净提交重新 prepare。本机真实 Docker 未运行，精确提交的远端 CI
-仍 pending；正式 500-case/32-arm、资源曲线、容量 knee 和 adoption 均未运行或得出。
+只读，旧 bundle 必须从最终干净提交重新 prepare。本机真实 Docker 未运行。绑定 head
+`4ad310a66b226122515be9683fe60ae3c1a183d2` 的
+[GitHub Actions Run #25](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30737106451)
+最终 success；步骤级结果确认真实 PostgreSQL/Redis、全部 integration、P2 migration
+round-trip、image build、Compose migration/readiness/hardening 实际执行。正式 500-case/32-arm、
+资源曲线、容量 knee 和 adoption 均未运行或得出。
