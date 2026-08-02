@@ -166,20 +166,6 @@ class SQLAlchemyJobReaper:
                 )
                 job.version += 1
                 touched_runs[run.id] = run.tenant_id
-                enqueue_progress_event(
-                    session,
-                    event_type=(
-                        EventType.JOB_RETRIED if action == "requeued" else EventType.JOB_FAILED
-                    ),
-                    tenant_id=run.tenant_id,
-                    run_id=run.id,
-                    timestamp=now,
-                    payload={
-                        "job_id": str(job.id),
-                        "status": target_status.value,
-                        "source": "reaper",
-                    },
-                )
                 reaped.append(
                     ReapedJob(
                         job_id=job.id,
@@ -196,6 +182,7 @@ class SQLAlchemyJobReaper:
                 )
             await session.flush()
             run_statuses: dict[UUID, RunStatus] = {}
+            completed_runs: list[tuple[UUID, UUID, RunStatus]] = []
             for run_id in sorted(touched_runs, key=str):
                 aggregation = await aggregate_run_in_session(
                     session,
@@ -210,14 +197,31 @@ class SQLAlchemyJobReaper:
                     RunStatus.FAILED,
                     RunStatus.CANCELLED,
                 }:
-                    enqueue_progress_event(
-                        session,
-                        event_type=EventType.RUN_COMPLETED,
-                        tenant_id=touched_runs[run_id],
-                        run_id=run_id,
-                        timestamp=now,
-                        payload={"status": aggregation.status.value},
-                    )
+                    completed_runs.append((run_id, touched_runs[run_id], aggregation.status))
+            for item in reaped:
+                enqueue_progress_event(
+                    session,
+                    event_type=(
+                        EventType.JOB_RETRIED if item.action == "requeued" else EventType.JOB_FAILED
+                    ),
+                    tenant_id=item.tenant_id,
+                    run_id=item.run_id,
+                    timestamp=now,
+                    payload={
+                        "job_id": str(item.job_id),
+                        "status": item.status.value,
+                        "source": "reaper",
+                    },
+                )
+            for run_id, tenant_id, run_status in completed_runs:
+                enqueue_progress_event(
+                    session,
+                    event_type=EventType.RUN_COMPLETED,
+                    tenant_id=tenant_id,
+                    run_id=run_id,
+                    timestamp=now,
+                    payload={"status": run_status.value},
+                )
         return tuple(replace(item, run_status=run_statuses[item.run_id]) for item in reaped)
 
 
