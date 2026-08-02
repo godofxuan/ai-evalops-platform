@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -58,6 +59,30 @@ async def test_app_lifespan_wires_operator_http_target_registry(
         lambda _engine: EmptySessionFactory(),
     )
     monkeypatch.setattr(main_module, "create_redis_client", lambda _settings: redis)
+    dispatcher_started = asyncio.Event()
+    dispatcher_stopped = asyncio.Event()
+
+    async def record_outbox_loop(
+        _dispatcher: object,
+        *,
+        stop_requested: asyncio.Event,
+        poll_seconds: float,
+        batch_size: int,
+        logger: object | None = None,
+    ) -> None:
+        del logger
+        assert poll_seconds == 0.5
+        assert batch_size == 50
+        dispatcher_started.set()
+        await stop_requested.wait()
+        dispatcher_stopped.set()
+
+    monkeypatch.setattr(
+        main_module,
+        "run_outbox_dispatch_loop",
+        record_outbox_loop,
+        raising=False,
+    )
     monkeypatch.setattr(
         main_module,
         "build_infrastructure_readiness_probe",
@@ -101,9 +126,14 @@ async def test_app_lifespan_wires_operator_http_target_registry(
     )
 
     async with application.router.lifespan_context(application):
+        await asyncio.wait_for(dispatcher_started.wait(), timeout=1)
+        assert application.state.outbox_dispatcher_task.done() is False
         with pytest.raises(RunDatasetVersionNotFoundError):
             await application.state.run_service.create_run(
                 principal=principal,
                 idempotency_key="app-registry-wiring",
                 request=request,
             )
+
+    assert dispatcher_stopped.is_set()
+    assert application.state.outbox_dispatcher_task.done() is True
