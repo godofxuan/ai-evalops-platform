@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 
 from app.auth.api_keys import GeneratedAPIKey, generate_api_key
 from app.core.config import Settings
@@ -15,7 +15,8 @@ from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     APIKey,
-    Artifact,
+    ArtifactBlob,
+    ArtifactReference,
     CaseResult,
     Dataset,
     DatasetVersion,
@@ -115,16 +116,19 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                 tenant_id=tenant_id,
                 name=f"review-dataset-{uuid4().hex}",
             )
-            artifact = Artifact(
-                id=artifact_id,
-                tenant_id=tenant_id,
-                artifact_type=ArtifactType.DATASET_SOURCE,
+            artifact_blob = ArtifactBlob(
                 sha256="a" * 64,
-                media_type="application/x-ndjson",
                 byte_size=1,
                 storage_path="aa/" + "a" * 64,
             )
-            session.add_all([dataset, artifact])
+            artifact_reference = ArtifactReference(
+                id=artifact_id,
+                tenant_id=tenant_id,
+                artifact_type=ArtifactType.DATASET_SOURCE,
+                blob_sha256="a" * 64,
+                media_type="application/x-ndjson",
+            )
+            session.add_all([dataset, artifact_blob, artifact_reference])
             await session.flush()
             session.add(
                 DatasetVersion(
@@ -223,9 +227,9 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                 task_ids = [UUID(item["id"]) for item in created.json()]
                 async with session_factory() as session:
                     packet_artifacts = await session.scalar(
-                        select(func.count(Artifact.id)).where(
-                            Artifact.run_id == run_id,
-                            Artifact.artifact_type == ArtifactType.HUMAN_REVIEW_PACKET,
+                        select(func.count(ArtifactReference.id)).where(
+                            ArtifactReference.run_id == run_id,
+                            ArtifactReference.artifact_type == ArtifactType.HUMAN_REVIEW_PACKET,
                         )
                     )
                 assert packet_artifacts == 1
@@ -302,6 +306,15 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                 assert metrics.json()["paired_labels"] == 8
         finally:
             async with session_factory.begin() as session:
+                blob_sha256s = list(
+                    (
+                        await session.execute(
+                            select(ArtifactReference.blob_sha256).where(
+                                ArtifactReference.tenant_id == tenant_id
+                            )
+                        )
+                    ).scalars()
+                )
                 await session.execute(
                     delete(HumanReviewAdjudication).where(
                         HumanReviewAdjudication.tenant_id == tenant_id
@@ -320,6 +333,20 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                 await session.execute(delete(EvaluationRun).where(EvaluationRun.id == run_id))
                 await session.execute(delete(DatasetVersion).where(DatasetVersion.id == version_id))
                 await session.execute(delete(Dataset).where(Dataset.id == dataset_id))
-                await session.execute(delete(Artifact).where(Artifact.id == artifact_id))
+                await session.execute(
+                    delete(ArtifactReference).where(ArtifactReference.tenant_id == tenant_id)
+                )
+                await session.flush()
+                if blob_sha256s:
+                    await session.execute(
+                        delete(ArtifactBlob).where(
+                            ArtifactBlob.sha256.in_(blob_sha256s),
+                            ~exists(
+                                select(ArtifactReference.id).where(
+                                    ArtifactReference.blob_sha256 == ArtifactBlob.sha256
+                                )
+                            ),
+                        )
+                    )
                 await session.execute(delete(APIKey).where(APIKey.tenant_id == tenant_id))
                 await session.execute(delete(Tenant).where(Tenant.id == tenant_id))

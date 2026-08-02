@@ -126,3 +126,15 @@ async def test_get_bytes_reads_and_verifies_content_by_server_digest(tmp_path: P
     loaded = await store.get_bytes(stored.sha256)
 
     assert loaded == content
+
+
+async def test_delete_bytes_removes_only_the_verified_content_address(tmp_path: Path) -> None:
+    store = LocalArtifactStore(tmp_path)
+    stored = await store.put_bytes(b'{"case_id":"case-1"}\n')
+
+    deleted = await store.delete_bytes(stored.sha256)
+
+    assert deleted is True
+    assert not (tmp_path / stored.relative_path).exists()
+    with pytest.raises(ArtifactIntegrityError):
+        await store.get_bytes(stored.sha256)

@@ -39,7 +39,7 @@ Phase 1 已建立：
 - Principal 服务端派生与统一 401；
 - tenant-scoped Dataset create/get；
 - 有界 UTF-8 JSONL 校验与不可变 Dataset Version；
-- tenant-owned artifact 元数据与 SHA-256 内容寻址物理存储；
+- tenant-owned artifact reference 与全局 SHA-256 content blob 分层；
 - 原子发布、物理去重、落盘摘要确认和临时文件清理；
 - Phase 1 Alembic migration、运维脚本与真实 PostgreSQL 集成测试合同。
 
@@ -341,12 +341,12 @@ uv run pytest -m integration
 
 ## 数据模型与状态机
 
-Phase 1 migration 创建五张领域表：
+Phase 1 migration 最初创建五张领域表：
 
 - `tenants`；
 - `api_keys`（只含 prefix 与 scrypt hash，不含明文）；
 - `datasets`；
-- `artifacts`（tenant-owned 元数据）；
+- `artifacts`（当时的一体化 tenant/物理元数据，已由 P1-7 migration 迁移）；
 - `dataset_versions`（`dataset_id + version` 和 `dataset_id + sha256` 唯一）。
 
 Phase 2 migration 新增：
@@ -376,7 +376,15 @@ Phase 8 migration 新增：
 - `human_review_submissions`；
 - `human_review_adjudications`。
 
-物理 artifact 可按 SHA-256 跨 tenant 复用，但数据库元数据保留 tenant 所有权。所有已实现的 dataset/version 查询同时过滤服务端 tenant 与资源 ID；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
+P1-7 migration `20260802_0009`：
+
+- 用 `artifact_blobs` 保存全局 SHA-256、大小和物理相对路径；
+- 用 `artifact_references` 保存 reference UUID、tenant、可选 Run、artifact type 和 media type；
+- 保留旧 Artifact UUID，并把 `dataset_versions.artifact_id` 无损切到 reference；
+- 同 tenant 的不同 Run 和不同 tenant 都可以分别拥有同一 blob，授权不再由物理去重键决定。
+
+所有已实现的 dataset/version 和 artifact reference 读取先过滤服务端 tenant 与资源 ID，再
+解析 blob；当前采用应用层隔离，尚未启用 PostgreSQL RLS。
 
 Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
 [状态机合同](docs/03_state_machines.md)。
@@ -462,7 +470,7 @@ P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RE
 
 - tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
-- 本地 artifact storage 不适合多 API 主机共享，尚无 artifact GC；
+- 本地 artifact storage 不适合多 API 主机共享，数据库提交与文件删除也不是跨系统原子事务；
 - JSONL 第一版有界读入内存，不是流式 parser；
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
@@ -474,7 +482,7 @@ P1-6 operator Registry、DNS rebinding 与实际 peer 加固的逐条判断、RE
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
 - review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；
 - 任意 JSONB metric 排序没有表达式索引，尚无大 Run query plan/容量证据；
-- artifact content store 尚无 orphan GC；
+- artifact 支持已知 SHA 的无引用清理，但尚无定时全盘扫描/对象存储生命周期 GC；
 - SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 

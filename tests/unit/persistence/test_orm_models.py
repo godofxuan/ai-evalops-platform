@@ -1,8 +1,9 @@
-from sqlalchemy import Table, UniqueConstraint
+from sqlalchemy import CheckConstraint, Table, UniqueConstraint
 
 from app.persistence.orm_models import (
     APIKey,
-    Artifact,
+    ArtifactBlob,
+    ArtifactReference,
     AuditEvent,
     Base,
     CaseResult,
@@ -31,10 +32,19 @@ def foreign_key_targets(table: Table, column_name: str) -> set[str]:
     return {foreign_key.target_fullname for foreign_key in column.foreign_keys}
 
 
-def test_orm_metadata_has_tables_introduced_through_phase_8() -> None:
+def check_expressions(table: Table) -> set[str]:
+    return {
+        str(constraint.sqltext)
+        for constraint in table.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+
+
+def test_orm_metadata_has_current_tables_through_p1_7() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
-        "artifacts",
+        "artifact_blobs",
+        "artifact_references",
         "audit_events",
         "case_results",
         "dataset_versions",
@@ -67,28 +77,43 @@ def test_dataset_and_version_constraints_encode_identity_and_immutability() -> N
         frozenset({"dataset_id", "sha256"}),
     } <= unique_column_sets(DatasetVersion.__table__)
     assert foreign_key_targets(DatasetVersion.__table__, "dataset_id") == {"datasets.id"}
-    assert foreign_key_targets(DatasetVersion.__table__, "artifact_id") == {"artifacts.id"}
+    assert foreign_key_targets(DatasetVersion.__table__, "artifact_id") == {
+        "artifact_references.id"
+    }
 
 
-def test_artifact_metadata_is_tenant_owned_while_storage_path_can_be_shared() -> None:
-    columns = set(Artifact.__table__.columns.keys())
-
-    assert {
-        "tenant_id",
-        "artifact_type",
+def test_artifact_blob_and_reference_metadata_separate_content_from_ownership() -> None:
+    assert set(ArtifactBlob.__table__.columns.keys()) == {
         "sha256",
-        "media_type",
         "byte_size",
         "storage_path",
+        "created_at",
+    }
+    assert foreign_key_targets(ArtifactReference.__table__, "blob_sha256") == {
+        "artifact_blobs.sha256"
+    }
+    assert foreign_key_targets(ArtifactReference.__table__, "tenant_id") == {"tenants.id"}
+    assert foreign_key_targets(ArtifactReference.__table__, "run_id") == {"evaluation_runs.id"}
+    assert {
+        "id",
+        "blob_sha256",
+        "tenant_id",
         "run_id",
-    } <= columns
-    assert "size_bytes" not in columns
-    assert foreign_key_targets(Artifact.__table__, "tenant_id") == {"tenants.id"}
-    assert foreign_key_targets(Artifact.__table__, "run_id") == {"evaluation_runs.id"}
-    assert frozenset({"tenant_id", "artifact_type", "sha256"}) in unique_column_sets(
-        Artifact.__table__
+        "artifact_type",
+        "media_type",
+        "created_at",
+    } == set(ArtifactReference.__table__.columns.keys())
+    assert frozenset({"tenant_id", "run_id", "artifact_type", "blob_sha256"}) in unique_column_sets(
+        ArtifactReference.__table__
     )
-    assert frozenset({"storage_path"}) not in unique_column_sets(Artifact.__table__)
+    assert any(
+        "artifact_type = 'dataset_source' AND run_id IS NULL" in expression
+        and "artifact_type <> 'dataset_source' AND run_id IS NOT NULL" in expression
+        for expression in check_expressions(ArtifactReference.__table__)
+    )
+    assert foreign_key_targets(DatasetVersion.__table__, "artifact_id") == {
+        "artifact_references.id"
+    }
 
 
 def test_run_metrics_are_unique_per_run_and_metric_name() -> None:

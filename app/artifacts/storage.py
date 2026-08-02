@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -27,6 +28,11 @@ class ArtifactStore(Protocol):
         """Read verified bytes using a server-validated content digest."""
 
 
+class DeletableArtifactStore(ArtifactStore, Protocol):
+    async def delete_bytes(self, sha256: str) -> bool:
+        """Delete a verified content address, returning whether it existed."""
+
+
 class LocalArtifactStore:
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
@@ -36,6 +42,9 @@ class LocalArtifactStore:
 
     async def get_bytes(self, sha256: str) -> bytes:
         return await asyncio.to_thread(self._get_bytes_sync, sha256)
+
+    async def delete_bytes(self, sha256: str) -> bool:
+        return await asyncio.to_thread(self._delete_bytes_sync, sha256)
 
     def _put_bytes_sync(self, content: bytes) -> StoredArtifact:
         digest = hashlib.sha256(content).hexdigest()
@@ -102,6 +111,31 @@ class LocalArtifactStore:
                 temporary_path.unlink(missing_ok=True)
 
     def _get_bytes_sync(self, sha256: str) -> bytes:
+        path = self._artifact_path(sha256)
+        if path.is_symlink() or not path.is_file():
+            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
+        content = path.read_bytes()
+        if hashlib.sha256(content).hexdigest() != sha256:
+            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
+        return content
+
+    def _delete_bytes_sync(self, sha256: str) -> bool:
+        path = self._artifact_path(sha256)
+        if path.is_symlink():
+            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
+        if not path.exists():
+            return False
+        self._assert_artifact_file(
+            path,
+            expected_sha256=sha256,
+            expected_size=path.stat().st_size,
+        )
+        path.unlink()
+        with suppress(OSError):
+            path.parent.rmdir()
+        return True
+
+    def _artifact_path(self, sha256: str) -> Path:
         if len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256):
             raise ArtifactIntegrityError("artifact digest is not canonical")
         digest_directory = self._root / sha256[:2]
@@ -109,13 +143,7 @@ class LocalArtifactStore:
             raise ArtifactIntegrityError(
                 f"artifact digest directory must not be a symlink: {sha256[:2]}"
             )
-        path = digest_directory / sha256
-        if path.is_symlink() or not path.is_file():
-            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
-        content = path.read_bytes()
-        if hashlib.sha256(content).hexdigest() != sha256:
-            raise ArtifactIntegrityError(f"artifact integrity check failed: {sha256}")
-        return content
+        return digest_directory / sha256
 
     @staticmethod
     def _assert_artifact_file(

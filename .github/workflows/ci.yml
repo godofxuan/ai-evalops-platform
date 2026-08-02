@@ -96,6 +96,12 @@ jobs:
           uv run --no-sync pytest tests/integration/test_identity_and_datasets.py
           --junitxml=/tmp/junit-identity-datasets.xml
 
+      - name: Integration - artifact blob and reference ownership
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_artifact_references.py
+          --junitxml=/tmp/junit-artifact-references.xml
+
       - name: Integration - readiness dependencies
         if: ${{ !cancelled() }}
         run: >-
@@ -121,6 +127,7 @@ jobs:
           /tmp/junit-job-claiming.xml
           /tmp/junit-human-reviews.xml
           /tmp/junit-identity-datasets.xml
+          /tmp/junit-artifact-references.xml
           /tmp/junit-readiness.xml
           /tmp/junit-redis-events.xml
           /tmp/junit-run-idempotency.xml

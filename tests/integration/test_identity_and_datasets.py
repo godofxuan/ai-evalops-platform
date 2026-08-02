@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from pathlib import Path
 from typing import cast
@@ -7,14 +8,21 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, select
 
 from app.auth.api_keys import generate_api_key
 from app.core.config import Settings
 from app.domain.enums import APIKeyStatus
 from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
-from app.persistence.orm_models import APIKey, Artifact, Dataset, DatasetVersion, Tenant
+from app.persistence.orm_models import (
+    APIKey,
+    ArtifactBlob,
+    ArtifactReference,
+    Dataset,
+    DatasetVersion,
+    Tenant,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -88,6 +96,7 @@ async def test_real_identity_tenant_dataset_version_and_artifact_boundaries(
 
         transport = ASGITransport(app=application)
         content = b'{"case_id":"case-1","question":"q","expected_answer":"a","metadata":{}}\n'
+        content_sha256 = hashlib.sha256(content).hexdigest()
         dataset_ids: list[UUID] = []
         try:
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -182,10 +191,21 @@ async def test_real_identity_tenant_dataset_version_and_artifact_boundaries(
                 assert revoked.json()["error"]["code"] == "invalid_api_key"
 
             async with session_factory() as session:
-                artifacts = (
+                references = (
                     (
                         await session.execute(
-                            select(Artifact).where(Artifact.tenant_id.in_(tenant_ids))
+                            select(ArtifactReference).where(
+                                ArtifactReference.tenant_id.in_(tenant_ids)
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                blobs = (
+                    (
+                        await session.execute(
+                            select(ArtifactBlob).where(ArtifactBlob.sha256 == content_sha256)
                         )
                     )
                     .scalars()
@@ -197,9 +217,10 @@ async def test_real_identity_tenant_dataset_version_and_artifact_boundaries(
                     .all()
                 )
 
-            assert len(artifacts) == 2
-            assert {artifact.tenant_id for artifact in artifacts} == set(tenant_ids)
-            assert len({artifact.storage_path for artifact in artifacts}) == 1
+            assert len(references) == 2
+            assert {reference.tenant_id for reference in references} == set(tenant_ids)
+            assert {reference.blob_sha256 for reference in references} == {content_sha256}
+            assert len(blobs) == 1
             assert len(await asyncio.to_thread(list_artifact_files, tmp_path)) == 1
             assert all(raw_key_a not in key.key_hash for key in persisted_keys)
             assert all(raw_key_b not in key.key_hash for key in persisted_keys)
@@ -211,6 +232,18 @@ async def test_real_identity_tenant_dataset_version_and_artifact_boundaries(
                         delete(DatasetVersion).where(DatasetVersion.dataset_id.in_(dataset_ids))
                     )
                     await session.execute(delete(Dataset).where(Dataset.id.in_(dataset_ids)))
-                await session.execute(delete(Artifact).where(Artifact.tenant_id.in_(tenant_ids)))
+                await session.execute(
+                    delete(ArtifactReference).where(ArtifactReference.tenant_id.in_(tenant_ids))
+                )
+                await session.execute(
+                    delete(ArtifactBlob).where(
+                        ArtifactBlob.sha256 == content_sha256,
+                        ~exists(
+                            select(ArtifactReference.id).where(
+                                ArtifactReference.blob_sha256 == ArtifactBlob.sha256
+                            )
+                        ),
+                    )
+                )
                 await session.execute(delete(APIKey).where(APIKey.tenant_id.in_(tenant_ids)))
                 await session.execute(delete(Tenant).where(Tenant.id.in_(tenant_ids)))

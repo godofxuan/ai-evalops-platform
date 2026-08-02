@@ -1,12 +1,14 @@
 from typing import Protocol
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
+from app.artifacts.repository import (
+    ArtifactMetadataIntegrityError,
+    ensure_artifact_reference,
+)
 from app.artifacts.storage import ArtifactStore, StoredArtifact
 from app.auth.principals import Principal
 from app.datasets.schemas import DatasetCreate, DatasetRead, DatasetVersionRead
@@ -17,7 +19,7 @@ from app.datasets.validation import (
 )
 from app.domain.enums import ArtifactType
 from app.persistence.database import AsyncSessionFactory
-from app.persistence.orm_models import Artifact, Dataset, DatasetVersion
+from app.persistence.orm_models import Dataset, DatasetVersion
 
 
 class DatasetNotFoundError(Exception):
@@ -30,10 +32,6 @@ class DatasetNameConflictError(Exception):
 
 class DuplicateDatasetVersionError(Exception):
     """The dataset already contains a version with the uploaded content."""
-
-
-class ArtifactMetadataIntegrityError(RuntimeError):
-    """Persisted artifact metadata conflicts with its content address."""
 
 
 def build_get_dataset_statement(
@@ -187,9 +185,10 @@ class SQLAlchemyDatasetService:
             if duplicate_id is not None:
                 raise DuplicateDatasetVersionError
 
-            artifact_id = await self._ensure_artifact(
+            artifact_reference = await ensure_artifact_reference(
                 session,
                 tenant_id=principal.tenant_id,
+                artifact_type=ArtifactType.DATASET_SOURCE,
                 media_type=media_type,
                 stored=stored,
             )
@@ -200,7 +199,7 @@ class SQLAlchemyDatasetService:
             )
             dataset_version = DatasetVersion(
                 dataset_id=dataset_id,
-                artifact_id=artifact_id,
+                artifact_id=artifact_reference.id,
                 version=int(current_version or 0) + 1,
                 schema_version="1",
                 sha256=validated.sha256,
@@ -241,47 +240,6 @@ class SQLAlchemyDatasetService:
             result = await session.execute(build_get_dataset_statement(tenant_id, dataset_id))
             if result.scalar_one_or_none() is None:
                 raise DatasetNotFoundError
-
-    @staticmethod
-    async def _ensure_artifact(
-        session: AsyncSession,
-        *,
-        tenant_id: UUID,
-        media_type: str,
-        stored: StoredArtifact,
-    ) -> UUID:
-        artifact_id = uuid4()
-        storage_path = stored.relative_path.as_posix()
-        insert_statement = (
-            postgresql_insert(Artifact)
-            .values(
-                id=artifact_id,
-                tenant_id=tenant_id,
-                artifact_type=ArtifactType.DATASET_SOURCE,
-                sha256=stored.sha256,
-                media_type=media_type,
-                byte_size=stored.size_bytes,
-                storage_path=storage_path,
-            )
-            .on_conflict_do_nothing(constraint="uq_artifacts_tenant_id_artifact_type_sha256")
-            .returning(Artifact.id)
-        )
-        inserted_id = (await session.execute(insert_statement)).scalar_one_or_none()
-        if inserted_id is not None:
-            return inserted_id
-
-        existing = (
-            await session.execute(
-                select(Artifact).where(
-                    Artifact.tenant_id == tenant_id,
-                    Artifact.artifact_type == ArtifactType.DATASET_SOURCE,
-                    Artifact.sha256 == stored.sha256,
-                )
-            )
-        ).scalar_one()
-        if existing.byte_size != stored.size_bytes or existing.storage_path != storage_path:
-            raise ArtifactMetadataIntegrityError
-        return existing.id
 
 
 def _constraint_name(error: IntegrityError) -> str | None:

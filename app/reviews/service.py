@@ -9,12 +9,12 @@ from sqlalchemy import Select, and_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.artifacts.repository import ensure_artifact_reference
 from app.artifacts.storage import ArtifactStore, StoredArtifact
 from app.auth.principals import Principal
 from app.domain.enums import ArtifactType, JobStatus, ReviewTaskStatus
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
-    Artifact,
     AuditEvent,
     CaseResult,
     EvaluationJob,
@@ -543,35 +543,14 @@ async def _ensure_packet_artifact(
     run_id: UUID,
     stored: StoredArtifact,
 ) -> None:
-    artifact_id = uuid4()
-    inserted_id = await session.scalar(
-        postgresql_insert(Artifact)
-        .values(
-            id=artifact_id,
-            tenant_id=tenant_id,
-            run_id=run_id,
-            artifact_type=ArtifactType.HUMAN_REVIEW_PACKET,
-            sha256=stored.sha256,
-            media_type="application/json",
-            byte_size=stored.size_bytes,
-            storage_path=stored.relative_path.as_posix(),
-        )
-        .on_conflict_do_nothing(
-            constraint="uq_artifacts_tenant_id_artifact_type_sha256",
-        )
-        .returning(Artifact.id)
+    await ensure_artifact_reference(
+        session,
+        tenant_id=tenant_id,
+        run_id=run_id,
+        artifact_type=ArtifactType.HUMAN_REVIEW_PACKET,
+        media_type="application/json",
+        stored=stored,
     )
-    if inserted_id is not None:
-        return
-    existing_run_id = await session.scalar(
-        select(Artifact.run_id).where(
-            Artifact.tenant_id == tenant_id,
-            Artifact.artifact_type == ArtifactType.HUMAN_REVIEW_PACKET,
-            Artifact.sha256 == stored.sha256,
-        )
-    )
-    if existing_run_id != run_id:
-        raise RuntimeError("review packet artifact conflicts with Run ownership")
 
 
 def _packet(candidate: ReviewCandidate) -> ReviewPacket:

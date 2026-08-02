@@ -10,7 +10,8 @@ from sqlalchemy.sql import Select
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
-    Artifact,
+    ArtifactBlob,
+    ArtifactReference,
     Dataset,
     DatasetVersion,
     EvaluationJob,
@@ -120,16 +121,23 @@ def build_get_dataset_version_source_statement(
     return (
         select(
             DatasetVersion.id,
-            Artifact.sha256,
+            ArtifactBlob.sha256,
             DatasetVersion.case_count,
         )
         .join(Dataset, Dataset.id == DatasetVersion.dataset_id)
-        .join(Artifact, Artifact.id == DatasetVersion.artifact_id)
+        .join(
+            ArtifactReference,
+            ArtifactReference.id == DatasetVersion.artifact_id,
+        )
+        .join(
+            ArtifactBlob,
+            ArtifactBlob.sha256 == ArtifactReference.blob_sha256,
+        )
         .where(
             DatasetVersion.id == dataset_version_id,
             Dataset.tenant_id == tenant_id,
-            Artifact.tenant_id == tenant_id,
-            Artifact.artifact_type == ArtifactType.DATASET_SOURCE,
+            ArtifactReference.tenant_id == tenant_id,
+            ArtifactReference.artifact_type == ArtifactType.DATASET_SOURCE,
         )
     )
 

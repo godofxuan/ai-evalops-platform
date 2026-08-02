@@ -55,7 +55,22 @@
 - 无论成功或失败都在 `finally` 清理临时文件；
 - 用户输入不能包含 `../` 或绝对路径并进入存储 API。
 
-## 6. HTTP Target 出口边界
+## 6. Artifact 所有权边界
+
+- 全局 `artifact_blobs` 只表示物理内容，不表示任何 tenant 有权读取；
+- `artifact_references` 才保存 tenant、可选 Run、类型和 media type；
+- 读取必须用 reference UUID 同时过滤 tenant 和可选 Run，再 join blob；跨 tenant、错误 Run 与
+  不存在共用同一个 not-found 结果，并且在失败时不触碰物理文件；
+- 同一 tenant 的两个 Run、以及两个不同 tenant，可以拥有不同 reference 并共享同一 blob；
+- 删除一个 reference 不删除仍被其他 reference 使用的 blob；最后一个 reference 删除后才清理
+  blob metadata 和经过摘要校验的物理文件；
+- 缺失或摘要不符的物理文件读取失败关闭，不把数据库 metadata 当作完整性证明；
+- 已知 SHA 的 orphan 清理必须先由数据库确认没有 reference，不能由客户端直接按 SHA 请求。
+
+数据库事务与本地文件删除不是分布式原子提交，本地 store 也不支持多个 API 主机共享。当前
+合同优先避免删除仍被授权引用的内容；多主机部署需要对象存储生命周期或等价协调机制。
+
+## 7. HTTP Target 出口边界
 
 - tenant 只提交操作员 Registry 中的 `target_id`，不能提交 URL 或 allowlist；
 - Registry 在应用启动时校验，在 Run 创建时按 ID/version 解析并冻结执行快照；
@@ -70,7 +85,7 @@
 这是应用层纵深防御，不是“完全防 SSRF”证明。生产部署仍需防火墙、NetworkPolicy、安全组或
 等价 egress policy，并在 HTTPX/HTTPCore 升级时重跑 peer 合同测试。
 
-## 7. 未完成的安全能力
+## 8. 未完成的安全能力
 
 - 请求速率限制；
 - PostgreSQL RLS；

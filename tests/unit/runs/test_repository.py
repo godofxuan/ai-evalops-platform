@@ -33,12 +33,14 @@ def test_run_lookup_statements_always_include_tenant_boundary() -> None:
     assert "evaluation_runs.tenant_id" in run_sql
 
 
-def test_dataset_version_source_query_reaches_artifact_through_tenant_dataset() -> None:
+def test_dataset_version_source_query_authorizes_reference_before_reading_blob() -> None:
     sql = compile_postgresql(
         build_get_dataset_version_source_statement(TENANT_ID, DATASET_VERSION_ID)
     )
 
     assert "JOIN datasets" in sql
-    assert "JOIN artifacts" in sql
+    assert "JOIN artifact_references" in sql
+    assert "JOIN artifact_blobs" in sql
     assert "datasets.tenant_id" in sql
-    assert "artifacts.tenant_id" in sql
+    assert "artifact_references.tenant_id" in sql
+    assert "artifact_blobs.sha256" in sql

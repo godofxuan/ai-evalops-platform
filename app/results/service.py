@@ -1,19 +1,19 @@
 import json
 from typing import Any, Protocol
 from typing import cast as type_cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import Float, Select, and_, case, cast, delete, func, or_, select
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.artifacts.repository import ensure_artifact_reference
 from app.artifacts.storage import ArtifactStore, StoredArtifact
 from app.auth.principals import Principal
 from app.domain.enums import ArtifactType, JobStatus
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
-    Artifact,
+    ArtifactReference,
     CaseResult,
     EvaluationJob,
     EvaluationRun,
@@ -321,20 +321,35 @@ class SQLAlchemyResultService:
             artifact_type: await self._artifact_store.put_bytes(_json_bytes(payload))
             for artifact_type, payload in payloads.items()
         }
-        artifacts: list[Artifact] = []
+        artifacts: list[tuple[ArtifactReference, StoredArtifact]] = []
         async with self._session_factory.begin() as session:
             await _replace_run_metrics(session, run_id=run_id, summary=summary)
             for artifact_type, item in stored.items():
                 artifacts.append(
-                    await _ensure_run_artifact(
-                        session,
-                        tenant_id=principal.tenant_id,
-                        run_id=run_id,
-                        artifact_type=artifact_type,
-                        stored=item,
+                    (
+                        await ensure_artifact_reference(
+                            session,
+                            tenant_id=principal.tenant_id,
+                            run_id=run_id,
+                            artifact_type=artifact_type,
+                            media_type="application/json",
+                            stored=item,
+                        ),
+                        item,
                     )
                 )
-        return [ArtifactRead.model_validate(item) for item in artifacts]
+        return [
+            ArtifactRead(
+                id=reference.id,
+                run_id=run_id,
+                artifact_type=reference.artifact_type,
+                sha256=item.sha256,
+                media_type=reference.media_type,
+                byte_size=item.size_bytes,
+                created_at=reference.created_at,
+            )
+            for reference, item in artifacts
+        ]
 
 
 def _sort_expression(query: CaseQuery) -> ColumnElement[Any]:
@@ -455,47 +470,6 @@ async def _replace_run_metrics(
                 metric_json=details,
             )
         )
-
-
-async def _ensure_run_artifact(
-    session: AsyncSession,
-    *,
-    tenant_id: UUID,
-    run_id: UUID,
-    artifact_type: ArtifactType,
-    stored: StoredArtifact,
-) -> Artifact:
-    artifact_id = uuid4()
-    inserted_id = await session.scalar(
-        postgresql_insert(Artifact)
-        .values(
-            id=artifact_id,
-            tenant_id=tenant_id,
-            run_id=run_id,
-            artifact_type=artifact_type,
-            sha256=stored.sha256,
-            media_type="application/json",
-            byte_size=stored.size_bytes,
-            storage_path=stored.relative_path.as_posix(),
-        )
-        .on_conflict_do_nothing(
-            constraint="uq_artifacts_tenant_id_artifact_type_sha256",
-        )
-        .returning(Artifact.id)
-    )
-    predicate = (
-        Artifact.id == inserted_id
-        if inserted_id is not None
-        else and_(
-            Artifact.tenant_id == tenant_id,
-            Artifact.artifact_type == artifact_type,
-            Artifact.sha256 == stored.sha256,
-        )
-    )
-    artifact = (await session.execute(select(Artifact).where(predicate))).scalar_one()
-    if artifact.run_id != run_id:
-        raise RuntimeError("artifact metadata conflicts with Run ownership")
-    return artifact
 
 
 def _json_bytes(payload: dict[str, Any]) -> bytes:

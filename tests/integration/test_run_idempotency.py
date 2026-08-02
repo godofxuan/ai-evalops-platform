@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 
 from app.auth.api_keys import generate_api_key
 from app.core.config import Settings
@@ -15,7 +15,8 @@ from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     APIKey,
-    Artifact,
+    ArtifactBlob,
+    ArtifactReference,
     Dataset,
     DatasetVersion,
     EvaluationJob,
@@ -261,6 +262,15 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
             assert case_ids == ["case-1", "case-2"]
         finally:
             async with session_factory.begin() as session:
+                blob_sha256s = list(
+                    (
+                        await session.execute(
+                            select(ArtifactReference.blob_sha256).where(
+                                ArtifactReference.tenant_id.in_((tenant_a_id, tenant_b_id))
+                            )
+                        )
+                    ).scalars()
+                )
                 if run_id is not None:
                     await session.execute(
                         delete(EvaluationJob).where(EvaluationJob.run_id == run_id)
@@ -272,8 +282,22 @@ async def test_real_postgresql_concurrent_run_idempotency_and_tenant_boundary(
                     )
                     await session.execute(delete(Dataset).where(Dataset.id == dataset_id))
                 await session.execute(
-                    delete(Artifact).where(Artifact.tenant_id.in_((tenant_a_id, tenant_b_id)))
+                    delete(ArtifactReference).where(
+                        ArtifactReference.tenant_id.in_((tenant_a_id, tenant_b_id))
+                    )
                 )
+                await session.flush()
+                if blob_sha256s:
+                    await session.execute(
+                        delete(ArtifactBlob).where(
+                            ArtifactBlob.sha256.in_(blob_sha256s),
+                            ~exists(
+                                select(ArtifactReference.id).where(
+                                    ArtifactReference.blob_sha256 == ArtifactBlob.sha256
+                                )
+                            ),
+                        )
+                    )
                 await session.execute(
                     delete(APIKey).where(APIKey.tenant_id.in_((tenant_a_id, tenant_b_id)))
                 )

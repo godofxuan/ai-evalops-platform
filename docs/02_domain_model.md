@@ -188,16 +188,27 @@ storage path 只能由 SHA-256 生成：
 8. finally 清理临时文件；
 9. 数据库保存相对 storage path。
 
-相同内容复用同一物理文件。数据库事务失败后可能留下无引用、但内容完整且地址正确的文件；后续需要 artifact GC。删除一个数据库记录时不能贸然删除共享内容文件。
+相同内容复用同一物理文件。数据库事务失败后可能留下无引用、但内容完整且地址正确的文件；
+已知 SHA 可以经过数据库“无 reference”确认后清理，但当前仍没有定时全盘扫描 GC。删除一个
+reference 时只有数据库确认它是最后一个 reference，才允许删除 blob metadata 和物理文件。
 
 物理文件与数据库所有权分开：
 
-- 物理文件可因相同 SHA-256 被多个 tenant 复用；
-- 每条 artifact 数据库记录必须带 `tenant_id`、`artifact_type`、`media_type`、`byte_size`；
-- Phase 1 的类型为 `dataset_source`；
-- `(tenant_id, artifact_type, sha256)` 唯一；
-- `storage_path` 不做全局唯一约束，因为不同 tenant 的元数据记录可以安全指向同一内容寻址文件；
-- `run_id` 等 Run 关联字段在 Phase 2/后续 Run 表存在时再通过迁移加入，不在 Phase 1 预埋无外键半成品列。
+- `artifact_blobs` 以 `sha256` 为主键，只保存 `byte_size`、唯一的内容寻址
+  `storage_path` 和 `created_at`；
+- `artifact_references` 保存 `id`、`blob_sha256`、`tenant_id`、可选 `run_id`、
+  `artifact_type`、`media_type` 和 `created_at`；
+- `media_type` 属于 reference，因为相同字节可以被不同上传声明为不同但允许的表示类型；
+- Run-owned reference 的
+  `(tenant_id, run_id, artifact_type, blob_sha256)` 唯一，使同一 Run 重试幂等，同时允许不同
+  Run 分别引用同一 blob；
+- `dataset_versions.artifact_id` 是保留兼容字段名的 reference UUID，FK 指向
+  `artifact_references.id`；
+- 读取必须先用 reference 的 tenant/Run 边界授权，再 join blob，不能把 SHA 当作授权凭据。
+
+P1-7 migration 保留所有旧 reference UUID，按 SHA 合并物理元数据。若同一 SHA 的旧大小或路径
+互相冲突，upgrade 失败；若新库已有旧模型不能无损表达的多 owner references，downgrade 失败，
+禁止静默丢失所有权。
 
 ## 8. 当前能证明与不能证明
 
@@ -207,12 +218,13 @@ storage path 只能由 SHA-256 生成：
 - 已知 key hash 使用随机 salt、scrypt 和常量时间 digest 比较；
 - HTTP 请求体不能决定 tenant；
 - 测试覆盖的 dataset 查询具有 tenant 边界；
-- JSONL 与 artifact 合同在本地单元测试成立。
+- JSONL、blob/reference metadata 和本地 content-addressed store 合同在单元测试成立；
+- 真实 PostgreSQL CI 覆盖同 tenant 双 Run、跨 tenant、并发同 SHA 与 reference 生命周期。
 
 不能证明：
 
 - 所有未来查询都不会遗漏 tenant；
 - API Key 方案已通过安全审计或抗 DoS；
-- 本机 PostgreSQL 并发/锁语义已经验证；
+- Windows 本机没有真实 PostgreSQL，不能把远端 CI 写成“本机已验证”；
 - artifact 存储适合多主机部署；
 - dataset version 的存在等于评测结果可复现；Run 绑定属于 Phase 2。

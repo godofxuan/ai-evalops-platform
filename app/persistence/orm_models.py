@@ -58,6 +58,7 @@ artifact_type_enum = Enum(
     name="artifact_type",
     native_enum=False,
     create_constraint=True,
+    length=32,
     values_callable=lambda members: [member.value for member in members],
 )
 run_status_enum = Enum(
@@ -192,21 +193,56 @@ class Dataset(Base):
     )
 
 
-class Artifact(Base):
-    __tablename__ = "artifacts"
+class ArtifactBlob(Base):
+    __tablename__ = "artifact_blobs"
     __table_args__ = (
+        CheckConstraint("byte_size >= 0", name="byte_size_nonnegative"),
+        UniqueConstraint("storage_path", name="uq_artifact_blobs_storage_path"),
+    )
+
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class ArtifactReference(Base):
+    __tablename__ = "artifact_references"
+    __table_args__ = (
+        CheckConstraint(
+            "(artifact_type = 'dataset_source' AND run_id IS NULL) OR "
+            "(artifact_type <> 'dataset_source' AND run_id IS NOT NULL)",
+            name="owner_scope",
+        ),
         UniqueConstraint(
             "tenant_id",
+            "run_id",
             "artifact_type",
-            "sha256",
-            name="uq_artifacts_tenant_id_artifact_type_sha256",
+            "blob_sha256",
+            name="uq_artifact_references_owner_type_blob",
         ),
-        CheckConstraint("byte_size >= 0", name="byte_size_nonnegative"),
-        Index("ix_artifacts_tenant_id_created_at", "tenant_id", "created_at"),
-        Index("ix_artifacts_run_id_artifact_type", "run_id", "artifact_type"),
+        Index(
+            "ix_artifact_references_tenant_id_created_at",
+            "tenant_id",
+            "created_at",
+        ),
+        Index(
+            "ix_artifact_references_run_id_artifact_type",
+            "run_id",
+            "artifact_type",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    blob_sha256: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("artifact_blobs.sha256", ondelete="RESTRICT"),
+        nullable=False,
+    )
     tenant_id: Mapped[UUID] = mapped_column(
         Uuid,
         ForeignKey("tenants.id", ondelete="CASCADE"),
@@ -220,10 +256,7 @@ class Artifact(Base):
         artifact_type_enum,
         nullable=False,
     )
-    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     media_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    storage_path: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -257,7 +290,7 @@ class DatasetVersion(Base):
     )
     artifact_id: Mapped[UUID] = mapped_column(
         Uuid,
-        ForeignKey("artifacts.id", ondelete="RESTRICT"),
+        ForeignKey("artifact_references.id", ondelete="RESTRICT"),
         nullable=False,
     )
     version: Mapped[int] = mapped_column(nullable=False)

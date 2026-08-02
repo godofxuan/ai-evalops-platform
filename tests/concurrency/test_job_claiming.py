@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 
 from app.auth.principals import Principal
 from app.core.config import Settings
@@ -21,7 +21,8 @@ from app.jobs.retry_policy import RetryPolicy
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.orm_models import (
     APIKey,
-    Artifact,
+    ArtifactBlob,
+    ArtifactReference,
     AuditEvent,
     CaseResult,
     Dataset,
@@ -91,14 +92,17 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                         key_hash="not-a-real-key",
                     ),
                     Dataset(id=dataset_id, tenant_id=tenant_id, name="claim-dataset"),
-                    Artifact(
+                    ArtifactBlob(
+                        sha256="a" * 64,
+                        byte_size=1,
+                        storage_path="aa/" + "a" * 64,
+                    ),
+                    ArtifactReference(
                         id=artifact_id,
                         tenant_id=tenant_id,
                         artifact_type=ArtifactType.DATASET_SOURCE,
-                        sha256="a" * 64,
+                        blob_sha256="a" * 64,
                         media_type="application/x-ndjson",
-                        byte_size=1,
-                        storage_path="aa/" + "a" * 64,
                     ),
                 ]
             )
@@ -360,7 +364,19 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 delete(EvaluationRun).where(EvaluationRun.id.in_((run_id, race_run_id)))
             )
             await session.execute(delete(DatasetVersion).where(DatasetVersion.id == version_id))
-            await session.execute(delete(Artifact).where(Artifact.id == artifact_id))
+            await session.execute(
+                delete(ArtifactReference).where(ArtifactReference.id == artifact_id)
+            )
+            await session.execute(
+                delete(ArtifactBlob).where(
+                    ArtifactBlob.sha256 == "a" * 64,
+                    ~exists(
+                        select(ArtifactReference.id).where(
+                            ArtifactReference.blob_sha256 == ArtifactBlob.sha256
+                        )
+                    ),
+                )
+            )
             await session.execute(delete(Dataset).where(Dataset.id == dataset_id))
             await session.execute(delete(APIKey).where(APIKey.id == api_key_id))
             await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
