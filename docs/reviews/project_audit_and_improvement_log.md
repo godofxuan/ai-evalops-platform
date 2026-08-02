@@ -443,7 +443,7 @@ Pytest 隔离修复推送后的 GitHub CI Run #11（`30713653240`）两个 job �
 
 ## P1-7 更新：Artifact 内容去重与所有权分离
 
-状态：`LOCAL_IMPLEMENTATION_VERIFIED / REMOTE_INTEGRATION_PENDING`。
+状态：`LOCAL_AND_REMOTE_CONTRACT_VERIFIED / FORMAL_GATE_NOT_RUN`。
 
 旧 `artifacts` 表把 blob SHA/path/size 与 tenant/Run owner 放在一行，且唯一键不含 Run；同一
 tenant 的两个 Run 若得到相同 type/SHA，第二个 Run 不能创建自己的 reference。实现提交
@@ -460,6 +460,12 @@ migration 和 diff check 通过。真实 PostgreSQL 测试在本机明确 skippe
 提前写成通过。完整过程见
 [`p1_7_artifact_ownership_log.md`](p1_7_artifact_ownership_log.md)。本修改不运行或覆盖正式
 Gate 1 artifact；多主机文件生命周期和跨系统原子删除仍未解决。
+
+后续远端证据已经产生：绑定 head `47e844a2b3bbb3c0b51fc3db20012fee3256dbdb` 的
+[GitHub Actions Run #13](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30728407695)
+为 success。两个 job 均成功，新增真实 PostgreSQL artifact ownership step、migration、全部
+既有 integration、image build 和 Compose readiness 都明确执行。这解决了上段的远端 pending，
+但不把普通 CI 改写为正式 Gate、破坏性实验或多主机一致性证明。
 
 ## Gate 6 协议草案：异步 Trace 关联
 

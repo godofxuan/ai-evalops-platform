@@ -334,3 +334,43 @@ de1a44b fix(artifacts): separate blobs from tenant references
 
 详细实施日志没有混入实现提交，留在后续独立 docs commit；这样代码回滚和审计记录可以分别
 审阅。当前尚未 push，GitHub PostgreSQL/Compose 结果仍未知。
+
+### 9.12 Push 与真实 PostgreSQL/Compose CI
+
+创建本地审计提交 `47e844a docs(artifacts): record P1-7 ownership hardening` 后，分支比远端
+ahead 2 且工作树 clean。执行非强制 `git push`：
+
+```text
+ca2a893..47e844a  codex/gate1-evidence-hardening -> codex/gate1-evidence-hardening
+```
+
+本机没有 `gh` 命令；第一次用 `gh run list` 只读查询因此失败。没有安装新工具，改用 GitHub
+公开只读 API。它确认 Actions Run #13：
+
+- run ID：`30728407695`；
+- head SHA：`47e844a2b3bbb3c0b51fc3db20012fee3256dbdb`；
+- event：push；
+- 总结：`completed / success`；
+- `quality-and-integration`：success；
+- `compose-smoke`：success。
+
+quality job 逐步证据中，下列步骤都明确 `completed / success`：
+
+- format、lint、mypy、非外部服务 tests；
+- `Apply migrations`；
+- concurrent job claiming；
+- blinded human review；
+- tenant identity/immutable datasets；
+- 新增的 `Integration - artifact blob and reference ownership`；
+- readiness、Redis events、Run idempotency；
+- application image build。
+
+Compose job 成功证明新 migration 能在当前完整 Compose 拓扑中应用并让 API/Worker/Reaper
+ready。新增 ownership step 使用真实 PostgreSQL，证明同 tenant 双 Run、跨 tenant、并发同
+SHA、读取边界、逐引用删除、缺文件和 rollback orphan 测试在 CI 合同下通过。
+
+证据链接：
+[GitHub Actions Run #13](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30728407695)。
+
+这仍是普通 CI，不是正式 500-case Gate 1、破坏性故障实验、多主机 artifact 生命周期或生产
+容量认证。正式 Gate 状态继续 `NOT_RUN`。

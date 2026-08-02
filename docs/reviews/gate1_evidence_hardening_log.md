@@ -2093,10 +2093,17 @@ Run 精确相等，省略 Run 只允许 Dataset reference。最后 reference 才
 | Alembic offline upgrade/downgrade | 2 passed，SQL 人工筛查通过 | `VERIFIED` |
 | Ruff / mypy 115 files / lock / diff | 全部通过 | `VERIFIED` |
 | 新真实 PostgreSQL ownership test | 本机 1 skipped | `NOT_RUN_LOCAL` |
+| GitHub CI Run #13 | 两个 job、migration、新 ownership integration、image build 成功 | `VERIFIED` |
 
 当前仍不能证明本地 store 适合多 API 主机，也不能把数据库 transaction 与文件 unlink 写成
 分布式原子提交。已知 SHA orphan 可在数据库确认无 reference 后清理，但没有定时全盘扫描 GC。
 `docs/results/`、prepared bundle 和正式实验 schema 均未修改；正式 Gate 1 继续 `NOT_RUN`。
+
+远端证据绑定 `47e844a2b3bbb3c0b51fc3db20012fee3256dbdb`：
+[GitHub Actions Run #13](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30728407695)
+为 `completed / success`；`quality-and-integration` 与 `compose-smoke` 均成功。新增 artifact
+ownership PostgreSQL step 明确执行成功。该结果把远端普通 CI 合同提升为 `VERIFIED`，不改变
+正式 Gate 的 `NOT_RUN`。
 
 实现回滚入口是：
 
