@@ -5,7 +5,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from app.core.telemetry import Telemetry
 from app.domain.enums import JobStatus, RunStatus
-from app.events.models import EventType, ProgressEvent
+from app.events.models import ProgressEvent
 from app.jobs.reaper import ReapedJob
 from app.observability.metrics import PlatformMetrics
 from app.workers.runtime import handle_reaped_job, run_reaper_iteration
@@ -58,7 +58,7 @@ async def test_handle_reaped_job_emits_linked_span_and_terminal_events() -> None
     )
     metrics = PlatformMetrics()
 
-    class RecordingPublisher:
+    class ForbiddenPublisher:
         def __init__(self) -> None:
             self.events: list[ProgressEvent] = []
 
@@ -66,7 +66,7 @@ async def test_handle_reaped_job_emits_linked_span_and_terminal_events() -> None
             self.events.append(event)
             return True
 
-    publisher = RecordingPublisher()
+    publisher = ForbiddenPublisher()
 
     await handle_reaped_job(
         item,
@@ -75,13 +75,9 @@ async def test_handle_reaped_job_emits_linked_span_and_terminal_events() -> None
         event_publisher=publisher,
     )
 
-    assert [event.event_type for event in publisher.events] == [
-        EventType.JOB_FAILED,
-        EventType.RUN_COMPLETED,
-    ]
+    assert publisher.events == []
     spans = exporter.get_finished_spans()
     recovered = next(span for span in spans if span.name == "reaper.job.recovered")
-    publish_spans = [span for span in spans if span.name == "progress.publish"]
     assert recovered.parent is None
     assert recovered.context.trace_id != origin_context.trace_id
     assert len(recovered.links) == 1
@@ -89,8 +85,4 @@ async def test_handle_reaped_job_emits_linked_span_and_terminal_events() -> None
     assert recovered.links[0].context.span_id == origin_context.span_id
     assert recovered.attributes is not None
     assert recovered.attributes["attempt.number"] == 2
-    assert len(publish_spans) == 2
-    assert all(
-        span.parent is not None and span.parent.span_id == recovered.context.span_id
-        for span in publish_spans
-    )
+    assert not [span for span in spans if span.name == "progress.publish"]

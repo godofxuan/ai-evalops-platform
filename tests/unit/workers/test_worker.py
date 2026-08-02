@@ -13,7 +13,7 @@ from app.domain.evaluation import (
     TargetResult,
     TokenUsage,
 )
-from app.events.models import EventType, ProgressEvent
+from app.events.models import ProgressEvent
 from app.jobs.claiming import ClaimedJob
 from app.observability.metrics import PlatformMetrics
 from app.targets.base import TargetHTTPError
@@ -249,7 +249,7 @@ async def test_worker_commits_with_latest_heartbeat_lease_version() -> None:
     assert await worker.process_one(worker_id="worker-1") is True
 
 
-async def test_progress_publisher_failure_does_not_fail_completed_job() -> None:
+async def test_worker_never_publishes_outside_the_state_transaction() -> None:
     claimed_job = ClaimedJob(
         job_id=JOB_ID,
         run_id=RUN_ID,
@@ -269,12 +269,17 @@ async def test_progress_publisher_failure_does_not_fail_completed_job() -> None:
         evaluator_version="v1",
     )
 
-    class BrokenPublisher:
+    class ForbiddenPublisher:
+        def __init__(self) -> None:
+            self.calls = 0
+
         async def publish(self, event: ProgressEvent) -> bool:
-            assert event.event_type in {EventType.JOB_PROGRESS}
-            raise ConnectionError("redis unavailable")
+            del event
+            self.calls += 1
+            return True
 
     committer = RecordingCommitter()
+    publisher = ForbiddenPublisher()
     worker = EvaluationWorker(
         claimer=SingleClaimer(claimed_job),
         target_factory=lambda _kind, _config: RecordingTarget(),
@@ -282,11 +287,12 @@ async def test_progress_publisher_failure_does_not_fail_completed_job() -> None:
         result_committer=committer,
         failure_committer=RecordingFailureCommitter(),
         lease_runner=PassThroughLeaseRunner(),
-        event_publisher=BrokenPublisher(),
+        event_publisher=publisher,
     )
 
     assert await worker.process_one(worker_id="worker-1") is True
     assert committer.committed is True
+    assert publisher.calls == 0
 
 
 async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
@@ -321,11 +327,16 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
     )
     metrics = PlatformMetrics()
 
-    class RecordingPublisher:
+    class ForbiddenPublisher:
+        def __init__(self) -> None:
+            self.calls = 0
+
         async def publish(self, event: ProgressEvent) -> bool:
             del event
+            self.calls += 1
             return True
 
+    publisher = ForbiddenPublisher()
     worker = EvaluationWorker(
         claimer=SingleClaimer(claimed_job),
         target_factory=lambda _kind, _config: RecordingTarget(),
@@ -333,7 +344,7 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
         result_committer=RecordingCommitter(),
         failure_committer=RecordingFailureCommitter(),
         lease_runner=PassThroughLeaseRunner(),
-        event_publisher=RecordingPublisher(),
+        event_publisher=publisher,
         metrics=metrics,
         telemetry=telemetry,
     )
@@ -348,8 +359,9 @@ async def test_worker_emits_pipeline_spans_and_success_metrics() -> None:
         "target.call",
         "evaluator.evaluate",
         "result.persist",
-        "progress.publish",
     } <= span_names
+    assert "progress.publish" not in span_names
+    assert publisher.calls == 0
     process_span = next(span for span in spans if span.name == "job.process")
     assert process_span.parent is None
     assert process_span.context.trace_id != origin_context.trace_id

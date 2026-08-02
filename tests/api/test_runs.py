@@ -375,6 +375,17 @@ async def test_cancel_run_uses_server_principal_and_returns_current_snapshot() -
     application = create_app()
     application.dependency_overrides[get_principal] = lambda: PRINCIPAL
     application.state.cancellation_service = service
+
+    class ForbiddenPublisher:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def publish(self, _event: object) -> bool:
+            self.calls += 1
+            return True
+
+    publisher = ForbiddenPublisher()
+    application.state.event_publisher = publisher
     transport = ASGITransport(app=application)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -383,3 +394,4 @@ async def test_cancel_run_uses_server_principal_and_returns_current_snapshot() -
     assert response.status_code == 202
     assert response.json()["status"] == "cancelling"
     assert service.called_with == (PRINCIPAL, run_id)
+    assert publisher.calls == 0
