@@ -85,13 +85,17 @@ async def refresh_durable_outbox_gauges(
     metrics: PlatformMetrics,
     now: datetime,
 ) -> DurableOutboxGauges:
-    async with session_factory() as session:
-        row = (await session.execute(build_durable_outbox_gauges_statement())).one()
-    gauges = DurableOutboxGauges(
-        pending=int(row.pending),
-        oldest_pending_at=row.oldest_pending_at,
-    )
-    metrics.set_outbox_pending(gauges.pending)
-    metrics.set_outbox_oldest_pending_age(gauges.oldest_pending_age_seconds(now))
-    metrics.record_outbox_metrics_refresh_success(now)
-    return gauges
+    try:
+        async with session_factory() as session:
+            row = (await session.execute(build_durable_outbox_gauges_statement())).one()
+        gauges = DurableOutboxGauges(
+            pending=int(row.pending),
+            oldest_pending_at=row.oldest_pending_at,
+        )
+        metrics.set_outbox_pending(gauges.pending)
+        metrics.set_outbox_oldest_pending_age(gauges.oldest_pending_age_seconds(now))
+        metrics.record_outbox_metrics_refresh_success(now)
+        return gauges
+    except Exception:
+        metrics.record_outbox_metrics_refresh_failure()
+        raise
