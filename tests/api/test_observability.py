@@ -124,11 +124,14 @@ async def test_metrics_endpoint_exposes_durable_outbox_refresh_failures() -> Non
 
     application = create_app(readiness_probe=ReadyProbe())
     application.state.session_factory = SessionFactory()
+    application.state.metrics.record_outbox_metrics_refresh_success(
+        datetime.fromtimestamp(123.5, tz=UTC)
+    )
     transport = ASGITransport(app=application)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/metrics")
 
     assert response.status_code == 200
-    assert "outbox_metrics_last_success_timestamp_seconds 0.0" in response.text
+    assert "outbox_metrics_last_success_timestamp_seconds 123.5" in response.text
     assert "outbox_metrics_refresh_failures_total 1.0" in response.text
