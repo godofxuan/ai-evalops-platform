@@ -88,3 +88,47 @@ async def test_metrics_endpoint_refreshes_durable_outbox_backlog() -> None:
     assert response.status_code == 200
     assert "outbox_pending 3.0" in response.text
     assert "outbox_oldest_pending_age_seconds" in response.text
+
+
+async def test_metrics_endpoint_exposes_durable_outbox_refresh_failures() -> None:
+    class Result:
+        def one(self) -> SimpleNamespace:
+            return SimpleNamespace(
+                queue_depth=0,
+                running=0,
+                oldest_heartbeat_at=None,
+            )
+
+    class SessionFactory:
+        def __init__(self) -> None:
+            self.executions = 0
+
+        def __call__(self) -> "Session":
+            return Session(self)
+
+    class Session:
+        def __init__(self, factory: SessionFactory) -> None:
+            self._factory = factory
+
+        async def execute(self, _statement: object) -> Result:
+            self._factory.executions += 1
+            if self._factory.executions == 1:
+                return Result()
+            raise RuntimeError("outbox metrics unavailable")
+
+        async def __aenter__(self) -> "Session":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    application = create_app(readiness_probe=ReadyProbe())
+    application.state.session_factory = SessionFactory()
+    transport = ASGITransport(app=application)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "outbox_metrics_last_success_timestamp_seconds 0.0" in response.text
+    assert "outbox_metrics_refresh_failures_total 1.0" in response.text
