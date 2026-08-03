@@ -517,6 +517,10 @@ async def test_real_transactional_outbox_claim_retry_and_at_least_once_delivery(
         rendered = metrics.render().decode("utf-8")
         assert "outbox_pending 1.0" in rendered
         assert "outbox_oldest_pending_age_seconds 691200.0" in rendered
+        assert (
+            metrics.registry.get_sample_value("outbox_metrics_last_success_timestamp_seconds")
+            == retention_now.timestamp()
+        )
     finally:
         if pending is not None and not pending.done():
             pending.cancel()
