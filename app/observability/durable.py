@@ -93,4 +93,5 @@ async def refresh_durable_outbox_gauges(
     )
     metrics.set_outbox_pending(gauges.pending)
     metrics.set_outbox_oldest_pending_age(gauges.oldest_pending_age_seconds(now))
+    metrics.record_outbox_metrics_refresh_success(now)
     return gauges
