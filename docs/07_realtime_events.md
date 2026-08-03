@@ -93,8 +93,10 @@ retry 和尚未 fenced acknowledgement 的行不会进入删除集合。多个 A
 
 `/metrics` 从 PostgreSQL 刷新 `outbox_pending` 和 `outbox_oldest_pending_age_seconds`；后者从
 最早 pending 的 `created_at` 计算，使长期 retry 不会被未来 `available_at` 隐藏。retry、lease
-loss 和实际 cleanup 删除量分别有全局 Counter。`deploy/prometheus/outbox-alerts.yml` 是告警规则
-模板，不代表真实 Prometheus/Alertmanager 已部署或验证。
+loss 和实际 cleanup 删除量分别有全局 Counter。每次完整成功 snapshot 还写
+`outbox_metrics_last_success_timestamp_seconds`；失败时保留上次时间、增加
+`outbox_metrics_refresh_failures_total` 并让 `/metrics` 继续返回 200。告警模板覆盖 backlog、lease
+loss 与持续五分钟没有成功刷新；不代表真实 Prometheus/Alertmanager 已部署或验证。
 
 ## 重连与重复
 
@@ -126,11 +128,13 @@ Outbox relay 是 at-least-once：Redis 已接受事件但进程在 `mark_publish
 - 两个 maintenance 并发、每轮一条时只删除两条过期 delivered 行；近期 delivered 和旧 pending
   保留；
 - durable pending=1 与 oldest age=8 天的真实 PostgreSQL Gauge 快照；
+- durable snapshot 成功时间精确等于观察时钟；失败保留旧时间并增加失败 Counter；
 - SSE 鉴权 Principal 传递和响应 headers。
 
 真实 PostgreSQL/Redis integration 覆盖事务回滚、跨 tenant FK、双 relay 认领、失败重试和
-ack 丢失重放；P2-8 还覆盖并发 retention 与 durable Gauge。本机没有启用真实服务，因此结果
-是 skipped；GitHub Actions #28、#29 和 #31 已实际通过对应合同。
+ack 丢失重放；P2-8 覆盖并发 retention 与 durable Gauge，P2-9 又验证 snapshot 成功时间。本机
+没有启用真实服务，因此结果是 skipped；GitHub Actions #28、#29、#31 和 #34 已实际通过对应合同。
 完整过程和残余风险见
-[`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md) 与
-[`reviews/p2_8_outbox_operations_log.md`](reviews/p2_8_outbox_operations_log.md)。
+[`reviews/p2_7_transactional_outbox_log.md`](reviews/p2_7_transactional_outbox_log.md)、
+[`reviews/p2_8_outbox_operations_log.md`](reviews/p2_8_outbox_operations_log.md) 与
+[`reviews/p2_9_outbox_metrics_freshness_log.md`](reviews/p2_9_outbox_metrics_freshness_log.md)。

@@ -709,3 +709,33 @@ Gauge 为 pending=1、oldest=691200 秒。绑定 head
 本阶段没有创建或修改正式 `docs/results/`。source、Compose 和 migration head 已变化，旧
 prepared bundle 只能历史只读，正式 Gate 前必须从最终干净提交重新 prepare。没有吞吐、p95/p99、
 容量 knee、资源曲线或 adoption 结论。
+
+## 17. P2-9 Outbox durable metrics freshness
+
+状态：`LOCAL_AND_REMOTE_VERIFIED / ALERT_RUNTIME_NOT_RUN / FORMAL_GATE_NOT_RUN`。
+
+P2-8 的 `/metrics` 在 Outbox PostgreSQL snapshot 失败时保留旧 Gauge，这保证 scrape 入口仍可用，
+但旧值/默认 0 没有新鲜度证据。P2-9 用五组纵向 RED→GREEN 增加：
+
+- 无 ID label 的 `outbox_metrics_last_success_timestamp_seconds`；
+- 无 ID label 的 `outbox_metrics_refresh_failures_total`；
+- pending/oldest-age 全部写入后才标记成功；
+- 失败时计数、保留旧成功时间、原样重抛给路由隔离边界；
+- `/metrics` 继续 200，Job refresh 与进程 Counter 仍可抓取；
+- `time() - last_success > 300` 且持续 5 分钟的 stale warning 模板。
+
+本地最终 `508 passed, 9 deselected in 241.85s`；聚焦 `22 passed`；70-package lock、261-file
+Ruff format、lint 与 119-source strict mypy 通过。真实 Outbox integration 本机因未启用迁移后的
+PostgreSQL/Redis 为 `1 skipped`。
+
+绑定代码/测试 head `30d4d372802db0d26778344a10ddbc9e13579f13` 的
+[GitHub Actions #34](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774192971)
+两个 job success；步骤级结果确认新 timestamp 断言在真实 transactional Outbox integration 中
+通过，其他真实服务 integration、migration round-trip、image、完整 Compose/readiness/hardening
+也成功。
+
+本阶段没有 migration、没有修改 `docs/results/`，也没有重新 prepare 或运行正式 Gate。#34 是
+普通 CI 合同，不能产生 throughput、p95/p99、容量 knee、资源曲线或 Worker adoption 结论。
+真实 Prometheus rule evaluation、`up` 告警、Alertmanager route 和 on-call 演练仍为 `NOT_RUN`。
+详细记录见
+[`reviews/p2_9_outbox_metrics_freshness_log.md`](reviews/p2_9_outbox_metrics_freshness_log.md)。

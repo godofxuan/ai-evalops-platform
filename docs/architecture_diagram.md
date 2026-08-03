@@ -27,7 +27,7 @@ flowchart LR
     RELAY -->|"Redis publish"| REDIS
     RELAY -->|"fenced ack / retry"| PG
     RELAY -->|"bounded retained delivered cleanup"| PG
-    API -->|"durable backlog metrics snapshot"| PG
+    API -->|"durable backlog snapshot<br/>success time + failure count"| PG
 
     PROM -->|"GET /metrics"| API
     PROM -->|"each replica :9101"| W
@@ -40,6 +40,8 @@ flowchart LR
 API、Outbox relay 与 retention cleanup 是同一 API 进程中的不同职责，不是额外 Compose 服务。
 dispatcher 与 cleanup 使用独立 cadence 和 task；PostgreSQL 是最终状态和待发布意图的持久边界；
 Redis 仍是可丢失的在线通知层。Prometheus 和 OpenTelemetry 不能覆盖 PostgreSQL 中的最终状态。
+若 Outbox snapshot 失败，API 保留上次 backlog 值并暴露 last-success timestamp 与 failure Counter；
+Prometheus 用 freshness 判断旧值，目标完全不可抓取仍由 `up` 告警负责。
 
 ## Job 生命周期
 

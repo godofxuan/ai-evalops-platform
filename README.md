@@ -495,6 +495,8 @@ Worker 集群资源按快照聚合、Compose 身份绑定、RED/GREEN、工具�
 [P2-7 事务型 Outbox 记录](docs/reviews/p2_7_transactional_outbox_log.md)。
 delivered retention、durable backlog 指标、告警模板、Compose 转发与真实并发 cleanup 见
 [P2-8 Outbox 运维记录](docs/reviews/p2_8_outbox_operations_log.md)。
+durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert 见
+[P2-9 Outbox 指标新鲜度记录](docs/reviews/p2_9_outbox_metrics_freshness_log.md)。
 
 不得把跳过的集成测试或未运行的 Docker 命令写成通过。
 
@@ -562,6 +564,19 @@ delivered retention、durable backlog 指标、告警模板、Compose 转发与�
 | Prometheus alert rules | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
 | 正式 500-case/32-arm | NOT_RUN |
 
+2026-08-03 P2-9 Outbox 指标刷新新鲜度验证结果：
+
+| 检查 | 结果 |
+|---|---|
+| lock / format / lint | 70 packages；261 Python files；All checks passed |
+| strict mypy | app + scripts + integration/concurrency，119 source files |
+| 最终 pytest 非集成 | 508 passed，9 deselected，241.85 秒 |
+| 本机 Outbox integration | 1 skipped；本机未启用真实 PostgreSQL/Redis |
+| GitHub Actions #34 | 代码/测试 head `30d4d37` 两个 job success；真实 PG/Redis、migration、image、Compose 通过 |
+| 新指标 | last-success timestamp Gauge + refresh-failure Counter；均无 ID label |
+| stale alert | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
+| 正式 500-case/32-arm | NOT_RUN |
+
 ## 当前限制
 
 - tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
@@ -585,8 +600,8 @@ delivered retention、durable backlog 指标、告警模板、Compose 转发与�
 - artifact 支持已知 SHA 的无引用清理，但尚无定时全盘扫描/对象存储生命周期 GC；
 - SSE fallback 尚未做大量长连接容量测试，Pub/Sub 不提供历史回放；
 - Outbox 是 at-least-once，同一 event ID 可能重放；已有 delivered-row retention、pending
-  backlog/oldest-age 指标与告警模板，但尚无 dead-letter、客户端消费 offset/history、真实告警链
-  或大型表在线建索引/清理容量证据；
+  backlog/oldest-age、刷新成功时间/失败数与告警模板，但尚无 dead-letter、客户端消费
+  offset/history、真实告警链或大型表在线建索引/清理容量证据；
 - readiness 表示依赖当前可用，不等于系统通过生产可靠性或安全认证。
 
 ## 面试展示路径（Phase 9）

@@ -18,6 +18,7 @@
 | permanent failure | MockTarget permanent_failure | 不重试；Job/Run 正确聚合 | `CONTRACT-pass` |
 | Redis publish 失败 | Flapping publisher + 真实 PG/Redis relay | PostgreSQL 状态不回滚；Outbox 保持 pending；有界退避后同 ID 重试 | local contract + GitHub Actions #28 integration `PASS` |
 | PostgreSQL 单轮断开 | Worker fake 抛 ConnectionError | loop 记录错误并继续；不把未知结果写成成功 | `CONTRACT-pass` |
+| Outbox 指标 snapshot 失败 | Job snapshot 成功、Outbox session 抛 RuntimeError | `/metrics` 仍 200；保留上次成功时间；失败 Counter +1 | local API `PASS` + GitHub Actions #34 |
 | PostgreSQL 容器中断 | Compose stop postgres | liveness 仍 200；readiness 503；恢复后重新可用 | `NOT-RUN` |
 | artifact 发布失败 | monkeypatch 原子 publish | 清理临时文件；不留下成功 metadata | `PASS-local`（既有测试） |
 | API 响应前客户端断开 | 已提交事务与 HTTP 生命周期分离 | 已提交 Run 依赖 Idempotency-Key 重放，不重复创建 | 真实 PG 合同存在；本机 `SKIPPED-no-infra` |

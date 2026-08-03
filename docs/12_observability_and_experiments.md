@@ -96,6 +96,10 @@ API、Worker、Reaper 是不同操作系统进程，Python 全局内存不共享
 故障完全消失。运维必须同时观察 readiness 和数据库告警，不能把旧 Gauge 当成新
 事实。
 
+Outbox durable refresh 另外暴露最近成功 snapshot 的 Unix 时间与失败 Counter。成功时间只在
+pending/oldest-age 都更新后写入；失败会计数、保留上次成功时间并重新抛给路由的隔离边界。
+Prometheus 可以用自己的 `time()` 计算 freshness，从而区分真实 backlog=0 与未成功刷新。
+
 ## 3. 指标目录
 
 | 指标 | 类型 | 写入位置 | 语义 |
@@ -115,13 +119,16 @@ API、Worker、Reaper 是不同操作系统进程，Python 全局内存不共享
 | `redis_publish_failures_total` | Counter | API Outbox Redis publisher | relay 发布失败；Outbox 保持 pending 并重试 |
 | `outbox_pending` | Gauge | API durable refresh | PostgreSQL 中全部未发布通知意图 |
 | `outbox_oldest_pending_age_seconds` | Gauge | API durable refresh | 最早 pending `created_at` 到 scrape 的秒数 |
+| `outbox_metrics_last_success_timestamp_seconds` | Gauge | API durable refresh | 最近一次完整成功 Outbox snapshot 的 Unix 时间 |
+| `outbox_metrics_refresh_failures_total` | Counter | API durable refresh | 本进程 Outbox snapshot 失败次数 |
 | `outbox_retry_scheduled_total` | Counter | API Outbox dispatcher | 成功安排的 durable publish retry |
 | `outbox_lease_lost_total` | Counter | API Outbox dispatcher | ack/reschedule 未通过 owner/lease fencing |
 | `outbox_cleanup_deleted_total` | Counter | API Outbox cleanup | 超过 retention 且已发布的实际删除行数 |
 
 Prometheus Python Client 会为 Counter 暴露 `_total` 后缀，因此代码中的逻辑名称会以
-`redis_publish_failures_total`、`outbox_retry_scheduled_total`、`outbox_lease_lost_total` 和
-`outbox_cleanup_deleted_total` 出现在文本格式中。
+`redis_publish_failures_total`、`outbox_metrics_refresh_failures_total`、
+`outbox_retry_scheduled_total`、`outbox_lease_lost_total` 和 `outbox_cleanup_deleted_total`
+出现在文本格式中。
 
 ## 4. 日志合同
 
@@ -176,9 +183,11 @@ curl http://127.0.0.1:8000/metrics
 
 Worker/Reaper 端口只在 Compose 网络中 `expose`，默认不发布到宿主机。
 
-告警模板位于 `deploy/prometheus/outbox-alerts.yml`。它覆盖持续 backlog age 和 lease loss，规则
-只有 `severity` 有界 label。当前 Compose 没有捆绑 Prometheus/Alertmanager，因此文件解析和表达式
-合同是 `CONTRACT_VERIFIED`，真实 rule evaluation、通知路由和 on-call 演练是 `NOT_RUN`。
+告警模板位于 `deploy/prometheus/outbox-alerts.yml`。它覆盖持续 backlog age、lease loss 和
+Outbox snapshot 超过 300 秒未成功刷新；stale 条件需持续 5 分钟。规则只有 `severity` 有界 label。
+当前 Compose 没有捆绑 Prometheus/Alertmanager，因此文件解析和表达式合同是
+`CONTRACT_VERIFIED`，真实 rule evaluation、通知路由和 on-call 演练是 `NOT_RUN`。目标完全不可
+抓取仍需独立的 Prometheus `up` 告警。
 
 ## 6. 可复现实验入口
 
@@ -251,7 +260,8 @@ new failure 和 recovery，然后保存完整 case-level comparison。
 - Worker/Reaper linked root 和内部业务 span 父子关系有 in-memory exporter 自动化测试；
 - SSE 关闭会归零连接 Gauge 并关闭底层 subscriber；
 - Redis 第一次失败、恢复后第二次发布可继续；
-- Outbox pending/oldest-age 从 PostgreSQL 刷新，不把未刷新默认值冒充 durable 零；
+- Outbox pending/oldest-age 从 PostgreSQL 刷新；last-success/failure 信号让默认值或旧值不再冒充
+  当前 durable 零；
 - retry、lease-lost 和 retention cleanup 使用无 ID label 的聚合 Counter；
 - 两个 cleanup 实例在真实 PostgreSQL 中保留 pending/近期 delivered 并删除过期 delivered；
 - 数据库单次迭代异常被记录后 Worker loop 可继续下一轮；

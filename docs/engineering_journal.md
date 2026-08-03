@@ -1025,3 +1025,53 @@ Python 与配置
 仍未解决 dead-letter/replay 权限、Gauge freshness、delivered overdue Gauge、真实告警链、普通
 `CREATE INDEX` 在大型表上的锁影响、cleanup throughput、归档/合规保留、多区域/soak 和生产容量。
 完整记录见 `docs/reviews/p2_8_outbox_operations_log.md`。
+
+## 2026-08-03 — P2-9：Outbox 指标刷新新鲜度
+
+### 判断与范围
+
+- P2-8 的 backlog Gauge 在数据库 refresh 失败时会保留旧值或默认 0，但没有 freshness 信号；
+  这会让“未知”看起来像“没有积压”。
+- dead-letter/max-attempts、replay/ack 权限和通知 SLO 属于 operator 产品决策；正式
+  500-case/32-arm 又需要单独授权，所以本阶段都没有擅自执行。
+- P2-9 只沿 `/metrics → durable snapshot → registry → alert` 调用链增加成功时间与失败计数，
+  不修改 Outbox retry、retention、fencing、权限、schema 或持久数据。
+- 选择 Unix timestamp 而不是二值 health/静态 age：Prometheus 能用自己的 `time()` 计算持续
+  新鲜度，失败路径不需要不断改写 age。
+
+### RED/GREEN 与问题
+
+- 五组纵向 RED→GREEN 分别冻结 success timestamp、failure Counter、durable success 接线、HTTP
+  失败降级和 stale alert；真实 PG 合同与“失败保留旧时间”回归另行提交。
+- 首个 RED 在 pytest 前被 Ruff format 拦截；排版修正后才得到精确 AttributeError，没有把格式
+  失败冒充功能失败。
+- durable success RED 的外层校验脚本依赖 pytest 展示完整 registry，但输出被截断；产品测试已在
+  新断言失败，修正的是校验脚本，不是测试预期。
+- integration 断言也先被 Ruff 要求改格式；修正后本机明确 `1 skipped`，没有写成 PASS。
+- 强化 HTTP 回归时补丁先命中前一个相似测试，运行前检查发现并移动；首次执行随后 GREEN。
+- 全量测试预估 509，实际 508；重新计数确认只新增 4 个 test function，另一个是既有测试新增
+  断言，因此 504+4=508 正确。
+- PowerShell 中文读取未指定 UTF-8 时乱码；后续显式 `-Encoding UTF8` 并用 `rg` 交叉核对。
+
+### 行为与证据
+
+- `outbox_metrics_last_success_timestamp_seconds` 只在 pending、oldest-age 全部写入后更新；
+- `outbox_metrics_refresh_failures_total` 在 refresh 异常时增加，异常随后原样重抛；
+- 路由继续隔离 Job/Outbox refresh，失败时 `/metrics` 返回 200、保留旧成功时间；
+- `AIEvalOpsOutboxMetricsStale` 使用 `time() - last_success > 300` 且 `for: 5m`；
+- 两个指标无 tenant/run/event label；真实 target-down 仍需 `up` 告警。
+
+| 检查 | 结果 |
+|---|---|
+| lock / Ruff / lint / strict mypy | 70 packages / 261 files / passed / 119 sources |
+| P2-9 聚焦 | 22 passed |
+| 最终非 integration | 508 passed，9 deselected，241.85 秒 |
+| 本机真实 Outbox integration | 1 skipped |
+| GitHub Actions #34 | head `30d4d37`，quality-and-integration + compose-smoke success |
+| 真实 PG timestamp contract | #34 transactional Outbox step success |
+| Prometheus/Alertmanager runtime | `NOT_RUN` |
+| 正式 500-case/32-arm | `NOT_RUN` |
+
+仍未解决每 API 副本抓取、应用时钟漂移、Job Gauge freshness、refresh latency、真实 `up`/rule/
+Alertmanager 演练、dead-letter/replay 权限、大型表/cleanup 容量、归档/合规、soak 和正式 Gate。
+完整记录见 `docs/reviews/p2_9_outbox_metrics_freshness_log.md`。

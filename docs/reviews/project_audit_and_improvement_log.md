@@ -807,3 +807,31 @@ delivered 与旧 pending，并得到 pending=1、oldest=691200 秒。绑定 head
 之后显式检查每个 `$LASTEXITCODE`。告警真实评估、dead-letter/replay 权限、Gauge freshness、大型表
 在线建索引、cleanup 容量、归档/合规、soak 和正式 Gate 仍未完成。详细记录见
 [`p2_8_outbox_operations_log.md`](p2_8_outbox_operations_log.md)。
+
+## P2-9 更新：Outbox durable metrics freshness
+
+状态：`LOCAL_AND_REMOTE_VERIFIED / ALERT_RUNTIME_NOT_RUN / FORMAL_GATE_NOT_RUN`。
+
+审计确认 P2-8 虽从 PostgreSQL 刷新 pending/oldest-age，但数据库失败时 `/metrics` 会保留旧 Gauge
+或进程初始 0，观察者无法区分“真实没有 backlog”和“从未成功 refresh”。本阶段没有越过产品边界
+实现 dead-letter/max-attempts，也没有用普通“继续”启动需要单独授权的正式 Gate。
+
+实现新增每 API 进程的无标签 last-success timestamp Gauge 与 refresh-failure Counter。durable
+snapshot 只有在 pending/oldest-age 全部写入后才标记成功；异常先计数再重抛，由既有 HTTP 隔离
+边界保持 `/metrics` 200、Job Gauge 和进程 Counter 可抓取。失败保留上次成功时间，不把未知清零。
+Prometheus 模板新增 300 秒 freshness、持续 5 分钟的 warning；target 完全不可抓取仍需要 `up`
+告警，仓库没有声称已部署或触发。
+
+五组 RED→GREEN 分别证明指标定义、成功接线、失败接线和 alert 缺失；真实 integration 增加成功
+时间等于 snapshot 时钟的断言。格式预检查、pytest 长文本截断导致的外层校验误判、补丁命中相似
+测试、中文读取编码和 509→508 计数修正都保留在详细日志中，没有重写成无问题过程。
+
+本地最终 `508 passed, 9 deselected in 241.85s`，聚焦 22 passed；Ruff 261 files、strict mypy
+119 sources、lock 70 packages。绑定 head `30d4d37` 的
+[GitHub Actions #34](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774192971)
+两个 job success，真实 transactional Outbox timestamp、全部 integration、migration、image 与
+Compose 均通过；本机真实服务仍 skipped。
+
+每副本抓取、时钟漂移、Job Gauge freshness、refresh latency、真实 Prometheus/Alertmanager、
+dead-letter/replay 权限、cleanup 容量、归档/合规、soak 和正式 Gate 仍未完成。详细记录见
+[`p2_9_outbox_metrics_freshness_log.md`](p2_9_outbox_metrics_freshness_log.md)。

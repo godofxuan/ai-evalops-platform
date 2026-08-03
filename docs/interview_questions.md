@@ -172,7 +172,7 @@ serializer 也只接受盲化 packet。三层边界减少未来重构误泄露�
 
 ## 实验与证据
 
-### 29. 469 passed 能证明性能好吗？
+### 29. 508 passed 能证明性能好吗？
 
 不能。它证明本地逻辑/API 合同没有回归；远端真实 PostgreSQL/Redis、migration、image 与
 Compose 合同也已通过。但正式 500-case、32-arm、soak 和生产容量仍未执行，不能从测试数量
@@ -192,10 +192,11 @@ Run ID。
 
 ### 32. 当前最值得继续做什么？
 
-transactional outbox retention、pending/oldest-age 指标和告警模板已完成并由真实 PostgreSQL CI
-验证。下一步先由 operator 冻结通知 SLO、dead-letter/replay 权限、真实告警阈值和 7 天 retention
-是否符合业务/合规；正式容量工作仍必须单独授权，用加固 Compose 运行四组扩容实验并保存全部
-负面结果，再决定 resource limit、索引、batch claim、连接池或 Worker 数，而不是先猜优化。
+transactional outbox retention、pending/oldest-age、refresh freshness/failure 指标和告警模板已完成，
+并由真实 PostgreSQL CI 验证。下一步先由 operator 冻结通知 SLO、dead-letter/replay 权限、真实
+告警阈值和 7 天 retention 是否符合业务/合规；正式容量工作仍必须单独授权，用加固 Compose
+运行四组扩容实验并保存全部负面结果，再决定 resource limit、索引、batch claim、连接池或
+Worker 数，而不是先猜优化。
 
 ### 33. 自动 quality gate 为什么没有自动 adoption？
 
@@ -225,3 +226,11 @@ Outbox，不能只依赖 `SKIP LOCKED` 就假设没有死锁。
 超过 retention 的已发布行，pending 不进入候选；CTE 用 `SKIP LOCKED` 让多 API 副本处理不同批次，
 `RETURNING` 提供实际删除数。migration downgrade 能删索引，但不能恢复 cleanup 已经删除的
 delivered intent，所以保留期是不可逆的数据生命周期合同，不只是性能优化。
+
+### 37. 为什么 Outbox backlog Gauge 还需要 last-success timestamp？
+
+为了让 Prometheus scrape 在数据库短暂故障时仍能拿到进程 Counter，`/metrics` 会保留上次 durable
+Gauge，而不是直接 503。但旧值或初始 0 不能冒充当前事实。成功时间只在 pending/oldest-age 全部
+写入后更新；失败增加 Counter、保留旧时间并继续返回 200。timestamp 比二值 health 更能表达持续
+时间，Prometheus 可用 `time()` 计算 freshness。target 完全不可抓取仍需独立 `up` 告警；当前仓库
+只验证规则合同，没有声称真实 Alertmanager 已部署。
