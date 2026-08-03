@@ -18,3 +18,12 @@ groups:
         annotations:
           summary: AI EvalOps Outbox relay lost a lease
           description: A relay could not fence an acknowledgement or retry update.
+
+      - alert: AIEvalOpsOutboxMetricsStale
+        expr: time() - outbox_metrics_last_success_timestamp_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AI EvalOps Outbox metrics are stale
+          description: No durable Outbox metrics refresh has succeeded within five minutes.
