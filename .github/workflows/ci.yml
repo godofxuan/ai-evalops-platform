@@ -121,7 +121,7 @@ jobs:
           uv run --no-sync pytest tests/integration/test_redis_events.py
           --junitxml=/tmp/junit-redis-events.xml
 
-      - name: Integration - transactional outbox delivery, replay, and retention
+      - name: Integration - transactional outbox delivery, replay, retention, and metrics freshness
         if: ${{ !cancelled() }}
         run: >-
           uv run --no-sync pytest tests/integration/test_transactional_outbox.py
