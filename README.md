@@ -573,6 +573,7 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 | 最终 pytest 非集成 | 508 passed，9 deselected，241.85 秒 |
 | 本机 Outbox integration | 1 skipped；本机未启用真实 PostgreSQL/Redis |
 | GitHub Actions #34 | 代码/测试 head `30d4d37` 两个 job success；真实 PG/Redis、migration、image、Compose 通过 |
+| GitHub Actions #35 | 代码、CI 命名与首版证据文档 head `074570c` 两个 job success |
 | 新指标 | last-success timestamp Gauge + refresh-failure Counter；均无 ID label |
 | stale alert | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
 | 正式 500-case/32-arm | NOT_RUN |

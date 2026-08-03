@@ -1068,6 +1068,7 @@ Python 与配置
 | 最终非 integration | 508 passed，9 deselected，241.85 秒 |
 | 本机真实 Outbox integration | 1 skipped |
 | GitHub Actions #34 | head `30d4d37`，quality-and-integration + compose-smoke success |
+| GitHub Actions #35 | 代码 + CI 命名 + 首版文档 head `074570c`，两个 job success |
 | 真实 PG timestamp contract | #34 transactional Outbox step success |
 | Prometheus/Alertmanager runtime | `NOT_RUN` |
 | 正式 500-case/32-arm | `NOT_RUN` |

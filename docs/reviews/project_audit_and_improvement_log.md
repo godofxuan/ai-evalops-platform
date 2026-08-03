@@ -830,7 +830,9 @@ Prometheus 模板新增 300 秒 freshness、持续 5 分钟的 warning；target 
 119 sources、lock 70 packages。绑定 head `30d4d37` 的
 [GitHub Actions #34](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774192971)
 两个 job success，真实 transactional Outbox timestamp、全部 integration、migration、image 与
-Compose 均通过；本机真实服务仍 skipped。
+Compose 均通过；本机真实服务仍 skipped。代码、CI 命名与首版证据文档 head `074570c` 又由
+[GitHub Actions #35](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774892844)
+完成两个 job，新命名的 metrics-freshness integration step 也为 success。
 
 每副本抓取、时钟漂移、Job Gauge freshness、refresh latency、真实 Prometheus/Alertmanager、
 dead-letter/replay 权限、cleanup 容量、归档/合规、soak 和正式 Gate 仍未完成。详细记录见

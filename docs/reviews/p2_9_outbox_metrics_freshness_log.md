@@ -8,9 +8,14 @@
 - 起始提交：`b0a7b5f816e1b39e7124c9f6438694cd099dfe2c`。
 - 首轮代码与测试验证提交：`30d4d372802db0d26778344a10ddbc9e13579f13`。
 - CI 可读性提交：`20cf325`，只调整 Outbox integration 步骤名称，不改变执行命令。
+- 代码、CI 命名与首版证据文档验证提交：
+  `074570c189e3aa970f1caf75f495897cb19fbf2a`。
 - 首轮远端证据：
   [GitHub Actions #34](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774192971)，
   绑定 `30d4d372802db0d26778344a10ddbc9e13579f13`，两个 job 均为 `success`。
+- 文档头远端证据：
+  [GitHub Actions #35](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774892844)，
+  绑定 `074570c189e3aa970f1caf75f495897cb19fbf2a`，两个 job 均为 `success`。
 - migration：无新增；数据库 head 仍为 `20260803_0014_outbox_retention_index`。
 - 正式 500-case/32-arm Gate：`NOT_RUN`。
 - 真实 Prometheus/Alertmanager：未部署、未评估、未路由，状态 `NOT_RUN`。
@@ -405,6 +410,14 @@ P2-9 把失败计数放进 Outbox durable 模块后，路由不需要知道数�
 - 完整 Compose build/start/migration/readiness/hardening：success。
 
 failure annotation 步骤显示 skipped，是因为没有失败需要注释；不属于缺失验证。
+
+### 10.3 GitHub Actions #35
+
+[GitHub Actions #35](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774892844)
+绑定 head `074570c189e3aa970f1caf75f495897cb19fbf2a`。`quality-and-integration` 与
+`compose-smoke` 均为 success；CI 步骤已显示为
+`transactional outbox delivery, replay, retention, and metrics freshness`，该步骤完成 success。
+它证明代码、更新后的 CI metadata 与首版 P2-9 文档共同存在时，完整流水线仍保持通过。
 
 ## 11. 部署与告警解释
 

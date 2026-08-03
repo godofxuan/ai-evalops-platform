@@ -732,7 +732,10 @@ PostgreSQL/Redis 为 `1 skipped`。
 [GitHub Actions #34](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774192971)
 两个 job success；步骤级结果确认新 timestamp 断言在真实 transactional Outbox integration 中
 通过，其他真实服务 integration、migration round-trip、image、完整 Compose/readiness/hardening
-也成功。
+也成功。随后绑定代码、CI 步骤命名与首版证据文档 head
+`074570c189e3aa970f1caf75f495897cb19fbf2a` 的
+[GitHub Actions #35](https://github.com/godofxuan/ai-evalops-platform/actions/runs/30774892844)
+也由两个 job 成功完成，且新命名的 metrics-freshness integration step 明确为 success。
 
 本阶段没有 migration、没有修改 `docs/results/`，也没有重新 prepare 或运行正式 Gate。#34 是
 普通 CI 合同，不能产生 throughput、p95/p99、容量 knee、资源曲线或 Worker adoption 结论。
