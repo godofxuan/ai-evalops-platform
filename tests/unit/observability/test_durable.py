@@ -55,7 +55,8 @@ def test_durable_outbox_gauge_query_counts_pending_and_oldest_created_at() -> No
 
 
 async def test_refresh_durable_outbox_gauges_updates_metrics_from_one_snapshot() -> None:
-    oldest_pending_at = datetime(2026, 7, 29, 11, 59, 15, tzinfo=UTC)
+    observed_at = datetime.fromtimestamp(123.5, tz=UTC)
+    oldest_pending_at = datetime.fromtimestamp(78.5, tz=UTC)
 
     class Result:
         def one(self) -> SimpleNamespace:
@@ -79,7 +80,7 @@ async def test_refresh_durable_outbox_gauges_updates_metrics_from_one_snapshot()
     gauges = await refresh_durable_outbox_gauges(
         session_factory=SessionFactory(),  # type: ignore[arg-type]
         metrics=metrics,
-        now=datetime(2026, 7, 29, 12, 0, tzinfo=UTC),
+        now=observed_at,
     )
 
     assert gauges == DurableOutboxGauges(
@@ -89,3 +90,4 @@ async def test_refresh_durable_outbox_gauges_updates_metrics_from_one_snapshot()
     rendered = metrics.render().decode("utf-8")
     assert "outbox_pending 3.0" in rendered
     assert "outbox_oldest_pending_age_seconds 45.0" in rendered
+    assert "outbox_metrics_last_success_timestamp_seconds 123.5" in rendered
