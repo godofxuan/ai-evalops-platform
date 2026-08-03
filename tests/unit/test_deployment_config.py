@@ -152,3 +152,20 @@ def test_outbox_alert_rules_cover_stalled_backlog_and_lease_loss() -> None:
     assert "tenant_id" not in serialized
     assert "run_id" not in serialized
     assert "event_id" not in serialized
+
+
+def test_outbox_alert_rules_detect_stale_metrics_refresh() -> None:
+    rules_path = Path("deploy/prometheus/outbox-alerts.yml")
+    loaded = yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+    rules = {rule["alert"]: rule for rule in loaded["groups"][0]["rules"]}
+
+    assert rules["AIEvalOpsOutboxMetricsStale"] == {
+        "alert": "AIEvalOpsOutboxMetricsStale",
+        "expr": "time() - outbox_metrics_last_success_timestamp_seconds > 300",
+        "for": "5m",
+        "labels": {"severity": "warning"},
+        "annotations": {
+            "summary": "AI EvalOps Outbox metrics are stale",
+            "description": "No durable Outbox metrics refresh has succeeded within five minutes.",
+        },
+    }
