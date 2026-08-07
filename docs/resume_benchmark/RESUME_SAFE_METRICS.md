@@ -1,12 +1,17 @@
 # Resume-safe metrics
 
-No capacity, latency, recovery-time, or scale claim is currently résumé-safe.
+The load measurements are hash-verified and internally reportable, but no combined reliability and
+scaling claim is yet résumé-safe.
 
-The formal 500-case worker-scaling experiment is `PENDING`. Metrics will be admitted here only when:
+Completed admission checks:
 
-1. the raw bundle is retained and hash-verified;
-2. every contributing arm passes durable correctness reconciliation;
-3. required collectors have no missing samples;
-4. stale result/failure acceptance is zero in explicitly induced scenarios;
-5. the environment and command are recorded; and
-6. aggregation includes every repetition rather than selecting the best run.
+- raw bundle retained and post-Git hash-verified;
+- all 32 arms pass durable reconciliation;
+- no required collector samples are missing;
+- environment, source/image identity, protocol, and commands are retained; and
+- aggregation includes all four repetitions.
+
+Remaining blocking check: stale result and stale failure acceptance must both be zero in explicitly
+induced real-service scenarios. Until that matrix completes, use the numbers in
+`EVALOPS_LOAD_REPORT.md` for engineering analysis only; do not copy them into the repository README,
+a résumé, or a reliability claim.

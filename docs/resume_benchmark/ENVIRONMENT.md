@@ -15,7 +15,21 @@ scheduled on an isolated GitHub-hosted Linux runner that already provides Docker
 
 ## Remote evidence runner
 
-The exact OS, CPU, memory, free disk, Docker version, Compose version, image IDs, service inventory,
-and source SHA will be retained inside the run directory after execution. Until that artifact exists,
-these fields remain `PENDING`; GitHub's generic runner specification is not substituted for observed
-runtime facts.
+Observed during formal run `gate1-gh-31177702100-1`; the complete capture is retained at
+`docs/results/load/gate1-gh-31177702100-1/environment/runner.txt`.
+
+| Field | Observed value |
+|---|---|
+| GitHub Actions run | `31177702100`, attempt `1` |
+| Frozen source SHA | `15e7ac2e28b70430acd0bff88ee6cc78e5b86a86` |
+| OS/kernel | Linux x86_64, Azure kernel `6.17.0-1020-azure` |
+| CPU | 4 logical CPUs; AMD EPYC 7763; 2 cores / 4 threads |
+| Memory | 16,766,423,040 bytes total |
+| Docker Engine | `28.0.4`, Linux/amd64 |
+| Docker Compose | `v2.38.2` |
+| Application image | `sha256:d42299d56dd18551b9abf8fc0eda58e38c03182fe9f007e57122f40bac197319` |
+| Python in image | `3.12.13` |
+
+This is an isolated, shared-class CI runner rather than production hardware. Results characterize
+this exact container topology and resource envelope; they are not a production SLO or capacity
+guarantee.

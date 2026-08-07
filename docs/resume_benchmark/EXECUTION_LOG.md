@@ -88,3 +88,47 @@ Instead, `PlatformMetrics` now creates the four fixed, low-cardinality database-
 children at process startup. A process with no observations therefore exposes an explicit zero count,
 while a failed scrape or truly absent metric remains `UNKNOWN`. Unit coverage verifies both the
 startup exposition and multi-worker busy/idle aggregation. A third formal run is required.
+
+## 2026-08-07 — Third formal run accepted
+
+### What ran
+
+GitHub Actions run `31177702100` built the image from frozen source `15e7ac2`, started the real
+PostgreSQL/Redis/API/Worker/Reaper Compose topology, and executed all 32 balanced arms. The evidence
+bot committed `gate1-gh-31177702100-1` in `ab97e61`.
+
+### Independent post-transport verification
+
+After a fast-forward pull, local validation recomputed the committed bytes rather than trusting the
+runner workspace. The final bundle is `complete`; all 664 payload hashes matched; all 32 planned arms
+were present; the quality gate was `VERIFIED`; and zero arms were invalid.
+
+Database reconciliation across 16,000 measured Jobs found 16,000 unique terminal successes, 400
+expected retries, zero failures, zero lost or nonterminal Jobs, zero duplicate durable results, zero
+binding mismatches, and zero collector gaps.
+
+### Reporting decision and effect
+
+A tested exporter now fails closed on missing/invalid arms, duplicates, nonterminal Jobs, binding
+mismatches, collector gaps, or incomplete repetitions. It generated 32 per-arm rows and eight
+all-repetition scaling rows. The report records the observed 3.1× 1-to-8 Worker speedup together with
+the drop to about 39% parallel efficiency. It does not choose a Worker count automatically.
+
+The load experiment did not induce an expired Worker submission. Therefore the report leaves stale
+success/failure acceptance as `NOT_RUN`; résumé admission remains blocked until fault scenarios C and
+D prove both accepted counts are zero.
+
+### Validation problems encountered
+
+1. The first exporter version used `csv.DictWriter`'s default CRLF terminator. Git warned that both
+   generated CSV files would be normalized to LF. A RED byte-level regression test reproduced the
+   mismatch; setting `lineterminator="\n"` made the test GREEN. The regenerated 33-line arm CSV and
+   9-line scaling CSV contain no CRLF bytes.
+2. An ad-hoc `mypy --strict app scripts tests` command treated unit-test files in separate namespace
+   directories as duplicate top-level modules (`test_repository`). The repository's CI contract is
+   `mypy app scripts tests/integration tests/concurrency`; rerunning that exact command passed 120
+   source files. No mypy rule or application code was changed to hide the command mistake.
+
+Final checkpoint validation: lock check passed; all repository files passed Ruff format and lint;
+strict mypy passed 120 source files; the exporter/finalizer/collector focus set passed 44 tests; and
+the complete non-integration suite passed `518 passed, 9 deselected` in 243.38 seconds.
