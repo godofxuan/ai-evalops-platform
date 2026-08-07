@@ -297,6 +297,7 @@ def _write_summary_csv(
                 "worker_cluster_cpu_percent_peak",
                 "worker_cluster_rss_bytes_peak",
             ),
+            lineterminator="\n",
         )
         writer.writeheader()
         for record in summary_records:

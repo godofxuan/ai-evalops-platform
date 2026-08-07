@@ -3,6 +3,11 @@
 ## Confirmed blockers and gaps
 
 - Local Docker/Compose is unavailable. Local real-service experiments are `NOT-RUN`, not passed.
+- Formal load run `gate1-gh-31174970193-1` completed all 32 arms, but its committed final bundle is
+  `INVALID-AFTER-GIT-TRANSPORT`. `summary/arms.csv` was hashed as a 4100-byte CRLF file, then Git's
+  repository-wide `eol=lf` clean filter committed a 4067-byte LF file. The expected SHA-256 was
+  `2e193d02...`, while the committed blob is `05f07c13...`. The raw run is retained as a negative
+  result, and none of its performance numbers are résumé-safe.
 - The existing `scripts.run_failure_scenarios` covers four coarse scenarios, not the required A–I
   matrix, and does not perform database-level invariant reconciliation for every scenario.
 - The initial local integration command skipped all nine integration tests because no real

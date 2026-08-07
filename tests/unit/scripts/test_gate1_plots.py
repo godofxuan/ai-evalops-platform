@@ -342,6 +342,17 @@ def test_gate1_finalization_publishes_one_complete_hashed_bundle(
         }
 
 
+def test_gate1_finalization_writes_git_stable_lf_csv(tmp_path: Path) -> None:
+    records = _summary_records()
+    _write_working_evidence(tmp_path, records)
+
+    _finalize(tmp_path, records)
+
+    csv_content = (tmp_path / "final" / "summary" / "arms.csv").read_bytes()
+    assert b"\r\n" not in csv_content
+    assert csv_content.count(b"\n") == len(records) + 1
+
+
 def test_gate1_finalization_refuses_an_existing_partial_formal_target(
     tmp_path: Path,
 ) -> None:
