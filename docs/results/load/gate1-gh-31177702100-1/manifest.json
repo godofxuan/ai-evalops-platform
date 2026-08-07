@@ -1,0 +1,143 @@
+{
+  "schema_version": 6,
+  "experiment": "worker_scaling",
+  "run_id": "gate1-gh-31177702100-1",
+  "status": "prepared",
+  "formal_run_started": false,
+  "result_schema_version": 4,
+  "seed": 1729,
+  "protocol": {
+    "path": "protocol.md",
+    "sha256": "246777d3bc033706a12f3d6bdb51950a707b3b635d078ef130b4af97af4d8fc8"
+  },
+  "provenance": {
+    "source_commit": "15e7ac2e28b70430acd0bff88ee6cc78e5b86a86",
+    "compose": {
+      "path": "deploy/compose.yaml",
+      "sha256": "e49da6a3eb1baf024b1a9a9859346eb7ff26457a8eee07bd470a2f8fbd3bf6bc"
+    },
+    "dockerfile": {
+      "path": "Dockerfile",
+      "sha256": "6298d42252dfe2e5d52811207d05ae937a4b4c74b8f4a342cc4d91347df4f12d"
+    },
+    "dockerignore": {
+      "path": ".dockerignore",
+      "sha256": "f56820ed1b4a64121d31a3da961a82f70604e015419246e598263a8d5af3dcd7"
+    },
+    "image": {
+      "identity_kind": "LOCAL_IMAGE_ID",
+      "verification": "LOCAL_IMAGE_ID_VERIFIED",
+      "repository": "ai-evalops-platform",
+      "tag": "phase9",
+      "reference": "ai-evalops-platform:phase9",
+      "immutable_id": "sha256:d42299d56dd18551b9abf8fc0eda58e38c03182fe9f007e57122f40bac197319",
+      "registry_digest": null,
+      "compose_project": "ai-evalops-platform",
+      "source_commit": "15e7ac2e28b70430acd0bff88ee6cc78e5b86a86",
+      "source": "https://github.com/godofxuan/ai-evalops-platform",
+      "dockerfile_sha256": "6298d42252dfe2e5d52811207d05ae937a4b4c74b8f4a342cc4d91347df4f12d",
+      "build_context": {
+        "algorithm": "docker-context-sha256-v2",
+        "sha256": "cc8583da6ff76181cb07130ecc748caae6c6561f0fb978e904cc457d4903053e",
+        "file_count": 138
+      },
+      "build": {
+        "created": "2026-08-07T12:20:05.173107Z",
+        "image_created": "2026-08-07T12:20:21.306074118Z"
+      },
+      "runtime": {
+        "python": "3.12.13",
+        "os": "linux",
+        "architecture": "amd64"
+      },
+      "labels": {
+        "org.opencontainers.image.revision": "15e7ac2e28b70430acd0bff88ee6cc78e5b86a86",
+        "org.opencontainers.image.source": "https://github.com/godofxuan/ai-evalops-platform",
+        "org.opencontainers.image.created": "2026-08-07T12:20:05.173107Z",
+        "io.ai-evalops.dockerfile.sha256": "6298d42252dfe2e5d52811207d05ae937a4b4c74b8f4a342cc4d91347df4f12d",
+        "io.ai-evalops.build-context.sha256": "cc8583da6ff76181cb07130ecc748caae6c6561f0fb978e904cc457d4903053e",
+        "io.ai-evalops.python.version": "3.12.13"
+      }
+    },
+    "execution_scripts": {
+      "algorithm": "sha256",
+      "files": {
+        "scripts/experiment_support.py": "8c7a6a515fa1ff0d71ea9f9d2fe7d9842d7131cd076ee7fc5180980d9f77ef8d",
+        "scripts/gate1_collectors.py": "6ea5014c732c8b03d62c6e201973fb191f858cfcc841da16de8f8e3c4c9b95ce",
+        "scripts/gate1_database.py": "3452492a47c68423040133df03085c9e80bd881eab06027813b31b202eed9dca",
+        "scripts/gate1_evidence.py": "8f9743153675ce2712c49e1f8540e8e2cf1b3d3b67f7a423b621449edbdb9ab3",
+        "scripts/gate1_finalization.py": "11c06b7807c9749419978174d1b1216ac41c1187149eed42fc556c38c04886a2",
+        "scripts/gate1_image_evidence.py": "f2d265bbbd20cbdd527729d024c156e0a5c0d1f3d181cb142ea9badfaf2091dd",
+        "scripts/gate1_plots.py": "8b75d7b3a65c05d964f3e7c18c63a5e00c252bcc09d9900563ee0d6ac0015bef",
+        "scripts/gate1_preflight.py": "0afb254b1b40e4dcc38667b6f659991f3629f91e450a6fcf7f676febc87ad671",
+        "scripts/gate1_prepared_evidence.py": "e26d2c4072b34b717868769cebff1a0bf5d4cbdf1753cb2633093de75928146a",
+        "scripts/run_load_test.py": "3fe86e27a91cc86bd4b8c6ae18326bb5ef154ec46b6e5f83736898a6d9eb0333",
+        "scripts/worker_scaling_protocol.py": "6fd65ef2727e79eec9f6ca7bba5b38b988e3a23b28e6fc3667b627df46c0222c"
+      }
+    }
+  },
+  "quality_gate": {
+    "automatic_evaluation": true,
+    "policy": "all_expected_arms_valid_for_capacity_comparison",
+    "policy_version": 1,
+    "non_waivable": true
+  },
+  "adoption_gate": {
+    "automatic_worker_count_change": false,
+    "automatic_adoption_decision": false,
+    "decision_owner": "human",
+    "performance_thresholds_owner": "human"
+  },
+  "configuration": {
+    "values": {
+      "api_url": "http://127.0.0.1:8000",
+      "api_key_env": "EVALOPS_EXPERIMENT_API_KEY",
+      "database_url_env": "EVALOPS_EXPERIMENT_DATABASE_URL",
+      "workers": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "cases": 500,
+      "warmup_cases": 50,
+      "delay_ms": 25,
+      "poll_seconds": 0.5,
+      "deadline_seconds": 900.0,
+      "readiness_deadline_seconds": 120.0,
+      "collector_interval_seconds": 1.0,
+      "seed": 1729,
+      "repetitions": 4
+    },
+    "sha256": "1c13d31fed2806935f847ad8ed48a94689f2c8b2611294cb9766d9852ecf341c"
+  },
+  "dataset": {
+    "generator": "gate1-deterministic-jsonl-v1",
+    "hashes_path": "dataset/hashes.json",
+    "hashes_sha256": "c9869b8947d904b3779486f94e8a7ad7719cb084a4fba53e02575d197e903250",
+    "measurement_path": "dataset/measurement.jsonl",
+    "warmup_path": "dataset/warmup.jsonl",
+    "workload_profiles": [
+      "io_latency_v1",
+      "transient_5pct_v1"
+    ],
+    "transient_selection": {
+      "algorithm": "sha256(case_id)-ascending",
+      "rate_percent": 5
+    },
+    "algorithm": "sha256",
+    "measurement_sha256": "dd9e1a59c2176214196937f3a0ece15fe324ef310dda0396f95577db2b0751aa",
+    "measurement_bytes": 147890,
+    "measurement_cases": 500,
+    "warmup_sha256": "d94ea6bb5273224c2680d8510f1218be4414b4d839816023b5a4d8b0c70745aa",
+    "warmup_bytes": 14940,
+    "warmup_cases": 50
+  },
+  "arm_plan": {
+    "path": "arm_order.json",
+    "sha256": "a2ffdcc62c640efdf38c752dead5cbff799407621eede7a578b431167d43f02e",
+    "algorithm": "position-balanced-v1",
+    "seed": 1729,
+    "arm_count": 32
+  }
+}

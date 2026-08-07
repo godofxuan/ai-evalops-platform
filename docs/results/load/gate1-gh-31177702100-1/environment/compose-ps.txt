@@ -1,0 +1,8 @@
+NAME                             IMAGE                        COMMAND                  SERVICE    CREATED          STATUS                      PORTS
+ai-evalops-platform-api-1        ai-evalops-platform:phase9   "python -m uvicorn a…"   api        14 minutes ago   Up 14 minutes (healthy)     127.0.0.1:8000->8000/tcp, 9101-9102/tcp
+ai-evalops-platform-migrate-1    ai-evalops-platform:phase9   "python -m alembic u…"   migrate    13 minutes ago   Exited (0) 23 seconds ago   
+ai-evalops-platform-postgres-1   postgres:18.4-alpine3.24     "docker-entrypoint.s…"   postgres   14 minutes ago   Up 14 minutes (healthy)     127.0.0.1:5432->5432/tcp
+ai-evalops-platform-reaper-1     ai-evalops-platform:phase9   "python -m app.cli r…"   reaper     14 minutes ago   Up 14 minutes (unhealthy)   8000/tcp, 9101-9102/tcp
+ai-evalops-platform-redis-1      redis:8.8.1-alpine3.23       "docker-entrypoint.s…"   redis      14 minutes ago   Up 14 minutes (healthy)     127.0.0.1:6379->6379/tcp
+ai-evalops-platform-worker-1     ai-evalops-platform:phase9   "python -m app.cli w…"   worker     14 minutes ago   Up 14 minutes (unhealthy)   8000/tcp, 9101-9102/tcp
+ai-evalops-platform-worker-2     ai-evalops-platform:phase9   "python -m app.cli w…"   worker     47 seconds ago   Up 45 seconds (unhealthy)   8000/tcp, 9101-9102/tcp

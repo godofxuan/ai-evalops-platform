@@ -1,0 +1,178 @@
+# HELP api_request_total Completed HTTP requests.
+# TYPE api_request_total counter
+# HELP api_request_duration HTTP request duration in seconds.
+# TYPE api_request_duration histogram
+# HELP run_created_total New Runs durably created; idempotency replays are excluded.
+# TYPE run_created_total counter
+run_created_total 0.0
+# HELP run_created_created New Runs durably created; idempotency replays are excluded.
+# TYPE run_created_created gauge
+run_created_created 1.7861052535090377e+09
+# HELP job_queue_depth Jobs currently eligible or waiting to become eligible.
+# TYPE job_queue_depth gauge
+job_queue_depth 0.0
+# HELP job_running Jobs currently holding a running lease.
+# TYPE job_running gauge
+job_running 0.0
+# HELP job_succeeded_total Jobs successfully persisted by this process.
+# TYPE job_succeeded_total counter
+job_succeeded_total 4353.0
+# HELP job_succeeded_created Jobs successfully persisted by this process.
+# TYPE job_succeeded_created gauge
+job_succeeded_created 1.7861052535090802e+09
+# HELP job_failed_total Jobs permanently failed by this process.
+# TYPE job_failed_total counter
+job_failed_total 0.0
+# HELP job_failed_created Jobs permanently failed by this process.
+# TYPE job_failed_created gauge
+job_failed_created 1.7861052535090885e+09
+# HELP job_retry_total Retry transitions committed by this process.
+# TYPE job_retry_total counter
+job_retry_total 165.0
+# HELP job_retry_created Retry transitions committed by this process.
+# TYPE job_retry_created gauge
+job_retry_created 1.7861052535090964e+09
+# HELP job_lease_expired_total Expired leases recovered by this process.
+# TYPE job_lease_expired_total counter
+job_lease_expired_total 0.0
+# HELP job_lease_expired_created Expired leases recovered by this process.
+# TYPE job_lease_expired_created gauge
+job_lease_expired_created 1.7861052535091064e+09
+# HELP worker_heartbeat_age Age in seconds of the stalest running Job heartbeat.
+# TYPE worker_heartbeat_age gauge
+worker_heartbeat_age 0.0
+# HELP case_duration Target plus evaluator case duration in seconds.
+# TYPE case_duration histogram
+case_duration_bucket{le="0.01"} 0.0
+case_duration_bucket{le="0.025"} 0.0
+case_duration_bucket{le="0.05"} 4496.0
+case_duration_bucket{le="0.1"} 4517.0
+case_duration_bucket{le="0.25"} 4518.0
+case_duration_bucket{le="0.5"} 4518.0
+case_duration_bucket{le="1.0"} 4518.0
+case_duration_bucket{le="2.5"} 4518.0
+case_duration_bucket{le="5.0"} 4518.0
+case_duration_bucket{le="10.0"} 4518.0
+case_duration_bucket{le="30.0"} 4518.0
+case_duration_bucket{le="60.0"} 4518.0
+case_duration_bucket{le="120.0"} 4518.0
+case_duration_bucket{le="+Inf"} 4518.0
+case_duration_count 4518.0
+case_duration_sum 117.89839913400246
+# HELP case_duration_created Target plus evaluator case duration in seconds.
+# TYPE case_duration_created gauge
+case_duration_created 1.7861052535091298e+09
+# HELP db_operation_duration_seconds Observed duration of bounded durable database operations.
+# TYPE db_operation_duration_seconds histogram
+db_operation_duration_seconds_bucket{le="0.0005",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="claim"} 6.0
+db_operation_duration_seconds_bucket{le="0.005",operation="claim"} 413.0
+db_operation_duration_seconds_bucket{le="0.01",operation="claim"} 3818.0
+db_operation_duration_seconds_bucket{le="0.025",operation="claim"} 4674.0
+db_operation_duration_seconds_bucket{le="0.05",operation="claim"} 4844.0
+db_operation_duration_seconds_bucket{le="0.1",operation="claim"} 4937.0
+db_operation_duration_seconds_bucket{le="0.25",operation="claim"} 4944.0
+db_operation_duration_seconds_bucket{le="0.5",operation="claim"} 4944.0
+db_operation_duration_seconds_bucket{le="1.0",operation="claim"} 4944.0
+db_operation_duration_seconds_bucket{le="2.5",operation="claim"} 4944.0
+db_operation_duration_seconds_bucket{le="5.0",operation="claim"} 4944.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="claim"} 4944.0
+db_operation_duration_seconds_count{operation="claim"} 4944.0
+db_operation_duration_seconds_sum{operation="claim"} 50.39584411000209
+db_operation_duration_seconds_bucket{le="0.0005",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="failure"} 99.0
+db_operation_duration_seconds_bucket{le="0.025",operation="failure"} 146.0
+db_operation_duration_seconds_bucket{le="0.05",operation="failure"} 159.0
+db_operation_duration_seconds_bucket{le="0.1",operation="failure"} 165.0
+db_operation_duration_seconds_bucket{le="0.25",operation="failure"} 165.0
+db_operation_duration_seconds_bucket{le="0.5",operation="failure"} 165.0
+db_operation_duration_seconds_bucket{le="1.0",operation="failure"} 165.0
+db_operation_duration_seconds_bucket{le="2.5",operation="failure"} 165.0
+db_operation_duration_seconds_bucket{le="5.0",operation="failure"} 165.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="failure"} 165.0
+db_operation_duration_seconds_count{operation="failure"} 165.0
+db_operation_duration_seconds_sum{operation="failure"} 2.236876535000164
+db_operation_duration_seconds_bucket{le="0.0005",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.025",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.05",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.1",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.25",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.5",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="1.0",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="2.5",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="5.0",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="reaper"} 0.0
+db_operation_duration_seconds_count{operation="reaper"} 0.0
+db_operation_duration_seconds_sum{operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.0005",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="result"} 2210.0
+db_operation_duration_seconds_bucket{le="0.025",operation="result"} 3865.0
+db_operation_duration_seconds_bucket{le="0.05",operation="result"} 4152.0
+db_operation_duration_seconds_bucket{le="0.1",operation="result"} 4338.0
+db_operation_duration_seconds_bucket{le="0.25",operation="result"} 4353.0
+db_operation_duration_seconds_bucket{le="0.5",operation="result"} 4353.0
+db_operation_duration_seconds_bucket{le="1.0",operation="result"} 4353.0
+db_operation_duration_seconds_bucket{le="2.5",operation="result"} 4353.0
+db_operation_duration_seconds_bucket{le="5.0",operation="result"} 4353.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="result"} 4353.0
+db_operation_duration_seconds_count{operation="result"} 4353.0
+db_operation_duration_seconds_sum{operation="result"} 66.16819570900154
+# HELP db_operation_duration_seconds_created Observed duration of bounded durable database operations.
+# TYPE db_operation_duration_seconds_created gauge
+db_operation_duration_seconds_created{operation="claim"} 1.7861052535091999e+09
+db_operation_duration_seconds_created{operation="failure"} 1.7861052535092366e+09
+db_operation_duration_seconds_created{operation="reaper"} 1.7861052535092683e+09
+db_operation_duration_seconds_created{operation="result"} 1.786105253509299e+09
+# HELP sse_connections Currently open SSE response iterators.
+# TYPE sse_connections gauge
+sse_connections 0.0
+# HELP redis_publish_failures_total Best-effort Redis progress publications that failed.
+# TYPE redis_publish_failures_total counter
+redis_publish_failures_total 0.0
+# HELP redis_publish_failures_created Best-effort Redis progress publications that failed.
+# TYPE redis_publish_failures_created gauge
+redis_publish_failures_created 1.7861052535093346e+09
+# HELP outbox_pending Durable progress events awaiting successful publication.
+# TYPE outbox_pending gauge
+outbox_pending 0.0
+# HELP outbox_oldest_pending_age_seconds Age of the oldest durable unpublished progress event.
+# TYPE outbox_oldest_pending_age_seconds gauge
+outbox_oldest_pending_age_seconds 0.0
+# HELP outbox_metrics_last_success_timestamp_seconds Unix timestamp of the most recent successful durable Outbox metrics refresh.
+# TYPE outbox_metrics_last_success_timestamp_seconds gauge
+outbox_metrics_last_success_timestamp_seconds 0.0
+# HELP outbox_metrics_refresh_failures_total Durable Outbox metrics refreshes that failed in this process.
+# TYPE outbox_metrics_refresh_failures_total counter
+outbox_metrics_refresh_failures_total 0.0
+# HELP outbox_metrics_refresh_failures_created Durable Outbox metrics refreshes that failed in this process.
+# TYPE outbox_metrics_refresh_failures_created gauge
+outbox_metrics_refresh_failures_created 1.7861052535093668e+09
+# HELP outbox_retry_scheduled_total Durable progress publications rescheduled after a failed attempt.
+# TYPE outbox_retry_scheduled_total counter
+outbox_retry_scheduled_total 0.0
+# HELP outbox_retry_scheduled_created Durable progress publications rescheduled after a failed attempt.
+# TYPE outbox_retry_scheduled_created gauge
+outbox_retry_scheduled_created 1.7861052535093744e+09
+# HELP outbox_lease_lost_total Outbox publications whose acknowledgement or reschedule lost its lease.
+# TYPE outbox_lease_lost_total counter
+outbox_lease_lost_total 0.0
+# HELP outbox_lease_lost_created Outbox publications whose acknowledgement or reschedule lost its lease.
+# TYPE outbox_lease_lost_created gauge
+outbox_lease_lost_created 1.7861052535093815e+09
+# HELP outbox_cleanup_deleted_total Published Outbox rows deleted after the configured retention period.
+# TYPE outbox_cleanup_deleted_total counter
+outbox_cleanup_deleted_total 0.0
+# HELP outbox_cleanup_deleted_created Published Outbox rows deleted after the configured retention period.
+# TYPE outbox_cleanup_deleted_created gauge
+outbox_cleanup_deleted_created 1.7861052535093887e+09
