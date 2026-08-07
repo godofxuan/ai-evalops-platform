@@ -1,0 +1,167 @@
+name: Evidence Gate - Worker Scaling
+
+on:
+  push:
+    branches:
+      - codex/evidence-gate-1
+    paths:
+      - .github/evidence-gate-trigger.txt
+      - .github/workflows/evidence-gate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: evidence-gate-worker-scaling
+  cancel-in-progress: false
+
+jobs:
+  worker-scaling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      EVALOPS_EXPERIMENT_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
+      EVALOPS_RUN_INTEGRATION: "1"
+      EVIDENCE_OUTPUT_ROOT: docs/results/load
+    steps:
+      - name: Check out the exact source commit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync locked dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Define immutable evidence run identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="gate1-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "EVIDENCE_RUN_ID=${run_id}" >> "$GITHUB_ENV"
+
+      - name: Prepare protocol, datasets, arm order, and bound image
+        run: >-
+          uv run --no-sync python -m scripts.run_load_test
+          --prepare-only
+          --run-id "$EVIDENCE_RUN_ID"
+          --output-root "$EVIDENCE_OUTPUT_ROOT"
+          --workers 1,2,4,8
+          --cases 500
+          --warmup-cases 50
+          --repetitions 4
+          --seed 1729
+
+      - name: Start PostgreSQL and Redis
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --wait
+          --wait-timeout 180 postgres redis
+
+      - name: Apply migrations with the bound image
+        run: docker compose -f deploy/compose.yaml run --rm --no-deps migrate
+
+      - name: Start API, Worker, and Reaper with the bound image
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --no-deps
+          api worker reaper
+
+      - name: Wait for API readiness
+        run: >-
+          curl --fail --silent --show-error
+          --retry 30 --retry-all-errors --retry-delay 2
+          http://127.0.0.1:8000/health/ready
+
+      - name: Create an ephemeral experiment API key
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$({ docker compose -f deploy/compose.yaml run --rm --no-deps api \
+            python -m scripts.create_dev_api_key \
+            --tenant-slug evidence-gate \
+            --tenant-name 'Evidence Gate' \
+            --key-name "github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"; } 2>&1)"
+          api_key="$(printf '%s\n' "$output" | sed -n 's/^API key (shown once): //p')"
+          if [ -z "$api_key" ]; then
+            printf '%s\n' "$output"
+            echo 'Unable to extract the one-time experiment API key.' >&2
+            exit 1
+          fi
+          echo "::add-mask::$api_key"
+          echo "EVALOPS_EXPERIMENT_API_KEY=$api_key" >> "$GITHUB_ENV"
+
+      - name: Execute the frozen 32-arm worker-scaling experiment
+        run: >-
+          uv run --no-sync python -m scripts.run_load_test
+          --execute-prepared
+          --run-id "$EVIDENCE_RUN_ID"
+          --output-root "$EVIDENCE_OUTPUT_ROOT"
+          --workers 1,2,4,8
+          --cases 500
+          --warmup-cases 50
+          --repetitions 4
+          --seed 1729
+          --confirm-quality-gate
+          --confirm-adoption-gate
+
+      - name: Preserve runner and Compose diagnostics
+        if: always() && env.EVIDENCE_RUN_ID != ''
+        shell: bash
+        run: |
+          set +e
+          evidence_dir="$EVIDENCE_OUTPUT_ROOT/$EVIDENCE_RUN_ID/environment"
+          mkdir -p "$evidence_dir"
+          {
+            echo "github_run_id=$GITHUB_RUN_ID"
+            echo "github_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "github_sha=$GITHUB_SHA"
+            echo "runner_os=$RUNNER_OS"
+            uname -a
+            lscpu
+            free -b
+            df -B1 .
+            docker version
+            docker compose version
+          } > "$evidence_dir/runner.txt" 2>&1
+          docker compose -f deploy/compose.yaml ps --all \
+            > "$evidence_dir/compose-ps.txt" 2>&1
+          docker compose -f deploy/compose.yaml logs --no-color \
+            > "$evidence_dir/compose.log" 2>&1
+
+      - name: Upload evidence even when execution fails
+        if: always() && env.EVIDENCE_RUN_ID != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.EVIDENCE_RUN_ID }}
+          path: ${{ env.EVIDENCE_OUTPUT_ROOT }}/${{ env.EVIDENCE_RUN_ID }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Commit immutable evidence to the target branch
+        if: always() && env.EVIDENCE_RUN_ID != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_path="$EVIDENCE_OUTPUT_ROOT/$EVIDENCE_RUN_ID"
+          test -d "$evidence_path"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$evidence_path"
+          if git diff --cached --quiet; then
+            echo "No evidence files were produced."
+            exit 1
+          fi
+          git commit -m "evidence(gate1): preserve worker scaling run $EVIDENCE_RUN_ID"
+          git push origin "HEAD:codex/evidence-gate-1"
+
+      - name: Stop the isolated Compose topology
+        if: always()
+        run: docker compose -f deploy/compose.yaml down --volumes
