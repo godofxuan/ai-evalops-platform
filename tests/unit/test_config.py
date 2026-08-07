@@ -47,6 +47,15 @@ def test_worker_heartbeat_must_be_shorter_than_lease() -> None:
         )
 
 
+def test_database_reconnect_delay_must_be_ordered() -> None:
+    with pytest.raises(ValidationError, match="database reconnect base delay"):
+        Settings(
+            _env_file=None,
+            database_reconnect_base_seconds=5,
+            database_reconnect_max_seconds=1,
+        )
+
+
 def test_outbox_dispatch_settings_have_bounded_operational_defaults() -> None:
     settings = Settings(_env_file=None)
 

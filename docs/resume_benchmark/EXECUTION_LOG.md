@@ -189,3 +189,40 @@ and its explicit trigger file are watched.
 Pre-trigger validation passed: all 284 repository files passed Ruff format, lint passed, strict mypy
 passed 123 source files, the focused fault/concurrency set passed 12 tests, and the complete
 non-integration suite passed `525 passed, 9 deselected` in 272.29 seconds.
+
+## 2026-08-07 — First formal A–I matrix and database reconnect baseline
+
+### Formal result
+
+GitHub Actions run `31181816878` executed source `da92532` and committed
+`fault-gh-31181816878-1` as `7f0738d`. Independent validation after Git transport found a complete
+five-payload bundle and 27/27 scenario/repetition records.
+
+Across 84 Jobs: 84 were unique and terminal, 84 succeeded, 72 retries were recorded, and failed,
+lost, duplicate-result, and orphan-running counts were all zero. Scenario C attempted three stale
+results and accepted zero; scenario D attempted three stale failures and accepted zero. Dual Reapers
+recovered 20 unique Jobs per repetition without overlap. Sixty concurrent duplicate-key HTTP requests
+all succeeded and resolved to exactly one Run per repetition.
+
+Observed recovery medians were: Worker kill 39.88 s; logical lease-expiry recovery operation 0.04 s;
+Redis outbox drain after restart 0.01 s; PostgreSQL recovery 6.91 s; Worker restart 5.41 s; dual Reaper
+recovery 0.31 s; and duplicate-key Run completion 0.62 s. Logical-clock B/C/D/H timings measure the
+eligible database recovery transaction, not real lease-wall-clock waiting, and are labeled accordingly.
+
+### Database resilience decision
+
+PostgreSQL scenario F passed 3/3 with a three-second outage, no Worker restart, no Job retry, and no
+correctness violation. Therefore the connection layer was not replaced. Inspection found a separate
+operational gap: unhandled database iteration failures returned the same boolean as processed work,
+so the Worker could retry immediately throughout an outage.
+
+RED tests required an exponential, bounded, jittered backoff; explicit database-failure outcome; safe
+cross-field settings; and shutdown-interruptible waits. The first run failed because those interfaces
+did not exist. The implementation preserves `pool_pre_ping`, adds shared Worker/Reaper reconnect
+backoff, resets failures after recovery, and prevents unknown exceptions from hot-looping by applying
+the normal poll delay. Focused GREEN result: 30 tests; Ruff and strict mypy passed. A second full A–I
+run is required for comparable After evidence.
+
+Pre-rerun full validation passed: lock resolved 70 packages; all 286 files passed Ruff format and
+lint; strict mypy passed 124 source files; and non-integration pytest passed
+`532 passed, 9 deselected` in 244.57 seconds.

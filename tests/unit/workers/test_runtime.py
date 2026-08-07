@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -7,12 +8,21 @@ from app.core.telemetry import Telemetry
 from app.domain.enums import JobStatus, RunStatus
 from app.jobs.reaper import ReapedJob
 from app.observability.metrics import PlatformMetrics
-from app.workers.runtime import handle_reaped_job, run_reaper_iteration
+from app.workers.runtime import _wait_or_stop, handle_reaped_job, run_reaper_iteration
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
 JOB_ID = UUID("00000000-0000-0000-0000-000000000701")
 ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000801")
+
+
+async def test_shutdown_interrupts_a_long_reconnect_wait() -> None:
+    stop_requested = asyncio.Event()
+    waiting = asyncio.create_task(_wait_or_stop(stop_requested, 30))
+
+    stop_requested.set()
+
+    await asyncio.wait_for(waiting, timeout=0.1)
 
 
 class EmptyReaper:

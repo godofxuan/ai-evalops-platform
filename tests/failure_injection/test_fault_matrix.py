@@ -8,7 +8,7 @@ from app.events.publisher import RedisEventPublisher
 from app.jobs.retry_policy import classify_failure
 from app.observability.metrics import PlatformMetrics
 from app.targets.base import TargetHTTPError, TargetTimeoutError
-from app.workers.runtime import run_worker_iteration
+from app.workers.runtime import WorkerIterationStatus, run_worker_iteration
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
@@ -86,11 +86,12 @@ class RecordingLogger:
 async def test_transient_database_iteration_failure_is_logged_and_loop_can_continue() -> None:
     logger = RecordingLogger()
 
-    processed = await run_worker_iteration(
+    outcome = await run_worker_iteration(
         TransientDatabaseFailureWorker(),
         worker_id="worker-db-fault",
         logger=logger,
     )
 
-    assert processed is True
+    assert outcome.status is WorkerIterationStatus.DATABASE_FAILURE
+    assert outcome.error_type == "ConnectionError"
     assert logger.events == [("worker_iteration_failed", {"error_type": "ConnectionError"})]

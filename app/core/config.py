@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     artifact_root: Path = Path("data/artifacts")
     alembic_config_path: Path = Path("alembic.ini")
     readiness_timeout_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
+    database_reconnect_base_seconds: float = Field(default=0.5, gt=0, le=300)
+    database_reconnect_max_seconds: float = Field(default=30.0, gt=0, le=3_600)
+    database_reconnect_jitter_ratio: float = Field(default=0.2, ge=0, le=1)
     dataset_max_file_bytes: int = Field(
         default=10 * 1024 * 1024,
         gt=0,
@@ -97,6 +100,8 @@ class Settings(BaseSettings):
     def validate_worker_timing(self) -> "Settings":
         if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
             raise ValueError("worker heartbeat interval must be shorter than lease")
+        if self.database_reconnect_base_seconds > self.database_reconnect_max_seconds:
+            raise ValueError("database reconnect base delay must not exceed maximum delay")
         if self.retry_base_delay_seconds > self.retry_max_delay_seconds:
             raise ValueError("retry base delay must not exceed maximum delay")
         if self.outbox_retry_base_seconds > self.outbox_retry_max_seconds:

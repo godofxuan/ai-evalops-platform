@@ -2,7 +2,9 @@ import asyncio
 import os
 import socket
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import timedelta
+from enum import StrEnum
 from time import perf_counter
 from typing import Protocol
 from uuid import uuid4
@@ -21,6 +23,7 @@ from app.jobs.results import SQLAlchemyResultCommitter
 from app.jobs.retry_policy import RetryPolicy
 from app.observability.metrics import PlatformMetrics, start_metrics_server
 from app.persistence.database import create_database_engine, create_session_factory
+from app.persistence.reconnect import BoundedReconnectBackoff, is_database_connectivity_error
 from app.workers.lease_runner import LeaseHeartbeatRunner
 from app.workers.worker import EvaluationWorker
 
@@ -41,6 +44,19 @@ class IterationLogger(Protocol):
 
     def error(self, event: str, **values: object) -> object:
         """Record an error."""
+
+
+class WorkerIterationStatus(StrEnum):
+    PROCESSED = "processed"
+    IDLE = "idle"
+    DATABASE_FAILURE = "database_failure"
+    FAILURE = "failure"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerIterationOutcome:
+    status: WorkerIterationStatus
+    error_type: str | None = None
 
 
 async def run_worker_process(
@@ -85,18 +101,34 @@ async def run_worker_process(
         telemetry=telemetry,
     )
     logger = get_logger(__name__, role="worker", worker_id=worker_id)
+    reconnect_backoff = _database_reconnect_backoff(settings)
+    consecutive_database_failures = 0
     logger.info("worker_started")
     try:
         while not stop_requested.is_set():
-            processed = await run_worker_iteration(
+            outcome = await run_worker_iteration(
                 worker,
                 worker_id=worker_id,
                 logger=logger,
             )
             if once:
                 return
-            if not processed:
-                await _wait_or_stop(stop_requested, settings.worker_poll_seconds)
+            if outcome.status is WorkerIterationStatus.DATABASE_FAILURE:
+                consecutive_database_failures += 1
+                delay_seconds = reconnect_backoff.delay_seconds(consecutive_database_failures)
+                logger.warning(
+                    "worker_database_reconnect_scheduled",
+                    attempt=consecutive_database_failures,
+                    delay_seconds=delay_seconds,
+                )
+                await _wait_or_stop(stop_requested, delay_seconds)
+            else:
+                consecutive_database_failures = 0
+                if outcome.status in {
+                    WorkerIterationStatus.IDLE,
+                    WorkerIterationStatus.FAILURE,
+                }:
+                    await _wait_or_stop(stop_requested, settings.worker_poll_seconds)
     finally:
         if metrics_server is not None:
             metrics_server.close()
@@ -131,9 +163,12 @@ async def run_reaper_process(
         reaper_id=reaper_id,
     )
     logger = get_logger(__name__, role="reaper", reaper_id=reaper_id)
+    reconnect_backoff = _database_reconnect_backoff(settings)
+    consecutive_database_failures = 0
     logger.info("reaper_started")
     try:
         while not stop_requested.is_set():
+            delay_seconds = settings.reaper_interval_seconds
             try:
                 with telemetry.start_as_current_span("reaper.recover_expired_leases"):
                     trace_id = telemetry.current_trace_id()
@@ -152,14 +187,25 @@ async def run_reaper_process(
                     )
                 if reaped:
                     logger.info("reaper_batch_completed", count=len(reaped))
+                consecutive_database_failures = 0
             except Exception as error:
                 logger.error(
                     "reaper_iteration_failed",
                     error_type=type(error).__name__,
                 )
+                if is_database_connectivity_error(error):
+                    consecutive_database_failures += 1
+                    delay_seconds = reconnect_backoff.delay_seconds(consecutive_database_failures)
+                    logger.warning(
+                        "reaper_database_reconnect_scheduled",
+                        attempt=consecutive_database_failures,
+                        delay_seconds=delay_seconds,
+                    )
+                else:
+                    consecutive_database_failures = 0
             if once:
                 return
-            await _wait_or_stop(stop_requested, settings.reaper_interval_seconds)
+            await _wait_or_stop(stop_requested, delay_seconds)
     finally:
         if metrics_server is not None:
             metrics_server.close()
@@ -221,6 +267,14 @@ def _retry_policy(settings: Settings) -> RetryPolicy:
     )
 
 
+def _database_reconnect_backoff(settings: Settings) -> BoundedReconnectBackoff:
+    return BoundedReconnectBackoff(
+        base_delay_seconds=settings.database_reconnect_base_seconds,
+        max_delay_seconds=settings.database_reconnect_max_seconds,
+        jitter_ratio=settings.database_reconnect_jitter_ratio,
+    )
+
+
 def _worker_id() -> str:
     return f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:8]}"
 
@@ -251,18 +305,28 @@ async def run_worker_iteration(
     *,
     worker_id: str,
     logger: IterationLogger,
-) -> bool:
+) -> WorkerIterationOutcome:
     try:
-        return await worker.process_one(worker_id=worker_id)
+        processed = await worker.process_one(worker_id=worker_id)
+        return WorkerIterationOutcome(
+            status=(WorkerIterationStatus.PROCESSED if processed else WorkerIterationStatus.IDLE)
+        )
     except LeaseLostError:
         logger.warning("worker_lease_lost")
-        return True
+        return WorkerIterationOutcome(status=WorkerIterationStatus.PROCESSED)
     except Exception as error:
         logger.error(
             "worker_iteration_failed",
             error_type=type(error).__name__,
         )
-        return True
+        return WorkerIterationOutcome(
+            status=(
+                WorkerIterationStatus.DATABASE_FAILURE
+                if is_database_connectivity_error(error)
+                else WorkerIterationStatus.FAILURE
+            ),
+            error_type=type(error).__name__,
+        )
 
 
 async def _wait_or_stop(stop_requested: asyncio.Event, timeout_seconds: float) -> None:
