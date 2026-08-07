@@ -1,0 +1,95 @@
+{
+  "status": "READY",
+  "ready": true,
+  "checks": {
+    "manifest_valid": true,
+    "git_repository_available": true,
+    "source_commit_matches": true,
+    "tracked_worktree_clean": true,
+    "docker_build_context_clean": true,
+    "measurement_hash_matches": true,
+    "warmup_hash_matches": true,
+    "dataset_hashes_file_hash_matches": true,
+    "protocol_hash_matches": true,
+    "arm_plan_hash_matches": true,
+    "compose_hash_matches": true,
+    "requested_compose_matches": true,
+    "dockerfile_hash_matches": true,
+    "dockerignore_hash_matches": true,
+    "image_build_context_hash_matches": true,
+    "configuration_hash_matches": true,
+    "execution_script_hashes_match": true,
+    "requested_configuration_matches": true,
+    "docker_cli_available": true,
+    "compose_config_valid": true,
+    "required_services_healthy": true,
+    "disk_space_sufficient": true,
+    "api_key_present": true,
+    "database_url_present": true,
+    "quality_gate_confirmed": true,
+    "adoption_gate_confirmed": true,
+    "identity_kind_supported": true,
+    "container_image_ids_match": true,
+    "image_revision_labels_present": true,
+    "image_revision_labels_match": true,
+    "compose_project_matches": true,
+    "image_build_input_labels_match": true
+  },
+  "blockers": [],
+  "runtime": {
+    "observed_source_commit": "46b4e72f4b58253a4f1f1cea0fd0b666d08a9bc2",
+    "operating_system": "Linux-6.17.0-1020-azure-x86_64-with-glibc2.39",
+    "python": "3.12.13",
+    "logical_cpu_count": 4,
+    "docker_version": "28.0.4",
+    "compose_version": "2.38.2",
+    "rendered_compose_sha256": "13590cc0869dea673df8d6120ab4f7cb5c20b485a29da4ead54cd8f3ee2481dc",
+    "image_ids": [
+      "sha256:8f38085a720dc9ee432af04dfa7d90503c20213937bbd676c7fe882313813099"
+    ],
+    "image_verification": {
+      "status": "LOCAL_IMAGE_ID_VERIFIED",
+      "identity_kind": "LOCAL_IMAGE_ID",
+      "reference": "ai-evalops-platform:phase9",
+      "expected_immutable_id": "sha256:8f38085a720dc9ee432af04dfa7d90503c20213937bbd676c7fe882313813099",
+      "containers": [
+        {
+          "service": "api",
+          "container_id": "39c5b36e4c37",
+          "image_reference": "ai-evalops-platform:phase9",
+          "image_id": "sha256:8f38085a720dc9ee432af04dfa7d90503c20213937bbd676c7fe882313813099",
+          "revision": "46b4e72f4b58253a4f1f1cea0fd0b666d08a9bc2",
+          "compose_project": "ai-evalops-platform"
+        },
+        {
+          "service": "reaper",
+          "container_id": "21adada50e7a",
+          "image_reference": "ai-evalops-platform:phase9",
+          "image_id": "sha256:8f38085a720dc9ee432af04dfa7d90503c20213937bbd676c7fe882313813099",
+          "revision": "46b4e72f4b58253a4f1f1cea0fd0b666d08a9bc2",
+          "compose_project": "ai-evalops-platform"
+        },
+        {
+          "service": "worker",
+          "container_id": "840e65766445",
+          "image_reference": "ai-evalops-platform:phase9",
+          "image_id": "sha256:8f38085a720dc9ee432af04dfa7d90503c20213937bbd676c7fe882313813099",
+          "revision": "46b4e72f4b58253a4f1f1cea0fd0b666d08a9bc2",
+          "compose_project": "ai-evalops-platform"
+        }
+      ]
+    },
+    "service_count": 5,
+    "disk_free_bytes": 91959214080
+  },
+  "details": {
+    "hash_mismatches": [],
+    "expected_source_commit": "46b4e72f4b58253a4f1f1cea0fd0b666d08a9bc2",
+    "observed_source_commit": "46b4e72f4b58253a4f1f1cea0fd0b666d08a9bc2",
+    "tracked_dirty_paths": [],
+    "dirty_build_context_paths": [],
+    "build_context_audit_blockers": [],
+    "git_head_returncode": 0,
+    "git_status_returncode": 0
+  }
+}
