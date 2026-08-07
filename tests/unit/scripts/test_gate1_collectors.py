@@ -418,6 +418,31 @@ redis_publish_failures_total 0
     assert delta["required_metrics_complete"] is False
 
 
+def test_required_zero_metric_from_idle_worker_preserves_comparison() -> None:
+    before = """
+db_operation_duration_seconds_count{operation="claim"} 0
+db_operation_duration_seconds_sum{operation="claim"} 0
+db_operation_duration_seconds_bucket{operation="claim",le="+Inf"} 0
+db_operation_duration_seconds_count{operation="result"} 0
+db_operation_duration_seconds_sum{operation="result"} 0
+db_operation_duration_seconds_bucket{operation="result",le="+Inf"} 0
+redis_publish_failures_total 0
+"""
+    busy_after = before.replace('operation="claim"} 0', 'operation="claim"} 1').replace(
+        'operation="result"} 0',
+        'operation="result"} 1',
+    )
+
+    delta = summarize_prometheus_deltas(
+        before={"worker-busy": before, "worker-idle": before},
+        after={"worker-busy": busy_after, "worker-idle": before},
+    )
+
+    assert delta["db_operations"]["claim"]["count"] == 1.0
+    assert delta["db_operations"]["result"]["count"] == 1.0
+    assert delta["required_metrics_complete"] is True
+
+
 def test_optional_metric_missing_stays_unknown_without_invalidating_required_metrics() -> None:
     required_metrics = """
 db_operation_duration_seconds_count{operation="claim"} 1

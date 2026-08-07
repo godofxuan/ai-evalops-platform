@@ -69,3 +69,22 @@ is classified `INVALID-AFTER-GIT-TRANSPORT`.
 A regression test first reproduced CRLF output through the public finalization function. The CSV
 writer now specifies LF explicitly. The new test and all 17 finalization/plot tests pass. A second
 formal run is scheduled; only its checked-out bundle may become the reporting source.
+
+## 2026-08-07 — Second formal run and zero-series metrics defect
+
+### Outcome
+
+Run `gate1-gh-31176423383-1` was committed as `6883b552`. Independent post-Git validation succeeded:
+the bundle is `complete`, contains 664 hashed payload files, and contains all 32 expected arms.
+
+The automatic capacity quality gate still rejected exactly eight deterministic 4/8-worker arms. In
+each rejected arm, one or more idle workers exposed no `operation="result"` histogram at all. The
+collector correctly treated absence as `UNKNOWN`; it did not invent zero.
+
+### Decision and fix
+
+Changing the collector to interpret any missing series as zero would hide instrumentation failures.
+Instead, `PlatformMetrics` now creates the four fixed, low-cardinality database-operation histogram
+children at process startup. A process with no observations therefore exposes an explicit zero count,
+while a failed scrape or truly absent metric remains `UNKNOWN`. Unit coverage verifies both the
+startup exposition and multi-worker busy/idle aggregation. A third formal run is required.

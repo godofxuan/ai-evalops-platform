@@ -3,6 +3,13 @@ from datetime import UTC, datetime
 from app.observability.metrics import PlatformMetrics
 
 
+def test_database_operation_histograms_exist_before_the_first_observation() -> None:
+    rendered = PlatformMetrics().render().decode("utf-8")
+
+    for operation in ("claim", "result", "failure", "reaper"):
+        assert f'db_operation_duration_seconds_count{{operation="{operation}"}} 0.0' in rendered
+
+
 def test_metrics_registry_exposes_required_platform_signals() -> None:
     metrics = PlatformMetrics()
 
