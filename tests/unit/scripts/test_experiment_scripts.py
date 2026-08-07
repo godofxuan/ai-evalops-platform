@@ -132,7 +132,10 @@ def test_experiment_cli_defaults_cover_required_scale_and_concurrency() -> None:
     assert load.cases == 500
     assert concurrency.requests == 20
     assert failure.allow_service_disruption is False
-    assert failure.lease_recovery_wait_seconds == 40
+    assert failure.repetitions == 3
+    assert failure.outage_seconds == 3
+    assert failure.idempotency_concurrency == 20
+    assert failure.source_commit == "UNSPECIFIED"
 
 
 def test_worker_scaling_plan_balances_every_worker_count_across_positions() -> None:

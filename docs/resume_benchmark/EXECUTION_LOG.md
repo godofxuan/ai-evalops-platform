@@ -132,3 +132,60 @@ D prove both accepted counts are zero.
 Final checkpoint validation: lock check passed; all repository files passed Ruff format and lint;
 strict mypy passed 120 source files; the exporter/finalizer/collector focus set passed 44 tests; and
 the complete non-integration suite passed `518 passed, 9 deselected` in 243.38 seconds.
+
+## 2026-08-07 — A–I fault-matrix harness design
+
+### Why the previous script was not extended superficially
+
+The previous `scripts.run_failure_scenarios` stopped Redis/PostgreSQL and killed a Worker, but mainly
+reported API final status. That cannot prove result uniqueness, contiguous attempts, zero lost Jobs,
+or rejection of a write from an expired lease. Treating those four coarse scenarios as the requested
+A–I matrix would have produced an attractive but unverifiable report.
+
+The replacement uses two execution modes against the same real PostgreSQL schema:
+
+- A/E/F/G/I disturb actual Compose services or submit concurrent HTTP requests;
+- B/C/D/H stop autonomous Worker/Reaper containers, create Runs through the real API, and invoke the
+  project's Claimer/Reaper/Committer services with a controlled logical clock. The clock removes a
+  30-second wait but does not replace PostgreSQL locks, transactions, unique constraints, or fencing
+  predicates.
+
+Every record includes raw Run/Job/Attempt/CaseResult rows and a derived invariant verdict. C submits
+a late success from Worker A after Worker B has reclaimed and committed; D does the same with a late
+failure. Either accepted count makes both the record and the complete matrix fail.
+
+### RED/GREEN work
+
+1. Reconciliation tests first failed because `scripts.fault_matrix_evidence` did not exist. The new
+   implementation counts terminal/nonterminal Jobs, retries, duplicate result keys, attempt gaps,
+   stale accepts, and Run counter mismatches. Six tests passed after implementation.
+2. Bundle tests first failed because `scripts.fault_bundle` did not exist. The finalizer now requires
+   a verified complete A–I matrix, hashes every payload file, refuses overwrite, and detects byte
+   tampering or file-set drift. The combined bundle/reconciliation set passes seven tests.
+3. The old CLI-default test expected a single `lease_recovery_wait_seconds=40`. It correctly failed
+   after the protocol changed. The contract now checks three repetitions, a three-second dependency
+   outage, and 20 concurrent idempotent submissions. Source SHA can be parsed as `UNSPECIFIED` for
+   help/tests but execution fails closed unless an exact SHA is supplied.
+
+### Problems and corrections
+
+- A broad test command included expensive prepared-evidence tests and reached the 184-second tool
+  limit without an assertion failure. Focused tests isolated the changed contracts; the later full
+  suite remains the final gate.
+- Ruff found only mechanical import ordering and line wrapping; the project formatter fixed them
+  without semantic changes.
+- Redis recovery now requires at least one durable unpublished outbox row before Redis restarts, then
+  waits for that Run's outbox to drain. This distinguishes actual outage recovery from a no-op stop.
+- Direct lease scenarios propagate the same frozen source SHA into each API Run rather than relying
+  only on workflow metadata.
+
+### Expected formal evidence
+
+The dedicated workflow runs 9 scenarios × 3 repetitions, retains runner and Compose diagnostics,
+and commits both success and failure artifacts. Only a successful 27-record matrix receives a
+`complete` SHA-256 manifest. Evidence commits do not retrigger the workflow because only the workflow
+and its explicit trigger file are watched.
+
+Pre-trigger validation passed: all 284 repository files passed Ruff format, lint passed, strict mypy
+passed 123 source files, the focused fault/concurrency set passed 12 tests, and the complete
+non-integration suite passed `525 passed, 9 deselected` in 272.29 seconds.
