@@ -14,7 +14,7 @@ from app.jobs.claiming import (
     validate_claim_request,
 )
 from app.jobs.lease import LeasePolicy
-from app.persistence.orm_models import EvaluationJob, EvaluationRun, ProgressEventOutbox
+from app.persistence.orm_models import EvaluationJob, EvaluationRun, ProgressEventOutbox, Tenant
 
 NOW = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
@@ -29,16 +29,16 @@ class FixedClock:
 
 
 class OneRowResult:
-    def __init__(self, job: EvaluationJob, run: EvaluationRun) -> None:
-        self._row = (job, run)
+    def __init__(self, job: EvaluationJob, run: EvaluationRun, tenant: Tenant) -> None:
+        self._row = (job, run, tenant)
 
-    def all(self) -> list[tuple[EvaluationJob, EvaluationRun]]:
+    def all(self) -> list[tuple[EvaluationJob, EvaluationRun, Tenant]]:
         return [self._row]
 
 
 class OneRowSession:
-    def __init__(self, job: EvaluationJob, run: EvaluationRun) -> None:
-        self._result = OneRowResult(job, run)
+    def __init__(self, job: EvaluationJob, run: EvaluationRun, tenant: Tenant) -> None:
+        self._result = OneRowResult(job, run, tenant)
         self.added: list[object] = []
 
     async def execute(self, _statement: object) -> OneRowResult:
@@ -69,18 +69,23 @@ def compile_postgresql(statement: object) -> str:
 def test_claim_candidates_use_postgresql_skip_locked_and_deterministic_order() -> None:
     sql = compile_postgresql(build_claim_candidates_statement(now=NOW, limit=10))
 
-    assert "FOR UPDATE OF evaluation_jobs SKIP LOCKED" in sql
+    assert "row_number() OVER (PARTITION BY evaluation_runs.tenant_id" in sql
+    assert "JOIN tenants" in sql
+    assert "tenants.last_job_claimed_at ASC NULLS FIRST" in sql
+    assert "FOR UPDATE OF evaluation_jobs, tenants SKIP LOCKED" in sql
     assert "evaluation_jobs.status" in sql
     assert "evaluation_jobs.next_attempt_at" in sql
     assert "evaluation_runs.status" in sql
-    assert (
-        "ORDER BY evaluation_jobs.priority DESC, evaluation_jobs.created_at ASC, "
-        "evaluation_jobs.id ASC" in sql
-    )
+    assert "tenant_candidate_rank ASC" in sql
     assert "LIMIT 10" in sql
 
 
 async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
+    tenant = Tenant(
+        id=TENANT_ID,
+        slug="claim-tenant",
+        name="Claim tenant",
+    )
     run = EvaluationRun(
         id=RUN_ID,
         tenant_id=TENANT_ID,
@@ -102,7 +107,7 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
         attempt_count=0,
         version=1,
     )
-    session = OneRowSession(job, run)
+    session = OneRowSession(job, run, tenant)
     claimer = SQLAlchemyJobClaimer(
         OneRowSessionFactory(session),  # type: ignore[arg-type]
         lease_policy=LeasePolicy(timedelta(seconds=30)),
@@ -113,6 +118,7 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
 
     assert len(claims) == 1
     assert claims[0].origin_traceparent == ORIGIN_TRACEPARENT
+    assert tenant.last_job_claimed_at == NOW
     events = [item for item in session.added if isinstance(item, ProgressEventOutbox)]
     assert len(events) == 1
     assert events[0].event_type == "job_progress"

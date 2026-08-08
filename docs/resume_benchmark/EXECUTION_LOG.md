@@ -535,3 +535,46 @@ Commit `5ef2e0c` triggered GitHub Actions run `31251984950`. `compose-smoke` com
 at `2026-08-08T10:06:09Z`, and `quality-and-integration` completed successfully at
 `2026-08-08T10:07:37Z`. The complete workflow conclusion is `success`, so the evaluator registry
 and retrieval/citation contract are now `VERIFIED` for the committed revision.
+
+## 2026-08-08 - Multi-tenant fair claiming local gate
+
+### Judgment and measured baseline contract
+
+The existing claimant globally ordered equal-priority Jobs by creation time and ID. It provided
+determinism and unique claims but no tenant fairness. Under the requested A-flood/B-latency setup,
+20 older A Jobs put B at legacy candidate position 21. A continuously replenished older backlog can
+therefore starve B.
+
+The selected policy stays inside PostgreSQL. A nullable Tenant `last_job_claimed_at` is combined
+with `row_number()` partitioned by tenant. The outer query orders by explicit priority, per-tenant
+candidate rank, least-recently-served Tenant, then stable Job age/ID. Job and Tenant rows are both
+locked with `SKIP LOCKED`, and the Tenant timestamp changes in the claim transaction. Priority is
+intentionally stronger than fairness; the guarantee applies within equal priority.
+
+### RED/GREEN and problems
+
+RED produced two expected failures: the compiled SQL lacked partition/rank/Tenant lock clauses, and
+the Claimer could not unpack the test's `(job, run, tenant)` row or update scheduling state.
+
+Implementation added Alembic revision `20260808_0016`, the indexed timestamp, ranked CTE, Tenant
+join/lock, and timestamp update. The first focused run then failed during collection because the new
+migration test guessed a nonexistent `app.persistence.migrations` helper. It was rewritten to use
+the same Alembic `Config` setup as existing migration tests. Seven focused tests passed.
+
+Strict MyPy then found that the integration cleanup helper used `object` for a session that requires
+`.execute()`. Narrowing it to `AsyncSession` made the contract explicit. Focused MyPy and Ruff passed.
+
+Repository validation passed: migration/ORM/claiming/deployment-focused tests passed `54` tests;
+307 files passed Ruff format/lint; strict MyPy passed 130 source files; and the complete
+non-integration suite passed `572 passed, 13 deselected` in `348.72s`. The extra deselected test is
+the new real-PostgreSQL fairness proof and is intentionally not counted as a local pass.
+An additional ORM column/index drift assertion was then added and passed inside a 22-test affected
+set; the full-suite total is not retroactively changed because that exact expanded suite was not
+rerun locally.
+
+### Pending remote authority
+
+The new real PostgreSQL test records the legacy B position as 21, launches two concurrent
+single-Job claimers, and requires the first wave to contain unique Jobs from both A and B. The CI
+workflow has a dedicated JUnit artifact/annotation entry. Local execution correctly skips without
+PostgreSQL; no fairness improvement is claimed as verified until the remote run succeeds.

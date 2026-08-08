@@ -57,6 +57,7 @@ Phase 3 已建立：
 
 - Run/Job 显式状态机和强制 reason/actor；
 - `FOR UPDATE OF evaluation_jobs SKIP LOCKED` 并发领取；
+- 同优先级下按租户候选轮次与最久未服务时间排序、同时锁定 Job/Tenant 的公平领取；
 - 短事务内状态、lease、version、Attempt 与审计写入；
 - owner/version/live-expiry 保护的心跳条件更新；
 - 10 Worker 真实 PostgreSQL 并发测试合同。
@@ -600,6 +601,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
   Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
+- 多租户公平领取不是提交限流、容量配额或计费策略；窗口查询与 Tenant 行锁的超大队列成本
+  尚未做容量实验；
 - 当前 evaluator registry 只有确定性 lexical/retrieval-citation 与 operational execution
   指标；尚无 LLM judge，且调用方提供的 evaluator version 仍是可追踪字段而非服务端签名证明；
 - Gate 1 能自动检查客观质量、expected-arm 完整性和 Worker 集群资源证据；但没有用户数值

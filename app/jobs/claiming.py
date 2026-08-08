@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, and_, or_, select, update
+from sqlalchemy import Select, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock, SystemClock
@@ -19,6 +19,7 @@ from app.persistence.orm_models import (
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
+    Tenant,
 )
 
 
@@ -59,7 +60,7 @@ def build_claim_candidates_statement(
     *,
     now: datetime,
     limit: int,
-) -> Select[tuple[EvaluationJob, EvaluationRun]]:
+) -> Select[tuple[EvaluationJob, EvaluationRun, Tenant]]:
     eligible_job = or_(
         EvaluationJob.status == JobStatus.QUEUED,
         and_(
@@ -69,17 +70,38 @@ def build_claim_candidates_statement(
         ),
     )
     eligible_run = EvaluationRun.status.in_((RunStatus.QUEUED, RunStatus.RUNNING))
-    return (
-        select(EvaluationJob, EvaluationRun)
+    ranked_candidates = (
+        select(
+            EvaluationJob.id.label("job_id"),
+            func.row_number()
+            .over(
+                partition_by=EvaluationRun.tenant_id,
+                order_by=(
+                    EvaluationJob.priority.desc(),
+                    EvaluationJob.created_at.asc(),
+                    EvaluationJob.id.asc(),
+                ),
+            )
+            .label("tenant_candidate_rank"),
+        )
         .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
         .where(eligible_job, eligible_run)
+        .cte("ranked_claim_candidates")
+    )
+    return (
+        select(EvaluationJob, EvaluationRun, Tenant)
+        .join(ranked_candidates, ranked_candidates.c.job_id == EvaluationJob.id)
+        .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+        .join(Tenant, Tenant.id == EvaluationRun.tenant_id)
         .order_by(
             EvaluationJob.priority.desc(),
+            ranked_candidates.c.tenant_candidate_rank.asc(),
+            Tenant.last_job_claimed_at.asc().nulls_first(),
             EvaluationJob.created_at.asc(),
             EvaluationJob.id.asc(),
         )
         .limit(limit)
-        .with_for_update(of=EvaluationJob, skip_locked=True)
+        .with_for_update(of=(EvaluationJob, Tenant), skip_locked=True)
     )
 
 
@@ -106,7 +128,8 @@ class SQLAlchemyJobClaimer:
             rows = (
                 await session.execute(build_claim_candidates_statement(now=now, limit=limit))
             ).all()
-            for job, run in rows:
+            for job, run, tenant in rows:
+                tenant.last_job_claimed_at = now
                 run_started_now = False
                 if job.status is JobStatus.RETRY_WAIT:
                     retry_due = transition_job(

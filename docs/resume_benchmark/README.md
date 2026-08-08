@@ -29,3 +29,4 @@ source row is `VERIFIED`.
 - `EVALOPS_ARTIFACT_BACKEND.md`: Local/S3 contract, MinIO proof, failure semantics, and limitations.
 - `EVALOPS_OBSERVABILITY_STACK.md`: Prometheus/Collector runtime proof and Span Link model.
 - `EVALOPS_EVALUATOR_REGISTRY.md`: evaluator plugin contract, metric definitions, provenance, and limits.
+- `EVALOPS_TENANT_FAIRNESS.md`: starvation baseline, PostgreSQL fair-claim policy, proof, and trade-offs.
