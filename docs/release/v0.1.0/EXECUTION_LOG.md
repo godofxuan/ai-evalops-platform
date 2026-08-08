@@ -739,3 +739,44 @@ pre-fair source `15e7ac2...` 的正式协议相同，适合 current RC 的直接
 正常退出，load 协议测试获得明确结果：`9 passed, 6 deselected in 225.45s`。随后才把
 `.github/evidence-gate-trigger.txt` 的请求时间更新为 `2026-08-09T01:27:53+08:00`。该 trigger
 提交的目的仅是运行冻结 32-arm 协议；在机器人完成不可变 evidence commit 前，不推送后续文档。
+
+## 2026-08-09 — 32-arm 执行成功但 evidence 回写被超大日志阻断
+
+精确 source `09c3e7d2f70daf5629b2f876eaaefddedb20d6c5` 的标准 CI run
+`31269813704` 成功；worker-scaling run `31269813705` 在 29m30s 后显示 failure。不能仅凭工作流
+总状态把它记成实验失败：GitHub jobs API 的逐步结论表明，checkout、依赖、prepare、Compose、迁移、
+服务启动、API readiness、临时密钥、冻结 32-arm execute、诊断和 artifact upload 全部 success，唯一
+失败步骤是 `Commit immutable evidence to the target branch`。
+
+artifact `gate1-gh-31269813705-1`（artifact id `9025594324`、下载大小 17,490,693 bytes、
+digest `sha256:af5d76fab30b2beba9c0b080fa931b8065b9a3f46b23b8dcadcab99061f60560`）因此通过
+GitHub Actions API 恢复到本地。恢复时没有打印 credential 值；临时 credential request 文件随后
+删除。包内 `execution.json` 为 `completed`，32/32 arms 均标记
+`valid_for_capacity_comparison: true`，`failures/index.json` 为空；final aggregate 的 quality gate 为
+`VERIFIED`、32/32 complete、没有 missing/invalid/blocker。adoption gate 为 `NOT_RUN` 且 review
+readiness 为 `READY_FOR_HUMAN_REVIEW`，这是冻结协议要求人类决定 worker 数的设计，不是 execute
+失败；API 的 step 13 success 也独立印证了这一点。
+
+检查未回写目录的文件大小后找到直接原因：`environment/compose.log` 为 122,939,753 bytes，超过
+GitHub 单文件 100 MiB 上限；其余最大文件约 0.5 MiB。由此判断应修 evidence diagnostics 的无界
+日志保存，而不是改 production scheduler、32-arm 结果或准入结论。
+
+按 RED→GREEN 增加三条工作流合同测试，覆盖 worker scaling、fault matrix 和 RC fair capacity。
+第一次 RED 中，worker scaling 与 RC 正确因缺少上限失败，但 fault 测试先因测试夹具误写 job 名
+`fault-evidence` 而 `KeyError`；将真实 job 名纠正为 `fault-matrix` 后重新执行，三项均只因没有
+`COMPOSE_LOG_LIMIT_BYTES=10485760` 失败。随后对三条持久化证据工作流采用相同最小修复：
+
+1. Compose 完整日志只暂存在 runner 临时目录，不直接进入 Git；
+2. evidence 仅保留最后 10 MiB，以保留最接近终止点的诊断；
+3. `compose-log-policy.txt` 明确记录策略、字节上限、原始/保留大小和 compose logs 退出码；
+4. 生成受限副本后删除 runner 临时文件，不改变实验 raw/final/manifest 或生产代码。
+
+GREEN 结果为新合同与既有 RC workflow 合同合计 `6 passed in 0.10s`，YAML 可正常解析，
+`git diff --check` 通过。当前下载 artifact 的超大原始日志仍须先记录原始 SHA-256，再生成受限可提交
+副本；完成清单复核前不把恢复目录称为已提交的 immutable bundle。
+
+提交前第一次组合验证不能采用：Ruff format 报告新测试需统一两处字符串引号，且命令引用了不存在的
+`tests/unit/scripts/test_experiment_workflow.py`，pytest 因路径错误显示 `no tests ran`；末尾的
+`git status` 又把 PowerShell 整体退出码覆盖成 0。没有据此宣称通过。使用真实文件列表纠正命令、
+让每一步在非零时立即退出，并用 Ruff 机械格式化后，最终结果为 Ruff check 通过、format check
+通过、两份真实 workflow 测试 `6 passed in 0.09s`、diff check 通过。
