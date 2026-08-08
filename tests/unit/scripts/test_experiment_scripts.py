@@ -123,7 +123,10 @@ def test_failed_experiment_record_contains_no_exception_message_or_secret() -> N
     assert "secret-must-not-be-recorded" not in str(report)
 
 
-def test_experiment_cli_defaults_cover_required_scale_and_concurrency() -> None:
+def test_experiment_cli_defaults_cover_required_scale_and_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
     load = load_parser().parse_args([])
     concurrency = concurrency_parser().parse_args([])
     failure = failure_parser().parse_args([])
@@ -136,6 +139,10 @@ def test_experiment_cli_defaults_cover_required_scale_and_concurrency() -> None:
     assert failure.outage_seconds == 3
     assert failure.idempotency_concurrency == 20
     assert failure.source_commit == "UNSPECIFIED"
+
+    github_sha = "a" * 40
+    monkeypatch.setenv("GITHUB_SHA", github_sha)
+    assert failure_parser().parse_args([]).source_commit == github_sha
 
 
 def test_worker_scaling_plan_balances_every_worker_count_across_positions() -> None:
