@@ -855,3 +855,29 @@ passed。
 Job 锁、stale result fencing 均不变。它目前只由 SQL 合同和数学等价性支持，尚未得到真实 PostgreSQL
 性能/正确性回归结果；必须推送后重新运行标准 CI、10W/100J/20:1/fencing，以及 current source 的
 large queue 和 32-arm 协议，才能决定 release。
+
+## 2026-08-09 — 第一次 rank 剪枝 remote failure 与 CTE 物化修正
+
+提交 `e04491d` 推送后，同一 exact source 启动 CI `31271973224`、worker scaling
+`31271973235`、RC capacity `31271973239` 和 fault matrix `31271973253`。CI 的
+quality/integration 与 Compose smoke 均 success，证明现有 10W/100J、20:1、公平/锁序/fencing
+合同未回归。RC 在 initial stage failure，100k 按 fail-closed 协议 skipped；artifact
+`rc-gh-31271973239-1`（id `9025917351`、digest
+`sha256:9f58c16366cb134b0f02d5ec792d893f6fd55e17631a613a2cd92c91d7db7b52`）上传，机器人提交
+`54cadeb` 原样保存。assessment source/expected source 均为 `e04491d...`，32/32 arms 完成、无
+missing/duplicate/unexpected，唯一 blocker 是 `postgres_explain_candidate_cardinality_mismatch`。
+
+该 blocker 的直接原因是 rank predicate 被 PostgreSQL 下推为 WindowAgg `Run Condition`，使 evidence
+summary 把输出 rank 数 1/4/100 误作完整队列基数。更重要的是 raw plan 证明非物化 CTE 被内联：
+q1k/single/w1 的 WindowAgg `Actual Loops=1000`、fair EXPLAIN 107.581ms；balanced q10k 的
+evaluation_jobs Seq Scan 10,000 rows × 4 loops。故第一次优化虽然 SQL 等价、correctness CI 通过，
+却产生 planner 重复执行风险，不能视为性能 GREEN。
+
+针对“内联导致窗口重复执行”新增第二条 SQL 形状 RED，要求
+`ranked_claim_candidates AS MATERIALIZED`；旧 SQL 按预期失败。最小修正仅给现有 ranked CTE 添加
+PostgreSQL `MATERIALIZED` 前缀，保留外层 `tenant_rank <= limit`、顺序、锁、eligibility 和 fencing。
+GREEN 为 claiming `9 passed`、Ruff/format/MyPy 全过。该修正必须再次 remote 验证后才可评价效果。
+
+四条工作流并发写同一分支还暴露基础设施风险：RC 先推进远端到 `54cadeb`，较慢的 worker-scaling 与
+fault 机器人稍后可能因 non-fast-forward 无法回写；artifact upload 位于 push 之前，原始实验仍会保留。
+这不改变实验结果，但最终工作流应共享回写串行化或采用独立 evidence 分支。

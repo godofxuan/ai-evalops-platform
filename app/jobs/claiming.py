@@ -83,6 +83,7 @@ def build_claim_candidates_statement(
         .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
         .where(_eligible_job(now), _eligible_run())
         .cte("ranked_claim_candidates")
+        .prefix_with("MATERIALIZED")
     )
     return (
         select(EvaluationJob, EvaluationRun, Tenant)
