@@ -106,15 +106,13 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         *,
         worker_id: str,
         limit: int,
-        now: datetime,
-        lease_expires_at: datetime,
+        eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
         self._attempts.set(self._attempts.get() + 1)
         return await super()._claim_once(
             worker_id=worker_id,
             limit=limit,
-            now=now,
-            lease_expires_at=lease_expires_at,
+            eligible_at=eligible_at,
         )
 
 

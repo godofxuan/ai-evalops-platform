@@ -28,6 +28,14 @@ class FixedClock:
         return NOW
 
 
+class AdvancingClock:
+    def __init__(self, *values: datetime) -> None:
+        self._values = iter(values)
+
+    def now(self) -> datetime:
+        return next(self._values)
+
+
 class OneRowResult:
     def __init__(self, job: EvaluationJob, run: EvaluationRun, tenant: Tenant) -> None:
         self._row = (job, run, tenant)
@@ -166,7 +174,45 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
     }
 
 
+async def test_claim_lease_starts_after_candidate_query_completes() -> None:
+    claimed_at = NOW + timedelta(seconds=20)
+    tenant = Tenant(id=TENANT_ID, slug="slow-query-tenant", name="Slow query tenant")
+    run = EvaluationRun(
+        id=RUN_ID,
+        tenant_id=TENANT_ID,
+        status=RunStatus.RUNNING,
+        target_type="mock",
+        target_config_json={},
+        target_version="v1",
+        evaluator_type="execution",
+        evaluator_config_json={},
+        evaluator_version="v1",
+    )
+    job = EvaluationJob(
+        id=JOB_ID,
+        run_id=RUN_ID,
+        case_id="case-slow-query",
+        case_payload_json={"case_id": "case-slow-query"},
+        status=JobStatus.QUEUED,
+        attempt_count=0,
+        version=1,
+    )
+    claimer = SQLAlchemyJobClaimer(
+        OneRowSessionFactory(OneRowSession(job, run, tenant)),  # type: ignore[arg-type]
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=AdvancingClock(NOW, claimed_at),
+    )
+
+    claim = (await claimer.claim(worker_id="worker-slow-query"))[0]
+
+    assert claim.lease_expires_at == claimed_at + timedelta(seconds=30)
+    assert job.heartbeat_at == claimed_at
+    assert job.started_at == claimed_at
+    assert tenant.last_job_claimed_at == claimed_at
+
+
 async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> None:
+    claimed_at = NOW + timedelta(seconds=20)
     tenant = Tenant(id=TENANT_ID, slug="retry-tenant", name="Retry tenant")
     run = EvaluationRun(
         id=RUN_ID,
@@ -192,12 +238,19 @@ async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> No
     claimer = SQLAlchemyJobClaimer(
         factory,  # type: ignore[arg-type]
         lease_policy=LeasePolicy(timedelta(seconds=30)),
-        clock=FixedClock(),
+        clock=AdvancingClock(
+            NOW,
+            NOW + timedelta(seconds=5),
+            NOW + timedelta(seconds=10),
+            claimed_at,
+        ),
     )
 
     claims = await claimer.claim(worker_id="worker-retry")
 
     assert [claim.job_id for claim in claims] == [JOB_ID]
+    assert claims[0].lease_expires_at == claimed_at + timedelta(seconds=30)
+    assert tenant.last_job_claimed_at == claimed_at
     assert factory.begin_count == 2
     assert factory.probe_count == 1
 

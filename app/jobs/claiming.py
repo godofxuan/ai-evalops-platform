@@ -133,18 +133,18 @@ class SQLAlchemyJobClaimer:
 
     async def claim(self, *, worker_id: str, limit: int = 1) -> tuple[ClaimedJob, ...]:
         validate_claim_request(worker_id=worker_id, limit=limit)
-        now = self._clock.now()
-        lease_expires_at = now + self._lease_policy.duration
         for retry_number in range(_MAX_CONTENTION_RETRIES + 1):
+            eligible_at = self._clock.now()
             claims = await self._claim_once(
                 worker_id=worker_id,
                 limit=limit,
-                now=now,
-                lease_expires_at=lease_expires_at,
+                eligible_at=eligible_at,
             )
             if claims:
                 return claims
-            if retry_number == _MAX_CONTENTION_RETRIES or not await self._has_eligible_jobs(now):
+            if retry_number == _MAX_CONTENTION_RETRIES or not await self._has_eligible_jobs(
+                self._clock.now()
+            ):
                 return ()
             await asyncio.sleep(_CONTENTION_RETRY_SECONDS)
         return ()
@@ -164,16 +164,21 @@ class SQLAlchemyJobClaimer:
         *,
         worker_id: str,
         limit: int,
-        now: datetime,
-        lease_expires_at: datetime,
+        eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
         claims: list[ClaimedJob] = []
         async with self._session_factory.begin() as session:
             rows = (
-                await session.execute(build_claim_candidates_statement(now=now, limit=limit))
+                await session.execute(
+                    build_claim_candidates_statement(now=eligible_at, limit=limit)
+                )
             ).all()
+            if not rows:
+                return ()
+            claimed_at = self._clock.now()
+            lease_expires_at = claimed_at + self._lease_policy.duration
             for job, run, tenant in rows:
-                tenant.last_job_claimed_at = now
+                tenant.last_job_claimed_at = claimed_at
                 run_started_now = False
                 if job.status is JobStatus.RETRY_WAIT:
                     retry_due = transition_job(
@@ -209,9 +214,9 @@ class SQLAlchemyJobClaimer:
                 job.attempt_count = next_attempt_number
                 job.lease_owner = worker_id
                 job.lease_expires_at = lease_expires_at
-                job.heartbeat_at = now
+                job.heartbeat_at = claimed_at
                 job.next_attempt_at = None
-                job.started_at = job.started_at or now
+                job.started_at = job.started_at or claimed_at
                 job.version = next_version
                 session.add(
                     JobAttempt(
@@ -219,7 +224,7 @@ class SQLAlchemyJobClaimer:
                         job_id=job.id,
                         attempt_number=next_attempt_number,
                         worker_id=worker_id,
-                        started_at=now,
+                        started_at=claimed_at,
                     )
                 )
 
@@ -239,7 +244,7 @@ class SQLAlchemyJobClaimer:
                             )
                             .values(
                                 status=run_started.current,
-                                started_at=now,
+                                started_at=claimed_at,
                                 version=EvaluationRun.version + 1,
                             )
                             .returning(EvaluationRun.id)
@@ -269,7 +274,7 @@ class SQLAlchemyJobClaimer:
                         event_type=EventType.RUN_STARTED,
                         tenant_id=run.tenant_id,
                         run_id=run.id,
-                        timestamp=now,
+                        timestamp=claimed_at,
                         payload={"status": "running"},
                     )
                 enqueue_progress_event(
@@ -277,7 +282,7 @@ class SQLAlchemyJobClaimer:
                     event_type=EventType.JOB_PROGRESS,
                     tenant_id=run.tenant_id,
                     run_id=run.id,
-                    timestamp=now,
+                    timestamp=claimed_at,
                     payload={
                         "job_id": str(job.id),
                         "case_id": job.case_id,

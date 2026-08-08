@@ -558,3 +558,61 @@ passed。使用新 admission 直接重验旧 initial 32-arm bundle，得到：
 
 该修改只影响 evidence summary/admission，不改生产 claim、锁序、lease 或 resume-safe 行为。旧
 manifest 和 raw evidence 保持原样，没有回写错误数字。
+
+## 2026-08-08 — 100k/w8 lease loss：让租约从慢 claim 完成后开始
+
+### 可诊断重跑与真实 RED
+
+诊断提交 `dc178739bdc4aeac5a110f11cc405d4e4e355f8c` 的标准 CI run
+`31263918298` success；专用 trigger source `87cf01c06102b6e4fa267ce5f7c96b29756f0fe6`
+的标准 CI run `31263972501` 也 success（3m15s）。RC run `31263972530` 在 20m32s failure，
+artifact `rc-gh-31263972530-1` 为 819 KB，digest
+`sha256:05feb45a59bd3a820f76393c23bdc769c5aed9c01a5c892767cdb77ab28fc1c0`，immutable
+evidence commit 为 `2036ace`。
+
+新的 `failure.json` 成功穿透 ExceptionGroup：唯一 leaf 是
+`LeaseLostError: result rejected because the worker no longer owns a live lease`，traceback 精确位于
+`EvaluationWorker._process_claim → SQLAlchemyResultCommitter.commit_success`。100k single-tenant
+w1/w2/w4 已各自 VERIFIED，correctness 的 lost/duplicate/orphan/attempt mismatch 均为 0：
+
+- w1：120.149s，0.832 Jobs/s，claim p95 3008.7ms，commit p95 62.2ms，lock-wait peak 0；
+- w2：195.037s，0.513 Jobs/s，claim p95 4202.7ms，commit p95 285.5ms，lock-wait peak 1；
+- w4：209.035s，0.478 Jobs/s，claim p95 11905.7ms，commit p95 635.1ms，lock-wait peak 2；
+- w8 未生成 runtime raw，在 worker sample 中 lease loss 后 TaskGroup 正确取消 sibling。
+
+### 根因判断
+
+harness 与生产默认均为 lease 30s、heartbeat 10s、claim batch 1。源码确认
+`SQLAlchemyJobClaimer.claim` 在执行昂贵 fair candidate SQL **之前**计算 `now` 和
+`lease_expires_at=now+30s`，并在 contention retries 中复用。100k/w4 的 claim p95 已消耗 11.9s；
+w8 的排序、锁等待和竞争可在 claim 返回前消耗完整租约。mock target 很快结束，不会到达 heartbeat
+runner 的第一个 10s tick，result commit 因此携带已过期 lease 被 fencing 正确拒绝。
+
+此证据支持修正“租约计时起点”，不支持放宽 stale completion、增加默认 lease 或重写 fair
+scheduler。candidate SQL/外部排序仍是最严重性能瓶颈，但先修 correctness gate，再讨论优化。
+
+### TDD、最小生产修改与效果
+
+新增 `AdvancingClock` RED：模拟候选查询耗时 20s。旧实现返回的 lease 在查询开始后 30s 到期，
+只剩 10s；断言要求查询完成后仍有完整 30s，测试按预期失败。最小修改为：
+
+1. 每次 contention attempt 读取新的 `eligible_at`，仅用于候选资格；
+2. 候选 SQL 返回并锁定 rows 后读取一个 `claimed_at`；
+3. lease expiry、job heartbeat/started、attempt started、tenant fairness timestamp 与 progress event
+   全部基于同一个 `claimed_at`；
+4. 固定 lease 长度、heartbeat 间隔、fair SQL、Tenant→Run→Job 锁序与 version fencing 均不变。
+
+额外把 contention-retry 测试改为四阶段推进时钟，证明第二次 attempt 也使用新资格时刻与新
+claimed_at。claiming unit 7 passed，包含 worker/result/lease runner 的相关组合 17 passed，扩大到
+harness/合同为 37 passed。
+
+首次把 MyPy 扩到 `tests/unit/jobs/test_claiming.py` 时出现两处既有 `object.compile` 类型错误；项目
+正式 MyPy 范围不含 unit tests，没有为消除输出而改写既有 helper。正式命令随后发现
+`InstrumentedClaimer._claim_once` 仍覆盖旧签名；同步为 `eligible_at` 后，MyPy 133 source files
+passed，Ruff/format/diff check passed。最终全仓非外部服务回归为
+`620 passed, 13 deselected in 351.58s`。
+
+该修改改变 production claim 的时间戳起点，但不改变 resume-safe claim 语义：仍在同一 transaction
+内锁定 Job/Tenant、写 attempt、设置 owner/version/lease；stale success/failure 仍按 owner、version
+和 live lease fail-closed。下一步必须用真实 PostgreSQL 重跑 1k/10k/100k，证明 w8 不再 lease loss；
+在此之前 release 仍为 `NOT_READY`。
