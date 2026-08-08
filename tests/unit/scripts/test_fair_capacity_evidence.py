@@ -186,7 +186,7 @@ def test_explain_summary_preserves_buffers_sort_spill_and_candidate_cardinality(
             "Execution Time": 8.5,
             "Plan": {
                 "Node Type": "Limit",
-                "Actual Rows": 1,
+                "Actual Rows": 1.0,
                 "Actual Loops": 1,
                 "Shared Hit Blocks": 20,
                 "Shared Read Blocks": 3,
@@ -195,7 +195,7 @@ def test_explain_summary_preserves_buffers_sort_spill_and_candidate_cardinality(
                 "Plans": [
                     {
                         "Node Type": "Sort",
-                        "Actual Rows": 1_000,
+                        "Actual Rows": 1_000.0,
                         "Actual Loops": 1,
                         "Sort Method": "external merge",
                         "Sort Space Used": 256,
@@ -203,7 +203,7 @@ def test_explain_summary_preserves_buffers_sort_spill_and_candidate_cardinality(
                         "Plans": [
                             {
                                 "Node Type": "WindowAgg",
-                                "Actual Rows": 10_000,
+                                "Actual Rows": 10_000.0,
                                 "Actual Loops": 1,
                             }
                         ],
@@ -235,6 +235,31 @@ def test_explain_summary_preserves_buffers_sort_spill_and_candidate_cardinality(
         "temp_spill": True,
     }
     assert "cpu_time_ms" not in summary
+
+
+def test_explain_summary_uses_largest_plan_row_count_without_window_aggregate() -> None:
+    raw_plan = [
+        {
+            "Planning Time": 0.5,
+            "Execution Time": 2.5,
+            "Plan": {
+                "Node Type": "Limit",
+                "Actual Rows": 1.0,
+                "Actual Loops": 1,
+                "Plans": [
+                    {
+                        "Node Type": "Seq Scan",
+                        "Actual Rows": 1_000.0,
+                        "Actual Loops": 1,
+                    }
+                ],
+            },
+        }
+    ]
+
+    summary = summarize_explain(raw_plan)
+
+    assert summary["candidate_cardinality"] == 1_000
 
 
 def test_100k_stage_requires_verified_1k_10k_correctness() -> None:
@@ -277,6 +302,7 @@ def test_release_manifest_binds_payload_set_and_source(tmp_path: Path) -> None:
     row = {
         "arm_id": "fair-q1000-single-w1-b1",
         "source_commit": "a" * 40,
+        "queue_size": 1_000,
         "distribution": "single_tenant",
         "fair_first_secondary_tenant_position": "",
         "legacy_fifo_first_secondary_tenant_position": "",
@@ -301,6 +327,8 @@ def test_release_manifest_binds_payload_set_and_source(tmp_path: Path) -> None:
         json.dumps(
             {
                 "format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+                "arm_id": "fair-q1000-single-w1-b1",
+                "candidate_cardinality": 1_000,
                 "planning_time_ms": 1.0,
                 "execution_time_ms": 2.0,
                 "plan": [{"Plan": {"Node Type": "Limit"}}],

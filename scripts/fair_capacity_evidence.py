@@ -163,6 +163,12 @@ def _plan_nodes(node: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
     return (node, *descendants)
 
 
+def _postgres_row_count(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
 def summarize_explain(raw_plan: object) -> dict[str, Any]:
     if (
         not isinstance(raw_plan, list)
@@ -175,10 +181,10 @@ def summarize_explain(raw_plan: object) -> dict[str, Any]:
     root = document["Plan"]
     assert isinstance(root, Mapping)
     nodes = _plan_nodes(root)
-    window_rows = [
-        int(node["Actual Rows"])
+    candidate_rows = [
+        row_count
         for node in nodes
-        if node.get("Node Type") == "WindowAgg" and type(node.get("Actual Rows")) is int
+        if (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
     ]
     sorts: list[dict[str, str | int]] = [
         {
@@ -203,7 +209,9 @@ def summarize_explain(raw_plan: object) -> dict[str, Any]:
         "shared_read_blocks": int(root.get("Shared Read Blocks", 0)),
         "temp_read_blocks": temp_read,
         "temp_written_blocks": temp_written,
-        "candidate_cardinality": max(window_rows) if window_rows else int(root["Actual Rows"]),
+        "candidate_cardinality": (
+            max(candidate_rows) if candidate_rows else int(root["Actual Rows"])
+        ),
         "sorts": sorts,
         "temp_spill": bool(
             temp_read

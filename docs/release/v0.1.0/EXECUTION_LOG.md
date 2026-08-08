@@ -515,3 +515,46 @@ files passed；diff check passed。
 下一次 remote run 的目标首先是获得可诊断的原始叶异常；只有 100k 全 16 arms VERIFIED 才进入
 current-source 旧 32-arm load protocol。若同类根因复现，再根据叶异常与原始 PostgreSQL 诊断决定
 是否需要最小生产修改。
+
+## 2026-08-08 — 修正 EXPLAIN candidate cardinality 并加入 fail-closed 准入
+
+### 修改前判断与真实证据
+
+分析 `rc-gh-31262849253-1` 的 100k raw plan 时，原始 WindowAgg 明确包含
+`Actual Rows: 100000.0`，但保存的 summary 是 `candidate_cardinality: 1`。原因不是 PostgreSQL
+计划异常，而是 psycopg 将真实 JSON 数字解码成 float，`summarize_explain` 却只接受
+`type(Actual Rows) is int`；现有单测使用整数，未覆盖真实驱动形状。
+
+更严重的是旧 admission 只验证 EXPLAIN 格式、hash 和 exact coverage，不验证候选基数语义，
+因此这类错误仍可能被判 `VERIFIED`。正在运行的 source `87cf01c...` 仍包含该缺陷，所以无论
+其运行结论如何，只能保留为过渡/负面证据，不能作为最终 release capacity bundle。
+
+### RED、最小修改与 GREEN
+
+第一组 RED 把既有计划单测的 `Actual Rows` 改为真实的 `1.0/1000.0/10000.0`；结果只有
+candidate 字段失败，期望 10000、实际 1。最小修复把非 bool 的 PostgreSQL int/float 行数统一
+正规化为 int，并取整个 plan tree 的有效候选节点行数。直接对不可变 100k raw plan 复算得到：
+
+```text
+stored_candidate_cardinality=1
+recalculated_candidate_cardinality=100000
+```
+
+补充的 legacy（无 WindowAgg）RED 首先得到期望 1000、实际 1；算法随后统一取整个 plan tree 的
+最大 Actual Rows。真实 100k fair 与 legacy raw plan 最终均复算为 100000。
+
+第二组 RED 构造 manifest/hash 完全自洽、queue_size=1000 但 candidate=1 的 bundle；旧 admission
+错误返回 `VERIFIED`。最小合同修改要求 `arms.csv` 存在正 `queue_size`，且每份 fair/legacy
+EXPLAIN 的数值 candidate 与所属 arm queue size 完全相等，否则 blocker 为
+`postgres_explain_candidate_cardinality_mismatch`。正向测试夹具同步补齐真实字段；没有放宽其他
+blocker。
+
+最终相关验证：42 tests passed；4 files formatted；Ruff passed；MyPy 两个 evidence source
+passed。使用新 admission 直接重验旧 initial 32-arm bundle，得到：
+
+```json
+{"status":"FAILED","arm_count":32,"blockers":["postgres_explain_candidate_cardinality_mismatch"]}
+```
+
+该修改只影响 evidence summary/admission，不改生产 claim、锁序、lease 或 resume-safe 行为。旧
+manifest 和 raw evidence 保持原样，没有回写错误数字。

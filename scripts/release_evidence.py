@@ -109,6 +109,7 @@ def _read_arm_rows(path: Path) -> tuple[list[dict[str, str]], str | None]:
     required_fields = {
         "arm_id",
         "source_commit",
+        "queue_size",
         "distribution",
         "fair_first_secondary_tenant_position",
         "legacy_fifo_first_secondary_tenant_position",
@@ -189,6 +190,33 @@ def _explain_coverage_blocker(
     )
 
 
+def _explain_candidate_cardinality_blocker(
+    payload_files: Mapping[str, Path],
+    *,
+    queue_sizes_by_arm: Mapping[str, int],
+) -> str | None:
+    for relative_path, path in payload_files.items():
+        if not relative_path.startswith("explain/") or not relative_path.endswith(".json"):
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(value, Mapping):
+            continue
+        arm_id = value.get("arm_id")
+        candidate_cardinality = value.get("candidate_cardinality")
+        expected = queue_sizes_by_arm.get(arm_id) if isinstance(arm_id, str) else None
+        if (
+            expected is None
+            or isinstance(candidate_cardinality, bool)
+            or not isinstance(candidate_cardinality, int | float)
+            or candidate_cardinality != expected
+        ):
+            return "postgres_explain_candidate_cardinality_mismatch"
+    return None
+
+
 def assess_release_bundle(
     bundle_directory: Path,
     *,
@@ -203,6 +231,7 @@ def assess_release_bundle(
     missing_arm_ids: list[str] = []
     duplicate_arm_ids: list[str] = []
     unexpected_arm_ids: list[str] = []
+    queue_sizes_by_arm: dict[str, int] = {}
     claim_scope = manifest.get("claim_scope") if manifest is not None else None
     source_commit = manifest.get("source_commit") if manifest is not None else None
 
@@ -232,11 +261,17 @@ def assess_release_bundle(
         if unexpected_arm_ids:
             blockers.append("unexpected_arm")
         for row in rows:
+            arm_id = row.get("arm_id", "")
             row_source = row.get("source_commit")
             if not isinstance(row_source, str) or _SOURCE_PATTERN.fullmatch(row_source) is None:
                 blockers.append("invalid_source_commit")
             elif row_source != source_commit:
                 blockers.append("row_source_mismatch")
+            queue_size = _integer(row, "queue_size")
+            if not arm_id or queue_size is None or queue_size == 0:
+                blockers.append("arms_csv_invalid")
+            else:
+                queue_sizes_by_arm[arm_id] = queue_size
             counts = {field: _integer(row, field) for field in _REQUIRED_COUNT_FIELDS}
             if any(value is None for value in counts.values()):
                 blockers.append("arms_csv_invalid")
@@ -276,6 +311,12 @@ def assess_release_bundle(
     explain_blocker = _explain_blocker(payload_files)
     if explain_blocker is not None:
         blockers.append(explain_blocker)
+    candidate_cardinality_blocker = _explain_candidate_cardinality_blocker(
+        payload_files,
+        queue_sizes_by_arm=queue_sizes_by_arm,
+    )
+    if candidate_cardinality_blocker is not None:
+        blockers.append(candidate_cardinality_blocker)
     if expected_explain_repetitions is not None:
         coverage_blocker = _explain_coverage_blocker(
             payload_files,

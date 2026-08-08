@@ -17,6 +17,7 @@ def _row(*, source_commit: str = CURRENT_SOURCE) -> dict[str, object]:
     return {
         "arm_id": ARM_ID,
         "source_commit": source_commit,
+        "queue_size": 1_000,
         "distribution": "single_tenant",
         "fair_first_secondary_tenant_position": "",
         "legacy_fifo_first_secondary_tenant_position": "",
@@ -41,6 +42,7 @@ def _write_bundle(
     claim_scope: str = "current_release_capacity",
     include_explain: bool = True,
     explain_repetitions: int = 1,
+    candidate_cardinality: int = 1_000,
     empty_csv: bool = False,
 ) -> Path:
     root.mkdir()
@@ -67,6 +69,7 @@ def _write_bundle(
                             "repetition": repetition,
                             "planning_time_ms": 1.0,
                             "execution_time_ms": 2.0,
+                            "candidate_cardinality": candidate_cardinality,
                             "plan": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20}}],
                         },
                         sort_keys=True,
@@ -144,6 +147,15 @@ def test_release_bundle_cannot_verify_without_raw_postgresql_explain(tmp_path: P
 
     assert result["status"] in {"UNKNOWN", "FAILED"}
     assert "postgres_explain_missing" in result["blockers"]
+
+
+def test_release_bundle_rejects_explain_candidate_cardinality_drift(tmp_path: Path) -> None:
+    bundle = _write_bundle(tmp_path / "bundle", candidate_cardinality=1)
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_candidate_cardinality_mismatch" in result["blockers"]
 
 
 def test_release_bundle_requires_every_fair_and_legacy_explain_repetition(
