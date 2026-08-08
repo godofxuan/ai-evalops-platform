@@ -65,7 +65,8 @@ Phase 4 已建立：
 
 - deterministic MockTarget，以及由操作员 Registry 管理、固定公网 IP 连接并校验实际 peer 的
   HTTPRAGTarget；
-- ExecutionEvaluator 与明确标为 lexical 的 BasicAnswerEvaluator；
+- 单一注册源的 evaluator registry：明确标为 lexical 的 BasicAnswerEvaluator、
+  RetrievalCitationEvaluator，以及归类为 operational 的 ExecutionEvaluator；
 - Worker 的 claim → Target → Evaluator → result 成功流水线；
 - lease owner/version/expiry fencing 的 CaseResult 提交；
 - Job/Attempt/Result/Audit/Run counter 同事务更新。
@@ -599,6 +600,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
   Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
+- 当前 evaluator registry 只有确定性 lexical/retrieval-citation 与 operational execution
+  指标；尚无 LLM judge，且调用方提供的 evaluator version 仍是可追踪字段而非服务端签名证明；
 - Gate 1 能自动检查客观质量、expected-arm 完整性和 Worker 集群资源证据；但没有用户数值
   performance policy，`READY_FOR_HUMAN_REVIEW` 不等于 adoption，正式 500-case/32-arm 仍未运行；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；

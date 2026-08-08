@@ -481,3 +481,50 @@ lock/format/lint/MyPy, non-integration tests, every real PostgreSQL/Redis/MinIO 
 migration downgrade/re-upgrade, and the application image build. Both jobs concluded `success`.
 Prometheus/Collector runtime wiring is now `VERIFIED`; durable trace search, log aggregation, and
 alert delivery remain explicitly outside this proof.
+
+## 2026-08-08 - Evaluator registry and retrieval/citation metrics
+
+### Judgment before modification
+
+The project already had an `Evaluator` protocol, two hard-coded implementations, and Run persistence
+for type/version/config/hash/source commit. Replacing that with a large plugin framework would add
+indirection without improving the evidence gate. The minimum useful change is an explicit registry
+whose metadata and factory share one registration record, plus the missing deterministic
+retrieval/citation evaluator.
+
+An LLM judge was intentionally not added. Its score would depend on judge model, prompt, sampling,
+provider behavior, and retry policy. The current registry marks deterministic and operational
+categories explicitly and declares every entry `llm_judge=false`, preventing a future judge from
+being presented as equivalent to reproducible overlap metrics.
+
+### RED, implementation, and corrections
+
+1. RED tests required exactly three registered kinds, category/version/judge metadata, construction
+   of `retrieval_citation`, rejection of an unregistered `llm_judge`, explicit overlap arithmetic,
+   and `null` metrics when ground-truth labels are unavailable. Collection failed because the new
+   enum and module did not exist.
+2. `RetrievalCitationEvaluator` now compares retrieved/cited IDs with
+   `metadata.relevant_source_ids`. It uses sets to prevent duplicate inflation. Missing, empty, or
+   malformed labels return `null`; empty predictions with valid labels return measured zero.
+3. The first post-implementation runtime checks passed (`7` evaluator tests and `19` Worker/Run
+   compatibility tests), and Ruff passed. Strict MyPy failed because an unannotated constructor map
+   was inferred as returning `object`, not the `Evaluator` protocol. Typing the callable return fixed
+   the static boundary.
+4. A final design review found that a descriptor tuple and a separate factory map could drift.
+   Metadata and factory were consolidated into one frozen registration record. A regression test now
+   constructs every advertised evaluator. The evaluator suite then passed `8` tests; focused Ruff
+   and strict MyPy passed.
+5. Repository validation then passed: 303 files satisfied Ruff format/lint, strict MyPy passed 129
+   source files, and the complete non-integration suite passed `570 passed, 12 deselected` in
+   `367.06s`.
+
+### Effect and boundary
+
+The Worker still consumes the same protocol, so the execution pipeline did not change. The project
+now exposes a minimal, inspectable evaluator catalog and deterministic retrieval/citation scoring,
+while keeping lexical quality and operational cost signals semantically separate.
+
+Run provenance remains traceable through source commit, dataset/target/evaluator versions,
+configuration snapshots, and hashes. The caller-declared evaluator version is not yet a
+server-attested implementation version. Repository validation is GREEN, but remote CI is still
+pending, so this phase remains `LOCAL-GREEN` rather than `VERIFIED`.
