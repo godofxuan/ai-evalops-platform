@@ -1,0 +1,78 @@
+redis-1  | Starting Redis Server
+redis-1  | 1:C 08 Aug 2026 15:15:03.529 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+redis-1  | 1:M 08 Aug 2026 15:15:03.562 # WARNING: Redis does not require authentication and is not protected by network restrictions. Redis will accept connections from any IP address on any network interface.
+postgres-1  | chmod: /var/run/postgresql: Operation not permitted
+postgres-1  | The files belonging to this database system will be owned by user "postgres".
+postgres-1  | This user must also own the server process.
+postgres-1  | 
+postgres-1  | The database cluster will be initialized with locale "en_US.utf8".
+postgres-1  | The default database encoding has accordingly been set to "UTF8".
+postgres-1  | The default text search configuration will be set to "english".
+postgres-1  | 
+postgres-1  | Data page checksums are enabled.
+postgres-1  | 
+postgres-1  | fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+postgres-1  | creating subdirectories ... ok
+postgres-1  | selecting dynamic shared memory implementation ... posix
+postgres-1  | selecting default "max_connections" ... 100
+postgres-1  | selecting default "shared_buffers" ... 128MB
+postgres-1  | selecting default time zone ... UTC
+postgres-1  | creating configuration files ... ok
+postgres-1  | running bootstrap script ... ok
+postgres-1  | sh: locale: not found
+postgres-1  | 2026-08-08 15:15:04.026 UTC [24] WARNING:  no usable system locales were found
+postgres-1  | performing post-bootstrap initialization ... ok
+postgres-1  | initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | syncing data to disk ... ok
+postgres-1  | 
+postgres-1  | 
+postgres-1  | Success. You can now start the database server using:
+postgres-1  | 
+postgres-1  |     pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+postgres-1  | 
+postgres-1  | waiting for server to start....2026-08-08 15:15:04.600 UTC [30] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-08 15:15:04.600 UTC [30] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-08 15:15:04.604 UTC [36] LOG:  database system was shut down at 2026-08-08 15:15:04 UTC
+postgres-1  | 2026-08-08 15:15:04.607 UTC [30] LOG:  database system is ready to accept connections
+postgres-1  |  done
+postgres-1  | server started
+postgres-1  | CREATE DATABASE
+postgres-1  | 
+postgres-1  | 
+postgres-1  | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 
+postgres-1  | waiting for server to shut down....2026-08-08 15:15:04.761 UTC [30] LOG:  received fast shutdown request
+postgres-1  | 2026-08-08 15:15:04.762 UTC [30] LOG:  aborting any active transactions
+postgres-1  | 2026-08-08 15:15:04.765 UTC [30] LOG:  background worker "logical replication launcher" (PID 39) exited with exit code 1
+postgres-1  | 2026-08-08 15:15:04.766 UTC [34] LOG:  shutting down
+postgres-1  | 2026-08-08 15:15:04.767 UTC [34] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-08-08 15:15:04.785 UTC [34] LOG:  checkpoint complete: wrote 943 buffers (5.8%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.014 s, sync=0.003 s, total=0.019 s; sync files=303, longest=0.002 s, average=0.001 s; distance=4362 kB, estimate=4362 kB; lsn=0/1BA6820, redo lsn=0/1BA6820
+postgres-1  | 2026-08-08 15:15:04.797 UTC [30] LOG:  database system is shut down
+postgres-1  |  done
+postgres-1  | server stopped
+postgres-1  | 
+postgres-1  | PostgreSQL init process complete; ready for start up.
+postgres-1  | 
+postgres-1  | 2026-08-08 15:15:04.886 UTC [1] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-08 15:15:04.886 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-08-08 15:15:04.886 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1  | 2026-08-08 15:15:04.887 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-08 15:15:04.890 UTC [52] LOG:  database system was shut down at 2026-08-08 15:15:04 UTC
+postgres-1  | 2026-08-08 15:15:04.894 UTC [1] LOG:  database system is ready to accept connections
+postgres-1  | 2026-08-08 15:20:04.965 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 15:24:34.046 UTC [50] LOG:  checkpoint complete: wrote 4804 buffers (29.3%), wrote 7 SLRU buffers; 0 WAL file(s) added, 0 removed, 16 recycled; write=269.064 s, sync=0.002 s, total=269.081 s; sync files=241, longest=0.001 s, average=0.001 s; distance=262764 kB, estimate=262764 kB; lsn=0/1E57D7F0, redo lsn=0/11C41AC8
+postgres-1  | 2026-08-08 15:25:04.065 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 15:29:34.039 UTC [50] LOG:  checkpoint complete: wrote 8456 buffers (51.6%), wrote 4 SLRU buffers; 0 WAL file(s) added, 0 removed, 13 recycled; write=269.951 s, sync=0.006 s, total=269.974 s; sync files=117, longest=0.002 s, average=0.001 s; distance=206156 kB, estimate=257103 kB; lsn=0/27B51AD0, redo lsn=0/1E594DA0
+postgres-1  | 2026-08-08 15:30:04.061 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 15:34:34.108 UTC [50] LOG:  checkpoint complete: wrote 7948 buffers (48.5%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 9 recycled; write=270.030 s, sync=0.003 s, total=270.048 s; sync files=99, longest=0.003 s, average=0.001 s; distance=155213 kB, estimate=246914 kB; lsn=0/3005F910, redo lsn=0/27D281E8
+postgres-1  | 2026-08-08 15:35:00.297 UTC [8115] ERROR:  canceling statement due to user request
+postgres-1  | 2026-08-08 15:35:00.297 UTC [8115] STATEMENT:  WITH ranked_claim_candidates AS 
+postgres-1  | 	(SELECT evaluation_jobs.id AS job_id, row_number() OVER (PARTITION BY evaluation_runs.tenant_id ORDER BY evaluation_jobs.priority DESC, evaluation_jobs.created_at ASC, evaluation_jobs.id ASC) AS tenant_candidate_rank 
+postgres-1  | 	FROM evaluation_jobs JOIN evaluation_runs ON evaluation_runs.id = evaluation_jobs.run_id 
+postgres-1  | 	WHERE (evaluation_jobs.status = $1 OR evaluation_jobs.status = $2 AND evaluation_jobs.next_attempt_at IS NOT NULL AND evaluation_jobs.next_attempt_at <= $3::TIMESTAMP WITH TIME ZONE) AND evaluation_runs.status IN ($4, $5))
+postgres-1  | 	 SELECT evaluation_jobs.id, evaluation_jobs.run_id, evaluation_jobs.case_id, evaluation_jobs.case_payload_json, evaluation_jobs.status, evaluation_jobs.priority, evaluation_jobs.attempt_count, evaluation_jobs.max_attempts, evaluation_jobs.next_attempt_at, evaluation_jobs.lease_owner, evaluation_jobs.lease_expires_at, evaluation_jobs.heartbeat_at, evaluation_jobs.cancel_requested_at, evaluation_jobs.last_error_code, evaluation_jobs.last_error_message, evaluation_jobs.created_at, evaluation_jobs.started_at, evaluation_jobs.finished_at, evaluation_jobs.version, evaluation_runs.id AS id_1, evaluation_runs.tenant_id, evaluation_runs.dataset_version_id, evaluation_runs.dataset_hash, evaluation_runs.idempotency_key, evaluation_runs.request_hash, evaluation_runs.target_type, evaluation_runs.target_config_json, evaluation_runs.target_config_hash, evaluation_runs.evaluator_type, evaluation_runs.evaluator_config_json, evaluation_runs.evaluator_config_hash, evaluation_runs.target_version, evaluation_runs.evaluator_version, evaluation_runs.source_commit, evaluation_runs.origin_traceparent, evaluation_runs.status AS status_1, evaluation_runs.total_jobs, evaluation_runs.succeeded_jobs, evaluation_runs.failed_jobs, evaluation_runs.cancelled_jobs, evaluation_runs.created_by, evaluation_runs.created_at AS created_at_1, evaluation_runs.started_at AS started_at_1, evaluation_runs.finished_at AS finished_at_1, evaluation_runs.cancel_requested_at AS cancel_requested_at_1, evaluation_runs.version AS version_1, tenants.id AS id_2, tenants.slug, tenants.name, tenants.status AS status_2, tenants.created_at AS created_at_2, tenants.updated_at, tenants.last_job_claimed_at 
+postgres-1  | 	FROM evaluation_jobs JOIN ranked_claim_candidates ON ranked_claim_candidates.job_id = evaluation_jobs.id JOIN evaluation_runs ON evaluation_runs.id = evaluation_jobs.run_id JOIN tenants ON tenants.id = evaluation_runs.tenant_id 
+postgres-1  | 	WHERE (evaluation_jobs.status = $6 OR evaluation_jobs.status = $7 AND evaluation_jobs.next_attempt_at IS NOT NULL AND evaluation_jobs.next_attempt_at <= $8::TIMESTAMP WITH TIME ZONE) AND evaluation_runs.status IN ($9, $10) ORDER BY evaluation_jobs.priority DESC, ranked_claim_candidates.tenant_candidate_rank ASC, tenants.last_job_claimed_at ASC NULLS FIRST, evaluation_jobs.created_at ASC, evaluation_jobs.id ASC 
+postgres-1  | 	 LIMIT $11::INTEGER FOR UPDATE OF evaluation_jobs, tenants SKIP LOCKED
+postgres-1  | 2026-08-08 15:35:04.139 UTC [50] LOG:  checkpoint starting: time

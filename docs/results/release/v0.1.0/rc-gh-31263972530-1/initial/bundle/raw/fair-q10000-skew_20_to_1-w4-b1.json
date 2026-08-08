@@ -1,0 +1,66 @@
+{
+  "arm_id": "fair-q10000-skew_20_to_1-w4-b1",
+  "queue_size": 10000,
+  "distribution": "skew_20_to_1",
+  "worker_concurrency": 4,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 9900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "contention_retries": 5,
+  "max_retry_exits": 0,
+  "claim_latency_ms": {
+    "p50": 497.25254649996486,
+    "p95": 710.3333176000007,
+    "p99": 1942.5587797799938
+  },
+  "result_commit_latency_ms": {
+    "p50": 89.89188000001036,
+    "p95": 141.76473735002153,
+    "p99": 185.16717966000104
+  },
+  "end_to_end_seconds": 15.398993528999995,
+  "jobs_per_second": 6.493930906047596,
+  "worker_process_cpu_percent": 14.077084758284014,
+  "worker_process_rss_bytes_peak": 107024384,
+  "postgres_connections_peak": 6,
+  "postgres_lock_waiting_connections_peak": 2,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "ab30b94d-0b41-4b33-a279-03e801097130": 1,
+    "ac0d58c6-0440-4383-a222-2fe22c6f100d": 2
+  },
+  "tenant_claim_counts": {
+    "ab30b94d-0b41-4b33-a279-03e801097130": 55,
+    "ac0d58c6-0440-4383-a222-2fe22c6f100d": 45
+  },
+  "fair_first_secondary_tenant_position": 2,
+  "legacy_fifo_first_secondary_tenant_position": 9525,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3602598.1204999997,
+      "p95": 3614873.2194499997
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}

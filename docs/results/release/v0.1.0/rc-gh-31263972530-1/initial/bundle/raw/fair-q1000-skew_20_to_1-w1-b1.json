@@ -1,0 +1,66 @@
+{
+  "arm_id": "fair-q1000-skew_20_to_1-w1-b1",
+  "queue_size": 1000,
+  "distribution": "skew_20_to_1",
+  "worker_concurrency": 1,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "contention_retries": 0,
+  "max_retry_exits": 0,
+  "claim_latency_ms": {
+    "p50": 13.943619000002627,
+    "p95": 17.54510610001887,
+    "p99": 34.43145718001641
+  },
+  "result_commit_latency_ms": {
+    "p50": 9.610045000016498,
+    "p95": 13.522229599954015,
+    "p99": 16.16488365001943
+  },
+  "end_to_end_seconds": 2.5014499449999903,
+  "jobs_per_second": 39.97681432718031,
+  "worker_process_cpu_percent": 53.6306761876862,
+  "worker_process_rss_bytes_peak": 103587840,
+  "postgres_connections_peak": 2,
+  "postgres_lock_waiting_connections_peak": 0,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "9c57c080-93cd-44cc-829b-af6d6596a6f7": 1,
+    "7f404009-0591-464a-a2e0-f7826657f4ad": 2
+  },
+  "tenant_claim_counts": {
+    "9c57c080-93cd-44cc-829b-af6d6596a6f7": 52,
+    "7f404009-0591-464a-a2e0-f7826657f4ad": 48
+  },
+  "fair_first_secondary_tenant_position": 2,
+  "legacy_fifo_first_secondary_tenant_position": 953,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3600258.567,
+      "p95": 3602431.0124
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}
