@@ -1,0 +1,89 @@
+redis-1     | Starting Redis Server
+redis-1     | 1:C 08 Aug 2026 16:12:26.353 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+redis-1     | 1:M 08 Aug 2026 16:12:26.362 # WARNING: Redis does not require authentication and is not protected by network restrictions. Redis will accept connections from any IP address on any network interface.
+postgres-1  | chmod: /var/run/postgresql: Operation not permitted
+postgres-1  | The files belonging to this database system will be owned by user "postgres".
+postgres-1  | This user must also own the server process.
+postgres-1  | 
+postgres-1  | The database cluster will be initialized with locale "en_US.utf8".
+postgres-1  | The default database encoding has accordingly been set to "UTF8".
+postgres-1  | The default text search configuration will be set to "english".
+postgres-1  | 
+postgres-1  | Data page checksums are enabled.
+postgres-1  | 
+postgres-1  | fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+postgres-1  | creating subdirectories ... ok
+postgres-1  | selecting dynamic shared memory implementation ... posix
+postgres-1  | selecting default "max_connections" ... 100
+postgres-1  | selecting default "shared_buffers" ... 128MB
+postgres-1  | selecting default time zone ... UTC
+postgres-1  | creating configuration files ... ok
+postgres-1  | running bootstrap script ... ok
+postgres-1  | sh: locale: not found
+postgres-1  | 2026-08-08 16:12:27.171 UTC [24] WARNING:  no usable system locales were found
+postgres-1  | performing post-bootstrap initialization ... ok
+postgres-1  | initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | syncing data to disk ... ok
+postgres-1  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | 
+postgres-1  | 
+postgres-1  | Success. You can now start the database server using:
+postgres-1  | 
+postgres-1  |     pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+postgres-1  | 
+postgres-1  | waiting for server to start....2026-08-08 16:12:27.714 UTC [30] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-08 16:12:27.714 UTC [30] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-08 16:12:27.718 UTC [36] LOG:  database system was shut down at 2026-08-08 16:12:27 UTC
+postgres-1  | 2026-08-08 16:12:27.721 UTC [30] LOG:  database system is ready to accept connections
+postgres-1  |  done
+postgres-1  | server started
+postgres-1  | CREATE DATABASE
+postgres-1  | 
+postgres-1  | 
+postgres-1  | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 
+postgres-1  | waiting for server to shut down....2026-08-08 16:12:27.874 UTC [30] LOG:  received fast shutdown request
+postgres-1  | 2026-08-08 16:12:27.875 UTC [30] LOG:  aborting any active transactions
+postgres-1  | 2026-08-08 16:12:27.878 UTC [30] LOG:  background worker "logical replication launcher" (PID 39) exited with exit code 1
+postgres-1  | 2026-08-08 16:12:27.880 UTC [34] LOG:  shutting down
+postgres-1  | 2026-08-08 16:12:27.880 UTC [34] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-08-08 16:12:27.897 UTC [34] LOG:  checkpoint complete: wrote 943 buffers (5.8%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.014 s, sync=0.002 s, total=0.017 s; sync files=303, longest=0.001 s, average=0.001 s; distance=4362 kB, estimate=4362 kB; lsn=0/1BA6820, redo lsn=0/1BA6820
+postgres-1  | 2026-08-08 16:12:27.909 UTC [30] LOG:  database system is shut down
+postgres-1  |  done
+postgres-1  | server stopped
+postgres-1  | 
+postgres-1  | PostgreSQL init process complete; ready for start up.
+postgres-1  | 
+postgres-1  | 2026-08-08 16:12:27.999 UTC [1] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-08 16:12:27.999 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-08-08 16:12:27.999 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1  | 2026-08-08 16:12:28.000 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-08 16:12:28.004 UTC [52] LOG:  database system was shut down at 2026-08-08 16:12:27 UTC
+postgres-1  | 2026-08-08 16:12:28.007 UTC [1] LOG:  database system is ready to accept connections
+postgres-1  | 2026-08-08 16:17:28.071 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:21:58.292 UTC [50] LOG:  checkpoint complete: wrote 4380 buffers (26.7%), wrote 7 SLRU buffers; 0 WAL file(s) added, 0 removed, 17 recycled; write=270.005 s, sync=0.005 s, total=270.222 s; sync files=239, longest=0.003 s, average=0.001 s; distance=274341 kB, estimate=274341 kB; lsn=0/1EA2C2E8, redo lsn=0/1278FFE8
+postgres-1  | 2026-08-08 16:22:28.322 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:26:58.329 UTC [50] LOG:  checkpoint complete: wrote 12393 buffers (75.6%), wrote 2 SLRU buffers; 0 WAL file(s) added, 0 removed, 12 recycled; write=269.986 s, sync=0.004 s, total=270.005 s; sync files=105, longest=0.003 s, average=0.001 s; distance=199355 kB, estimate=266843 kB; lsn=0/2765A6E8, redo lsn=0/1EA3EF20
+postgres-1  | 2026-08-08 16:27:28.370 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:31:58.183 UTC [50] LOG:  checkpoint complete: wrote 9133 buffers (55.7%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 9 recycled; write=269.799 s, sync=0.002 s, total=269.814 s; sync files=93, longest=0.002 s, average=0.001 s; distance=144843 kB, estimate=254643 kB; lsn=0/31E355E8, redo lsn=0/277B1DC8
+postgres-1  | 2026-08-08 16:32:28.270 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:36:58.086 UTC [50] LOG:  checkpoint complete: wrote 8904 buffers (54.3%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 10 recycled; write=269.810 s, sync=0.002 s, total=269.816 s; sync files=83, longest=0.001 s, average=0.001 s; distance=171717 kB, estimate=246350 kB; lsn=0/3F437740, redo lsn=0/31F63230
+postgres-1  | 2026-08-08 16:37:28.115 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:41:58.089 UTC [50] LOG:  checkpoint complete: wrote 10431 buffers (63.7%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 14 recycled; write=269.963 s, sync=0.003 s, total=269.974 s; sync files=92, longest=0.002 s, average=0.001 s; distance=218006 kB, estimate=243516 kB; lsn=0/46F3EB88, redo lsn=0/3F448B18
+postgres-1  | 2026-08-08 16:42:28.120 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:46:58.091 UTC [50] LOG:  checkpoint complete: wrote 8628 buffers (52.7%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 7 recycled; write=269.953 s, sync=0.007 s, total=269.972 s; sync files=85, longest=0.006 s, average=0.001 s; distance=125983 kB, estimate=231763 kB; lsn=0/4EBAC6D0, redo lsn=0/46F50A90
+postgres-1  | 2026-08-08 16:47:28.170 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:51:58.022 UTC [50] LOG:  checkpoint complete: wrote 10126 buffers (61.8%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 8 recycled; write=269.845 s, sync=0.001 s, total=269.853 s; sync files=90, longest=0.001 s, average=0.001 s; distance=127715 kB, estimate=221358 kB; lsn=0/56B41420, redo lsn=0/4EC09718
+postgres-1  | 2026-08-08 16:52:28.070 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 16:56:58.083 UTC [50] LOG:  checkpoint complete: wrote 8613 buffers (52.6%), wrote 2 SLRU buffers; 0 WAL file(s) added, 1 removed, 7 recycled; write=270.005 s, sync=0.003 s, total=270.013 s; sync files=80, longest=0.003 s, average=0.001 s; distance=130487 kB, estimate=212271 kB; lsn=0/641FDC70, redo lsn=0/56B773C0
+postgres-1  | 2026-08-08 16:57:28.170 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 17:01:58.051 UTC [50] LOG:  checkpoint complete: wrote 10139 buffers (61.9%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 14 recycled; write=269.868 s, sync=0.003 s, total=269.882 s; sync files=75, longest=0.003 s, average=0.001 s; distance=219839 kB, estimate=219839 kB; lsn=0/6C4FF950, redo lsn=0/642270E8
+postgres-1  | 2026-08-08 17:02:28.081 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 17:06:58.048 UTC [50] LOG:  checkpoint complete: wrote 9444 buffers (57.6%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 8 recycled; write=269.959 s, sync=0.002 s, total=269.968 s; sync files=76, longest=0.001 s, average=0.001 s; distance=134053 kB, estimate=211260 kB; lsn=0/7438A7D0, redo lsn=0/6C5107C0
+postgres-1  | 2026-08-08 17:07:28.079 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 17:11:58.191 UTC [50] LOG:  checkpoint complete: wrote 12037 buffers (73.5%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 13 recycled; write=270.102 s, sync=0.001 s, total=270.112 s; sync files=100, longest=0.001 s, average=0.001 s; distance=210861 kB, estimate=211220 kB; lsn=0/8113B2D8, redo lsn=0/792FBF70
+postgres-1  | 2026-08-08 17:12:28.220 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 17:16:58.091 UTC [50] LOG:  checkpoint complete: wrote 11831 buffers (72.2%), wrote 1 SLRU buffers; 0 WAL file(s) added, 2 removed, 6 recycled; write=269.853 s, sync=0.006 s, total=269.871 s; sync files=104, longest=0.006 s, average=0.001 s; distance=129341 kB, estimate=203032 kB; lsn=0/88AB5DD0, redo lsn=0/8114B4C0
+postgres-1  | 2026-08-08 17:17:28.170 UTC [50] LOG:  checkpoint starting: time
+postgres-1  | 2026-08-08 17:21:58.010 UTC [50] LOG:  checkpoint complete: wrote 11767 buffers (71.8%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 7 recycled; write=269.827 s, sync=0.003 s, total=269.841 s; sync files=91, longest=0.003 s, average=0.001 s; distance=124397 kB, estimate=195169 kB; lsn=0/88DEE090, redo lsn=0/88AC6C18
+postgres-1  | 2026-08-08 17:22:28.070 UTC [50] LOG:  checkpoint starting: time
