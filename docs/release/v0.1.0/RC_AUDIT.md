@@ -125,21 +125,21 @@ capacity。
 
 ### 6.1 README 当前限制：formal load
 
-README 的 2026-07-29、P2-7、P2-8、P2-9 时间点表格中的 `NOT-RUN` 是当时真实结果，必须
-保留。README “当前限制”仍写“正式 500-case/32-arm 仍未运行”则已过期。应改成：历史
-pre-fair formal load 已 VERIFIED，但 current fair RC source rerun 仍 NOT_RUN。
+README 的 2026-07-29、P2-7、P2-8、P2-9 时间点表格中的 `NOT-RUN` 是当时真实结果，已经
+保留。README “当前限制”中已把过期的“正式 500-case/32-arm 仍未运行”修正为：历史
+pre-fair formal load 已 VERIFIED，但 current fair RC source rerun 仍 `NOT_RUN`。
 
 ### 6.2 README 当前限制：database reconnect
 
-README “当前限制”仍写 Worker/Reaper “尚无优雅的数据库断线重连策略”，与
-`03d6987…` 的 bounded reconnect/backoff 和 A–I After evidence 冲突。应改成：已有受控、
+README “当前限制”原来写 Worker/Reaper “尚无优雅的数据库断线重连策略”，与
+`03d6987…` 的 bounded reconnect/backoff 和 A–I After evidence 冲突。现已修正为：已有受控、
 bounded、stop-aware reconnect/backoff；长期 outage、生产级连接治理和 SLO 仍未证明。
 
 ### 6.3 RESUME_SAFE_METRICS 的 source 边界
 
-该文档中的正式 load 数字本身可追溯到 VERIFIED historical bundle，但需要明确标识为
-pre-fair source，避免读者把它理解为 current fair RC throughput。修正只能增加 source/time
-边界，不得改写已观测数字。
+该文档中的正式 load 数字本身可追溯到 VERIFIED historical bundle；现已明确标识 pre-fair
+exact source，避免读者把它理解为 current fair RC throughput。只增加了 source/time 边界，
+没有改写已观测数字。
 
 ## 7. 审计期间遇到的问题与修正
 
@@ -165,4 +165,3 @@ pre-fair source，避免读者把它理解为 current fair RC throughput。修�
 capacity、真实 PostgreSQL EXPLAIN 和同协议 32-arm rerun。下一步先修正当前状态文档，再按
 vertical TDD 建立 release/fair-capacity evidence contract；除非真实 paired evidence 发现并
 定位 regression，不修改 production scheduler。
-

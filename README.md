@@ -593,7 +593,9 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
   集成与 Compose readiness 验证，但数据库提交与对象删除仍不是跨系统原子事务；
 - JSONL 第一版有界读入内存，不是流式 parser；
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
-- Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
+- Worker/Reaper 已有 bounded exponential reconnect backoff、恢复后重置和 stop-aware wait，
+  并通过三次 3 秒 PostgreSQL outage 的 A–I After matrix；这仍不是长期断线 SLO、连接故障
+  自动切换或生产可靠性认证；
 - HTTP Target 已固定经过验证的数值公网 IP，并在读取正文前校验实际 peer；仍依赖当前
   HTTPX/HTTPCore transport 元数据合同和部署级 egress 控制，不声称完全消除 SSRF；
 - Prometheus/Collector 已进入 Compose；Collector debug exporter 只用于开发/CI，尚无生产
@@ -606,7 +608,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - 当前 evaluator registry 只有确定性 lexical/retrieval-citation 与 operational execution
   指标；尚无 LLM judge，且调用方提供的 evaluator version 仍是可追踪字段而非服务端签名证明；
 - Gate 1 能自动检查客观质量、expected-arm 完整性和 Worker 集群资源证据；但没有用户数值
-  performance policy，`READY_FOR_HUMAN_REVIEW` 不等于 adoption，正式 500-case/32-arm 仍未运行；
+  performance policy，`READY_FOR_HUMAN_REVIEW` 不等于 adoption；pre-fair source `15e7ac2`
+  的正式 500-case/32-arm 已 VERIFIED，当前 fair RC source 的同协议 rerun 仍为 `NOT_RUN`；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
 - can_create_review_tasks 与 can_review 独立且都默认关闭；当前仍不是通用 RBAC/scope 系统；
 - review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；

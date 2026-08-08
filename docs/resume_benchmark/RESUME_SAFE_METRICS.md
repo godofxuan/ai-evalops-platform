@@ -4,6 +4,9 @@ Status: the following scoped claims are backed by post-Git hash-verified evidenc
 
 ## Admitted claims
 
+- 下述 32-arm throughput 数字绑定到 pre-fair source
+  `15e7ac2e28b70430acd0bff88ee6cc78e5b86a86`，是 VERIFIED historical baseline，不是当前
+  fair scheduler 或 v0.1.0 RC throughput；在 current-head rerun 完成前不得省略该边界。
 - Executed a real Docker Compose worker-scaling matrix with 500 measured cases per arm, Worker counts
   1/2/4/8, two workloads, and four repetitions: 32 arms and 16,000 Jobs, with 16,000 successful,
   zero failed/lost/orphan Jobs, zero duplicate durable results, and 400 successful retry events.
@@ -24,7 +27,8 @@ Status: the following scoped claims are backed by post-Git hash-verified evidenc
 ## Scope rules
 
 These are experiment results, not universal production guarantees. Keep the workload names, Worker
-counts, repetition count, source/evidence reference, and “observed” wording. Do not claim linear
+counts, repetition count, source/evidence reference, pre-fair historical boundary, and “observed”
+wording. Do not claim linear
 scaling: eight-Worker parallel efficiency was about 0.39. Do not claim the reconnect backoff made
 recovery faster; the before/after difference is too small and based on only three repetitions.
 The fairness result is a controlled 20:1 first-wave test, not a general queue-latency SLO.
