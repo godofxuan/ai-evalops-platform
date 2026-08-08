@@ -21,6 +21,7 @@ source row is `VERIFIED`.
 - `LOAD_RESULTS.csv`: per-arm real-service load results;
 - `FAULT_RESULTS.csv`: real-service fault-injection results;
 - `CONCURRENCY_RESULTS.csv`: real-service concurrency and fencing results;
+- `TENANT_FAIRNESS_RESULTS.csv`: real-PostgreSQL A-flood/B-latency fairness comparison;
 - `RESUME_SAFE_METRICS.md`: only claims safe to reuse externally;
 - `NEGATIVE_RESULTS.md`: failures, blockers, and invalid evidence;
 - `EXECUTION_LOG.md`: chronological what/why/problem/effect record;

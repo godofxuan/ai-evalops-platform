@@ -41,3 +41,18 @@ one Run each time.
 
 Central answer: the retained experiments observed no task loss, and the deliberately expired Worker
 could not overwrite the reclaimed Job with either a late success or a late failure.
+
+## Multi-tenant fair claiming
+
+Source `6d29925`; GitHub Actions `31253695011`; real PostgreSQL:
+
+| Invariant | Observed | Status |
+|---|---:|---|
+| Tenant A older / Tenant B later equal-priority Jobs | 20 / 1 | `VERIFIED` |
+| legacy FIFO position of Tenant B | 21 | `VERIFIED` |
+| fair maximum claim position of Tenant B | 2 | `VERIFIED` |
+| unique / duplicate Jobs in first two claims | 2 / 0 | `VERIFIED_ZERO_DUPLICATES` |
+| existing concurrent single-tenant unique-claim/fencing suite | passed | `VERIFIED` |
+
+This proves the controlled first-wave fairness contract, not a universal latency SLO or a submission
+rate/concurrency quota.

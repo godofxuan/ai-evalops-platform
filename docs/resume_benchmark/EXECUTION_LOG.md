@@ -612,3 +612,12 @@ the outer locking query for current-row revalidation after concurrent updates. A
 requires both layers. The third local gate passed `574 passed, 13 deselected` in `355.24s`, 307-file
 Ruff, and strict MyPy across 130 source files. Run `31253257533` remains `FAILED`; another remote run
 is required.
+
+### Remote fairness authority
+
+Commit `6d29925` triggered Actions run `31253695011`. Compose smoke succeeded at
+`2026-08-08T10:52:23Z`; quality/integration succeeded at `2026-08-08T10:54:34Z`. The existing
+10-Worker/100-Job claim/fencing test passed again, proving the contention correction preserved the
+prior contract. The new PostgreSQL fairness test also passed: legacy B position was 21; two
+concurrent fair claimers returned unique Jobs from both tenants in the first wave, placing B no later
+than position 2 with zero duplicate first-wave claims. This scoped policy is now `VERIFIED`.

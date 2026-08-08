@@ -1,6 +1,6 @@
 # Multi-tenant job-claim fairness
 
-Status: `LOCAL-GREEN` (real PostgreSQL concurrency proof pending)
+Status: `VERIFIED`
 
 ## Judgment before modification
 
@@ -91,6 +91,19 @@ concurrent lock/update resolution. A compiled-SQL regression requires both predi
 The third local gate passed `574 passed, 13 deselected` in `355.24s`; Ruff passed 307 files and
 strict MyPy passed 130 source files. A third remote run is required.
 
+## Remote authority
+
+Commit `6d29925` triggered GitHub Actions run `31253695011`. `compose-smoke` completed successfully
+at `2026-08-08T10:52:23Z`; `quality-and-integration` completed successfully at
+`2026-08-08T10:54:34Z`.
+
+The quality job applied the new migration and passed both the pre-existing 10-Worker/100-Job unique
+claim/fencing test and the new real-PostgreSQL fairness test. In the controlled equal-priority 20:1
+setup, legacy FIFO placed B at candidate position 21. The fair first wave contained two unique Jobs,
+one from each Tenant, so B was served no later than claim position 2; duplicate first-wave claims
+were zero. The result is recorded in `TENANT_FAIRNESS_RESULTS.csv` and is `VERIFIED` for this scoped
+scenario.
+
 ## Real-service proof contract
 
 The PostgreSQL integration test creates:
@@ -106,10 +119,9 @@ It retains both comparisons in the same test:
   than claim wave `2`;
 - claimed Job IDs must remain unique.
 
-The test is wired into GitHub Actions after real migrations. Because local Docker/PostgreSQL is not
-available and the first remote attempt failed before the fairness assertions, the numeric
-improvement is not yet admitted as evidence. Corrected remote success is required to promote this
-document to `VERIFIED`.
+The test is wired into GitHub Actions after real migrations. Local execution remains unavailable,
+and the first two remote attempts are retained as failures. The corrected third run completed this
+contract successfully, so only its scoped 21-to-within-2 comparison is admitted as evidence.
 
 ## Trade-offs and limits
 

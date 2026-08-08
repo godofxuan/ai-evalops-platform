@@ -11,3 +11,9 @@ Recommended concise wording:
 
 Use the longer scoped bullets in `RESUME_SAFE_METRICS.md` when a format allows context. Do not round
 3.11× upward, call the scaling linear, or omit that the measurements are retained experiments.
+
+Optional fairness wording:
+
+> Added PostgreSQL-native tenant-fair job claiming; in a controlled real-PostgreSQL 20:1 backlog
+> test, reduced the later tenant's claim position from 21 to within the first two claims without
+> duplicate first-wave Jobs.
