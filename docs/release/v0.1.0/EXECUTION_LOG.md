@@ -983,3 +983,63 @@ Jobs/s 中位数 3.377，范围 0.628–5.488。高并发单租户仍显示明�
 标准 2 workloads × 4 workers × 4 repetitions 的 worker-scaling 协议，目的是在相对旧 formal
 baseline 的相同协议上判定 -15% release gate，同时复核 10W/100J 执行正确性、资源、DB 与 claim
 指标。fault matrix 尚不触发，避免两个证据机器人再次争抢同一目标分支。
+
+## 2026-08-09 — 最终 32-arm 完整但性能发布门失败
+
+触发 source `6acf72c3aa73c9fdc1664fe4e847fc8b8e90efd7` 的标准 CI run `31274490725` 与其前一
+恢复证据提交的 CI run `31274460712` 均为 `completed/success`。worker-scaling run
+`31274490704` 也为 `completed/success`，运行时间 2026-08-08T19:27:56Z 至 19:47:18Z；artifact
+`gate1-gh-31274490704-1` 的 id 为 `9026814020`、压缩大小 9,702,555 bytes、digest 为
+`sha256:099c7dff5302c82c61efc69ff1ddb634225883c0dd657adf7f3a61756da01d93`，过期时间
+2026-11-06T19:27:56Z。机器人提交 `1c35e5b` 已通过 fast-forward 同步。
+
+独立复核再次从 frozen arm order 读取预期，再重读 32 份 summary 与 final manifest：status
+`complete`、32/32 arms、664/664 payload，文件集、大小、SHA-256、raw/summary/plot 交叉引用全部
+通过，符号链接 0、常见 credential 模式命中 0。execution 32 arms 均
+`valid_for_capacity_comparison=true`，共 16,000 submitted/unique/terminal succeeded，correctness、
+collector gap 与 blocker 均为 0。第一次核验命令错误地从 final manifest 顶层读取
+`source_commit`，触发 `KeyError`；检查 schema 后确认 source 位于 prepared manifest 的
+`provenance.source_commit`，修正字段后完整验证通过。没有修改 evidence。
+
+相对 historical pre-fair formal baseline `15e7ac2e28b70430acd0bff88ee6cc78e5b86a86` 的同协议
+吞吐中位数如下：
+
+| Workload | Workers | Pre-fair Jobs/s | Current RC Jobs/s | Change |
+|---|---:|---:|---:|---:|
+| io latency | 1 | 21.481 | 21.477 | -0.02% |
+| io latency | 2 | 38.062 | 30.991 | -18.58% |
+| io latency | 4 | 56.263 | 39.650 | -29.53% |
+| io latency | 8 | 66.804 | 24.427 | -63.44% |
+| transient 5% | 1 | 19.587 | 20.664 | +5.50% |
+| transient 5% | 2 | 34.031 | 31.725 | -6.77% |
+| transient 5% | 4 | 50.825 | 34.267 | -32.58% |
+| transient 5% | 8 | 60.759 | 22.617 | -62.78% |
+
+8 个主要 worker 组中 5 个回退超过 15%；组变化中位数 `-24.05%`，最差 `-63.44%`；32 个
+同名 repetition arm 的配对变化中位数 `-29.55%`，范围 `-80.41%` 至 `+10.84%`。current run
+内部也出现 4→8 负扩展：io `-15.22%`、transient `-11.65%`。pre-fair runner 是 4-vCPU AMD
+EPYC 7763，current 是 4-vCPU AMD EPYC 9V74；因此百分比不是跨硬件生产 SLO，但协议、Compose
+形状、job 数与 arm 顺序相同，且两个 workload 的高并发回退和 current-run 内部负扩展方向一致。
+按本次 release gate 必须定为 `NOT_READY`，唯一 blocker 是公平 claim 在 4/8 workers 的吞吐与
+扩展性，不能发布或声称 linear scaling。
+
+本轮已按指令完成一个有证据的优化闭环：rank cardinality 假设 → SQL-shape RED → rank 剪枝 →
+发现内联放大 → MATERIALIZED RED/最小修正 → paired 1k/10k/100k 与最终 32-arm。它显著改善了当前
+fair 实现自身，但未越过 formal baseline gate。指令限制只允许一个假设/最小 production change，
+因此此处停止继续性能调优，保留失败结果，不引入 Kafka/Celery/Temporal/Redis queue，也不改
+resume-safe claim、lease、heartbeat、fencing、锁序或 result commit 语义。
+
+本地验证第一次误用 `mypy app scripts tests`，因不同无包目录下两个 `test_repository.py` 被视为
+duplicate module 而停止；这不是代码错误。改为仓库 CI 的精确范围
+`mypy app scripts tests/integration tests/concurrency` 后，133 source files 无问题；Ruff format
+为 318 files、lint all passed；pytest 为 `629 passed, 13 skipped, 3 warnings in 304.55s`。13 skips
+是本机未启用真实 PostgreSQL/Redis/MinIO，3 warnings 是 Windows 临时目录清理 PermissionError；
+配套 GitHub CI 已覆盖真实服务并成功。
+
+## 2026-08-09 — 串行触发物化后最终 fault/fencing 回归
+
+最终 worker evidence 已由机器人完整回写且本地复核结束，此时把
+`.github/fault-evidence-trigger.txt` 更新为 `2026-08-09T03:49:56+08:00`。这次只运行 A–I × 3
+fault matrix，用来确认物化公平候选后 stale success/failure fencing、lease reclaim、双 Reaper、
+数据库/Redis 短断线、worker restart 与幂等提交没有 correctness regression。性能 gate 已失败，
+但 correctness 仍必须独立闭合；该 fault 结果不会把 `NOT_READY` 自动改成 READY。
