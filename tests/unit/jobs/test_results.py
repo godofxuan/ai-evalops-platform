@@ -6,6 +6,7 @@ from sqlalchemy.dialects import postgresql
 from app.jobs.results import (
     build_owned_job_for_completion_statement,
     build_run_lock_for_completion_statement,
+    build_tenant_key_share_for_completion_statement,
 )
 
 JOB_ID = UUID("00000000-0000-0000-0000-000000000701")
@@ -45,3 +46,15 @@ def test_result_commit_has_explicit_run_first_lock_statement() -> None:
 
     assert "WHERE evaluation_runs.id" in sql
     assert "FOR UPDATE OF evaluation_runs" in sql
+
+
+def test_result_commit_has_explicit_tenant_key_share_statement() -> None:
+    sql = str(
+        build_tenant_key_share_for_completion_statement(tenant_id=RUN_ID).compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "WHERE tenants.id" in sql
+    assert "FOR KEY SHARE OF tenants" in sql

@@ -559,12 +559,11 @@ async def _run_worker_sample(
     process_cpu_started = time.process_time()
     started_at = perf_counter()
     try:
-        await asyncio.gather(
-            *(
-                _process_quota(worker, worker_id=f"rc-worker-{index}", quota=quota)
-                for index, (worker, quota) in enumerate(zip(workers, quotas, strict=True))
-            )
-        )
+        async with asyncio.TaskGroup() as worker_tasks:
+            for index, (worker, quota) in enumerate(zip(workers, quotas, strict=True)):
+                worker_tasks.create_task(
+                    _process_quota(worker, worker_id=f"rc-worker-{index}", quota=quota)
+                )
     finally:
         elapsed_seconds = perf_counter() - started_at
         process_cpu_seconds = time.process_time() - process_cpu_started

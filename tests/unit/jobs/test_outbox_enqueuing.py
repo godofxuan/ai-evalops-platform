@@ -173,7 +173,12 @@ async def test_success_commits_progress_and_terminal_events_in_state_transaction
 ) -> None:
     run = _run()
     session = RecordingSession(
-        [ScalarResult(RUN_ID), RowResult((_job(), run)), ScalarResult(_attempt())]
+        [
+            ScalarResult(TENANT_ID),
+            ScalarResult(RUN_ID),
+            RowResult((_job(), run)),
+            ScalarResult(_attempt()),
+        ]
     )
 
     async def aggregate(*_args: object, **_kwargs: object) -> RunAggregation:

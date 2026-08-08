@@ -20,6 +20,7 @@ from app.persistence.orm_models import (
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
+    Tenant,
 )
 from app.runs.aggregation import aggregate_run_in_session
 
@@ -48,6 +49,19 @@ def build_run_lock_for_completion_statement(
 
     return (
         select(EvaluationRun.id).where(EvaluationRun.id == run_id).with_for_update(of=EvaluationRun)
+    )
+
+
+def build_tenant_key_share_for_completion_statement(
+    *,
+    tenant_id: UUID,
+) -> Select[tuple[UUID]]:
+    """Acquire the Tenant FK lock before Run/Job locks without serializing readers."""
+
+    return (
+        select(Tenant.id)
+        .where(Tenant.id == tenant_id)
+        .with_for_update(of=Tenant, read=True, key_share=True)
     )
 
 
@@ -98,6 +112,11 @@ class SQLAlchemyResultCommitter:
         next_version = lease_version + 1
         try:
             async with self._session_factory.begin() as session:
+                locked_tenant_id = await session.scalar(
+                    build_tenant_key_share_for_completion_statement(tenant_id=claim.tenant_id)
+                )
+                if locked_tenant_id is None:
+                    raise LeaseLostError("result rejected because its Tenant no longer exists")
                 locked_run_id = await session.scalar(
                     build_run_lock_for_completion_statement(run_id=claim.run_id)
                 )
