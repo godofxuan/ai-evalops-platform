@@ -1,7 +1,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 
 from app.auth.principals import Principal
 from app.core.clock import Clock, SystemClock
@@ -11,7 +11,7 @@ from app.domain.run_state_machine import transition_run
 from app.events.models import EventType
 from app.events.outbox import enqueue_progress_event
 from app.persistence.database import AsyncSessionFactory
-from app.persistence.orm_models import AuditEvent, EvaluationJob, EvaluationRun
+from app.persistence.orm_models import AuditEvent, EvaluationJob, EvaluationRun, Tenant
 from app.runs.aggregation import aggregate_run_in_session
 from app.runs.schemas import RunRead
 from app.runs.service import RunNotFoundError
@@ -49,6 +49,19 @@ _NONTERMINAL_JOB_STATUSES = {
 }
 
 
+def build_tenant_key_share_for_cancellation_statement(
+    *,
+    tenant_id: UUID,
+) -> Select[tuple[UUID]]:
+    """Order cancellation behind Tenant updates before locking its Run and Jobs."""
+
+    return (
+        select(Tenant.id)
+        .where(Tenant.id == tenant_id)
+        .with_for_update(of=Tenant, read=True, key_share=True)
+    )
+
+
 class SQLAlchemyCancellationService:
     def __init__(
         self,
@@ -81,6 +94,24 @@ class SQLAlchemyCancellationService:
             if run.status in _TERMINAL_RUN_STATUSES:
                 return _run_read(run)
 
+            locked_tenant_id = await session.scalar(
+                build_tenant_key_share_for_cancellation_statement(tenant_id=principal.tenant_id)
+            )
+            if locked_tenant_id is None:
+                raise RunNotFoundError
+            run = (
+                await session.execute(
+                    select(EvaluationRun)
+                    .where(
+                        EvaluationRun.id == run_id,
+                        EvaluationRun.tenant_id == principal.tenant_id,
+                    )
+                    .with_for_update(of=EvaluationRun)
+                )
+            ).scalar_one()
+            if run.status in _TERMINAL_RUN_STATUSES:
+                return _run_read(run)
+
             jobs = (
                 (
                     await session.execute(
@@ -96,18 +127,6 @@ class SQLAlchemyCancellationService:
                 .scalars()
                 .all()
             )
-            run = (
-                await session.execute(
-                    select(EvaluationRun)
-                    .where(
-                        EvaluationRun.id == run_id,
-                        EvaluationRun.tenant_id == principal.tenant_id,
-                    )
-                    .with_for_update(of=EvaluationRun)
-                )
-            ).scalar_one()
-            if run.status in _TERMINAL_RUN_STATUSES:
-                return _run_read(run)
 
             if run.status in {RunStatus.QUEUED, RunStatus.RUNNING}:
                 run_transition = transition_run(

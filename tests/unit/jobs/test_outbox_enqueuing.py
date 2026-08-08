@@ -299,8 +299,9 @@ async def test_cancellation_commits_terminal_event_in_state_transaction(
     session = RecordingSession(
         [
             ScalarResult(run),
-            ScalarCollectionResult([job]),
+            ScalarResult(TENANT_ID),
             ScalarResult(run),
+            ScalarCollectionResult([job]),
         ]
     )
 
@@ -346,8 +347,9 @@ async def test_nonterminal_cancellation_commits_progress_event_in_state_transact
     session = RecordingSession(
         [
             ScalarResult(run),
-            ScalarCollectionResult([job]),
+            ScalarResult(TENANT_ID),
             ScalarResult(run),
+            ScalarCollectionResult([job]),
         ]
     )
 
