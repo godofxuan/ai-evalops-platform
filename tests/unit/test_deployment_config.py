@@ -4,7 +4,7 @@ from typing import Any
 import yaml
 
 APP_SERVICES = ("migrate", "api", "worker", "reaper")
-STATEFUL_SERVICES = ("postgres", "redis")
+STATEFUL_SERVICES = ("postgres", "redis", "minio")
 ALL_SERVICES = (*STATEFUL_SERVICES, *APP_SERVICES)
 
 
@@ -50,6 +50,7 @@ def test_every_compose_service_has_an_explicit_non_root_user() -> None:
     expected_users = {
         "postgres": "postgres",
         "redis": "redis",
+        "minio": "1000:1000",
         "migrate": "10001:10001",
         "api": "10001:10001",
         "worker": "10001:10001",
@@ -89,6 +90,9 @@ def test_every_compose_service_has_cpu_memory_and_pid_limits() -> None:
         "EVALOPS_REDIS_CPUS",
         "EVALOPS_REDIS_MEMORY_LIMIT",
         "EVALOPS_REDIS_PIDS_LIMIT",
+        "EVALOPS_MINIO_CPUS",
+        "EVALOPS_MINIO_MEMORY_LIMIT",
+        "EVALOPS_MINIO_PIDS_LIMIT",
     ):
         assert f"{variable}=" in env_example
 
@@ -104,13 +108,41 @@ def test_read_only_services_declare_only_their_required_writable_paths() -> None
         "/var/run/postgresql:size=16m,mode=3777",
     ]
     assert services["redis"]["tmpfs"] == ["/tmp:size=64m,mode=1777"]
+    assert services["minio"]["tmpfs"] == ["/tmp:size=64m,mode=1777"]
 
     assert services["postgres"]["volumes"] == ["postgres_data:/var/lib/postgresql"]
     assert services["redis"]["volumes"] == ["redis_data:/data"]
+    assert services["minio"]["volumes"] == ["minio_data:/data"]
     assert services["api"]["volumes"] == ["artifact_data:/data/artifacts"]
     assert services["worker"]["volumes"] == ["artifact_data:/data/artifacts"]
     assert "volumes" not in services["migrate"]
     assert "volumes" not in services["reaper"]
+
+
+def test_s3_backend_and_minio_are_documented_and_exercised_in_ci() -> None:
+    env_example = Path(".env.example").read_text(encoding="utf-8")
+    compose = _load_compose()
+    services = compose["services"]
+    environment = compose["x-app-environment"]
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    quality_steps = workflow["jobs"]["quality-and-integration"]["steps"]
+    compose_job = workflow["jobs"]["compose-smoke"]
+
+    assert services["minio"]["image"] == "minio/minio:RELEASE.2025-09-07T16-13-09Z"
+    assert services["minio"]["healthcheck"]
+    assert environment["EVALOPS_ARTIFACT_BACKEND"] == "${EVALOPS_ARTIFACT_BACKEND:-local}"
+    assert environment["EVALOPS_ARTIFACT_S3_ENDPOINT_URL"] == (
+        "${EVALOPS_ARTIFACT_S3_ENDPOINT_URL:-http://minio:9000}"
+    )
+    assert "EVALOPS_ARTIFACT_BACKEND=local" in env_example
+    assert "EVALOPS_ARTIFACT_S3_BUCKET=evalops" in env_example
+    by_name = {step["name"]: step for step in quality_steps}
+    assert "docker compose" in by_name["Start MinIO for integration"]["run"]
+    assert (
+        "test_minio_artifact_storage.py"
+        in by_name["Integration - S3-compatible MinIO artifact storage"]["run"]
+    )
+    assert compose_job["env"]["EVALOPS_ARTIFACT_BACKEND"] == "s3"
 
 
 def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
@@ -123,7 +155,7 @@ def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
     assert len(matching_steps) == 1
     command = matching_steps[0]["run"]
     assert "python3 scripts/verify_compose_hardening.py" in command
-    assert "postgres redis api worker reaper" in command
+    assert "postgres redis minio api worker reaper" in command
 
 
 def test_integration_prerequisites_run_after_an_independent_unit_failure() -> None:

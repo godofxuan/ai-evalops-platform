@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 from sqlalchemy import Connection, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.artifacts.storage import ArtifactStore
 from app.core.config import Settings
 
 type AsyncCheck = Callable[[], Awaitable[None]]
@@ -97,6 +98,7 @@ def build_infrastructure_readiness_probe(
     settings: Settings,
     engine: AsyncEngine,
     redis_client: Redis,
+    artifact_store: ArtifactStore | None = None,
 ) -> "CompositeReadinessProbe":
     async def postgresql_check() -> None:
         await check_postgresql(engine)
@@ -105,7 +107,10 @@ def build_infrastructure_readiness_probe(
         await check_redis(redis_client)
 
     async def artifact_check() -> None:
-        await check_artifact_directory(settings.artifact_root)
+        if artifact_store is None:
+            await check_artifact_directory(settings.artifact_root)
+        else:
+            await artifact_store.check_ready()
 
     async def migration_check() -> None:
         await check_migrations(engine, settings.alembic_config_path)

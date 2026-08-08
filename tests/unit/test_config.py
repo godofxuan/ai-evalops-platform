@@ -26,6 +26,28 @@ def test_settings_load_prefixed_environment_without_exposing_secret_urls(
     assert "redis-secret" not in repr(settings)
 
 
+def test_s3_artifact_settings_preserve_secrets_and_require_bucket(monkeypatch) -> None:
+    monkeypatch.setenv("EVALOPS_ARTIFACT_BACKEND", "s3")
+    monkeypatch.setenv("EVALOPS_ARTIFACT_S3_BUCKET", "evalops")
+    monkeypatch.setenv("EVALOPS_ARTIFACT_S3_ACCESS_KEY_ID", "minio-access")
+    monkeypatch.setenv("EVALOPS_ARTIFACT_S3_SECRET_ACCESS_KEY", "minio-secret")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.artifact_backend == "s3"
+    assert settings.artifact_s3_bucket == "evalops"
+    assert settings.artifact_s3_access_key_id is not None
+    assert settings.artifact_s3_access_key_id.get_secret_value() == "minio-access"
+    assert settings.artifact_s3_secret_access_key is not None
+    assert settings.artifact_s3_secret_access_key.get_secret_value() == "minio-secret"
+    assert "minio-secret" not in repr(settings)
+
+
+def test_s3_artifact_backend_requires_bucket() -> None:
+    with pytest.raises(ValidationError, match="artifact S3 bucket"):
+        Settings(_env_file=None, artifact_backend="s3")
+
+
 def test_settings_expose_bounded_dataset_upload_limits(monkeypatch) -> None:
     monkeypatch.setenv("EVALOPS_DATASET_MAX_FILE_BYTES", "2048")
     monkeypatch.setenv("EVALOPS_DATASET_MAX_CASES", "12")

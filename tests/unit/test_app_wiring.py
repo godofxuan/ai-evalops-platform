@@ -59,6 +59,19 @@ async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
         lambda _engine: EmptySessionFactory(),
     )
     monkeypatch.setattr(main_module, "create_redis_client", lambda _settings: redis)
+    artifact_store = SimpleNamespace()
+    artifact_factory_settings: list[Settings] = []
+
+    def build_recording_artifact_store(settings: Settings) -> object:
+        artifact_factory_settings.append(settings)
+        return artifact_store
+
+    monkeypatch.setattr(
+        main_module,
+        "build_artifact_store",
+        build_recording_artifact_store,
+        raising=False,
+    )
     dispatcher_started = asyncio.Event()
     dispatcher_stopped = asyncio.Event()
     cleanup_started = asyncio.Event()
@@ -137,7 +150,7 @@ async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
     monkeypatch.setattr(
         main_module,
         "build_infrastructure_readiness_probe",
-        lambda **_kwargs: SimpleNamespace(),
+        lambda **kwargs: SimpleNamespace(arguments=kwargs),
     )
     settings = Settings(
         _env_file=None,
@@ -185,6 +198,9 @@ async def test_app_lifespan_wires_outbox_tasks_and_operator_target_registry(
         assert application.state.outbox_dispatcher_task.done() is False
         assert application.state.outbox_cleanup_task.done() is False
         assert dispatcher_arguments["metrics"] is application.state.metrics
+        assert artifact_factory_settings == [settings]
+        assert application.state.artifact_store is artifact_store
+        assert application.state.readiness_probe.arguments["artifact_store"] is artifact_store
         with pytest.raises(RunDatasetVersionNotFoundError):
             await application.state.run_service.create_run(
                 principal=principal,

@@ -347,3 +347,62 @@ Effect: the minimum RLS spike is now evidence-backed rather than locally inferre
 does not promote the current shared owner credential to a production RLS boundary because PostgreSQL
 owners normally bypass enabled policies unless RLS is forced. Runtime/migration role separation and
 transaction tenant-context wiring remain explicit future rollout work.
+
+## 2026-08-08 — S3-compatible artifact backend local GREEN
+
+### Judgment before modification
+
+Inspection found that `ArtifactStore` already separated physical bytes from Dataset/Run/Result/Review
+services, and PostgreSQL already separated global `artifact_blobs` from tenant-owned
+`artifact_references`. Replacing that design would expand risk without solving the requested shared
+storage gap. The selected change retains Local storage and adds S3 behind the same interface.
+
+Official boto3 documentation defines `PutObject IfNoneMatch="*"` as create-only, returning 412 when
+the key exists and 409 for a concurrent conflict; MinIO's S3 compatibility documentation lists
+`If-None-Match` support for `PutObject`. This supports server-side atomic publication without the
+check-then-write race of a separate HEAD followed by an unconditional PUT.
+
+Tenant ID was not added to physical object metadata. One content digest can legitimately have
+references from multiple tenants, so tenant authorization remains in PostgreSQL rather than being
+collapsed into one ambiguous object metadata value.
+
+### RED/GREEN sequence
+
+1. The first S3 tests failed during collection because `S3ArtifactStore` and the bounded publish
+   conflict error did not exist. Implementation added digest keys, Content-MD5, SHA metadata,
+   conditional writes, 412 verification, bounded 409 retry, verified reads/deletes, stream closing,
+   prefix validation, and thread offloading.
+2. The next run passed all 13 storage tests but failed two configuration tests. Settings then gained
+   a Local/S3 selector, bucket/prefix/endpoint/region/addressing fields, secret credentials, required
+   bucket validation, and paired-credential validation. The combined set passed 31 tests.
+3. Factory/wiring tests next failed because `build_artifact_store` did not exist. The factory now
+   creates Local roots or a configured boto3 client; the API uses it once and passes the same store to
+   all services and readiness. Focused wiring/readiness tests passed.
+4. Deployment tests failed five times because MinIO and its CI proof were absent. Compose now defines
+   a pinned MinIO service with non-root identity, read-only rootfs, dropped capabilities, resource
+   limits, health check, and persistent volume. CI has a real MinIO integration step and Compose
+   smoke explicitly selects S3 and provisions its bucket.
+
+### Problems and corrections
+
+- The first two `apply_patch` attempts were rejected atomically because their anchors guessed an
+  existing test function name. No partial files were written; exact context was read and the patches
+  were split.
+- Ruff rejected broad `pytest.raises(Exception)` assertions in the real-service failure test. They
+  were narrowed to `botocore.exceptions.ClientError`, preventing unrelated failures from satisfying
+  the test.
+- Strict MyPy rejected boto3/botocore because the runtime packages are not typed. Adding
+  `boto3-stubs[s3]` as a development dependency preserved the strict gate instead of suppressing
+  import checking.
+- The host has no Docker daemon, so real MinIO behavior cannot be labeled verified locally. The
+  workflow retains JUnit output and annotations; its next remote result is the authority.
+
+### Local result and current effect
+
+The focused artifact/config/wiring/deployment set passed 66 tests. Full validation resolved 79 locked
+packages; 295 files passed Ruff format and lint; strict MyPy passed 127 source files; and
+non-integration pytest passed `561 passed, 12 deselected` in 368.12 seconds.
+
+The project can now select a shared S3-compatible backend without changing upper services, while
+Local remains the default. This is local GREEN only until GitHub verifies real MinIO conditional
+writes, corruption/failure behavior, and S3-backed Compose readiness.

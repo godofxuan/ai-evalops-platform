@@ -26,7 +26,7 @@ Phase 0 已建立：
 - JSON 结构化日志和按敏感字段名递归脱敏；
 - request ID 响应头与日志上下文；
 - liveness 与 readiness；
-- PostgreSQL、Redis、artifact 目录和 Alembic revision 探测；
+- PostgreSQL、Redis、选定 artifact backend 和 Alembic revision 探测；
 - Alembic 空基线迁移；
 - API、Worker、Reaper 进程骨架；
 - 单元/API/真实服务集成测试合同；
@@ -40,7 +40,7 @@ Phase 1 已建立：
 - tenant-scoped Dataset create/get；
 - 有界 UTF-8 JSONL 校验与不可变 Dataset Version；
 - tenant-owned artifact reference 与全局 SHA-256 content blob 分层；
-- 原子发布、物理去重、落盘摘要确认和临时文件清理；
+- Local 与 S3-compatible/MinIO artifact backend、原子发布、物理去重和摘要确认；
 - Phase 1 Alembic migration、运维脚本与真实 PostgreSQL 集成测试合同。
 
 Phase 2 已建立：
@@ -130,9 +130,9 @@ FastAPI API
      |                                                       |
      |                                                       +---- artifact metadata
      |                                                               |
-     |                                                               +---- SHA-256 local storage
+     |                                                               +---- SHA-256 Local / S3-compatible storage
      |
-     +---- readiness ---- PostgreSQL / Redis / artifact directory / Alembic
+     +---- readiness ---- PostgreSQL / Redis / selected artifact backend / Alembic
      +---- structured JSON logs + request_id + tenant context
 
 Worker ---- claim → heartbeat → Target → Evaluator → fenced result/failure
@@ -226,15 +226,16 @@ docker compose -f deploy/compose.yaml up --build --wait
 curl http://127.0.0.1:8000/health/ready
 ```
 
-Compose 会启动 PostgreSQL、Redis、一次性 migration、API、Worker 和 Reaper。默认开发端口只绑定到 `127.0.0.1`。
+Compose 会启动 PostgreSQL、Redis、MinIO、一次性 migration、API、Worker 和 Reaper。默认开发端口只绑定到 `127.0.0.1`。
 
-六个服务都显式使用非 root 用户、只读镜像根文件系统、`cap_drop: ALL` 与
+七个服务都显式使用非 root 用户、只读镜像根文件系统、`cap_drop: ALL` 与
 `no-new-privileges`，并设置 CPU、内存和 PID 上限。需要写入的目录只通过命名 volume 或有界
-tmpfs 开放：PostgreSQL/Redis 写各自数据卷，API/Worker 写 artifact 卷；migrate/Reaper 不挂载
-artifact 卷。CI 还会用 `docker inspect` 验证 Docker 的有效 HostConfig，而不只解析 YAML。
+tmpfs 开放：PostgreSQL/Redis/MinIO 写各自数据卷，API/Worker 保留 Local backend 的 artifact
+卷；migrate/Reaper 不挂载 artifact 卷。CI 还会用 `docker inspect` 验证 Docker 的有效
+HostConfig，而不只解析 YAML。
 
 默认 limit 是开发/CI containment，不是生产容量结论。可通过 `.env.example` 中的
-`EVALOPS_APP_*`、`EVALOPS_POSTGRES_*` 和 `EVALOPS_REDIS_*` 调整；修改前应使用真实负载观察
+`EVALOPS_APP_*`、`EVALOPS_POSTGRES_*`、`EVALOPS_REDIS_*` 和 `EVALOPS_MINIO_*` 调整；修改前应使用真实负载观察
 OOM、CPU throttling、PID 和尾延迟。升级基础镜像或改用 host bind mount 后必须重跑 fresh-volume
 Compose smoke，并确认宿主目录 ownership。
 
@@ -244,7 +245,7 @@ Compose smoke，并确认宿主目录 ownership。
 docker compose -f deploy/compose.yaml down --volumes
 ```
 
-这会删除 Compose 管理的开发数据库、Redis 和 artifact 卷，不应在需要保留这些开发数据时执行。
+这会删除 Compose 管理的开发数据库、Redis、MinIO object 和 Local artifact 卷，不应在需要保留这些开发数据时执行。
 
 ## 健康检查合同
 
@@ -258,7 +259,7 @@ docker compose -f deploy/compose.yaml down --volumes
 
 - 并发检查 PostgreSQL `SELECT 1`；
 - 检查 Redis `PING`；
-- 对 artifact 目录执行临时写入、flush、`fsync` 和清理；
+- Local backend 执行临时写入、flush、`fsync` 和清理；S3 backend 执行无写入的 bucket 探测；
 - 比较数据库 current revisions 与代码 Alembic heads；
 - 全部正常返回 200；
 - 任一失败返回 503 和稳定错误码；
@@ -584,7 +585,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - PostgreSQL RLS spike 已验证非 owner 角色的纵深隔离，但当前共享 owner 运行凭据会绕过
   策略，生产落地仍需拆分 migration/runtime role 并接入事务级 tenant context；
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
-- 本地 artifact storage 不适合多 API 主机共享，数据库提交与文件删除也不是跨系统原子事务；
+- Local artifact storage 仍不适合多 API 主机共享；S3-compatible backend 已实现但数据库提交
+  与对象删除仍不是跨系统原子事务；
 - JSONL 第一版有界读入内存，不是流式 parser；
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；

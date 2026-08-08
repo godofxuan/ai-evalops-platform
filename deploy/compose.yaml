@@ -5,7 +5,15 @@ x-app-environment: &app-environment
   EVALOPS_LOG_LEVEL: INFO
   EVALOPS_DATABASE_URL: postgresql+psycopg://evalops:${EVALOPS_POSTGRES_PASSWORD:-evalops}@postgres:5432/evalops
   EVALOPS_REDIS_URL: redis://redis:6379/0
+  EVALOPS_ARTIFACT_BACKEND: "${EVALOPS_ARTIFACT_BACKEND:-local}"
   EVALOPS_ARTIFACT_ROOT: /data/artifacts
+  EVALOPS_ARTIFACT_S3_BUCKET: "${EVALOPS_ARTIFACT_S3_BUCKET:-evalops}"
+  EVALOPS_ARTIFACT_S3_PREFIX: "${EVALOPS_ARTIFACT_S3_PREFIX:-artifacts/v1}"
+  EVALOPS_ARTIFACT_S3_ENDPOINT_URL: "${EVALOPS_ARTIFACT_S3_ENDPOINT_URL:-http://minio:9000}"
+  EVALOPS_ARTIFACT_S3_REGION: "${EVALOPS_ARTIFACT_S3_REGION:-us-east-1}"
+  EVALOPS_ARTIFACT_S3_ACCESS_KEY_ID: "${EVALOPS_ARTIFACT_S3_ACCESS_KEY_ID:-minioadmin}"
+  EVALOPS_ARTIFACT_S3_SECRET_ACCESS_KEY: "${EVALOPS_ARTIFACT_S3_SECRET_ACCESS_KEY:-minioadmin}"
+  EVALOPS_ARTIFACT_S3_ADDRESSING_STYLE: "${EVALOPS_ARTIFACT_S3_ADDRESSING_STYLE:-path}"
   EVALOPS_ALEMBIC_CONFIG_PATH: /app/alembic.ini
   EVALOPS_READINESS_TIMEOUT_SECONDS: "2.0"
   EVALOPS_DATABASE_RECONNECT_BASE_SECONDS: "${EVALOPS_DATABASE_RECONNECT_BASE_SECONDS:-0.5}"
@@ -65,6 +73,8 @@ x-ready-dependencies: &ready-dependencies
     condition: service_healthy
   redis:
     condition: service_healthy
+  minio:
+    condition: service_healthy
   migrate:
     condition: service_completed_successfully
 
@@ -121,6 +131,35 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cpus: "${EVALOPS_MINIO_CPUS:-0.5}"
+    mem_limit: "${EVALOPS_MINIO_MEMORY_LIMIT:-512m}"
+    pids_limit: "${EVALOPS_MINIO_PIDS_LIMIT:-128}"
+    environment:
+      MINIO_ROOT_USER: "${EVALOPS_ARTIFACT_S3_ACCESS_KEY_ID:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${EVALOPS_ARTIFACT_S3_SECRET_ACCESS_KEY:-minioadmin}"
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "127.0.0.1:${EVALOPS_MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${EVALOPS_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   migrate:
     <<: *app-service
@@ -180,5 +219,6 @@ services:
 
 volumes:
   artifact_data:
+  minio_data:
   postgres_data:
   redis_data:

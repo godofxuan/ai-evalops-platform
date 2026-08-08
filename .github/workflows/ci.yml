@@ -41,6 +41,11 @@ jobs:
       EVALOPS_ARTIFACT_ROOT: /tmp/evalops-artifacts
       EVALOPS_ALEMBIC_CONFIG_PATH: alembic.ini
       EVALOPS_RUN_INTEGRATION: "1"
+      EVALOPS_RUN_MINIO_INTEGRATION: "1"
+      EVALOPS_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
+      EVALOPS_TEST_MINIO_ACCESS_KEY: minioadmin
+      EVALOPS_TEST_MINIO_SECRET_KEY: minioadmin
+      EVALOPS_TEST_MINIO_BUCKET: evalops-integration
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -82,6 +87,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run --no-sync alembic upgrade head
 
+      - name: Start MinIO for integration
+        if: ${{ !cancelled() }}
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --wait
+          --wait-timeout 120 minio
+
       - name: Integration - job claiming, trace propagation, and lease fencing
         if: ${{ !cancelled() }}
         run: >-
@@ -111,6 +122,12 @@ jobs:
         run: >-
           uv run --no-sync pytest tests/integration/test_artifact_references.py
           --junitxml=/tmp/junit-artifact-references.xml
+
+      - name: Integration - S3-compatible MinIO artifact storage
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_minio_artifact_storage.py
+          --junitxml=/tmp/junit-minio-artifacts.xml
 
       - name: Integration - cross-table tenant consistency constraints
         if: ${{ !cancelled() }}
@@ -159,11 +176,16 @@ jobs:
           /tmp/junit-identity-datasets.xml
           /tmp/junit-tenant-rls.xml
           /tmp/junit-artifact-references.xml
+          /tmp/junit-minio-artifacts.xml
           /tmp/junit-tenant-consistency.xml
           /tmp/junit-readiness.xml
           /tmp/junit-redis-events.xml
           /tmp/junit-transactional-outbox.xml
           /tmp/junit-run-idempotency.xml
+
+      - name: Stop MinIO integration service
+        if: always()
+        run: docker compose -f deploy/compose.yaml stop minio
 
       - name: Build application image
         if: ${{ !cancelled() }}
@@ -171,6 +193,11 @@ jobs:
 
   compose-smoke:
     runs-on: ubuntu-latest
+    env:
+      EVALOPS_ARTIFACT_BACKEND: s3
+      EVALOPS_ARTIFACT_S3_BUCKET: evalops
+      EVALOPS_ARTIFACT_S3_ACCESS_KEY_ID: minioadmin
+      EVALOPS_ARTIFACT_S3_SECRET_ACCESS_KEY: minioadmin
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -178,13 +205,22 @@ jobs:
       - name: Build the complete current topology
         run: docker compose -f deploy/compose.yaml build
 
-      - name: Start and wait for PostgreSQL and Redis
+      - name: Start and wait for PostgreSQL, Redis, and MinIO
         run: >-
           docker compose -f deploy/compose.yaml up --detach --wait
-          --wait-timeout 180 postgres redis
+          --wait-timeout 180 postgres redis minio
 
       - name: Apply migrations in the Compose topology
         run: docker compose -f deploy/compose.yaml run --rm --no-deps migrate
+
+      - name: Provision the configured artifact bucket
+        run: >-
+          docker compose -f deploy/compose.yaml run --rm --no-deps api
+          python -c "import boto3; from app.core.config import Settings;
+          s=Settings(); boto3.client('s3', endpoint_url=s.artifact_s3_endpoint_url,
+          region_name=s.artifact_s3_region,
+          aws_access_key_id=s.artifact_s3_access_key_id.get_secret_value(),
+          aws_secret_access_key=s.artifact_s3_secret_access_key.get_secret_value()).create_bucket(Bucket=s.artifact_s3_bucket)"
 
       - name: Start API, Worker, and Reaper
         run: >-
@@ -201,7 +237,7 @@ jobs:
         run: >-
           python3 scripts/verify_compose_hardening.py
           --compose-file deploy/compose.yaml
-          postgres redis api worker reaper
+          postgres redis minio api worker reaper
 
       - name: Preserve Compose diagnostics
         if: always()

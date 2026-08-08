@@ -21,7 +21,15 @@ class Settings(BaseSettings):
         )
     )
     redis_url: SecretStr = Field(default_factory=lambda: SecretStr("redis://localhost:6379/0"))
+    artifact_backend: Literal["local", "s3"] = "local"
     artifact_root: Path = Path("data/artifacts")
+    artifact_s3_bucket: str | None = None
+    artifact_s3_prefix: str = "artifacts/v1"
+    artifact_s3_endpoint_url: str | None = None
+    artifact_s3_region: str = "us-east-1"
+    artifact_s3_access_key_id: SecretStr | None = None
+    artifact_s3_secret_access_key: SecretStr | None = None
+    artifact_s3_addressing_style: Literal["path", "virtual"] = "path"
     alembic_config_path: Path = Path("alembic.ini")
     readiness_timeout_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
     database_reconnect_base_seconds: float = Field(default=0.5, gt=0, le=300)
@@ -108,4 +116,8 @@ class Settings(BaseSettings):
             raise ValueError("outbox retry base delay must not exceed maximum delay")
         if self.outbox_publish_timeout_seconds >= self.outbox_lease_seconds:
             raise ValueError("outbox publish timeout must be shorter than lease")
+        if self.artifact_backend == "s3" and not self.artifact_s3_bucket:
+            raise ValueError("artifact S3 bucket is required for the S3 backend")
+        if (self.artifact_s3_access_key_id is None) != (self.artifact_s3_secret_access_key is None):
+            raise ValueError("artifact S3 access and secret keys must be configured together")
         return self

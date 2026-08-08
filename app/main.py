@@ -31,7 +31,7 @@ from app.api.routes_observability import router as observability_router
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
-from app.artifacts.storage import LocalArtifactStore
+from app.artifacts.storage import build_artifact_store
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
 from app.core.logging import configure_logging, get_logger
@@ -111,11 +111,10 @@ def create_app(
                 telemetry.shutdown()
             return
 
-        runtime_settings.artifact_root.mkdir(parents=True, exist_ok=True)
         engine = create_database_engine(runtime_settings)
         session_factory = create_session_factory(engine)
         redis_client = create_redis_client(runtime_settings)
-        artifact_store = LocalArtifactStore(runtime_settings.artifact_root)
+        artifact_store = build_artifact_store(runtime_settings)
         application.state.database_engine = engine
         application.state.session_factory = session_factory
         application.state.api_key_lookup = SQLAlchemyAPIKeyLookup(session_factory)
@@ -206,6 +205,7 @@ def create_app(
             settings=runtime_settings,
             engine=engine,
             redis_client=redis_client,
+            artifact_store=artifact_store,
         )
         logger.info("application_started", environment=runtime_settings.environment)
         try:

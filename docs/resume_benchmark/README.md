@@ -26,3 +26,4 @@ source row is `VERIFIED`.
 - `EXECUTION_LOG.md`: chronological what/why/problem/effect record;
 - `EVALOPS_*.md` / `EVALOPS_*.csv`: final consolidated deliverables.
 - `EVALOPS_RLS_SPIKE.md`: PostgreSQL tenant-policy design, proof contract, and rollout limitation.
+- `EVALOPS_ARTIFACT_BACKEND.md`: Local/S3 contract, MinIO proof, failure semantics, and limitations.
