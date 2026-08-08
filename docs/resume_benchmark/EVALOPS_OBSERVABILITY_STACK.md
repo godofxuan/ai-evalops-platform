@@ -1,7 +1,10 @@
 # Prometheus and OpenTelemetry runtime stack
 
-Status: configuration, verification contracts, and focused tests `VERIFIED`; real Compose execution
-`PENDING` on the next GitHub Actions run.
+Status: configuration, verification contracts, Prometheus scrape/query paths, API/Worker/Reaper OTLP
+receipt, effective container hardening, and complete CI `VERIFIED`.
+
+Remote authority: GitHub Actions run `31251253284` executed exact source commit
+`0a63cff69beed1b376cc53c61d3cba4bbbfb099a`; both jobs concluded `success`.
 
 ## Decision
 
@@ -49,5 +52,7 @@ command even though the verifier owns that detail; the test was corrected to ins
 Manual image-config comparison found `config.yml` would not match the Collector's default
 `config.yaml` before any remote run, so the filename and contract were corrected.
 
-Focused result: 21 tests passed; Ruff and strict MyPy passed. Local Docker is unavailable, so actual
-scrape/export behavior remains pending remote Compose evidence.
+Focused result: 21 tests passed; Ruff and strict MyPy passed. The remote Compose job then verified all
+three scrape pools and required metric series, received spans from all three process roles, passed API
+readiness, and verified effective hardening for the nine-service topology. The quality job passed the
+complete non-integration/integration/migration/image gates.

@@ -467,3 +467,17 @@ The verifier requires three healthy scrape pools, non-empty series for API, DB o
 retry, and lease-expiration metrics, and Collector output from API/Worker/Reaper. Focused GREEN:
 21 tests, Ruff, and strict MyPy. Local Docker remains unavailable, so real Compose execution is
 pending and no remote observability claim is admitted yet.
+
+### Remote observability authority
+
+Commit `0a63cff` started GitHub Actions run `31251253284`. Compose built and started the complete
+nine-service topology. The fail-closed verifier observed `up` for `evalops-api`, `evalops-worker`, and
+`evalops-reaper`; required API, DB operation, queue, retry, and lease-expiration metric queries all
+returned series. Collector detailed output contained `process.role` for API, Worker, and Reaper,
+proving all three processes exported through the configured OTLP/HTTP path.
+
+S3-backed readiness and effective runtime hardening also passed. The independent quality job passed
+lock/format/lint/MyPy, non-integration tests, every real PostgreSQL/Redis/MinIO integration,
+migration downgrade/re-upgrade, and the application image build. Both jobs concluded `success`.
+Prometheus/Collector runtime wiring is now `VERIFIED`; durable trace search, log aggregation, and
+alert delivery remain explicitly outside this proof.

@@ -108,7 +108,7 @@ Phase 9 已建立：
 
 - API/Worker/Reaper 独立 Prometheus registry 与低基数指标；
 - API `/metrics`、Worker 9101、Reaper 9102 抓取入口；
-- Compose Prometheus 与 OpenTelemetry Collector 真实运行配置和 fail-closed 验证脚本；
+- 经真实 Compose 验证的 Prometheus 与 OpenTelemetry Collector 数据路径和 fail-closed 脚本；
 - API request、Run 创建、claim、Target、Evaluator、result、Reaper、SSE 业务 span；
 - W3C `traceparent` API 延续、Run 来源 carrier 持久化，以及 Worker/Reaper 异步 Span Link；
 - question/answer/evidence/credential 等敏感字段脱敏；
