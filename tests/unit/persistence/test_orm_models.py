@@ -249,6 +249,11 @@ def test_case_results_and_review_tasks_share_their_jobs_run() -> None:
         ("job_id", "run_id"),
         ("evaluation_jobs.id", "evaluation_jobs.run_id"),
     ) in foreign_key_specs(CaseResult.__table__)
+    assert not CaseResult.__table__.columns.tenant_id.nullable
+    assert (
+        ("run_id", "tenant_id"),
+        ("evaluation_runs.id", "evaluation_runs.tenant_id"),
+    ) in foreign_key_specs(CaseResult.__table__)
     assert (
         ("job_id", "run_id"),
         ("evaluation_jobs.id", "evaluation_jobs.run_id"),
@@ -298,7 +303,14 @@ def test_case_result_is_unique_per_job_and_run_case() -> None:
     assert frozenset({"job_id"}) in unique_column_sets(CaseResult.__table__)
     assert frozenset({"run_id", "case_id"}) in unique_column_sets(CaseResult.__table__)
     assert foreign_key_targets(CaseResult.__table__, "job_id") == {"evaluation_jobs.id"}
-    assert foreign_key_targets(CaseResult.__table__, "run_id") == {"evaluation_jobs.run_id"}
+    assert foreign_key_targets(CaseResult.__table__, "run_id") == {
+        "evaluation_jobs.run_id",
+        "evaluation_runs.id",
+    }
+    assert foreign_key_targets(CaseResult.__table__, "tenant_id") == {
+        "evaluation_runs.tenant_id",
+        "tenants.id",
+    }
     assert "metrics_json" in CaseResult.__table__.columns
 
 

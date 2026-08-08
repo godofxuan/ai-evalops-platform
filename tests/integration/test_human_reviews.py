@@ -208,6 +208,7 @@ async def test_real_postgresql_blinded_double_review_and_third_adjudication(
                     CaseResult(
                         job_id=job_id,
                         run_id=run_id,
+                        tenant_id=tenant_id,
                         case_id=f"case-{index}",
                         answer_json={"answer": f"candidate-{index}"},
                         evidence_json={"citations": [], "sources": []},

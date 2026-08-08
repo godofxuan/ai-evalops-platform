@@ -142,6 +142,7 @@ class SQLAlchemyResultCommitter:
                         id=result_id,
                         job_id=claim.job_id,
                         run_id=claim.run_id,
+                        tenant_id=claim.tenant_id,
                         case_id=claim.case_id,
                         answer_json={"answer": target_result.answer},
                         evidence_json={

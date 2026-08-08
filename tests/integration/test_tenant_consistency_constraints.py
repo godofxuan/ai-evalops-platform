@@ -343,6 +343,7 @@ async def test_real_postgresql_rejects_cross_tenant_and_cross_run_links(
             build_row=lambda: CaseResult(
                 job_id=job_a1_id,
                 run_id=run_a2_id,
+                tenant_id=tenant_a_id,
                 case_id="case-result-wrong-run",
                 answer_json={},
                 evidence_json={},

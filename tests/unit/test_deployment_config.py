@@ -146,6 +146,18 @@ def test_nonintegration_failures_are_exported_to_ci_annotations() -> None:
     assert "/tmp/junit-unit.xml" in annotation_command
 
 
+def test_ci_executes_and_annotates_real_postgresql_rls_integration() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["quality-and-integration"]["steps"]
+    by_name = {step["name"]: step for step in steps}
+
+    rls_step = by_name["Integration - PostgreSQL row-level tenant isolation"]
+    assert rls_step["if"] == "${{ !cancelled() }}"
+    assert "pytest tests/integration/test_tenant_rls.py" in rls_step["run"]
+    assert "--junitxml=/tmp/junit-tenant-rls.xml" in rls_step["run"]
+    assert "/tmp/junit-tenant-rls.xml" in by_name["Annotate test failures"]["run"]
+
+
 def test_outbox_alert_rules_cover_stalled_backlog_and_lease_loss() -> None:
     rules_path = Path("deploy/prometheus/outbox-alerts.yml")
     loaded = yaml.safe_load(rules_path.read_text(encoding="utf-8"))

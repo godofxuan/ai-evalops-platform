@@ -521,6 +521,12 @@ class CaseResult(Base):
             name="fk_case_results_job_id_run_id_evaluation_jobs",
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_case_results_run_id_tenant_id_evaluation_runs",
+            ondelete="CASCADE",
+        ),
         UniqueConstraint("job_id", name="uq_case_results_job_id"),
         UniqueConstraint(
             "run_id",
@@ -537,11 +543,17 @@ class CaseResult(Base):
         ),
         CheckConstraint("latency_ms >= 0", name="latency_ms_nonnegative"),
         Index("ix_case_results_run_id_case_id", "run_id", "case_id"),
+        Index("ix_case_results_tenant_id_run_id", "tenant_id", "run_id"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     case_id: Mapped[str] = mapped_column(String(200), nullable=False)
     answer_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

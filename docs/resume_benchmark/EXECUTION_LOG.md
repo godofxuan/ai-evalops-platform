@@ -283,3 +283,49 @@ The workflow now runs artifact preparation and migrations under `!cancelled()`, 
 integration steps. This removes misleading empty-schema cascades on future independent unit failures.
 A new workflow contract test failed before the YAML change and passes after it. The next pushed CI
 run remains the authority on whether the original non-integration failure was transient.
+
+## 2026-08-08 — PostgreSQL RLS spike design and local GREEN
+
+### Design judgment
+
+PostgreSQL documentation confirms that missing policies default-deny after RLS is enabled, table
+owners normally bypass RLS, `FORCE ROW LEVEL SECURITY` subjects owners to policies, and roles with
+`BYPASSRLS` always bypass. It also warns that policy subqueries can introduce concurrency races. The
+current schema gave Dataset, DatasetVersion, and Run direct tenant columns, but CaseResult only
+reached its tenant through Run.
+
+The selected minimal design adds a direct, backfilled, non-null CaseResult tenant column, a composite
+Run/tenant foreign key, and a tenant/run index. All four policies use the same row-local predicate and
+transaction-local `app.current_tenant_id`. This is preferable to a CaseResult policy subquery because
+the policy has no cross-table snapshot dependency and the database independently checks lineage.
+
+The migration deliberately enables but does not force RLS. The application still uses one table-owner
+credential for migrations and all processes; forcing the owner without first wiring API tenant
+context and a background-worker access model would default-deny legitimate work. The spike is scoped
+to proving a non-owner runtime boundary, and its document explicitly withholds a production
+enforcement claim.
+
+### RED/GREEN and problems
+
+RED migration tests first failed because 0015 and the CaseResult tenant column did not exist. The
+first downgrade run then failed due to a test typo (`20260802_0014` instead of the real
+`20260803_0014`); only the test range was corrected. The next ORM run showed that `tenant_id` has two
+intentional FK targets—Tenant directly and Run through the composite constraint—so the incomplete
+test expectation was expanded rather than removing a constraint. Ruff requested import/line wrapping,
+and MyPy required narrowing an update result to `CursorResult[Any]` before checking `rowcount`.
+
+Local GREEN: lock check resolved 70 packages; 291 files passed Ruff format and lint; strict MyPy
+passed 126 source files; and 29 focused tests passed. Three service tests were correctly skipped
+without local PostgreSQL. The dedicated GitHub test will create a temporary non-owner/non-BYPASSRLS
+role and prove fail-closed reads, four-table tenant filtering, rejected cross-tenant writes, hidden-row
+updates, and accepted same-tenant writes against migrated PostgreSQL.
+
+### CI diagnostic correction
+
+The earlier CI failure was not transient. After the prerequisite fix, run `31249058658` proved
+Compose smoke, migrations, and every integration group passed; only non-integration pytest failed.
+Adding `/tmp/junit-unit.xml` to the existing annotation flow exposed the exact failure in run
+`31249326439`: a parser-default test assumed `GITHUB_SHA` was absent even though GitHub Actions sets
+it. The production parser correctly binds that SHA for evidence provenance. The test now explicitly
+deletes the variable when checking the offline `UNSPECIFIED` default and separately proves that a
+present 40-character GitHub SHA is adopted.
