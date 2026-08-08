@@ -724,3 +724,18 @@ connections 12、最大 waiting-lock connections 2。证据因此支持的瓶颈
 此时 1k/10k/100k current fair capacity gate 已完成，但 release 仍暂为 `NOT_READY`：尚需对同一
 current source 执行历史兼容的正式 500-case/32-arm worker-scaling 协议，并完成最终 release 文档与
 一致性审计。
+
+## 2026-08-09 — 准备 current-source 500-case/32-arm 同协议重跑
+
+容量 gate VERIFIED 后才检查 `.github/workflows/evidence-gate.yml`，没有提前并行启动另一个正式实验。
+现有 workflow 精确固定 workers `1,2,4,8`、cases `500`、warmup `50`、repetitions `4`、seed
+`1729`，由 load harness 的两个 workload 组成 2 × 4 × 4 = 32 arms；prepare 与 execute 使用同一
+参数，source 绑定 `GITHUB_SHA`，产物写入新的不可变 `gate1-gh-<run>-<attempt>` 目录。因此它与
+pre-fair source `15e7ac2...` 的正式协议相同，适合 current RC 的直接对照，不需要改 workflow 或
+生产 scheduler。
+
+首次把 CLI help、`test_experiment_scripts.py -k load` 和 diff check 合在 120 秒工具时限中执行，
+命令在 124 秒被终止且没有 pytest 结果；这不是 GREEN，也没有失败断言。拆分后 CLI help 在 3.5 秒
+正常退出，load 协议测试获得明确结果：`9 passed, 6 deselected in 225.45s`。随后才把
+`.github/evidence-gate-trigger.txt` 的请求时间更新为 `2026-08-09T01:27:53+08:00`。该 trigger
+提交的目的仅是运行冻结 32-arm 协议；在机器人完成不可变 evidence commit 前，不推送后续文档。
