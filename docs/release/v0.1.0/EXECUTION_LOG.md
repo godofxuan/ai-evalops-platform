@@ -905,3 +905,9 @@ mismatch：多租户按 run 重复 heap scan 时只读取了每循环平均行�
 最终 release/evidence 单测 `43 passed`，Ruff/format/MyPy 通过；使用新 summarizer 对失败包全部 256
 份 raw fair/legacy EXPLAIN 离线重算，`mismatches=0`。这只证明 raw 计划可被正确解释，原 bundle
 仍为 FAILED；下一次正式 workflow 必须从新 source 重新生成 summary、manifest 与 assessment。
+
+最终修复 source `1eff237620c06b7121b922f7ef6373965f90bc32` 的标准 CI run
+`31272570667` 完整 success；Compose smoke 与 quality/integration 均通过。为避免专用 workflow 再次
+并发回写，下一轮按 RC capacity → worker scaling → fault matrix 串行触发。本次只更新
+`.github/release-candidate-trigger.txt` 为 `2026-08-09T02:46:46+08:00`，目标是先验证 1k/10k，
+只有 assessment VERIFIED 才由同一 workflow 进入 100k；在结果回来前不触发另外两条最终实验。
