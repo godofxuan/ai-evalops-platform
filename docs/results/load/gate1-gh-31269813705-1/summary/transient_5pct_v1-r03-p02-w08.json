@@ -1,0 +1,285 @@
+{
+  "schema_version": 4,
+  "arm": {
+    "arm_id": "transient_5pct_v1-r03-p02-w08",
+    "order": 10,
+    "repetition": 3,
+    "workload": "transient_5pct_v1",
+    "workers": 8,
+    "position": 2,
+    "warmup_required": true
+  },
+  "summary": {
+    "valid_for_capacity_comparison": true,
+    "throughput_cases_per_second": 12.603520884102707,
+    "successful_throughput_cases_per_second": 12.603520884102707,
+    "end_to_end_ms": 39671.45407999988,
+    "case_latency_ms": {
+      "evidence": "VERIFIED",
+      "count": 500,
+      "p50": 25.0,
+      "p95": 25.0,
+      "p99": 25.0
+    },
+    "queue_wait_ms": {
+      "evidence": "VERIFIED",
+      "count": 500,
+      "p50": 21487.625500000002,
+      "p95": 37031.988999999994,
+      "p99": 38020.58857
+    },
+    "retry_queue_wait_ms": {
+      "evidence": "VERIFIED",
+      "count": 25,
+      "p50": 1106.61,
+      "p95": 8932.689599999989,
+      "p99": 26006.865439999958
+    },
+    "retry_count": 25,
+    "claim_latency_ms": {
+      "status": "VERIFIED",
+      "evidence": "DIRECTIONAL",
+      "observation": "OBSERVED_VALUE",
+      "value": 637.0,
+      "reason": "histogram was present in paired Prometheus scrapes",
+      "source": "prometheus:db_operation_duration_seconds{operation=\"claim\"}",
+      "sample_count": 10,
+      "count": 637.0,
+      "sum_seconds": 232.37173487699636,
+      "mean_ms": 364.79079258555157,
+      "buckets": {
+        "0.25": 337.0,
+        "+Inf": 637.0,
+        "0.01": 34.0,
+        "1.0": 583.0,
+        "0.05": 128.0,
+        "0.005": 0.0,
+        "0.0005": 0.0,
+        "0.0025": 0.0,
+        "5.0": 637.0,
+        "0.5": 469.0,
+        "2.5": 637.0,
+        "0.1": 213.0,
+        "0.025": 104.0,
+        "0.001": 0.0
+      }
+    },
+    "db_transaction_latency_ms": {
+      "result": {
+        "status": "VERIFIED",
+        "evidence": "DIRECTIONAL",
+        "observation": "OBSERVED_VALUE",
+        "value": 500.0,
+        "reason": "histogram was present in paired Prometheus scrapes",
+        "source": "prometheus:db_operation_duration_seconds{operation=\"result\"}",
+        "sample_count": 10,
+        "count": 500.0,
+        "sum_seconds": 41.004099360000055,
+        "mean_ms": 82.0081987200001,
+        "buckets": {
+          "2.5": 500.0,
+          "+Inf": 500.0,
+          "0.025": 37.0,
+          "5.0": 500.0,
+          "0.001": 0.0,
+          "0.1": 396.0,
+          "0.25": 493.0,
+          "0.01": 0.0,
+          "1.0": 500.0,
+          "0.05": 115.0,
+          "0.005": 0.0,
+          "0.0005": 0.0,
+          "0.0025": 0.0,
+          "0.5": 500.0
+        }
+      },
+      "failure": {
+        "status": "VERIFIED",
+        "evidence": "DIRECTIONAL",
+        "observation": "OBSERVED_VALUE",
+        "value": 25.0,
+        "reason": "histogram was present in paired Prometheus scrapes",
+        "source": "prometheus:db_operation_duration_seconds{operation=\"failure\"}",
+        "sample_count": 10,
+        "count": 25.0,
+        "sum_seconds": 1.9699343070009263,
+        "mean_ms": 78.79737228003705,
+        "buckets": {
+          "2.5": 25.0,
+          "+Inf": 25.0,
+          "0.025": 2.0,
+          "0.001": 0.0,
+          "0.1": 20.0,
+          "0.25": 25.0,
+          "5.0": 25.0,
+          "0.01": 0.0,
+          "1.0": 25.0,
+          "0.005": 0.0,
+          "0.0005": 0.0,
+          "0.0025": 0.0,
+          "0.5": 25.0,
+          "0.05": 5.0
+        }
+      },
+      "reaper": {
+        "status": "VERIFIED",
+        "evidence": "DIRECTIONAL",
+        "observation": "OBSERVED_VALUE",
+        "value": 9.0,
+        "reason": "histogram was present in paired Prometheus scrapes",
+        "source": "prometheus:db_operation_duration_seconds{operation=\"reaper\"}",
+        "sample_count": 10,
+        "count": 9.0,
+        "sum_seconds": 0.07693283099979453,
+        "mean_ms": 8.548092333310503,
+        "buckets": {
+          "2.5": 9.0,
+          "+Inf": 9.0,
+          "0.0005": 0.0,
+          "0.025": 9.0,
+          "0.001": 0.0,
+          "1.0": 9.0,
+          "5.0": 9.0,
+          "0.5": 9.0,
+          "0.1": 9.0,
+          "0.25": 9.0,
+          "0.0025": 2.0,
+          "0.01": 6.0,
+          "0.05": 9.0,
+          "0.005": 4.0
+        }
+      }
+    },
+    "db_lock_wait": {
+      "evidence": "DIRECTIONAL",
+      "sample_count": 12,
+      "samples_with_waiters": 3,
+      "peak_waiting_connections": 2
+    },
+    "worker_cluster_resources": {
+      "status": "VERIFIED",
+      "evidence": "VERIFIED",
+      "reason": "worker_totals_summed_by_snapshot",
+      "source": "docker_stats:compose_service=worker",
+      "expected_workers": 8,
+      "snapshot_count": 12,
+      "complete_snapshot_count": 12,
+      "worker_containers": [
+        "ai-evalops-platform-worker-1",
+        "ai-evalops-platform-worker-2",
+        "ai-evalops-platform-worker-3",
+        "ai-evalops-platform-worker-4",
+        "ai-evalops-platform-worker-5",
+        "ai-evalops-platform-worker-6",
+        "ai-evalops-platform-worker-7",
+        "ai-evalops-platform-worker-8"
+      ],
+      "cpu_percent": {
+        "p50": 94.08,
+        "p95": 185.52499999999998,
+        "p99": 197.449,
+        "peak": 200.43
+      },
+      "rss_bytes": {
+        "p50": 578095677.5,
+        "p95": 595214729.2,
+        "p99": 600834257.84,
+        "peak": 602239140
+      }
+    },
+    "postgres_connections": {
+      "evidence": "VERIFIED",
+      "sample_count": 12,
+      "peak": 25
+    },
+    "redis_publish_failures": {
+      "status": "VERIFIED",
+      "evidence": "VERIFIED",
+      "observation": "OBSERVED_ZERO",
+      "value": 0.0,
+      "reason": "metric was present in paired Prometheus scrapes",
+      "source": "prometheus:redis_publish_failures_total",
+      "sample_count": 10,
+      "delta": 0.0
+    },
+    "stale_submission_rejection": {
+      "evidence": "NOT_RUN",
+      "observed": 0
+    },
+    "collector_missed_samples": 0,
+    "cpu_rss_by_container": {
+      "ai-evalops-platform-api-1": {
+        "service": "api",
+        "sample_count": 12,
+        "cpu_percent_peak": 56.48,
+        "rss_bytes_peak": 283534950
+      },
+      "ai-evalops-platform-postgres-1": {
+        "service": "postgres",
+        "sample_count": 12,
+        "cpu_percent_peak": 103.42,
+        "rss_bytes_peak": 132644864
+      },
+      "ai-evalops-platform-reaper-1": {
+        "service": "reaper",
+        "sample_count": 12,
+        "cpu_percent_peak": 31.22,
+        "rss_bytes_peak": 80981524
+      },
+      "ai-evalops-platform-redis-1": {
+        "service": "redis",
+        "sample_count": 12,
+        "cpu_percent_peak": 2.51,
+        "rss_bytes_peak": 11303649
+      },
+      "ai-evalops-platform-worker-1": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 37.1,
+        "rss_bytes_peak": 73914122
+      },
+      "ai-evalops-platform-worker-2": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 54.62,
+        "rss_bytes_peak": 73903636
+      },
+      "ai-evalops-platform-worker-3": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 41.81,
+        "rss_bytes_peak": 73117204
+      },
+      "ai-evalops-platform-worker-4": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 46.43,
+        "rss_bytes_peak": 72435630
+      },
+      "ai-evalops-platform-worker-5": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 40.14,
+        "rss_bytes_peak": 82522931
+      },
+      "ai-evalops-platform-worker-6": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 44.22,
+        "rss_bytes_peak": 84829798
+      },
+      "ai-evalops-platform-worker-7": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 47.41,
+        "rss_bytes_peak": 80813752
+      },
+      "ai-evalops-platform-worker-8": {
+        "service": "worker",
+        "sample_count": 12,
+        "cpu_percent_peak": 33.1,
+        "rss_bytes_peak": 82376131
+      }
+    }
+  }
+}

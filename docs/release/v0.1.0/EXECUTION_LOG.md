@@ -780,3 +780,49 @@ GREEN 结果为新合同与既有 RC workflow 合同合计 `6 passed in 0.10s`�
 `git status` 又把 PowerShell 整体退出码覆盖成 0。没有据此宣称通过。使用真实文件列表纠正命令、
 让每一步在非零时立即退出，并用 Ruff 机械格式化后，最终结果为 Ruff check 通过、format check
 通过、两份真实 workflow 测试 `6 passed in 0.09s`、diff check 通过。
+
+## 2026-08-09 — 恢复包独立核验、Git-safe 保存与 pre-fair 配对比较
+
+在裁剪任何文件前，项目自己的 `validate_gate1_final_bundle` 对恢复包重新读取并核验：final status
+`complete`、32 arms、664 payload files，文件集、大小、SHA-256、summary/raw/plot 交叉引用全部通过。
+全目录符号链接计数为 0，常见 GitHub token、Bearer authorization 和明文 password 模式命中为 0。
+
+原始 `environment/compose.log` 的固定身份是 122,939,753 bytes、SHA-256
+`5bed872f1ba845314f75582df55ba1aeaaf774eb64a81428d9235a1a2a270ccb`。原始完整包仍可由
+artifact id `9025594324` 和 artifact digest 取回（GitHub retention 90 天）。本地可提交副本只把该日志
+替换为最后 10,485,760 bytes，保留日志 SHA-256 为
+`442e658ac5c543048e1f20ddaa163bf41c0b61fb10c2c2c29433219e964997a4`；原始/保留身份、原因、
+source 和 artifact 身份均写入 `environment/compose-log-policy.txt`。裁剪后整个恢复目录为
+86,587,166 bytes；`final/` 下的 664 个受 manifest 约束文件没有修改。
+
+current run 与 historical pre-fair run 使用相同的 2 workloads × 4 worker counts × 4 repetitions、
+500 measurement cases、50 warmup、seed 1729。按 workload/worker 分组后的吞吐中位数对照如下：
+
+| Workload | Workers | Pre-fair Jobs/s | Current fair Jobs/s | Change |
+|---|---:|---:|---:|---:|
+| io latency | 1 | 21.481 | 15.470 | -27.98% |
+| io latency | 2 | 38.062 | 30.761 | -19.18% |
+| io latency | 4 | 56.263 | 27.198 | -51.66% |
+| io latency | 8 | 66.804 | 10.985 | -83.56% |
+| transient 5% | 1 | 19.587 | 18.823 | -3.90% |
+| transient 5% | 2 | 34.031 | 28.511 | -16.22% |
+| transient 5% | 4 | 50.825 | 17.080 | -66.39% |
+| transient 5% | 8 | 60.759 | 12.642 | -79.19% |
+
+32 个同名 arm 的配对变化中位数为：吞吐 `-48.30%`、end-to-end `+93.50%`、queue-wait p95
+`+104.22%`、claim mean `+464.19%`、result transaction mean `+30.49%`、worker RSS peak
+`+4.73%`、worker CPU peak `+1.89%`。吞吐变化范围为 `-93.97%` 至 `-2.54%`，没有任何 arm
+优于历史吞吐；current aggregate 还明确记录两个 workload 的 2→4 和 4→8 负扩展。因资源增长很小而
+claim 时间显著增长，数据与 100k EXPLAIN/claim 结论一致，瓶颈优先指向公平候选查询和并发锁竞争，
+而不是 worker CPU/RSS 饱和。
+
+但两次 GitHub runner 并非同一 CPU：pre-fair 为 4-vCPU AMD EPYC 7763，current 为 4-vCPU
+Intel Xeon Platinum 8370C；内存约 16.76 GB、Docker 28.0.4 和 Compose 配置一致。故这些结果足以
+证明 current source 存在显著容量/负扩展风险，却不足以把全部百分比严格因果归于 scheduler，亦不能
+建立跨硬件性能 SLO。release 文档必须同时披露回归、环境差异和“2 workers 是本次 current runner
+的最佳中位吞吐点”；不得继续把 pre-fair 8-worker 3.11× 当作 current fair 性能。
+
+第一次 evidence 提交尝试在 `git add` 后被 `git diff --cached --check` 阻断，未产生 commit。原因是
+恢复的 `compose-ps.txt` 和 Compose/OTel 原始诊断日志天然包含大量行尾空格，而不是手写代码或文档
+引入格式错误。清理这些空格会改变已记录的 retained SHA-256，降低证据可追溯性，因此不改写原始
+诊断；后续只对手写 `EXECUTION_LOG.md` 执行 whitespace check，并允许生成证据保留原字节。
