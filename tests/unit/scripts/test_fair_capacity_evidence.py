@@ -262,6 +262,39 @@ def test_explain_summary_uses_largest_plan_row_count_without_window_aggregate() 
     assert summary["candidate_cardinality"] == 1_000
 
 
+def test_explain_summary_ignores_invisible_bitmap_index_entries() -> None:
+    raw_plan = [
+        {
+            "Planning Time": 0.5,
+            "Execution Time": 2.5,
+            "Plan": {
+                "Node Type": "Limit",
+                "Actual Rows": 1.0,
+                "Actual Loops": 1,
+                "Plans": [
+                    {
+                        "Node Type": "Bitmap Heap Scan",
+                        "Relation Name": "evaluation_jobs",
+                        "Actual Rows": 1_000.0,
+                        "Actual Loops": 1,
+                        "Plans": [
+                            {
+                                "Node Type": "Bitmap Index Scan",
+                                "Actual Rows": 4_000.0,
+                                "Actual Loops": 1,
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+    ]
+
+    summary = summarize_explain(raw_plan)
+
+    assert summary["candidate_cardinality"] == 1_000
+
+
 def test_100k_stage_requires_verified_1k_10k_correctness() -> None:
     assert queue_sizes_for_stage(stage="initial", prior_status=None) == (1_000, 10_000)
     assert queue_sizes_for_stage(stage="large", prior_status="VERIFIED") == (100_000,)

@@ -169,6 +169,43 @@ def _postgres_row_count(value: object) -> int | None:
     return int(value)
 
 
+def _candidate_cardinality(
+    nodes: Sequence[Mapping[str, Any]],
+    *,
+    fallback: int,
+) -> int:
+    # The fair selector's WindowAgg consumes the visible candidate set before
+    # the outer LIMIT.  Prefer that semantic boundary when PostgreSQL keeps it.
+    window_rows = [
+        row_count
+        for node in nodes
+        if node.get("Node Type") == "WindowAgg"
+        and (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
+    ]
+    if window_rows:
+        return max(window_rows)
+
+    # The benchmark-only FIFO plan has no WindowAgg.  Its visible job-table scan
+    # is the equivalent boundary.  Bitmap Index Scan counts may include dead TIDs
+    # that the heap scan later rejects under MVCC, so they are not queue jobs.
+    job_rows = [
+        row_count
+        for node in nodes
+        if node.get("Relation Name") == "evaluation_jobs"
+        and (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
+    ]
+    if job_rows:
+        return max(job_rows)
+
+    visible_rows = [
+        row_count
+        for node in nodes
+        if node.get("Node Type") != "Bitmap Index Scan"
+        and (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
+    ]
+    return max(visible_rows) if visible_rows else fallback
+
+
 def summarize_explain(raw_plan: object) -> dict[str, Any]:
     if (
         not isinstance(raw_plan, list)
@@ -181,11 +218,6 @@ def summarize_explain(raw_plan: object) -> dict[str, Any]:
     root = document["Plan"]
     assert isinstance(root, Mapping)
     nodes = _plan_nodes(root)
-    candidate_rows = [
-        row_count
-        for node in nodes
-        if (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
-    ]
     sorts: list[dict[str, str | int]] = [
         {
             "method": str(node["Sort Method"]),
@@ -209,8 +241,9 @@ def summarize_explain(raw_plan: object) -> dict[str, Any]:
         "shared_read_blocks": int(root.get("Shared Read Blocks", 0)),
         "temp_read_blocks": temp_read,
         "temp_written_blocks": temp_written,
-        "candidate_cardinality": (
-            max(candidate_rows) if candidate_rows else int(root["Actual Rows"])
+        "candidate_cardinality": _candidate_cardinality(
+            nodes,
+            fallback=int(root["Actual Rows"]),
         ),
         "sorts": sorts,
         "temp_spill": bool(

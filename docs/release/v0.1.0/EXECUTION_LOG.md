@@ -616,3 +616,47 @@ passed，Ruff/format/diff check passed。最终全仓非外部服务回归为
 内锁定 Job/Tenant、写 attempt、设置 owner/version/lease；stale success/failure 仍按 owner、version
 和 live lease fail-closed。下一步必须用真实 PostgreSQL 重跑 1k/10k/100k，证明 w8 不再 lease loss；
 在此之前 release 仍为 `NOT_READY`。
+
+## 2026-08-09 — RC 重跑暴露 Bitmap Index 死元组计数误判
+
+### 运行结果与保留证据
+
+租约计时修复后的精确 source `aac76ed05dd17092f39ead7821ceb50abd205770` 触发标准 CI run
+`31265533926` 与 RC capacity run `31265533928`。标准 CI 在 3m54s 后成功；RC 在 6m30s 后失败，
+但 always-preserve 路径正常上传 artifact `rc-gh-31265533928-1`（742 KB，digest
+`sha256:b0a45c0892a464346091cb3f179368edb408789e19b65d294965ad8bb39ebd10`），并由机器人提交
+`d1c0272` 原样保存 297 个证据文件。该失败没有被删除、覆盖或改写成成功。
+
+`initial/assessment.json` 证明 32 个 1k/10k arms 全部执行完成：expected/observed 均为 32，
+missing/duplicate/unexpected 均为空，source 与 expected source 均精确为 `aac76ed...`；唯一 blocker 为
+`postgres_explain_candidate_cardinality_mismatch`。因此这不是 worker correctness、租约或 arm
+coverage 失败，也不能被当作 VERIFIED，更不能进入 100k stage。
+
+### 从表面“队列累积”到真实 PostgreSQL 语义
+
+逐份检查 256 个 EXPLAIN summary 后，24 份不匹配全部集中在 q1k/single-tenant：w2、w4、w8 的
+fair 与 legacy FIFO 各 4 次 repetition，candidate 分别为 2000、3000、4000。这个等差模式最初看似
+fixture 未清理；但原始计划显示父 `Bitmap Heap Scan on evaluation_jobs` 的 `Actual Rows` 始终为
+1000，只有子 `Bitmap Index Scan` 上升为 2000/3000/4000。PostgreSQL bitmap index 阶段可以返回
+尚未 vacuum 的死索引 TID；heap scan 执行 MVCC 可见性检查后才得到真实可见队列。此前“取整棵计划
+树最大的 Actual Rows”把物理索引 TID 数误当成业务候选作业数，门禁本身严格正确，错误位于摘要
+字段的语义。
+
+### RED、最小证据工具修复与效果
+
+先加入包含 4000 个 Bitmap Index TID、但只有 1000 个可见 heap rows 的回归测试。旧实现按预期
+失败：`assert 4000 == 1000`。最小修复只修改 evidence summarizer：
+
+1. fair 计划存在 `WindowAgg` 时，优先取该语义边界的可见候选行数；
+2. benchmark-only legacy FIFO 无 `WindowAgg` 时，取 `evaluation_jobs` 表访问节点的最大可见行数；
+3. 只有缺少上述语义节点时才回退到其他 plan nodes，并明确排除 `Bitmap Index Scan`；
+4. 不修改 production fair SQL、锁序、lease、heartbeat、fencing、样本量或 admission 等值要求。
+
+修复后 evidence/release 相关测试为 `40 passed`；提交前最终验证为：2 个改动 Python 文件格式正确、
+Ruff passed、MyPy 3 个 evidence source passed、diff check passed，完整非外部服务回归
+`621 passed, 13 deselected in 363.19s`。随后直接对本次真实 artifact 中 256 份 raw
+EXPLAIN 离线重算，结果为 `mismatches=0`：q1k fair 64/64、q1k legacy 64/64 均为 1000，q10k
+fair 64/64、q10k legacy 64/64 均为 10000。这个离线结果只验证修复算法能正确解释已保留 raw
+计划；原 bundle 的 immutable summary/manifest 仍保持 FAILED，不回填为成功。必须提交新 source
+并重新运行 source-bound 1k/10k/100k workflow，才可建立最终 release capacity 证据；此刻 release
+继续为 `NOT_READY`。
