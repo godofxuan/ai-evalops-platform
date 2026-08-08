@@ -354,3 +354,47 @@ git diff --check
 结果：`613 passed, 13 deselected in 361.11s`；315 files formatted；Ruff passed；MyPy 133
 source files passed；diff check passed。真实双提交 integration test 在本地仍因无 Docker/PostgreSQL
 被 marker 排除，必须以接下来的 GitHub CI 与 RC workflow 为最终反馈环。
+
+## 2026-08-08 — 第二次远程 deadlock：统一 Tenant → Run → Job
+
+### 第二次 RED 证据
+
+修复 source `feb4de1bae2cec1dd6d3c0158dc8efd4a25f559e` 触发 RC run `31261077382`
+与 CI run `31261077379`。RC 仍在双 Worker arm 失败，100k 再次被 gate skip，failure evidence
+commit 为 `9b91ab1`。标准 CI 的 compose-smoke 成功，但真实 PostgreSQL
+`Integration - job claiming, trace propagation, and lease fencing` 失败，证明新增并发 test 是独立
+有效的 RED seam。
+
+新的 `failure.json` 精确为 `DeadlockDetected`，PostgreSQL graph 与第一次不同：
+
+- process 672 在 INSERT `audit_events` 的 tenant FK KEY SHARE 上等待 process 673；
+- process 673 在 INSERT `progress_event_outbox` 时反向等待 process 672；
+- context 明确为 relation `tenants`，随后 cleanup DELETE 与尚未结束的 Worker 又产生第二个干扰性
+  deadlock。
+
+这证明 run-first 修复消除了第一次 Run lock-upgrade 环，但 completion 仍是 `Run → Tenant FK`，
+而 claim path 是 `Tenant FOR UPDATE → Run`，锁序依旧相反。
+
+### 第二层修复与 harness 清理
+
+先新增 tenant-lock SQL 单元 RED，collection error 表明 helper 尚不存在。随后新增
+`build_tenant_key_share_for_completion_statement`，使用 PostgreSQL
+`FOR KEY SHARE OF tenants`；result transaction 的显式顺序变成：
+
+1. Tenant KEY SHARE；
+2. Run FOR UPDATE；
+3. owned Job FOR UPDATE；
+4. CaseResult/Audit/Outbox flush 与 Run aggregation。
+
+KEY SHARE 可在多个 completion 间兼容，因此不会把同一 Tenant 下不同 Run 的所有结果提交独占
+串行；但它会在任何 transaction 持 Run 前与 claim 的 Tenant UPDATE 锁完成排序，从而消除
+Tenant↔Run 环。
+
+同时把 harness 的 Worker `asyncio.gather` 改为 `asyncio.TaskGroup`。任一 Worker 抛错时，其余
+Worker 会被取消并等待退出，之后才 dispose engine 与删除 fixture，避免 failure cleanup 和仍活跃
+transaction 交叉制造第二个 deadlock。局部验证为 23 tests passed，Ruff/MyPy passed。下一次
+push 需要同时让真实 integration RED 转 GREEN，并让原始 RC 走过双 Worker arm，才能接受修复。
+
+提交前最终本地结果：`614 passed, 13 deselected in 369.80s`；315 files formatted；Ruff
+passed；MyPy 133 source files passed；diff check passed。integration marker 的真实结论仍未提前
+声称为 GREEN。
