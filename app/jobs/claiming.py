@@ -89,7 +89,11 @@ def build_claim_candidates_statement(
         .join(ranked_candidates, ranked_candidates.c.job_id == EvaluationJob.id)
         .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
         .join(Tenant, Tenant.id == EvaluationRun.tenant_id)
-        .where(_eligible_job(now), _eligible_run())
+        .where(
+            _eligible_job(now),
+            _eligible_run(),
+            ranked_candidates.c.tenant_candidate_rank <= limit,
+        )
         .order_by(
             EvaluationJob.priority.desc(),
             ranked_candidates.c.tenant_candidate_rank.asc(),

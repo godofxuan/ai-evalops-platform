@@ -124,6 +124,12 @@ def test_claim_candidates_use_postgresql_skip_locked_and_deterministic_order() -
     assert "LIMIT 10" in sql
 
 
+def test_claim_candidates_prune_tenant_ranks_that_cannot_enter_the_batch() -> None:
+    sql = compile_postgresql(build_claim_candidates_statement(now=NOW, limit=10))
+
+    assert "ranked_claim_candidates.tenant_candidate_rank <= 10" in sql
+
+
 async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
     tenant = Tenant(
         id=TENANT_ID,

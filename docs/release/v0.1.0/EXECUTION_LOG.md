@@ -826,3 +826,32 @@ Intel Xeon Platinum 8370C；内存约 16.76 GB、Docker 28.0.4 和 Compose 配�
 恢复的 `compose-ps.txt` 和 Compose/OTel 原始诊断日志天然包含大量行尾空格，而不是手写代码或文档
 引入格式错误。清理这些空格会改变已记录的 retained SHA-256，降低证据可追溯性，因此不改写原始
 诊断；后续只对手写 `EXECUTION_LOG.md` 执行 whitespace check，并允许生成证据保留原字节。
+
+## 2026-08-09 — 性能门触发：按 tenant rank 做等价候选剪枝
+
+重新核对 RC 指令后不能直接写 READY：相同协议的 8 个 workload/worker 组中有 7 个吞吐中位数回退
+超过 15%，触发 release performance investigation threshold。此时停止发布文档定案，按指定顺序先查
+ranked CTE candidate cardinality，不添加新队列系统或调整正确性语义。
+
+current 100k/single-tenant/w1 的真实 PostgreSQL fair EXPLAIN 显示：candidate cardinality 100,000；
+WindowAgg 输出 100,000，后续三个 Hash Join 和外层 Sort 都处理 100,000 行，最终 Limit 只返回 1；
+execution 799.618ms，外层 Sort 为 external merge，temp read/write 15,467/27,259 blocks。证据直接支持
+“没有按 claim batch 剪掉不可能入选的 tenant ranks”这一单一假设。
+
+等价性依据：对 batch limit N，任一 tenant rank 大于 N 的 job 之前已经有同租户 N 个 priority 不低、
+rank 更小的 job；在全局 `priority DESC, tenant_rank ASC, tenant_last_claimed_at, created_at, id`
+顺序下，它不可能进入前 N。因此可在外层 join/lock/order 之前增加
+`tenant_candidate_rank <= limit`，同时保留 WindowAgg、公平排序、Tenant/Job `FOR UPDATE SKIP LOCKED`、
+eligibility recheck、contention retry、lease/fencing 和 batch 1–100 合同。
+
+RED 新增 SQL 合同断言，要求 limit=10 时编译 SQL 包含
+`ranked_claim_candidates.tenant_candidate_rank <= 10`；旧实现按预期 `1 failed, 7 deselected`。第一次
+补丁错误命中 CTE 内部第一个 `.where`，形成定义前自引用；在运行 GREEN 前立即重读源码发现并移动到
+外层查询，没有提交该错误。最终最小 production change 只有一个外层 predicate；GREEN 为 claiming
+unit `8 passed`、Ruff passed、2 files formatted、MyPy 1 source passed、手写差异 whitespace check
+passed。
+
+该修改不改变 resume-safe claim：状态转换、attempt/version、lease owner/expiry、heartbeat、Tenant 与
+Job 锁、stale result fencing 均不变。它目前只由 SQL 合同和数学等价性支持，尚未得到真实 PostgreSQL
+性能/正确性回归结果；必须推送后重新运行标准 CI、10W/100J/20:1/fencing，以及 current source 的
+large queue 和 32-arm 协议，才能决定 release。
