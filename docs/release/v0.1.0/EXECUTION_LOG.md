@@ -881,3 +881,27 @@ GREEN 为 claiming `9 passed`、Ruff/format/MyPy 全过。该修正必须再次 
 四条工作流并发写同一分支还暴露基础设施风险：RC 先推进远端到 `54cadeb`，较慢的 worker-scaling 与
 fault 机器人稍后可能因 non-fast-forward 无法回写；artifact upload 位于 push 之前，原始实验仍会保留。
 这不改变实验结果，但最终工作流应共享回写串行化或采用独立 evidence 分支。
+
+## 2026-08-09 — 修正 Run Condition 计划的 candidate cardinality 解释
+
+FAILED bundle 不回写：其原 summary/manifest/assessment 保持 `FAILED`。修复只面向下一次 source-bound
+生成和对已保存 raw EXPLAIN 的离线验证。
+
+第一条 evidence RED 构造 WindowAgg `Actual Rows=1`、Run Condition rank<=1、可见
+`evaluation_jobs` Bitmap Heap Scan 1,000 rows、Bitmap Index 4,000 TIDs；旧 summarizer 返回 1，
+预期 1,000。最初把 heap relation 放到 WindowAgg 之前后该 RED 通过，但对真实 256 plans 仍有 56
+mismatch：多租户按 run 重复 heap scan 时只读取了每循环平均行数。第二条 RED 要求 Bitmap Heap
+`10 rows × 100 loops = 1,000`；加入 row visits 后 mismatch 降到 48，却把 balanced q10k 的重复
+全表 Seq Scan `10,000 × 4` 错算成 40,000。这一中间算法没有提交，也没有放宽 gate。
+
+第三条 RED 明确重复全表 Seq Scan 仍代表同一 10,000 行，不能乘 loops。最终语义为：
+
+1. 无 Run Condition 的 WindowAgg：其输出行数是完整候选基数；
+2. 有 Run Condition 的 WindowAgg：其输出是保留 rank 数，取直接输入节点行数且不乘相关子计划 loops；
+3. benchmark-only legacy：Seq Scan 取每次可见全表行数；按 run 分区的 Bitmap Heap/Index heap
+   取 rows × loops；
+4. 始终排除 Bitmap Index Scan TID 数，避免再次把 MVCC 死元组算成可见作业。
+
+最终 release/evidence 单测 `43 passed`，Ruff/format/MyPy 通过；使用新 summarizer 对失败包全部 256
+份 raw fair/legacy EXPLAIN 离线重算，`mismatches=0`。这只证明 raw 计划可被正确解释，原 bundle
+仍为 FAILED；下一次正式 workflow 必须从新 source 重新生成 summary、manifest 与 assessment。

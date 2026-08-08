@@ -169,30 +169,61 @@ def _postgres_row_count(value: object) -> int | None:
     return int(value)
 
 
+def _postgres_relation_row_visits(node: Mapping[str, Any]) -> int | None:
+    rows = _postgres_row_count(node.get("Actual Rows"))
+    loops = _postgres_row_count(node.get("Actual Loops"))
+    if rows is None:
+        return None
+    return rows * (loops if loops is not None else 1)
+
+
+def _window_candidate_rows(node: Mapping[str, Any]) -> int | None:
+    if node.get("Node Type") != "WindowAgg":
+        return None
+    if node.get("Run Condition") is None:
+        return _postgres_row_count(node.get("Actual Rows"))
+    plans = node.get("Plans")
+    if not isinstance(plans, list):
+        return None
+    input_rows = [
+        row_count
+        for child in plans
+        if isinstance(child, Mapping)
+        and (row_count := _postgres_row_count(child.get("Actual Rows"))) is not None
+    ]
+    return max(input_rows) if input_rows else None
+
+
 def _candidate_cardinality(
     nodes: Sequence[Mapping[str, Any]],
     *,
     fallback: int,
 ) -> int:
-    # The fair selector's WindowAgg consumes the visible candidate set before
-    # the outer LIMIT.  Prefer that semantic boundary when PostgreSQL keeps it.
+    # WindowAgg consumes the candidate set.  With a rank Run Condition its own
+    # rows are the emitted ranks, so use the direct input rows instead.  Ignore
+    # loops here because a correlated plan may re-evaluate the same full set.
     window_rows = [
-        row_count
-        for node in nodes
-        if node.get("Node Type") == "WindowAgg"
-        and (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
+        row_count for node in nodes if (row_count := _window_candidate_rows(node)) is not None
     ]
     if window_rows:
         return max(window_rows)
 
-    # The benchmark-only FIFO plan has no WindowAgg.  Its visible job-table scan
-    # is the equivalent boundary.  Bitmap Index Scan counts may include dead TIDs
-    # that the heap scan later rejects under MVCC, so they are not queue jobs.
+    # The legacy selector has no WindowAgg.  A repeated Seq Scan sees the same
+    # full relation on every loop, while indexed/bitmap heap scans are normally
+    # partitioned by run and need rows * loops.  Bitmap Index TIDs are excluded
+    # because MVCC visibility is applied by the heap scan.
     job_rows = [
         row_count
         for node in nodes
         if node.get("Relation Name") == "evaluation_jobs"
-        and (row_count := _postgres_row_count(node.get("Actual Rows"))) is not None
+        and (
+            row_count := (
+                _postgres_row_count(node.get("Actual Rows"))
+                if node.get("Node Type") == "Seq Scan"
+                else _postgres_relation_row_visits(node)
+            )
+        )
+        is not None
     ]
     if job_rows:
         return max(job_rows)
