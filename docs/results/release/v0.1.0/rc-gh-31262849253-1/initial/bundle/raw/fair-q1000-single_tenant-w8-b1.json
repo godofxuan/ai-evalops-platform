@@ -1,0 +1,64 @@
+{
+  "arm_id": "fair-q1000-single_tenant-w8-b1",
+  "queue_size": 1000,
+  "distribution": "single_tenant",
+  "worker_concurrency": 8,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 105,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 5,
+  "contention_retries": 506,
+  "max_retry_exits": 5,
+  "claim_latency_ms": {
+    "p50": 395.1482459997351,
+    "p95": 2376.0839483998097,
+    "p99": 2605.3841022801134
+  },
+  "result_commit_latency_ms": {
+    "p50": 108.47681900008865,
+    "p95": 196.59133514962832,
+    "p99": 213.3582656297588
+  },
+  "end_to_end_seconds": 11.086179729999913,
+  "jobs_per_second": 9.020239833329924,
+  "worker_process_cpu_percent": 38.758203183126945,
+  "worker_process_rss_bytes_peak": 103194624,
+  "postgres_connections_peak": 9,
+  "postgres_lock_waiting_connections_peak": 2,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "4b7c4acb-545a-4849-acc4-e3fae3ba34b7": 1
+  },
+  "tenant_claim_counts": {
+    "4b7c4acb-545a-4849-acc4-e3fae3ba34b7": 100
+  },
+  "fair_first_secondary_tenant_position": null,
+  "legacy_fifo_first_secondary_tenant_position": null,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3605915.9390000002,
+      "p95": 3610862.4565500002
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}
