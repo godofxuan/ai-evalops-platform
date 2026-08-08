@@ -1,0 +1,189 @@
+github_run_id=31271973253
+github_run_attempt=1
+github_sha=e04491d360ae32ae54f428e3ef067fa05f83ee3c
+runner_os=Linux
+Linux runnervmvrwv9 6.17.0-1020-azure #20~24.04.1-Ubuntu SMP Fri Jun 19 20:09:14 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           48 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  4
+On-line CPU(s) list:                     0-3
+Vendor ID:                               AuthenticAMD
+Model name:                              AMD EPYC 9V74 80-Core Processor
+CPU family:                              25
+Model:                                   17
+Thread(s) per core:                      2
+Core(s) per socket:                      2
+Socket(s):                               1
+Stepping:                                1
+BogoMIPS:                                5192.27
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves user_shstk clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload umip vaes vpclmulqdq rdpid fsrm
+Virtualization:                          AMD-V
+Hypervisor vendor:                       Microsoft
+Virtualization type:                     full
+L1d cache:                               64 KiB (2 instances)
+L1i cache:                               64 KiB (2 instances)
+L2 cache:                                2 MiB (2 instances)
+L3 cache:                                32 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-3
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode
+Vulnerability Spec store bypass:         Vulnerable
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Retpolines; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Vulnerable: No microcode
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+               total        used        free      shared  buff/cache   available
+Mem:     16766418944  1858555904  9700921344    72355840  5642469376 14907863040
+Swap:     3221221376           0  3221221376
+Filesystem        1B-blocks        Used   Available Use% Mounted on
+/dev/root      154894188544 63814217728 91063193600  42% /
+Client: Docker Engine - Community
+ Version:           28.0.4
+ API version:       1.48
+ Go version:        go1.23.7
+ Git commit:        b8034c0
+ Built:             Tue Mar 25 15:07:16 2025
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          28.0.4
+  API version:      1.48 (minimum version 1.24)
+  Go version:       go1.23.7
+  Git commit:       6430e49
+  Built:            Tue Mar 25 15:07:16 2025
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.2.6
+  GitCommit:        11ce9d5f3c68c941867e82890e93e815c1304f1b
+ runc:
+  Version:          1.3.6
+  GitCommit:        v1.3.6-0-g491b69ba
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+Docker Compose version v2.38.2
+[
+    {
+        "Id": "sha256:4ccba9fd6fd68c93e2112d5367f80a573a94d793bb3d5e1c43f0b74ee267d4c6",
+        "RepoTags": [
+            "ai-evalops-platform:phase9"
+        ],
+        "RepoDigests": [],
+        "Parent": "",
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-08-08T18:28:10.24222334Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "8000/tcp": {},
+                "9101/tcp": {},
+                "9102/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "LANG=C.UTF-8",
+                "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+                "PYTHON_VERSION=3.12.13",
+                "PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684",
+                "PYTHONDONTWRITEBYTECODE=1",
+                "PYTHONUNBUFFERED=1",
+                "UV_COMPILE_BYTECODE=1",
+                "UV_LINK_MODE=copy",
+                "UV_NO_DEV=1"
+            ],
+            "Cmd": [
+                "python",
+                "-m",
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--loop",
+                "app.core.event_loop:create_psycopg_compatible_event_loop"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/live', timeout=2).read()"
+                ],
+                "Interval": 10000000000,
+                "Timeout": 3000000000,
+                "StartPeriod": 10000000000,
+                "Retries": 3
+            },
+            "ArgsEscaped": true,
+            "Image": "",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": null,
+            "OnBuild": null,
+            "Labels": null
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 440907266,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/o0qvjsitarj8n4qa0uvnis57n/diff:/var/lib/docker/overlay2/lgomnryv622pwjn2euqimnxbz/diff:/var/lib/docker/overlay2/jlpmcs33apkeit2z65nr7x9bh/diff:/var/lib/docker/overlay2/uj0h9ruwco1pj0jkyr33okkgk/diff:/var/lib/docker/overlay2/uq4k18adyotdplshbsy1ku90w/diff:/var/lib/docker/overlay2/z7t789xuo2cyofov7wso29n7t/diff:/var/lib/docker/overlay2/jiksxma8ysoqczrs5ym035qdj/diff:/var/lib/docker/overlay2/owz4jz7zesqvbfqeefabyiul1/diff:/var/lib/docker/overlay2/m6tfcduracn5ckuolxttl6zxp/diff:/var/lib/docker/overlay2/59cac58a274bb1ee06d763cb3057a3a55573023030b8d1819920d08c672a7664/diff:/var/lib/docker/overlay2/1532397f8732bd4b8729c8b40d110168d6a6b5cd3419c814743b52fd19dfa585/diff:/var/lib/docker/overlay2/9a02a52daafe0fc5524b7f0c41eb49155a7e51264014edcffa352ecc87ca0e9c/diff:/var/lib/docker/overlay2/0d741be54ae6771725a02a854fd555a914e3343f74f7539464481fa68ee1bf8d/diff",
+                "MergedDir": "/var/lib/docker/overlay2/2hnba8qdsjfnpc8a21uk93l5u/merged",
+                "UpperDir": "/var/lib/docker/overlay2/2hnba8qdsjfnpc8a21uk93l5u/diff",
+                "WorkDir": "/var/lib/docker/overlay2/2hnba8qdsjfnpc8a21uk93l5u/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:6f94328331290cbd81edab450664d42da7b64c191416c9346cd5d28c84f76035",
+                "sha256:eeece50a9eae41fbec657a77c3360a561685b2fc638dbb59c4f59be2e9deb502",
+                "sha256:4bdf3c4a59c868d57940d8a761f38ce2a7269959ff6d1fd5a0157a86f6dac082",
+                "sha256:02bea5b709fab77889748c8fe2fed5a41e60e418e70d6a91b5a4f9c85475b043",
+                "sha256:22e54c1d36e711fe78b9f29a4ef2803ddd1962838016c39cd5956a0e1ab26d46",
+                "sha256:423a2e7b8c3a5d1a78517b634ec68368689353f57f416357850f756154de517f",
+                "sha256:670c9034c99364a668536896cb47270402478a91f07dee3aee92ea2eaaadf6a6",
+                "sha256:af7b14984f0cb45693a587ce288a2e8032601d3388422c48253454707ab0236b",
+                "sha256:f6a1e00255164f8b6ae75aa8a7c2954bc807bc0a27008ce7b56c2c2ef7e994f5",
+                "sha256:4a08964e94f91291030380104536d1be1a5e32cdf529fd925cf305351d58b4f6",
+                "sha256:22a0097affd93e4b145b974bccb54ddb080a5512fc90e2e5a4e843887878c6ef",
+                "sha256:9bba7d2174bd0e8961c9cd8597f409401c56f82fc3b8b650e54efa034f6aa469",
+                "sha256:0552e4adf06853378af1c4842f865aac2de285bd17c2424baef1a8ef9814b596",
+                "sha256:a59a4a6cb5b635f8707467dbb312037f9cfa59af60430028d144c9c99d4956da"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-08-08T18:28:12.696893442Z"
+        }
+    }
+]

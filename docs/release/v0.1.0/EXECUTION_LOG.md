@@ -911,3 +911,67 @@ mismatch：多租户按 run 重复 heap scan 时只读取了每循环平均行�
 并发回写，下一轮按 RC capacity → worker scaling → fault matrix 串行触发。本次只更新
 `.github/release-candidate-trigger.txt` 为 `2026-08-09T02:46:46+08:00`，目标是先验证 1k/10k，
 只有 assessment VERIFIED 才由同一 workflow 进入 100k；在结果回来前不触发另外两条最终实验。
+
+## 2026-08-09 — 恢复并发工作流未回写的优化中间证据
+
+第一次 rank 剪枝 source `e04491d360ae32ae54f428e3ef067fa05f83ee3c` 同时触发了多条会向同一分支
+回写证据的工作流。RC 工作流先提交 `54cadeb` 后，worker-scaling run `31271973235` 与 fault
+run `31271973253` 的实验和 artifact upload 均已成功，但最后的 Git push 因 non-fast-forward 失败。
+这属于证据持久化竞争，不是实验执行失败。为避免丢弃负面结果，分别从 GitHub artifact 恢复为：
+
+- `docs/results/load/gate1-gh-31271973235-1/`：artifact id `9026335273`，下载大小
+  9,825,907 bytes，digest
+  `sha256:44e9fd3e4354749c0a5d684c54a574e2da19aafdb2076869ea666d56103023a0`；
+- `docs/results/fault/fault-gh-31271973253-1/`：artifact id `9025931491`，下载大小
+  149,656 bytes，digest
+  `sha256:10a1947b78c125ae7ad0a66dbfb90d35a4b2cbf0f2201e585da362e6adeae98e`。
+
+恢复后没有凭工作流步骤名称直接信任内容。项目验证器重读 worker bundle，确认 final status `complete`、
+32 arms、664 个 manifest payload，文件集、大小、SHA-256、summary/raw/plot 交叉引用全部一致；fault
+验证器确认 status `complete`、3 repetitions、9 scenarios × 3 = 27 records、6 个 manifest payload，
+且 report 为 `verified`。两个目录的符号链接计数均为 0；Authorization、Bearer、GitHub token 与明文
+password 模式扫描命中 0。
+
+这份 worker 证据必须作为负面中间结果保留：其 io-latency worker 1/2/4/8 吞吐中位数依次为
+16.090、29.887、25.409、7.772 Jobs/s，transient-5% 依次为 17.194、24.691、19.057、
+12.934 Jobs/s；两个 workload 均出现 2→4 和 4→8 负扩展。它证明仅添加
+`tenant_candidate_rank <= limit` 并未解决 planner 内联放大，支持随后单独引入 CTE `MATERIALIZED`
+的决定。fault 包证明该中间 source 的 27 个故障场景没有 correctness 回归，但不能替代物化后 source
+的最终 fault 回归。
+
+## 2026-08-09 — 物化公平候选的 RC 容量配对结果
+
+最终容量 run `31272789199` 对 exact source
+`9987a28d707653a45fffa60a283461e2514e3103` 执行；机器人提交 `2f828c9` 已快进同步。本地没有
+复用 workflow 写出的 assessment，而是用 `build_fair_capacity_plan` 从 stage queue sizes 独立生成
+预期 arm，再调用 fail-closed admission verifier 重算。结果为 initial 32/32 与 large 16/16 均
+`VERIFIED`，missing/duplicate/unexpected 均为空，4 次 fair/legacy EXPLAIN 覆盖完整，source 与 row
+source 绑定一致，manifest 文件集、大小和 SHA-256 全部通过，候选基数与 1k/10k/100k 队列一致，
+所有 submitted=unique=terminal，lost/duplicate/stale accepted/illegal transition/orphan/attempt mismatch
+均为 0，20:1 skew 的 fair 首个 secondary tenant 位置均不大于 2。
+
+本轮与首个完整 fair RC run `31266366590` 均运行在 4-vCPU AMD EPYC 9V74、同一 Compose 协议与
+相同 32-arm initial 矩阵上。按 queue size/worker 对 4 种 distribution 取吞吐中位数，变化如下：
+
+| Queue | Workers | 剪枝前 Jobs/s | 物化后 Jobs/s | Change |
+|---:|---:|---:|---:|---:|
+| 1,000 | 1 | 33.764 | 32.088 | -4.96% |
+| 1,000 | 2 | 45.082 | 54.185 | +20.19% |
+| 1,000 | 4 | 30.375 | 52.443 | +72.65% |
+| 1,000 | 8 | 23.758 | 29.912 | +25.90% |
+| 10,000 | 1 | 10.694 | 24.833 | +132.22% |
+| 10,000 | 2 | 9.791 | 26.246 | +168.06% |
+| 10,000 | 4 | 6.530 | 15.526 | +137.77% |
+| 10,000 | 8 | 5.779 | 9.358 | +61.94% |
+
+32 个同名 arm 的配对吞吐变化中位数为 `+65.25%`。其中
+`q1000-many_small_tenants-w1` 单次 runtime 样本为 `-43.93%`，但协议规定的主要 worker gate 使用
+同 queue/worker 下跨 distribution 的中位数；全部 8 组都未超过 -15%，不能把单次 noisy arm 隐藏，
+也不能反过来用它否定完整中位数协议。最终是否越过相对旧 formal baseline 的发布门槛，仍由随后
+串行重跑的标准 32-arm worker-scaling 协议决定。
+
+100k large subset 的 16 个 arm 全部 `VERIFIED`。公平 EXPLAIN execution median 相对同 fixture、
+同 snapshot legacy FIFO 的比值范围为 `0.247–0.770`，中位数 `0.491`，超过 `3×` 的 arm 为 0；
+Jobs/s 中位数 3.377，范围 0.628–5.488。高并发单租户仍显示明显 contention：w8 claim p95
+41,386.537 ms、504 retries，因此 release 文档必须把“大队列高并发热点租户延迟”列为限制；但查询
+计划数据已经否定“公平 SQL 比 legacy FIFO 慢 3×”这一特定门槛，不能据此引入新的队列基础设施。

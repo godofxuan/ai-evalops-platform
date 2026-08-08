@@ -1,0 +1,10 @@
+NAME                                   IMAGE                                          COMMAND                  SERVICE          CREATED              STATUS                          PORTS
+ai-evalops-platform-api-1              ai-evalops-platform:phase9                     "python -m uvicorn a…"   api              36 minutes ago       Up 36 minutes (healthy)         127.0.0.1:8000->8000/tcp, 9101-9102/tcp
+ai-evalops-platform-migrate-1          ai-evalops-platform:phase9                     "python -m alembic u…"   migrate          35 minutes ago       Exited (0) 28 seconds ago       
+ai-evalops-platform-minio-1            ai-evalops-minio:2025-09-07                    "/usr/bin/docker-ent…"   minio            35 minutes ago       Up 35 minutes (healthy)         127.0.0.1:9000-9001->9000-9001/tcp
+ai-evalops-platform-otel-collector-1   otel/opentelemetry-collector-contrib:0.158.0   "/otelcol-contrib --…"   otel-collector   35 minutes ago       Up 35 minutes                   127.0.0.1:4318->4318/tcp, 4317/tcp, 55679/tcp, 127.0.0.1:13133->13133/tcp
+ai-evalops-platform-postgres-1         postgres:18.4-alpine3.24                       "docker-entrypoint.s…"   postgres         36 minutes ago       Up 36 minutes (healthy)         127.0.0.1:5432->5432/tcp
+ai-evalops-platform-reaper-1           ai-evalops-platform:phase9                     "python -m app.cli r…"   reaper           36 minutes ago       Up 36 minutes (unhealthy)       8000/tcp, 9101-9102/tcp
+ai-evalops-platform-redis-1            redis:8.8.1-alpine3.23                         "docker-entrypoint.s…"   redis            36 minutes ago       Up 36 minutes (healthy)         127.0.0.1:6379->6379/tcp
+ai-evalops-platform-worker-1           ai-evalops-platform:phase9                     "python -m app.cli w…"   worker           36 minutes ago       Up 36 minutes (unhealthy)       8000/tcp, 9101-9102/tcp
+ai-evalops-platform-worker-2           ai-evalops-platform:phase9                     "python -m app.cli w…"   worker           About a minute ago   Up About a minute (unhealthy)   8000/tcp, 9101-9102/tcp

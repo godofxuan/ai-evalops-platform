@@ -1,0 +1,230 @@
+{
+  "schema_version": 4,
+  "groups": [
+    {
+      "workload": "io_latency_v1",
+      "workers": 1,
+      "arm_ids": [
+        "io_latency_v1-r01-p01-w01",
+        "io_latency_v1-r02-p03-w01",
+        "io_latency_v1-r03-p04-w01",
+        "io_latency_v1-r04-p02-w01"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          18.168731121244218,
+          18.249552781277426,
+          14.011580217621757,
+          10.193526874438337
+        ],
+        "median": 16.09015566943299,
+        "min": 10.193526874438337,
+        "max": 18.249552781277426
+      }
+    },
+    {
+      "workload": "io_latency_v1",
+      "workers": 2,
+      "arm_ids": [
+        "io_latency_v1-r01-p02-w02",
+        "io_latency_v1-r02-p01-w02",
+        "io_latency_v1-r03-p03-w02",
+        "io_latency_v1-r04-p04-w02"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          30.234064324401523,
+          30.354083266151815,
+          6.2268872171046645,
+          29.54013333447585
+        ],
+        "median": 29.887098829438685,
+        "min": 6.2268872171046645,
+        "max": 30.354083266151815
+      }
+    },
+    {
+      "workload": "io_latency_v1",
+      "workers": 4,
+      "arm_ids": [
+        "io_latency_v1-r01-p04-w04",
+        "io_latency_v1-r02-p02-w04",
+        "io_latency_v1-r03-p01-w04",
+        "io_latency_v1-r04-p03-w04"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          27.424182964051358,
+          25.298831863830355,
+          2.6714272423227636,
+          25.519934231013657
+        ],
+        "median": 25.409383047422004,
+        "min": 2.6714272423227636,
+        "max": 27.424182964051358
+      }
+    },
+    {
+      "workload": "io_latency_v1",
+      "workers": 8,
+      "arm_ids": [
+        "io_latency_v1-r01-p03-w08",
+        "io_latency_v1-r02-p04-w08",
+        "io_latency_v1-r03-p02-w08",
+        "io_latency_v1-r04-p01-w08"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          13.766253150770174,
+          1.7768532735646543,
+          14.212004818266882,
+          1.651840029671742
+        ],
+        "median": 7.771553212167414,
+        "min": 1.651840029671742,
+        "max": 14.212004818266882
+      }
+    },
+    {
+      "workload": "transient_5pct_v1",
+      "workers": 1,
+      "arm_ids": [
+        "transient_5pct_v1-r01-p01-w01",
+        "transient_5pct_v1-r02-p03-w01",
+        "transient_5pct_v1-r03-p04-w01",
+        "transient_5pct_v1-r04-p02-w01"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          7.395624977412362,
+          16.812637514540533,
+          17.575749335394143,
+          17.590612957291242
+        ],
+        "median": 17.194193424967338,
+        "min": 7.395624977412362,
+        "max": 17.590612957291242
+      }
+    },
+    {
+      "workload": "transient_5pct_v1",
+      "workers": 2,
+      "arm_ids": [
+        "transient_5pct_v1-r01-p02-w02",
+        "transient_5pct_v1-r02-p01-w02",
+        "transient_5pct_v1-r03-p03-w02",
+        "transient_5pct_v1-r04-p04-w02"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          10.063232145494831,
+          22.578188608193727,
+          27.23842396871421,
+          26.803815096855487
+        ],
+        "median": 24.691001852524607,
+        "min": 10.063232145494831,
+        "max": 27.23842396871421
+      }
+    },
+    {
+      "workload": "transient_5pct_v1",
+      "workers": 4,
+      "arm_ids": [
+        "transient_5pct_v1-r01-p04-w04",
+        "transient_5pct_v1-r02-p02-w04",
+        "transient_5pct_v1-r03-p01-w04",
+        "transient_5pct_v1-r04-p03-w04"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          24.84344193548175,
+          14.517005105371913,
+          23.597561331941566,
+          6.538517642161873
+        ],
+        "median": 19.05728321865674,
+        "min": 6.538517642161873,
+        "max": 24.84344193548175
+      }
+    },
+    {
+      "workload": "transient_5pct_v1",
+      "workers": 8,
+      "arm_ids": [
+        "transient_5pct_v1-r01-p03-w08",
+        "transient_5pct_v1-r02-p04-w08",
+        "transient_5pct_v1-r03-p02-w08",
+        "transient_5pct_v1-r04-p01-w08"
+      ],
+      "valid_arm_count": 4,
+      "throughput_cases_per_second": {
+        "points": [
+          12.422427147152469,
+          13.036316312280858,
+          12.905714384216068,
+          12.963118468051988
+        ],
+        "median": 12.934416426134028,
+        "min": 12.422427147152469,
+        "max": 13.036316312280858
+      }
+    }
+  ],
+  "negative_scaling": [
+    {
+      "workload": "io_latency_v1",
+      "from_workers": 2,
+      "to_workers": 4,
+      "median_throughput_change": -4.477715782016681
+    },
+    {
+      "workload": "io_latency_v1",
+      "from_workers": 4,
+      "to_workers": 8,
+      "median_throughput_change": -17.63782983525459
+    },
+    {
+      "workload": "transient_5pct_v1",
+      "from_workers": 2,
+      "to_workers": 4,
+      "median_throughput_change": -5.633718633867868
+    },
+    {
+      "workload": "transient_5pct_v1",
+      "from_workers": 4,
+      "to_workers": 8,
+      "median_throughput_change": -6.122866792522711
+    }
+  ],
+  "gate_evaluation": {
+    "policy_version": 1,
+    "quality_gate": {
+      "status": "VERIFIED",
+      "policy": "all_expected_arms_valid_for_capacity_comparison",
+      "expected_arm_count": 32,
+      "observed_arm_count": 32,
+      "expected_arms_complete": true,
+      "missing_arm_ids": [],
+      "invalid_arm_ids": []
+    },
+    "adoption_gate": {
+      "status": "NOT_RUN",
+      "review_readiness": "READY_FOR_HUMAN_REVIEW",
+      "decision_owner": "human",
+      "performance_thresholds_owner": "human",
+      "automatic_worker_count_change": false,
+      "automatic_adoption_decision": null,
+      "selected_worker_count": null,
+      "blocked_by": []
+    }
+  },
+  "automatic_adoption_decision": null
+}
