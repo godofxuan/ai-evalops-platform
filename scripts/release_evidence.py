@@ -21,6 +21,7 @@ _REQUIRED_COUNT_FIELDS = (
     "stale_failure_accepted_count",
     "illegal_state_transition_count",
     "orphan_nonterminal_count",
+    "attempt_sequence_mismatch_count",
 )
 
 
@@ -105,7 +106,14 @@ def _read_arm_rows(path: Path) -> tuple[list[dict[str, str]], str | None]:
         return [], "arms_csv_invalid"
     if not rows:
         return [], "arms_csv_empty"
-    required_fields = {"arm_id", "source_commit", *_REQUIRED_COUNT_FIELDS}
+    required_fields = {
+        "arm_id",
+        "source_commit",
+        "distribution",
+        "fair_first_secondary_tenant_position",
+        "legacy_fifo_first_secondary_tenant_position",
+        *_REQUIRED_COUNT_FIELDS,
+    }
     if not required_fields.issubset(reader.fieldnames):
         return rows, "arms_csv_invalid"
     return rows, None
@@ -146,11 +154,47 @@ def _explain_blocker(payload_files: Mapping[str, Path]) -> str | None:
     return None
 
 
+def _explain_coverage_blocker(
+    payload_files: Mapping[str, Path],
+    *,
+    expected_arm_ids: Sequence[str],
+    expected_repetitions: int,
+) -> str | None:
+    if expected_repetitions <= 0:
+        return "expected_explain_contract_invalid"
+    expected = {
+        (arm_id, selector, repetition)
+        for arm_id in expected_arm_ids
+        for selector in ("fair", "legacy_fifo")
+        for repetition in range(1, expected_repetitions + 1)
+    }
+    observed: list[tuple[str, str, int]] = []
+    for relative_path, path in payload_files.items():
+        if not relative_path.startswith("explain/") or not relative_path.endswith(".json"):
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(value, Mapping):
+            arm_id = value.get("arm_id")
+            selector = value.get("selector")
+            repetition = value.get("repetition")
+            if isinstance(arm_id, str) and isinstance(selector, str) and type(repetition) is int:
+                observed.append((arm_id, selector, repetition))
+    return (
+        None
+        if len(observed) == len(expected) and set(observed) == expected
+        else "postgres_explain_coverage_mismatch"
+    )
+
+
 def assess_release_bundle(
     bundle_directory: Path,
     *,
     expected_source_commit: str,
     expected_arm_ids: Sequence[str],
+    expected_explain_repetitions: int | None = None,
 ) -> dict[str, Any]:
     """Assess one immutable RC bundle without weakening missing or failed evidence."""
     bundle_directory = bundle_directory.resolve()
@@ -213,10 +257,33 @@ def assess_release_bundle(
                 blockers.append("illegal_state_transition")
             if counts["orphan_nonterminal_count"] != 0:
                 blockers.append("orphan_nonterminal_jobs")
+            if counts["attempt_sequence_mismatch_count"] != 0:
+                blockers.append("attempt_sequence_mismatch")
+            if row.get("distribution") == "skew_20_to_1":
+                fair_position = _integer(row, "fair_first_secondary_tenant_position")
+                legacy_position = _integer(
+                    row,
+                    "legacy_fifo_first_secondary_tenant_position",
+                )
+                if fair_position is None or legacy_position is None:
+                    blockers.append("arms_csv_invalid")
+                else:
+                    if fair_position > 2:
+                        blockers.append("skew_fairness_regression")
+                    if legacy_position <= 2:
+                        blockers.append("legacy_fifo_baseline_invalid")
 
     explain_blocker = _explain_blocker(payload_files)
     if explain_blocker is not None:
         blockers.append(explain_blocker)
+    if expected_explain_repetitions is not None:
+        coverage_blocker = _explain_coverage_blocker(
+            payload_files,
+            expected_arm_ids=tuple(expected_counts),
+            expected_repetitions=expected_explain_repetitions,
+        )
+        if coverage_blocker is not None:
+            blockers.append(coverage_blocker)
     unique_blockers = list(dict.fromkeys(blockers))
     if not unique_blockers:
         status = "VERIFIED"
@@ -235,5 +302,6 @@ def assess_release_bundle(
         "missing_arm_ids": missing_arm_ids,
         "duplicate_arm_ids": duplicate_arm_ids,
         "unexpected_arm_ids": unexpected_arm_ids,
+        "expected_explain_repetitions": expected_explain_repetitions,
         "blockers": unique_blockers,
     }

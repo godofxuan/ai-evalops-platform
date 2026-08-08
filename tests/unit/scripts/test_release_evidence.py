@@ -17,6 +17,9 @@ def _row(*, source_commit: str = CURRENT_SOURCE) -> dict[str, object]:
     return {
         "arm_id": ARM_ID,
         "source_commit": source_commit,
+        "distribution": "single_tenant",
+        "fair_first_secondary_tenant_position": "",
+        "legacy_fifo_first_secondary_tenant_position": "",
         "submitted_count": 1_000,
         "unique_job_count": 1_000,
         "terminal_count": 1_000,
@@ -26,6 +29,7 @@ def _row(*, source_commit: str = CURRENT_SOURCE) -> dict[str, object]:
         "stale_failure_accepted_count": 0,
         "illegal_state_transition_count": 0,
         "orphan_nonterminal_count": 0,
+        "attempt_sequence_mismatch_count": 0,
     }
 
 
@@ -36,6 +40,7 @@ def _write_bundle(
     source_commit: str = CURRENT_SOURCE,
     claim_scope: str = "current_release_capacity",
     include_explain: bool = True,
+    explain_repetitions: int = 1,
     empty_csv: bool = False,
 ) -> Path:
     root.mkdir()
@@ -49,22 +54,27 @@ def _write_bundle(
             writer.writeheader()
             writer.writerows(selected_rows)
     if include_explain:
-        explain_path = root / "explain" / "fair.json"
-        explain_path.parent.mkdir()
-        explain_path.write_text(
-            json.dumps(
-                {
-                    "format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
-                    "planning_time_ms": 1.0,
-                    "execution_time_ms": 2.0,
-                    "plan": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20}}],
-                },
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
+        for selector in ("fair", "legacy_fifo"):
+            for repetition in range(1, explain_repetitions + 1):
+                explain_path = root / "explain" / f"{selector}-r{repetition}.json"
+                explain_path.parent.mkdir(exist_ok=True)
+                explain_path.write_text(
+                    json.dumps(
+                        {
+                            "format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+                            "arm_id": ARM_ID,
+                            "selector": selector,
+                            "repetition": repetition,
+                            "planning_time_ms": 1.0,
+                            "execution_time_ms": 2.0,
+                            "plan": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20}}],
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                    newline="\n",
+                )
     files: dict[str, dict[str, object]] = {}
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         relative = path.relative_to(root).as_posix()
@@ -134,6 +144,38 @@ def test_release_bundle_cannot_verify_without_raw_postgresql_explain(tmp_path: P
 
     assert result["status"] in {"UNKNOWN", "FAILED"}
     assert "postgres_explain_missing" in result["blockers"]
+
+
+def test_release_bundle_requires_every_fair_and_legacy_explain_repetition(
+    tmp_path: Path,
+) -> None:
+    bundle = _write_bundle(tmp_path / "bundle")
+
+    result = assess_release_bundle(
+        bundle,
+        expected_source_commit=CURRENT_SOURCE,
+        expected_arm_ids=(ARM_ID,),
+        expected_explain_repetitions=4,
+    )
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_coverage_mismatch" in result["blockers"]
+
+
+def test_release_bundle_accepts_complete_fair_and_legacy_explain_coverage(
+    tmp_path: Path,
+) -> None:
+    bundle = _write_bundle(tmp_path / "bundle", explain_repetitions=4)
+
+    result = assess_release_bundle(
+        bundle,
+        expected_source_commit=CURRENT_SOURCE,
+        expected_arm_ids=(ARM_ID,),
+        expected_explain_repetitions=4,
+    )
+
+    assert result["status"] == "VERIFIED"
+    assert "postgres_explain_coverage_mismatch" not in result["blockers"]
 
 
 def test_release_bundle_does_not_treat_empty_csv_as_zero_failures(tmp_path: Path) -> None:
@@ -213,6 +255,32 @@ def test_release_bundle_fails_on_illegal_state_transition(tmp_path: Path) -> Non
     result = _assess(bundle)
 
     assert "illegal_state_transition" in result["blockers"]
+
+
+def test_release_bundle_fails_on_attempt_sequence_mismatch(tmp_path: Path) -> None:
+    row = _row()
+    row["attempt_sequence_mismatch_count"] = 1
+    bundle = _write_bundle(tmp_path / "bundle", rows=[row])
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "attempt_sequence_mismatch" in result["blockers"]
+
+
+def test_release_bundle_fails_when_skew_secondary_tenant_appears_after_two(
+    tmp_path: Path,
+) -> None:
+    row = _row()
+    row["distribution"] = "skew_20_to_1"
+    row["fair_first_secondary_tenant_position"] = 3
+    row["legacy_fifo_first_secondary_tenant_position"] = 21
+    bundle = _write_bundle(tmp_path / "bundle", rows=[row])
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "skew_fairness_regression" in result["blockers"]
 
 
 @pytest.mark.parametrize("mutation", ["hash", "file_set"])
