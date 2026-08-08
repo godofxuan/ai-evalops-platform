@@ -441,3 +441,77 @@ initial/large 命令都改为 100。100 不是任意缩小：many-small 分布�
 contract，要求 group 精确为 `release-candidate-fair-capacity-v2`；RED 为 1 failed。更新 group 后，
 current protocol 可使用独立 runner 立即验证，不删除或改写旧 run。旧 pending/旧 source 以后若
 执行，其 Git push 仍受 non-fast-forward 保护，不能覆盖当前分支；artifact 保留其独立价值。
+
+## 2026-08-08 — v2 容量首跑：初始门通过，100k w4 失败，补齐异常证据
+
+### 修改前判断与真实执行
+
+source `05dc5264545df0714fa0918818c6383ee7eb3403` 同时触发标准 CI run
+`31262849255` 与 RC capacity run `31262849253`。标准 CI 的 `compose-smoke`、
+`quality-and-integration` 均为 success，说明当前 source 的常规单测、真实 PostgreSQL 集成、
+Compose 启动和镜像构建没有回归。RC run 使用独立 v2 concurrency group，未被仍在运行的旧
+500-sample run 阻塞。
+
+RC run 在 12m30s 后 failure，但 always-preserve 路径按设计执行：artifact
+`rc-gh-31262849253-1` 大小 809 KB，GitHub artifact digest 为
+`sha256:400422753144086ff2395420f2f48ac4ab1fac0ccd2d74266eab533f54a5bd99`，失败证据提交为
+`9c3e152`。没有删除、覆盖或把该失败改写成成功。
+
+### 已经成立的效果与尚未成立的结论
+
+`initial/assessment.json` 是 `VERIFIED`：expected/observed 均为 32 arms，source 与 expected
+source 均精确为 `05dc526...`，1k/10k 无 missing、duplicate、unexpected arm，每臂 fair 与
+benchmark-only legacy FIFO 各保存 4 次真实 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`，manifest
+scope 为 `current_release_capacity` 且 blockers 为空。因此 1k/10k correctness/capacity initial
+gate 已通过；但 100k 未完成，整个 current-head capacity gate 仍未通过，release 仍为
+`NOT_READY`。
+
+100k 已完成的两个 arm 均通过 lost/duplicate/orphan/attempt mismatch = 0：
+
+- `fair-q100000-single_tenant-w1-b1`：100 jobs，202.142s，0.495 Jobs/s，claim p50/p95/p99
+  1148/2959/3055ms，result commit p95 48.7ms，lock-wait peak 0；
+- `fair-q100000-single_tenant-w2-b1`：100 jobs，124.978s，0.800 Jobs/s，claim p50/p95/p99
+  1510/4012/6260ms，result commit p95 192.8ms，lock-wait peak 1。
+
+w4 未生成 runtime raw；Compose 中三个 `canceling statement due to user request` 出现在首个 worker
+异常后，符合 `TaskGroup` 取消 sibling 的行为，不能反推它们是根因。原 `failure.json` 只保存
+`error_type=ExceptionGroup`，没有叶异常、cause 或 traceback。这使“协议故障、租约丢失、数据库
+错误或性能边界”无法区分；在根因未知时修改 production scheduler 不符合本阶段规则。
+
+### RED、最小修改与 GREEN
+
+先新增纯函数测试，构造 `ExceptionGroup(RuntimeError caused by TimeoutError)`，要求失败报告保存
+顶层消息、叶异常、cause、固定时间和包含两层异常的 traceback。首次执行：pytest collection
+因 `build_failure_report` 不存在而失败，形成有效 RED。
+
+最小修改仅位于 evidence harness：`build_failure_report` 递归序列化 BaseExceptionGroup children、
+cause/context，并保存 `traceback.format_exception` 的完整文本；CLI failure path 改为调用它。
+不改变 fair selector、production claimer、lease、result commit、样本量或 resume-safe claim。
+首次静态检查只发现新增 import 顺序的 Ruff `I001`，调整顺序后重新验证。
+
+精确本地命令：
+
+```powershell
+$env:UV_CACHE_DIR='D:\文档\ai-evalops-platform\.codex-tools\uv-cache'
+.\.codex-tools\Scripts\uv.exe run --no-sync pytest `
+  tests/unit/scripts/test_fair_capacity_evidence.py -q
+.\.codex-tools\Scripts\uv.exe run --no-sync ruff format --check `
+  scripts/fair_capacity_evidence.py scripts/run_fair_capacity_test.py `
+  tests/unit/scripts/test_fair_capacity_evidence.py
+.\.codex-tools\Scripts\uv.exe run --no-sync ruff check `
+  scripts/fair_capacity_evidence.py scripts/run_fair_capacity_test.py `
+  tests/unit/scripts/test_fair_capacity_evidence.py
+.\.codex-tools\Scripts\uv.exe run --no-sync mypy `
+  scripts/fair_capacity_evidence.py scripts/run_fair_capacity_test.py
+.\.codex-tools\Scripts\uv.exe run --no-sync pytest `
+  tests/unit/scripts/test_release_candidate_workflow.py `
+  tests/unit/scripts/test_release_evidence.py `
+  tests/unit/scripts/test_fair_capacity_evidence.py -q
+```
+
+当前 GREEN：容量证据单测 `16 passed`；相关合同组合 `40 passed`；全仓非外部服务回归
+`617 passed, 13 deselected in 373.08s`；315 files formatted；Ruff passed；MyPy 133 source
+files passed；diff check passed。
+下一次 remote run 的目标首先是获得可诊断的原始叶异常；只有 100k 全 16 arms VERIFIED 才进入
+current-source 旧 32-arm load protocol。若同类根因复现，再根据叶异常与原始 PostgreSQL 诊断决定
+是否需要最小生产修改。

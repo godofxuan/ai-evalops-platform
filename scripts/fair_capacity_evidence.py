@@ -1,9 +1,10 @@
 import hashlib
 import json
 import re
+import traceback
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -30,6 +31,38 @@ class FairCapacityArm:
     distribution: str
     worker_concurrency: int
     claim_batch_size: int
+
+
+def _exception_record(error: BaseException) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+    }
+    if isinstance(error, BaseExceptionGroup):
+        record["children"] = [_exception_record(child) for child in error.exceptions]
+    if error.__cause__ is not None:
+        record["cause"] = _exception_record(error.__cause__)
+    elif error.__context__ is not None and not error.__suppress_context__:
+        record["context"] = _exception_record(error.__context__)
+    return record
+
+
+def build_failure_report(
+    error: BaseException,
+    *,
+    recorded_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Preserve nested worker failures instead of only the ExceptionGroup shell."""
+
+    timestamp = recorded_at or datetime.now(UTC)
+    return {
+        "status": "FAILED",
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "recorded_at": timestamp.isoformat(),
+        "exception": _exception_record(error),
+        "traceback": "".join(traceback.format_exception(error)),
+    }
 
 
 def queue_sizes_for_stage(*, stage: str, prior_status: str | None) -> tuple[int, ...]:

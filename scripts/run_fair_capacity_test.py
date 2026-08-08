@@ -42,6 +42,7 @@ from scripts.fair_capacity_evidence import (
     FAULT_EVIDENCE_SOURCE_COMMIT,
     FairCapacityArm,
     assess_arm_runtime,
+    build_failure_report,
     build_fair_capacity_plan,
     build_legacy_fifo_statement,
     order_timed_values,
@@ -823,11 +824,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with contextlib.suppress(ExperimentError):
             write_report(
                 run_directory / "failure.json",
-                {
-                    "status": "FAILED",
-                    "error_type": type(error).__name__,
-                    "recorded_at": datetime.now(UTC).isoformat(),
-                },
+                build_failure_report(error),
             )
         print(f"fair-capacity experiment failed: error_type={type(error).__name__}")
         return 1

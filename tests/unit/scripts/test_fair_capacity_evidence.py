@@ -9,6 +9,7 @@ from sqlalchemy.dialects import postgresql
 from scripts.fair_capacity_evidence import (
     FAULT_EVIDENCE_SOURCE_COMMIT,
     assess_arm_runtime,
+    build_failure_report,
     build_fair_capacity_plan,
     build_legacy_fifo_statement,
     order_timed_values,
@@ -23,6 +24,33 @@ from scripts.release_evidence import assess_release_bundle
 
 def test_fault_evidence_reference_is_the_audited_after_bundle_source() -> None:
     assert FAULT_EVIDENCE_SOURCE_COMMIT == "03d6987c75f2169c8207f2355f1f9d7528f9d223"
+
+
+def test_failure_report_preserves_task_group_leaf_exception_and_cause() -> None:
+    try:
+        try:
+            raise TimeoutError("claim exceeded the diagnostic boundary")
+        except TimeoutError as cause:
+            raise RuntimeError("worker sample failed") from cause
+    except RuntimeError as worker_error:
+        error = ExceptionGroup("worker tasks failed", [worker_error])
+
+    report = build_failure_report(
+        error,
+        recorded_at=datetime(2026, 8, 8, tzinfo=UTC),
+    )
+
+    assert report["status"] == "FAILED"
+    assert report["error_type"] == "ExceptionGroup"
+    assert report["error_message"] == "worker tasks failed (1 sub-exception)"
+    assert report["recorded_at"] == "2026-08-08T00:00:00+00:00"
+    assert report["exception"]["children"][0]["error_type"] == "RuntimeError"
+    assert report["exception"]["children"][0]["cause"] == {
+        "error_type": "TimeoutError",
+        "error_message": "claim exceeded the diagnostic boundary",
+    }
+    assert "RuntimeError: worker sample failed" in report["traceback"]
+    assert "TimeoutError: claim exceeded the diagnostic boundary" in report["traceback"]
 
 
 def test_order_timed_values_uses_global_event_time_not_worker_list_order() -> None:
