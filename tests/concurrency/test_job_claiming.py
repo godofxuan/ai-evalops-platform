@@ -217,11 +217,20 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             latency_ms=10,
         )
         evaluation_result = EvaluationResult(metrics={"execution_success": True})
-        await committer.commit_success(
-            claim=first,
-            lease_version=receipt.version,
-            target_result=target_result,
-            evaluation_result=evaluation_result,
+        second = claims[1]
+        await asyncio.gather(
+            committer.commit_success(
+                claim=first,
+                lease_version=receipt.version,
+                target_result=target_result,
+                evaluation_result=evaluation_result,
+            ),
+            committer.commit_success(
+                claim=second,
+                lease_version=second.version,
+                target_result=target_result,
+                evaluation_result=evaluation_result,
+            ),
         )
         with pytest.raises(LeaseLostError):
             await committer.commit_success(
@@ -260,8 +269,8 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             reaper_b.reap(limit=100),
         )
         reaped = tuple(item for batch in reaped_batches for item in batch)
-        assert len(reaped) == 99
-        assert len({item.job_id for item in reaped}) == 99
+        assert len(reaped) == 98
+        assert len({item.job_id for item in reaped}) == 98
         assert all(item.status is JobStatus.RETRY_WAIT for item in reaped)
         assert {item.origin_traceparent for item in reaped} == {ORIGIN_TRACEPARENT}
         async with session_factory() as session:
@@ -279,8 +288,8 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     JobAttempt.outcome == AttemptOutcome.LEASE_EXPIRED,
                 )
             )
-        assert retry_wait_count == 99
-        assert expired_attempt_count == 99
+        assert retry_wait_count == 98
+        assert expired_attempt_count == 98
 
         async with session_factory.begin() as session:
             session.add(

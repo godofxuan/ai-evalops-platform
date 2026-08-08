@@ -40,6 +40,17 @@ class ResultCommitReceipt:
     run_status: RunStatus
 
 
+def build_run_lock_for_completion_statement(
+    *,
+    run_id: UUID,
+) -> Select[tuple[UUID]]:
+    """Lock the parent Run before Job/result writes to prevent FK lock upgrades."""
+
+    return (
+        select(EvaluationRun.id).where(EvaluationRun.id == run_id).with_for_update(of=EvaluationRun)
+    )
+
+
 def build_owned_job_for_completion_statement(
     *,
     job_id: UUID,
@@ -87,6 +98,11 @@ class SQLAlchemyResultCommitter:
         next_version = lease_version + 1
         try:
             async with self._session_factory.begin() as session:
+                locked_run_id = await session.scalar(
+                    build_run_lock_for_completion_statement(run_id=claim.run_id)
+                )
+                if locked_run_id is None:
+                    raise LeaseLostError("result rejected because its Run no longer exists")
                 row = (
                     await session.execute(
                         build_owned_job_for_completion_statement(
