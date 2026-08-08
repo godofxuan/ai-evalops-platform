@@ -40,7 +40,7 @@ Phase 1 已建立：
 - tenant-scoped Dataset create/get；
 - 有界 UTF-8 JSONL 校验与不可变 Dataset Version；
 - tenant-owned artifact reference 与全局 SHA-256 content blob 分层；
-- Local 与 S3-compatible/MinIO artifact backend、原子发布、物理去重和摘要确认；
+- Local 与经真实 MinIO 验证的 S3-compatible artifact backend、原子发布、物理去重和摘要确认；
 - Phase 1 Alembic migration、运维脚本与真实 PostgreSQL 集成测试合同。
 
 Phase 2 已建立：
@@ -585,8 +585,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - PostgreSQL RLS spike 已验证非 owner 角色的纵深隔离，但当前共享 owner 运行凭据会绕过
   策略，生产落地仍需拆分 migration/runtime role 并接入事务级 tenant context；
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
-- Local artifact storage 仍不适合多 API 主机共享；S3-compatible backend 已实现但数据库提交
-  与对象删除仍不是跨系统原子事务；
+- Local artifact storage 仍不适合多 API 主机共享；S3-compatible backend 已经真实 MinIO
+  集成与 Compose readiness 验证，但数据库提交与对象删除仍不是跨系统原子事务；
 - JSONL 第一版有界读入内存，不是流式 parser；
 - Run API 已有 create/get/cancel/SSE/cases/metrics/artifacts/compare；
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；

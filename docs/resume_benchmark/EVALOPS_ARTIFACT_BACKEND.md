@@ -1,7 +1,10 @@
 # S3-compatible artifact backend
 
-Status: local contracts and complete non-integration suite `VERIFIED`; first real MinIO execution
-`FAILED`; non-root volume-ownership correction `PENDING` on the next GitHub Actions run.
+Status: local contracts, complete non-integration suite, real MinIO object semantics, S3-backed API
+readiness, and effective container hardening `VERIFIED`.
+
+Remote authority: GitHub Actions run `31250798443` executed exact source commit
+`05d66816239a354bd6692a9b2a366305b7f8f2aa` and concluded `success` in both jobs.
 
 ## Decision and scope
 
@@ -81,10 +84,11 @@ local focused set passed 66 tests. Full local validation resolved 79 locked pack
 files with Ruff formatting and lint, passed strict MyPy for 127 source files, and passed 561
 non-integration tests with 12 real-service tests deselected in 368.12 seconds.
 
-The pending GitHub test will execute 12 concurrent conditional writes against real MinIO, require one
-physical creation, verify download, simulate object corruption, refuse corrupt deletion, verify
-idempotent deletion, and confirm missing-bucket readiness/publish failures. Compose smoke will select
-the S3 backend, provision the bucket explicitly, and require API readiness through MinIO.
+The GitHub test executed 12 concurrent conditional writes against real MinIO, observed exactly one
+physical creation, verified download, simulated object corruption, refused corrupt deletion, verified
+idempotent deletion, and confirmed missing-bucket readiness/publish failures. Compose smoke selected
+the S3 backend, provisioned the bucket explicitly, passed API readiness through MinIO, and verified
+the effective non-root/read-only/capability/resource-limit container configuration.
 
 ## First remote negative result
 
@@ -99,3 +103,15 @@ without preparing ownership. The correction does not relax runtime hardening to 
 owns a non-parent-volume data directory during image build, switches back to UID/GID 1000, and mounts
 the named volume there. Compose failure annotation ordering was also changed to put MinIO-only logs
 before aggregate service logs so a future root cause is not truncated out of the bounded annotation.
+
+## Successful remote rerun
+
+GitHub Actions run `31250798443` executed corrected source `05d6681`. Compose successfully built the
+thin MinIO image, started PostgreSQL/Redis/MinIO, applied migrations, provisioned the configured
+bucket, started API/Worker/Reaper, passed S3-backed API readiness, and verified effective hardening
+for MinIO and every other long-running service.
+
+The quality job passed lock, format, lint, strict MyPy, all non-integration tests, MinIO startup, the
+dedicated real MinIO integration, every PostgreSQL/Redis integration group, migration downgrade/
+re-upgrade, MinIO cleanup, and the final application image build. This closes the shared artifact
+backend gate without erasing the first failed attempt.

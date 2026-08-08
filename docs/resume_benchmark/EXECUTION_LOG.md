@@ -428,3 +428,19 @@ Compose definition. The correction creates `/var/lib/evalops-minio` and assigns 
 image build, switches to `USER 1000:1000`, mounts `minio_data` at that path, and leaves the runtime
 rootfs read-only with all capabilities dropped. Focused deployment/hardening GREEN: 17 tests. A new
 remote run is required; the result is not yet admitted as MinIO verification.
+
+### Remote MinIO authority
+
+Corrected commit `05d6681` started GitHub Actions run `31250798443`. The Compose job successfully
+built the thin MinIO image, started and health-checked PostgreSQL/Redis/MinIO, applied migrations,
+provisioned the configured bucket, and started API/Worker/Reaper with the S3 backend selected. API
+readiness succeeded through `HeadBucket`, and runtime inspection verified non-root identity,
+read-only rootfs, dropped capabilities, no-new-privileges, and positive CPU/memory/PID limits for
+MinIO and the other services.
+
+The quality job passed non-integration tests and started the same MinIO topology. Its dedicated
+integration issued 12 concurrent publishes of identical bytes and observed exactly one
+`created=true`, then verified download integrity, corruption rejection, refusal to delete corrupt
+content, idempotent deletion, and missing-bucket readiness/publish failures. Every later integration,
+migration downgrade/re-upgrade, cleanup, and application image build passed. The overall workflow
+concluded `success`; the S3-compatible/MinIO backend is now `VERIFIED` for the tested contract.
