@@ -1,17 +1,26 @@
 # Resume-safe metrics
 
-The load measurements are hash-verified and internally reportable, but no combined reliability and
-scaling claim is yet résumé-safe.
+Status: the following scoped claims are backed by post-Git hash-verified evidence.
 
-Completed admission checks:
+## Admitted claims
 
-- raw bundle retained and post-Git hash-verified;
-- all 32 arms pass durable reconciliation;
-- no required collector samples are missing;
-- environment, source/image identity, protocol, and commands are retained; and
-- aggregation includes all four repetitions.
+- Executed a real Docker Compose worker-scaling matrix with 500 measured cases per arm, Worker counts
+  1/2/4/8, two workloads, and four repetitions: 32 arms and 16,000 Jobs, with 16,000 successful,
+  zero failed/lost/orphan Jobs, zero duplicate durable results, and 400 successful retry events.
+- Observed median throughput scaling from 21.48 to 66.80 Jobs/s for the I/O workload (3.11× speedup
+  at eight Workers) and from 19.59 to 60.76 Jobs/s for the 5% transient-failure workload (3.10×).
+- Ran a nine-scenario fault matrix three times after the database reconnect change: 84/84 logical
+  Jobs succeeded, 72 deliberate retries completed, and failed/lost/duplicate/orphan counts were zero.
+- Deliberately attempted three stale success commits and three stale failure commits after lease
+  recovery; zero were accepted. Sixty concurrent duplicate-idempotency-key HTTP submissions all
+  succeeded and resolved to one Run per repetition.
+- Recovered from three 3-second PostgreSQL outages without restarting the Worker; median recovery
+  after PostgreSQL restart was 6.83 seconds (range 6.28–6.83 seconds), with zero Job retries or
+  correctness violations.
 
-Remaining blocking check: stale result and stale failure acceptance must both be zero in explicitly
-induced real-service scenarios. Until that matrix completes, use the numbers in
-`EVALOPS_LOAD_REPORT.md` for engineering analysis only; do not copy them into the repository README,
-a résumé, or a reliability claim.
+## Scope rules
+
+These are experiment results, not universal production guarantees. Keep the workload names, Worker
+counts, repetition count, source/evidence reference, and “observed” wording. Do not claim linear
+scaling: eight-Worker parallel efficiency was about 0.39. Do not claim the reconnect backoff made
+recovery faster; the before/after difference is too small and based on only three repetitions.

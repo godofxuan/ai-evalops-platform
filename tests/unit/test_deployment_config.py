@@ -126,6 +126,15 @@ def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
     assert "postgres redis api worker reaper" in command
 
 
+def test_integration_prerequisites_run_after_an_independent_unit_failure() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["quality-and-integration"]["steps"]
+    by_name = {step["name"]: step for step in steps}
+
+    assert by_name["Prepare artifact directory"]["if"] == "${{ !cancelled() }}"
+    assert by_name["Apply migrations"]["if"] == "${{ !cancelled() }}"
+
+
 def test_outbox_alert_rules_cover_stalled_backlog_and_lease_loss() -> None:
     rules_path = Path("deploy/prometheus/outbox-alerts.yml")
     loaded = yaml.safe_load(rules_path.read_text(encoding="utf-8"))

@@ -13,8 +13,9 @@
   Idle worker processes did not expose zero-valued `operation="result"` histograms, so successful
   scrapes were classified `UNKNOWN`. The run remains valid correctness/raw evidence but is not used
   for capacity or résumé metrics.
-- The existing `scripts.run_failure_scenarios` covers four coarse scenarios, not the required A–I
-  matrix, and does not perform database-level invariant reconciliation for every scenario.
+- Before commit `da92532`, `scripts.run_failure_scenarios` covered four coarse scenarios rather than
+  A–I and lacked per-scenario database reconciliation. This historical gap is resolved by the two
+  retained 27-record matrices; the original limitation remains recorded to explain the redesign.
 - The initial local integration command skipped all nine integration tests because no real
   PostgreSQL/Redis endpoints were configured.
 - The first documentation lookup assumed `docs/phase_9_environment_and_blockers.md`; the actual file
@@ -22,6 +23,12 @@
   failed read.
 - Recursive PowerShell discovery encountered access-denied pytest temporary directories. A bounded
   `rg --files` lookup was used instead; those directories were not deleted.
+- CI run `31247720679` failed first in the non-integration pytest step. Because artifact preparation
+  and migrations used the default success condition while later integration steps used
+  `!cancelled()`, migration was skipped and eight later PostgreSQL tests produced misleading
+  `UndefinedTable` failures. Public annotations exposed the cascade but GitHub required sign-in for
+  the first step's raw log. The workflow prerequisites were changed to `!cancelled()`; the next CI
+  run must determine whether the original unit failure was transient or reproducible.
 
 ## Reporting rule
 

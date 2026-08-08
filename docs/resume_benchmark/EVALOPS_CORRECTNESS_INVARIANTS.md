@@ -1,32 +1,43 @@
 # AI EvalOps correctness invariants
 
-Status: load invariants `VERIFIED`; deliberately induced fencing matrix `PENDING`.
+Status: formal load invariants and deliberately induced A–I fencing matrix `VERIFIED`.
 
-## Verified by the formal 500-case matrix
+## Formal 500-case load matrix
 
 Across 32 real-service arms and 16,000 measured Jobs:
 
 | Invariant | Observed | Status |
 |---|---:|---|
-| submitted Jobs | 16,000 | `VERIFIED` |
-| unique Jobs | 16,000 | `VERIFIED` |
-| terminal Jobs | 16,000 | `VERIFIED` |
-| failed Jobs | 0 | `VERIFIED_ZERO` |
-| lost Jobs | 0 | `VERIFIED_ZERO` |
-| orphan nonterminal Jobs | 0 | `VERIFIED_ZERO` |
+| submitted / unique / terminal Jobs | 16,000 / 16,000 / 16,000 | `VERIFIED` |
+| failed / lost / orphan nonterminal Jobs | 0 / 0 / 0 | `VERIFIED_ZERO` |
 | duplicate durable results | 0 | `VERIFIED_ZERO` |
 | tenant/config binding mismatches | 0 | `VERIFIED_ZERO` |
 | reconciliation violations | 0 | `VERIFIED_ZERO` |
-| retries | 400 | `VERIFIED` |
+| retries that ultimately succeeded | 400 | `VERIFIED` |
 
-Every retry attempt sequence was contiguous, and all 400 retry events ultimately reached success.
+The load harness did not induce expired-lease writes and correctly labeled that field `NOT_RUN`.
+Those claims come from the separate fault matrix below, not from an invented load-test zero.
 
-## Still requiring deliberate fault injection
+## Deliberately induced A–I matrix after reconnect changes
 
-The load harness records `stale_submission_rejection.evidence=NOT_RUN`. Consequently, it cannot
-answer whether an expired Worker can overwrite a reclaimed Job. Scenarios C and D must deliberately
-submit late success and late failure from Worker A after Reaper recovery and Worker B reclaim. Both
-accepted counts must be exactly zero before the full correctness gate can pass.
+Source `03d6987`; evidence `fault-gh-31247720668-1`; 9 scenarios × 3 repetitions:
 
-Current answer to the central question: no task loss occurred in the formal load experiment; old
-Worker overwrite has not yet been established by this experiment and remains withheld.
+| Invariant | Observed | Status |
+|---|---:|---|
+| logical Jobs submitted / unique / terminal / succeeded | 84 / 84 / 84 / 84 | `VERIFIED` |
+| failed / lost / orphan Jobs | 0 / 0 / 0 | `VERIFIED_ZERO` |
+| duplicate CaseResults / terminal commits | 0 / 0 | `VERIFIED_ZERO` |
+| deliberate retries | 72 | `VERIFIED` |
+| stale successes attempted / accepted | 3 / 0 | `VERIFIED_ZERO_ACCEPTED` |
+| stale failures attempted / accepted | 3 / 0 | `VERIFIED_ZERO_ACCEPTED` |
+| concurrent duplicate-key HTTP requests succeeded | 60 / 60 | `VERIFIED` |
+| unique Runs produced by those requests | 3 (one per repetition) | `VERIFIED` |
+
+Scenarios C and D used the real PostgreSQL state machine and deliberately submitted late success and
+late failure from Worker A after recovery and Worker B commit. Both were rejected by lease fencing.
+Scenario H ran two Reapers against 20 eligible Jobs per repetition; all 60 were reaped once without
+overlap. Scenario I sent 20 concurrent identical idempotency requests per repetition and produced
+one Run each time.
+
+Central answer: the retained experiments observed no task loss, and the deliberately expired Worker
+could not overwrite the reclaimed Job with either a late success or a late failure.

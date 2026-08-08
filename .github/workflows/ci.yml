@@ -73,9 +73,11 @@ jobs:
         run: uv run --no-sync pytest -m "not integration"
 
       - name: Prepare artifact directory
+        if: ${{ !cancelled() }}
         run: mkdir -p "$EVALOPS_ARTIFACT_ROOT"
 
       - name: Apply migrations
+        if: ${{ !cancelled() }}
         run: uv run --no-sync alembic upgrade head
 
       - name: Integration - job claiming, trace propagation, and lease fencing

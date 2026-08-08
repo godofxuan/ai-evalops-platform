@@ -226,3 +226,60 @@ run is required for comparable After evidence.
 Pre-rerun full validation passed: lock resolved 70 packages; all 286 files passed Ruff format and
 lint; strict mypy passed 124 source files; and non-integration pytest passed
 `532 passed, 9 deselected` in 244.57 seconds.
+
+## 2026-08-08 — Database reconnect After evidence and CI failure diagnosis
+
+### Remote execution and admitted effect
+
+Local commit `03d6987` was pushed after verifying the worktree was clean and exactly one commit ahead
+of `7f0738d`. GitHub Actions fault run `31247720668` executed the exact source SHA and committed
+`fault-gh-31247720668-1` as `0901f9d`. A fast-forward pull preserved linear history. Independent
+post-Git validation reported `complete: 27 scenarios, 5 payload files`; manifest source, payload set,
+and SHA-256 records all matched.
+
+The post-change matrix completed 84/84 Jobs successfully with 72 deliberate retries. Failed, lost,
+duplicate CaseResult, duplicate terminal commit, stale accepted, and orphan counts were all zero.
+Scenarios C and D attempted three stale successes and three stale failures respectively; none were
+accepted. Scenario I completed 60/60 concurrent HTTP submissions and produced one Run per repetition.
+
+Scenario F recovered after each three-second PostgreSQL outage without a Worker restart. Its median
+changed from 6.910767 seconds (range 6.350567–6.951565) to 6.827549 seconds (range
+6.281487–6.831259). The small difference is not admitted as a speed improvement. The verified change
+is the bounded retry contract during disconnection and stop-aware shutdown, with no observed
+correctness or recovery regression.
+
+### Evidence exporter RED/GREEN
+
+The existing fault CSVs contained headers only. RED tests required 27 per-repetition rows, nine
+scenario summaries, complete source/run binding, LF-only output, and fail-closed rejection of an
+unverified report, source mismatch, failed invariant, lost Job, or accepted stale result. The first
+test failed at import because `scripts.export_fault_evidence` did not exist.
+
+The GREEN implementation validates each immutable bundle before reading it, revalidates A–I matrix
+completeness, and requires submitted=unique=completed=succeeded for every record. It preserves
+scenario-specific outage, Outbox, Reaper, HTTP idempotency, container identity, and explicit Worker
+restart fields instead of conflating them. Seven exporter tests, Ruff, and strict mypy passed. Running
+the exporter against the two retained bundles produced 54 verified result rows and 18 summary rows.
+
+### CI failure and diagnosis
+
+The same push started CI run `31247720679`. Compose smoke passed, but `quality-and-integration`
+failed. GitHub's public API showed the first failure was `Run tests without external services`.
+`Prepare artifact directory` and `Apply migrations` then skipped because they used the implicit
+success condition, while every integration step explicitly used `!cancelled()`. Eight database tests
+therefore continued against an empty schema and emitted `UndefinedTable`; these were secondary, not
+eight independent regressions.
+
+GitHub refused unauthenticated raw-log download with HTTP 403, and the public browser page required
+sign-in for log text. Focused reproduction with the exact CI environment passed all 30 changed tests,
+then 149 artifact/auth/core/dataset/domain/evaluator/event/job tests, 89
+observability/persistence/result/review/run/worker tests, and 51 target tests. Directory bisection
+found local slowness in a prepared-evidence test whose build-context helper enumerates every path
+before applying `.dockerignore`; the local repository has many ignored tool and pytest directories,
+unlike a clean GitHub checkout. Several externally terminated `uv` parents left six test children;
+their exact PIDs and start times were verified and only those processes were stopped.
+
+The workflow now runs artifact preparation and migrations under `!cancelled()`, matching the
+integration steps. This removes misleading empty-schema cascades on future independent unit failures.
+A new workflow contract test failed before the YAML change and passes after it. The next pushed CI
+run remains the authority on whether the original non-integration failure was transient.
