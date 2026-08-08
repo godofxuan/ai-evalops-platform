@@ -1,6 +1,10 @@
 # PostgreSQL row-level security spike
 
-Status: migration and local contracts `VERIFIED`; real PostgreSQL non-owner execution `PENDING`.
+Status: migration, local contracts, and real PostgreSQL non-owner execution `VERIFIED`.
+
+Remote authority: GitHub Actions run `31249605065` executed exact source commit
+`5f9ccbbabf8d467156f9ba4f96bb71c28df24aa5`. The dedicated RLS integration step, every later
+integration group, the application image build, and the overall workflow all completed successfully.
 
 ## Scope
 
@@ -49,6 +53,10 @@ the four-table DML privileges, and verifies against real PostgreSQL that:
 - a same-tenant INSERT succeeds.
 
 The role is removed with `DROP OWNED` and `DROP ROLE` in test cleanup.
+
+The remote test completed successfully against the workflow's migrated PostgreSQL service. This
+closes the spike's execution gate: the policy boundary is no longer inferred only from offline SQL or
+skipped local integration tests.
 
 ## Deliberate limitation
 

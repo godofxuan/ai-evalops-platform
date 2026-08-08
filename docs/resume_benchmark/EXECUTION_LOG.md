@@ -329,3 +329,21 @@ Adding `/tmp/junit-unit.xml` to the existing annotation flow exposed the exact f
 it. The production parser correctly binds that SHA for evidence provenance. The test now explicitly
 deletes the variable when checking the offline `UNSPECIFIED` default and separately proves that a
 present 40-character GitHub SHA is adopted.
+
+### Remote RLS authority
+
+Commit `5f9ccbb` started GitHub Actions run `31249605065`. Compose smoke completed successfully. In
+the quality-and-integration job, dependency installation, lock checking, formatting, Ruff, strict
+MyPy, and the complete non-integration suite all passed. Migrations then applied successfully to the
+real PostgreSQL service.
+
+The dedicated `Integration - PostgreSQL row-level tenant isolation` step passed. It exercised the
+temporary non-owner/non-`BYPASSRLS` role and verified fail-closed reads without tenant context,
+tenant-filtered reads across Dataset, DatasetVersion, Run, and CaseResult, hidden-row UPDATE
+isolation, rejected cross-tenant writes, and accepted same-tenant writes. Every later integration
+group and the application image build also passed; the overall workflow concluded `success`.
+
+Effect: the minimum RLS spike is now evidence-backed rather than locally inferred. Limitation: this
+does not promote the current shared owner credential to a production RLS boundary because PostgreSQL
+owners normally bypass enabled policies unless RLS is forced. Runtime/migration role separation and
+transaction tenant-context wiring remain explicit future rollout work.

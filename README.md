@@ -441,8 +441,9 @@ P2-3 migration `20260802_0012`：
 - 只保存 W3C `traceparent`，不持久化 baggage、tracestate、凭据或请求内容。
 
 所有已实现的 dataset/version 和 artifact reference 读取先过滤服务端 tenant 与资源 ID，再
-解析 blob。跨表复合外键提供数据库纵深防御，但当前仍未启用 PostgreSQL RLS；两者不是
-同一种隔离机制。
+解析 blob。跨表复合外键提供数据库纵深防御；四张核心评测表已启用最小 PostgreSQL RLS
+spike，并由非 owner、非 `BYPASSRLS` 角色的真实 PostgreSQL 集成测试验证。当前应用仍使用
+共享 owner 凭据，因此这不是生产强制边界；两者不是同一种隔离机制。
 
 Run/Job 状态转换由两个纯领域状态机集中校验，图和审计规则见
 [状态机合同](docs/03_state_machines.md)。
@@ -580,7 +581,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 
 ## 当前限制
 
-- tenant 隔离依赖应用层查询约束，尚无 PostgreSQL RLS；
+- PostgreSQL RLS spike 已验证非 owner 角色的纵深隔离，但当前共享 owner 运行凭据会绕过
+  策略，生产落地仍需拆分 migration/runtime role 并接入事务级 tenant context；
 - API Key 认证尚无限流/容量验证，不声称抵御 DoS；
 - 本地 artifact storage 不适合多 API 主机共享，数据库提交与文件删除也不是跨系统原子事务；
 - JSONL 第一版有界读入内存，不是流式 parser；
