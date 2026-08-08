@@ -584,6 +584,25 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 | stale alert | YAML/表达式合同通过；真实 Prometheus/Alertmanager `NOT_RUN` |
 | 正式 500-case/32-arm | NOT_RUN |
 
+## v0.1.0 Release Candidate 证据结论
+
+当前决定：**`NOT_READY`，不得发布 v0.1.0 tag/Release**。correctness、fairness、current-head
+1k/10k/100k capacity、CI 与 evidence manifest 均已通过；唯一 blocker 是 current fair scheduler
+相对 historical pre-fair formal baseline 的性能门：8 个 workload/worker 中位数组有 5 个回退
+超过 15%，最差为 -63.44%。完整判定见
+[v0.1.0 Release Decision](docs/release/v0.1.0/RELEASE_DECISION.md)。
+
+最终 source-bound 证据：
+
+- fair capacity source `9987a28` / run `31272789199`：1k/10k 为 32/32、100k 为 16/16，全部
+  `VERIFIED`；Jobs/s 中位数分别为 43.240、22.501、3.377；
+- formal load source `6acf72c` / run `31274490704`：32/32 arms、16,000 jobs、correctness failure 0；
+- fault source `70a9b2b` / run `31275450353`：A–I ×3 共 27/27，stale success/failure accepted 0。
+
+这些是 GitHub-hosted 4-vCPU runner 的实验结果，不是生产 SLO。旧 source `15e7ac2` 的
+500-case/32-arm 仍是 VERIFIED historical pre-fair experiment，不得描述为 current v0.1.0
+throughput。容量、公平性、环境和负面结果见 [v0.1.0 RC 文档](docs/release/v0.1.0/RC_AUDIT.md)。
+
 ## 当前限制
 
 - PostgreSQL RLS spike 已验证非 owner 角色的纵深隔离，但当前共享 owner 运行凭据会绕过
@@ -603,13 +622,14 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
   Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
-- 多租户公平领取不是提交限流、容量配额或计费策略；窗口查询与 Tenant 行锁的超大队列成本
-  尚未做容量实验；
+- 多租户公平领取不是提交限流、容量配额或计费策略；1k/10k/100k 容量实验已经完成，但 100k
+  热点单租户 w8 claim p95 为 41,386.537 ms、504 retries，且正式 32-arm 的 4/8 Worker 吞吐未过
+  release performance gate；
 - 当前 evaluator registry 只有确定性 lexical/retrieval-citation 与 operational execution
   指标；尚无 LLM judge，且调用方提供的 evaluator version 仍是可追踪字段而非服务端签名证明；
-- Gate 1 能自动检查客观质量、expected-arm 完整性和 Worker 集群资源证据；但没有用户数值
-  performance policy，`READY_FOR_HUMAN_REVIEW` 不等于 adoption；pre-fair source `15e7ac2`
-  的正式 500-case/32-arm 已 VERIFIED，当前 fair RC source 的同协议 rerun 仍为 `NOT_RUN`；
+- Gate 1 能自动检查客观质量、expected-arm 完整性和 Worker 集群资源证据；
+  `READY_FOR_HUMAN_REVIEW` 不等于 release READY；pre-fair source `15e7ac2` 与 current fair source
+  `6acf72c` 的正式 500-case/32-arm 均 VERIFIED，但 current fair 的 performance release gate FAIL；
 - can_review 是管理员凭据信任边界，不是自然人/反自动化身份认证；
 - can_create_review_tasks 与 can_review 独立且都默认关闭；当前仍不是通用 RBAC/scope 系统；
 - review deterministic sampling 会读入全部成功候选，尚无大 Run sampling 容量证据；
@@ -657,8 +677,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
     继续一个跨排队/retry 的超大 parent-child trace。
 31. 展示 SSE 观测包装曾如何破坏 async generator close，并如何用 `aclosing` 修复。
 32. 展示 500-case、幂等、故障和 comparison 脚本如何拒绝覆盖负面结果。
-33. 明确区分本机 504 passed、远端真实服务/Compose 合同通过和 NOT-RUN 容量实验，拒绝把
-    合同当成性能实测结果。
+33. 展示容量实验从历史 `NOT_RUN` 到 current source-bound 1k/10k/100k 与 32-arm 实测的证据演进，
+    并解释为什么 verified experiment 仍可能因性能门失败而 `NOT_READY`。
 34. 展示 #27 外键 key-share 锁升级死锁、先锁 Run 后插 Outbox 的修复，以及为什么交付仍是
     at-least-once 而不是 exactly-once。
 35. 展示 retention CTE 为什么只删除过期已发布行、如何用 `SKIP LOCKED` 并发维护，以及为什么

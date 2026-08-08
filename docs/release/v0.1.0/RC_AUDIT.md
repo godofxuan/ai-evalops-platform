@@ -5,6 +5,10 @@
 规划基线：`0d85905`  
 审计冻结 HEAD：`0d859057d41b7609f91e2e0bc51ecae9575133d8`
 
+> 最终更新（2026-08-09）：本文件前半部分保留的是 RC 开始时的审计快照。current-head 实验现已
+> 全部完成；最终结论由 [RELEASE_DECISION.md](RELEASE_DECISION.md) 覆盖：correctness、fairness、
+> capacity、CI 与 manifest 均 PASS，但 formal performance gate FAIL，因此状态为 `NOT_READY`。
+
 ## 1. 修改前判断
 
 本阶段先验证证据一致性，不先修改 scheduler、benchmark harness 或结果文档。原因是 release
@@ -127,7 +131,8 @@ capacity。
 
 README 的 2026-07-29、P2-7、P2-8、P2-9 时间点表格中的 `NOT-RUN` 是当时真实结果，已经
 保留。README “当前限制”中已把过期的“正式 500-case/32-arm 仍未运行”修正为：历史
-pre-fair formal load 已 VERIFIED，但 current fair RC source rerun 仍 `NOT_RUN`。
+pre-fair formal load 已 VERIFIED；在本节记录的初始审计时，current fair RC source rerun 为
+`NOT_RUN`，现已由第 9 节的最终 VERIFIED/性能 gate FAIL 结论覆盖。
 
 ### 6.2 README 当前限制：database reconnect
 
@@ -165,3 +170,16 @@ exact source，避免读者把它理解为 current fair RC throughput。只增�
 capacity、真实 PostgreSQL EXPLAIN 和同协议 32-arm rerun。下一步先修正当前状态文档，再按
 vertical TDD 建立 release/fair-capacity evidence contract；除非真实 paired evidence 发现并
 定位 regression，不修改 production scheduler。
+
+## 9. 最终审计收口（覆盖第 5、8 节的阶段性状态）
+
+阶段性唯一 blocker“current fair evidence 未运行”已经关闭：
+
+- fair capacity：source `9987a28…`，run `31272789199`，1k/10k 32/32、100k 16/16 VERIFIED；
+- formal load：source `6acf72c…`，run `31274490704`，32/32、664/664、16,000 jobs VERIFIED；
+- final fault：source `70a9b2b…`，run `31275450353`，A–I ×3、27/27 VERIFIED；
+- CI：`31274490725` 与 `31275450358` success。
+
+审计发现的新且最终唯一 blocker 是 performance release gate：相对 historical formal baseline，
+8 个主要 workload/worker 中位数组有 5 个回退超过 15%。因此证据一致性已闭合，但 release decision
+仍为 `NOT_READY`。详细数值、环境差异、失败历史和限制分别见本目录其余 release-facing 文档。

@@ -1043,3 +1043,38 @@ duplicate module 而停止；这不是代码错误。改为仓库 CI 的精确�
 fault matrix，用来确认物化公平候选后 stale success/failure fencing、lease reclaim、双 Reaper、
 数据库/Redis 短断线、worker restart 与幂等提交没有 correctness regression。性能 gate 已失败，
 但 correctness 仍必须独立闭合；该 fault 结果不会把 `NOT_READY` 自动改成 READY。
+
+## 2026-08-09 — 最终 fault 通过与 release-facing 文档封版
+
+fault run `31275450353` 对 exact source `70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6`
+在 2026-08-08T19:51:03Z 至 19:55:47Z 执行并 `completed/success`。artifact
+`fault-gh-31275450353-1` 的 id `9026907209`、压缩大小 147,158 bytes、digest
+`sha256:30ff97585f4ac1ec433b87a79e7f364284517d850eb7efd7748f1c2b14d46531`，机器人提交
+`c00f1a2` 已 fast-forward 同步。项目 validator 重读 manifest 后确认 6/6 payload 的 fileset、size、
+SHA-256 全部一致；report 为 `verified`，A–I 每个 scenario 3 次，共 27/27。lost、duplicate
+CaseResult、duplicate terminal commit、orphan running、invariant failure 均为 0；stale success 与
+stale failure 各 attempted 3、accepted 0。符号链接与 credential 模式命中均为 0。因此修改后的
+production source 没有出现本协议可见的 correctness/fencing regression。
+
+配套 CI `31275450358` 也在 exact source 上 `completed/success`。第一次 API 查询遇到临时“无法连接
+到远程服务器”，且 PowerShell 的非终止错误令 shell 表面退出码为 0；没有接受该结果。重试时设置
+`$ErrorActionPreference='Stop'`，获得明确的 completed/success、source 与时间字段。
+
+随后创建指定的 `FAIRNESS_CAPACITY.md`、`CURRENT_HEAD_LOAD.md`、`CORRECTNESS.md`、
+`ENVIRONMENT.md`、`NEGATIVE_RESULTS.md` 与 `RELEASE_DECISION.md`，并在 `RC_AUDIT.md` 保留初始
+快照、追加最终覆盖结论。README 新增 source-bound RC 段并把当前限制中的“大队列未实验”和
+“current 32-arm NOT_RUN”改为实际 VERIFIED/性能 gate FAIL；早期 Phase 表中的 NOT_RUN 作为当时
+事实保留。文档只引用最终验证过的 capacity、formal load、fault、CI、manifest 与环境，不把
+pre-fair 数字冒充 current throughput，也没有修改 production scheduler 或 resume-safe claim。
+
+封版 stale-claim 扫描第一次未通过，因为 `RC_AUDIT.md` 的历史快照仍有一句未带时间限定的
+“current rerun 仍 NOT_RUN”。该句作为旧审计事实不能删除，但单独检索会误导，因此改成“初始审计
+时 NOT_RUN，现由第 9 节 VERIFIED/性能 gate FAIL 覆盖”。这只消除当前状态歧义，不改写历史证据。
+
+修正后 release 七文件存在性与 stale current-claim 扫描均 PASS，`git diff --check` 通过。封版验证
+结果：Ruff format `325 files already formatted`、Ruff check `All checks passed`、MyPy
+`Success: no issues found in 133 source files`；claiming、release admission、capacity evidence、RC/
+worker/fault workflow、日志上限和 experiment scripts 共 `73 passed, 1 warning in 239.65s`。warning
+仍是 Windows pytest 临时目录清理 PermissionError，不是断言或产品路径失败。更早的完整非集成套件
+为 `629 passed, 13 skipped, 3 warnings`，最终 source 的两次 GitHub CI 和三条真实实验工作流均
+success。由此可以提交文档，但 release decision 保持 `NOT_READY`。
