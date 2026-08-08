@@ -110,3 +110,179 @@ uv run --no-sync mypy scripts/release_evidence.py
 
 当前效果仅是 fail-closed release admission contract；尚未生成大队列数据、EXPLAIN 或 current
 32-arm evidence，因此 release 状态仍是 `NOT_READY`，resume-safe claim 不变。
+
+## 2026-08-08 — Fair-capacity harness 与远程 RC 工作流
+
+### 先判断范围与测量口径
+
+本阶段没有修改生产调度 SQL。原因是当前任务首先要求测量 current fair scheduler，且尚无
+可证明的性能回归足以授权修改生产算法。实验拆成两层：
+
+1. 在同一 PostgreSQL `REPEATABLE READ` transaction snapshot 中，交替执行 current fair
+   selector 和只用于 benchmark 的 legacy global FIFO selector，各重复 4 次，保存原始
+   `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`；
+2. 每个 arm 在仍有大队列 backlog 时，用真实 `EvaluationWorker`、
+   `SQLAlchemyJobClaimer`、heartbeat、result/failure committer 完成固定 500-job sample。
+
+这意味着 `queue_size` 是候选队列规模，`sample_jobs=500` 是真实处理样本，不能把它解释成
+“完整排空 100k 队列的吞吐”。资源口径是一个 benchmark 进程内运行多个真实 Worker 对象，
+不是多个 Compose Worker 容器的总 RSS；该限制写入 configuration，而不隐藏。
+
+计划固定为：queue 1k/10k/100k × single tenant / balanced multi-tenant / 20:1 skew /
+many-small-tenants × Worker concurrency 1/2/4/8 × production claim batch 1，共 48 arms。
+初始阶段先跑 1k/10k 的 32 arms，只有它的 assessment 为 VERIFIED 才进入 100k 的 16 arms。
+
+### TDD：计划、分布、旧基线、EXPLAIN 与 manifest
+
+先新增 `tests/unit/scripts/test_fair_capacity_evidence.py`，在实现文件不存在时执行：
+
+```powershell
+uv run pytest tests/unit/scripts/test_fair_capacity_evidence.py -q
+```
+
+首次 RED 是 import/collection failure，证明测试先于实现。随后按垂直切片逐一实现：
+
+- `build_fair_capacity_plan`：初始阶段恰好 32 arms，batch 固定为 1；
+- `tenant_job_counts`：总数精确守恒，balanced=4 tenants，20:1 误差限制在 19–21，
+  many-small=100 tenants；
+- `build_legacy_fifo_statement`：只复刻 pre-fair global priority/created/id FIFO，保留
+  eligible job/run 与 `FOR UPDATE ... SKIP LOCKED`，不进入生产路径；
+- `summarize_explain`：提取 planning/execution time、root rows/loops、shared/temp blocks、
+  WindowAgg candidate cardinality、sort 与磁盘 spill，不虚构 PostgreSQL CPU；
+- `queue_sizes_for_stage`：100k 阶段要求前置状态精确为 VERIFIED；
+- `write_release_manifest`：exact source、完整 fileset、size、SHA-256、拒绝覆盖与 symlink。
+
+这一批最初为 8 tests passed。第一次聚合质量门禁结果是：pytest 通过，但 Ruff format、Ruff
+check 和 strict MyPy 失败。问题包括 2 个未格式化文件、unused import、async function 中同步
+文件/子进程调用、可合并 context manager、4 个类型错误。处理原则是：机械格式交给 Ruff，
+语义问题用小补丁处理；最终没有用 `# noqa` 大范围屏蔽规则。
+
+### 问题：多 Worker 局部列表会伪造领取顺序
+
+第一次实现把每个 claimer 的 `claimed_jobs` 按 Worker 列表拼接。这样 Worker A 的全部领取可能
+被排在 Worker B 前面，即使 B 实际更早完成，`tenant_first_claim_positions` 会失真。先增加
+`test_order_timed_values_uses_global_event_time_not_worker_list_order`；RED 为无法 import
+`order_timed_values`。实现后，每次 claim 返回时记录全局 monotonic `perf_counter`，汇总所有
+Worker 事件后按时间排序。
+
+首次 GREEN 尝试又暴露 `Sequence` 漏导入，以及 Ruff `UP047` 要求 Python 3.12 PEP 695
+泛型语法；修正为原生 type parameter 并显式标注 `list[ClaimedJob]` 后，结果为 9 passed、
+format/ruff/mypy 全部通过。
+
+### 每个 arm 的 fail-closed 判定
+
+仅有 bundle 总合同不足以证明 arm 本身正确，因此先写 RED 测试，要求：
+
+- submitted = unique = terminal = claimed = sample；
+- lost、duplicate durable result、orphan nonterminal、attempt sequence mismatch、stale
+  accepted、illegal transition 全部为 0；
+- 20:1 skew 的 secondary tenant 必须在前 2 个 claim 内出现；
+- 预期 tenant 不能从固定 sample 中消失。
+
+RED 为无法 import `assess_arm_runtime`。第一次实现后的“合法样本”测试失败，因为测试夹具没有
+显式提供 stale/illegal 三个字段；实现把缺失字段视为 UNKNOWN/非零并拒绝是正确行为，所以补
+完整夹具，而没有放宽校验器。最终 12 passed，static gates 全绿。运行器会先把 raw runtime 与
+arm assessment 写盘，再在 FAILED 时抛出错误，因此失败数据仍被保留，manifest 不会伪装完整。
+
+20:1 arm 同时记录 fair 实测 secondary position 和 legacy FIFO 按 fixture 排序得到的基线
+position。stale success/failure 不是每个 capacity arm 重复注入，而是明确引用 source
+`03d6987c75f2169c8207f2355f1f9d7528f9d223` 的 A–I After fault bundle；CSV 与 configuration
+都标为 `referenced_fault_after_bundle_not_induced_per_arm`，避免把引用证据写成当场测量。
+
+提交前交叉核对发现，初稿误把该 source 写成不存在的 `03d6987e071...`。执行 `git cat-file -t`
+后，错误候选 exit 128；正确的 `03d6987c75...` 是 commit，且与 fault manifest、report、
+environment/source.txt 全部一致。根因是工作中转摘要抄写漂移。修正时把常量移到可单测的
+`fair_capacity_evidence` 模块，并新增 exact-SHA 回归测试，避免以后再次静默引用错误对象。
+
+### CLI 入口问题
+
+执行：
+
+```powershell
+uv run python scripts/run_fair_capacity_test.py --help
+```
+
+失败为 `ModuleNotFoundError: No module named 'app'`。原因是直接运行文件时 Python 把
+`scripts/` 而非仓库根目录作为首个 import path。没有用运行时 `sys.path` 注入掩盖它，而是按
+仓库既有规范使用模块入口：
+
+```powershell
+uv run python -m scripts.run_fair_capacity_test --help
+```
+
+结果 exit 0，CLI 参数完整显示。正式 workflow 只使用该模块入口。
+
+### 远程工作流的 RED→GREEN
+
+新增工作流合同测试，先要求以下步骤存在并有正确顺序：Compose 启动 PostgreSQL/Redis、
+Alembic migration、1k/10k、100k、always diagnostics/upload/commit。首次 RED 为 workflow
+文件不存在，2 failed。实现 `.github/workflows/release-candidate-evidence.yml` 后第一次测试仍
+失败，因为测试错误地要求迁移命令包含字面量 `migrate`，而真实标准命令是
+`uv run --no-sync alembic upgrade head`；修正测试去验证实际迁移动作。随后 14 个相关测试
+通过。另有 Ruff `I001`，由 Ruff 只整理 import block 后通过。
+
+工作流用 `$GITHUB_SHA` 绑定 exact source；生成
+`docs/results/release/v0.1.0/rc-gh-<run>-<attempt>/` 不可变目录；初始命令失败会自然阻止下一
+个普通 step，因此 100k 不会越过 gate。diagnostics、artifact upload 和 git commit 使用
+`always()`，失败时也保存 partial evidence。最后才 `docker compose down --volumes`。
+
+最终 diff 复核又发现，最初 `queue_sizes_for_stage` 虽有单测，却没有接入 CLI，100k 只靠 YAML
+step 顺序保护，手工调用仍可绕过。先把 workflow contract 改为要求 `--stage initial/large` 与
+`--prior-assessment`，RED 为 1 failed；随后让 CLI 读取 initial assessment，并同时验证
+`status=VERIFIED`、source SHA 与本次完全相同、requested queue sizes 与 frozen stage plan 完全
+相等。initial stage 也拒绝携带 prior assessment。新增同源通过、异源拒绝和计划外 queue 拒绝
+测试后，100k gate 从“编排约定”变成运行入口本身的 fail-closed contract。
+
+### 再次加固离线 admission contract
+
+代码复核发现三个“运行时能拦，但离线重验可能漏掉”的缺口，均先制造 RED：
+
+1. `attempt_sequence_mismatch_count=1` 原先仍被判 VERIFIED：RED 为 `1 failed, 17 passed`；
+   将该列加入 required counts，并新增 `attempt_sequence_mismatch` blocker。
+2. skew secondary position=3 原先仍被判 VERIFIED：新增 distribution、fair/legacy secondary
+   position 必填列，fair >2 为 `skew_fairness_regression`，legacy <=2 为
+   `legacy_fifo_baseline_invalid`。
+3. 原合同只要存在一份 raw EXPLAIN 就可能通过：新增精确覆盖合同，正式调用要求每个 arm 的
+   fair/legacy × repetitions 1..4 集合完全一致，缺失、重复或意外记录均为
+   `postgres_explain_coverage_mismatch`。RED 首先表现为入口没有
+   `expected_explain_repetitions` 参数；实现后又增加完整 8-record 正向测试，证明不是永远失败。
+
+最终相关命令与结果：
+
+```powershell
+uv run pytest tests/unit/scripts/test_release_evidence.py `
+  tests/unit/scripts/test_fair_capacity_evidence.py `
+  tests/unit/scripts/test_release_candidate_workflow.py -q
+uv run ruff format --check scripts/release_evidence.py scripts/fair_capacity_evidence.py `
+  scripts/run_fair_capacity_test.py tests/unit/scripts/test_release_evidence.py `
+  tests/unit/scripts/test_fair_capacity_evidence.py `
+  tests/unit/scripts/test_release_candidate_workflow.py
+uv run ruff check <同一文件集合>
+uv run mypy --strict scripts/release_evidence.py scripts/fair_capacity_evidence.py `
+  scripts/run_fair_capacity_test.py
+```
+
+结果（加入 fault source 与 stage-binding 回归后）：`38 passed`；Ruff format/check 通过；strict MyPy
+通过。
+
+### 当前效果与仍未完成的证据
+
+本地环境没有 Docker，因此此处只证明 harness、SQL shape、合同和工作流静态正确，不能声称
+真实 PostgreSQL 1k/10k/100k 已运行。下一步必须提交并推送这一小目标，触发 GitHub Actions；
+只有远程 initial 与 large bundle 均 VERIFIED、原始 plans/CSV/manifest 可独立重算后，才能
+继续 current-head 32-arm protocol 和最终 release decision。此时 release 仍是 `NOT_READY`。
+
+### 提交前全仓回归
+
+```powershell
+uv run pytest -m "not integration" -q
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy app scripts tests/integration tests/concurrency
+```
+
+第一次结果：`610 passed, 13 deselected in 365.07s`。接入 CLI stage binding 后重新完整执行，
+最终结果为 `612 passed, 13 deselected in 359.13s`；315 files already formatted；Ruff all checks
+passed；MyPy 133 source files 无问题。13 个 deselected 是带 `integration` marker、需要真实外部服务
+的测试，并非失败或被静默跳过。真实 PostgreSQL/Compose capacity 运行仍由随后 GitHub Actions
+负责，不能用这 610 个本地测试替代。
