@@ -1,0 +1,301 @@
+# HELP api_request_total Completed HTTP requests.
+# TYPE api_request_total counter
+api_request_total{method="GET",route="/health/ready",status="200"} 70.0
+api_request_total{method="POST",route="/api/v1/datasets",status="201"} 2.0
+api_request_total{method="POST",route="/api/v1/datasets/{dataset_id}/versions",status="201"} 2.0
+api_request_total{method="POST",route="/api/v1/runs",status="202"} 21.0
+api_request_total{method="GET",route="/api/v1/runs/{run_id}",status="200"} 397.0
+api_request_total{method="GET",route="/api/v1/runs/{run_id}/cases",status="200"} 41.0
+api_request_total{method="GET",route="/metrics",status="200"} 20.0
+# HELP api_request_created Completed HTTP requests.
+# TYPE api_request_created gauge
+api_request_created{method="GET",route="/health/ready",status="200"} 1.7862173590529249e+09
+api_request_created{method="POST",route="/api/v1/datasets",status="201"} 1.786217379312167e+09
+api_request_created{method="POST",route="/api/v1/datasets/{dataset_id}/versions",status="201"} 1.7862173793785152e+09
+api_request_created{method="POST",route="/api/v1/runs",status="202"} 1.786217393092022e+09
+api_request_created{method="GET",route="/api/v1/runs/{run_id}",status="200"} 1.7862173931393163e+09
+api_request_created{method="GET",route="/api/v1/runs/{run_id}/cases",status="200"} 1.7862173961434057e+09
+api_request_created{method="GET",route="/metrics",status="200"} 1.7862173964580472e+09
+# HELP api_request_duration HTTP request duration in seconds.
+# TYPE api_request_duration histogram
+api_request_duration_bucket{le="0.005",method="GET",route="/health/ready"} 0.0
+api_request_duration_bucket{le="0.01",method="GET",route="/health/ready"} 0.0
+api_request_duration_bucket{le="0.025",method="GET",route="/health/ready"} 37.0
+api_request_duration_bucket{le="0.05",method="GET",route="/health/ready"} 53.0
+api_request_duration_bucket{le="0.1",method="GET",route="/health/ready"} 62.0
+api_request_duration_bucket{le="0.25",method="GET",route="/health/ready"} 67.0
+api_request_duration_bucket{le="0.5",method="GET",route="/health/ready"} 68.0
+api_request_duration_bucket{le="1.0",method="GET",route="/health/ready"} 69.0
+api_request_duration_bucket{le="2.5",method="GET",route="/health/ready"} 70.0
+api_request_duration_bucket{le="5.0",method="GET",route="/health/ready"} 70.0
+api_request_duration_bucket{le="10.0",method="GET",route="/health/ready"} 70.0
+api_request_duration_bucket{le="+Inf",method="GET",route="/health/ready"} 70.0
+api_request_duration_count{method="GET",route="/health/ready"} 70.0
+api_request_duration_sum{method="GET",route="/health/ready"} 5.301306659000019
+api_request_duration_bucket{le="0.005",method="POST",route="/api/v1/datasets"} 0.0
+api_request_duration_bucket{le="0.01",method="POST",route="/api/v1/datasets"} 0.0
+api_request_duration_bucket{le="0.025",method="POST",route="/api/v1/datasets"} 0.0
+api_request_duration_bucket{le="0.05",method="POST",route="/api/v1/datasets"} 1.0
+api_request_duration_bucket{le="0.1",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="0.25",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="0.5",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="1.0",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="2.5",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="5.0",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="10.0",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_bucket{le="+Inf",method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_count{method="POST",route="/api/v1/datasets"} 2.0
+api_request_duration_sum{method="POST",route="/api/v1/datasets"} 0.09872638700001346
+api_request_duration_bucket{le="0.005",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 0.0
+api_request_duration_bucket{le="0.01",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 0.0
+api_request_duration_bucket{le="0.025",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 0.0
+api_request_duration_bucket{le="0.05",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 0.0
+api_request_duration_bucket{le="0.1",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="0.25",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="0.5",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="1.0",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="2.5",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="5.0",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="10.0",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_bucket{le="+Inf",method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_count{method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 2.0
+api_request_duration_sum{method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 0.11297557599999664
+api_request_duration_bucket{le="0.005",method="POST",route="/api/v1/runs"} 0.0
+api_request_duration_bucket{le="0.01",method="POST",route="/api/v1/runs"} 0.0
+api_request_duration_bucket{le="0.025",method="POST",route="/api/v1/runs"} 0.0
+api_request_duration_bucket{le="0.05",method="POST",route="/api/v1/runs"} 0.0
+api_request_duration_bucket{le="0.1",method="POST",route="/api/v1/runs"} 9.0
+api_request_duration_bucket{le="0.25",method="POST",route="/api/v1/runs"} 18.0
+api_request_duration_bucket{le="0.5",method="POST",route="/api/v1/runs"} 20.0
+api_request_duration_bucket{le="1.0",method="POST",route="/api/v1/runs"} 21.0
+api_request_duration_bucket{le="2.5",method="POST",route="/api/v1/runs"} 21.0
+api_request_duration_bucket{le="5.0",method="POST",route="/api/v1/runs"} 21.0
+api_request_duration_bucket{le="10.0",method="POST",route="/api/v1/runs"} 21.0
+api_request_duration_bucket{le="+Inf",method="POST",route="/api/v1/runs"} 21.0
+api_request_duration_count{method="POST",route="/api/v1/runs"} 21.0
+api_request_duration_sum{method="POST",route="/api/v1/runs"} 3.820699510999958
+api_request_duration_bucket{le="0.005",method="GET",route="/api/v1/runs/{run_id}"} 0.0
+api_request_duration_bucket{le="0.01",method="GET",route="/api/v1/runs/{run_id}"} 0.0
+api_request_duration_bucket{le="0.025",method="GET",route="/api/v1/runs/{run_id}"} 0.0
+api_request_duration_bucket{le="0.05",method="GET",route="/api/v1/runs/{run_id}"} 45.0
+api_request_duration_bucket{le="0.1",method="GET",route="/api/v1/runs/{run_id}"} 154.0
+api_request_duration_bucket{le="0.25",method="GET",route="/api/v1/runs/{run_id}"} 305.0
+api_request_duration_bucket{le="0.5",method="GET",route="/api/v1/runs/{run_id}"} 385.0
+api_request_duration_bucket{le="1.0",method="GET",route="/api/v1/runs/{run_id}"} 392.0
+api_request_duration_bucket{le="2.5",method="GET",route="/api/v1/runs/{run_id}"} 397.0
+api_request_duration_bucket{le="5.0",method="GET",route="/api/v1/runs/{run_id}"} 397.0
+api_request_duration_bucket{le="10.0",method="GET",route="/api/v1/runs/{run_id}"} 397.0
+api_request_duration_bucket{le="+Inf",method="GET",route="/api/v1/runs/{run_id}"} 397.0
+api_request_duration_count{method="GET",route="/api/v1/runs/{run_id}"} 397.0
+api_request_duration_sum{method="GET",route="/api/v1/runs/{run_id}"} 72.29366000900012
+api_request_duration_bucket{le="0.005",method="GET",route="/api/v1/runs/{run_id}/cases"} 0.0
+api_request_duration_bucket{le="0.01",method="GET",route="/api/v1/runs/{run_id}/cases"} 0.0
+api_request_duration_bucket{le="0.025",method="GET",route="/api/v1/runs/{run_id}/cases"} 0.0
+api_request_duration_bucket{le="0.05",method="GET",route="/api/v1/runs/{run_id}/cases"} 4.0
+api_request_duration_bucket{le="0.1",method="GET",route="/api/v1/runs/{run_id}/cases"} 36.0
+api_request_duration_bucket{le="0.25",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_bucket{le="0.5",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_bucket{le="1.0",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_bucket{le="2.5",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_bucket{le="5.0",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_bucket{le="10.0",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_bucket{le="+Inf",method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_count{method="GET",route="/api/v1/runs/{run_id}/cases"} 41.0
+api_request_duration_sum{method="GET",route="/api/v1/runs/{run_id}/cases"} 2.5553341030000922
+api_request_duration_bucket{le="0.005",method="GET",route="/metrics"} 0.0
+api_request_duration_bucket{le="0.01",method="GET",route="/metrics"} 16.0
+api_request_duration_bucket{le="0.025",method="GET",route="/metrics"} 18.0
+api_request_duration_bucket{le="0.05",method="GET",route="/metrics"} 18.0
+api_request_duration_bucket{le="0.1",method="GET",route="/metrics"} 18.0
+api_request_duration_bucket{le="0.25",method="GET",route="/metrics"} 20.0
+api_request_duration_bucket{le="0.5",method="GET",route="/metrics"} 20.0
+api_request_duration_bucket{le="1.0",method="GET",route="/metrics"} 20.0
+api_request_duration_bucket{le="2.5",method="GET",route="/metrics"} 20.0
+api_request_duration_bucket{le="5.0",method="GET",route="/metrics"} 20.0
+api_request_duration_bucket{le="10.0",method="GET",route="/metrics"} 20.0
+api_request_duration_bucket{le="+Inf",method="GET",route="/metrics"} 20.0
+api_request_duration_count{method="GET",route="/metrics"} 20.0
+api_request_duration_sum{method="GET",route="/metrics"} 0.47551377100003833
+# HELP api_request_duration_created HTTP request duration in seconds.
+# TYPE api_request_duration_created gauge
+api_request_duration_created{method="GET",route="/health/ready"} 1.7862173590529711e+09
+api_request_duration_created{method="POST",route="/api/v1/datasets"} 1.786217379312194e+09
+api_request_duration_created{method="POST",route="/api/v1/datasets/{dataset_id}/versions"} 1.7862173793785408e+09
+api_request_duration_created{method="POST",route="/api/v1/runs"} 1.7862173930920482e+09
+api_request_duration_created{method="GET",route="/api/v1/runs/{run_id}"} 1.786217393139337e+09
+api_request_duration_created{method="GET",route="/api/v1/runs/{run_id}/cases"} 1.786217396143434e+09
+api_request_duration_created{method="GET",route="/metrics"} 1.7862173964580684e+09
+# HELP run_created_total New Runs durably created; idempotency replays are excluded.
+# TYPE run_created_total counter
+run_created_total 21.0
+# HELP run_created_created New Runs durably created; idempotency replays are excluded.
+# TYPE run_created_created gauge
+run_created_created 1.7862173585823307e+09
+# HELP job_queue_depth Jobs currently eligible or waiting to become eligible.
+# TYPE job_queue_depth gauge
+job_queue_depth 0.0
+# HELP job_running Jobs currently holding a running lease.
+# TYPE job_running gauge
+job_running 0.0
+# HELP job_succeeded_total Jobs successfully persisted by this process.
+# TYPE job_succeeded_total counter
+job_succeeded_total 0.0
+# HELP job_succeeded_created Jobs successfully persisted by this process.
+# TYPE job_succeeded_created gauge
+job_succeeded_created 1.7862173585823662e+09
+# HELP job_failed_total Jobs permanently failed by this process.
+# TYPE job_failed_total counter
+job_failed_total 0.0
+# HELP job_failed_created Jobs permanently failed by this process.
+# TYPE job_failed_created gauge
+job_failed_created 1.7862173585823731e+09
+# HELP job_retry_total Retry transitions committed by this process.
+# TYPE job_retry_total counter
+job_retry_total 0.0
+# HELP job_retry_created Retry transitions committed by this process.
+# TYPE job_retry_created gauge
+job_retry_created 1.7862173585823784e+09
+# HELP job_lease_expired_total Expired leases recovered by this process.
+# TYPE job_lease_expired_total counter
+job_lease_expired_total 0.0
+# HELP job_lease_expired_created Expired leases recovered by this process.
+# TYPE job_lease_expired_created gauge
+job_lease_expired_created 1.7862173585823843e+09
+# HELP worker_heartbeat_age Age in seconds of the stalest running Job heartbeat.
+# TYPE worker_heartbeat_age gauge
+worker_heartbeat_age 0.0
+# HELP case_duration Target plus evaluator case duration in seconds.
+# TYPE case_duration histogram
+case_duration_bucket{le="0.01"} 0.0
+case_duration_bucket{le="0.025"} 0.0
+case_duration_bucket{le="0.05"} 0.0
+case_duration_bucket{le="0.1"} 0.0
+case_duration_bucket{le="0.25"} 0.0
+case_duration_bucket{le="0.5"} 0.0
+case_duration_bucket{le="1.0"} 0.0
+case_duration_bucket{le="2.5"} 0.0
+case_duration_bucket{le="5.0"} 0.0
+case_duration_bucket{le="10.0"} 0.0
+case_duration_bucket{le="30.0"} 0.0
+case_duration_bucket{le="60.0"} 0.0
+case_duration_bucket{le="120.0"} 0.0
+case_duration_bucket{le="+Inf"} 0.0
+case_duration_count 0.0
+case_duration_sum 0.0
+# HELP case_duration_created Target plus evaluator case duration in seconds.
+# TYPE case_duration_created gauge
+case_duration_created 1.7862173585824003e+09
+# HELP db_operation_duration_seconds Observed duration of bounded durable database operations.
+# TYPE db_operation_duration_seconds histogram
+db_operation_duration_seconds_bucket{le="0.0005",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.025",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.05",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.1",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.25",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.5",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="1.0",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="2.5",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="5.0",operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="claim"} 0.0
+db_operation_duration_seconds_count{operation="claim"} 0.0
+db_operation_duration_seconds_sum{operation="claim"} 0.0
+db_operation_duration_seconds_bucket{le="0.0005",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.025",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.05",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.1",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.25",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.5",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="1.0",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="2.5",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="5.0",operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="failure"} 0.0
+db_operation_duration_seconds_count{operation="failure"} 0.0
+db_operation_duration_seconds_sum{operation="failure"} 0.0
+db_operation_duration_seconds_bucket{le="0.0005",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.025",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.05",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.1",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.25",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.5",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="1.0",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="2.5",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="5.0",operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="reaper"} 0.0
+db_operation_duration_seconds_count{operation="reaper"} 0.0
+db_operation_duration_seconds_sum{operation="reaper"} 0.0
+db_operation_duration_seconds_bucket{le="0.0005",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.001",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.0025",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.005",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.01",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.025",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.05",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.1",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.25",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="0.5",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="1.0",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="2.5",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="5.0",operation="result"} 0.0
+db_operation_duration_seconds_bucket{le="+Inf",operation="result"} 0.0
+db_operation_duration_seconds_count{operation="result"} 0.0
+db_operation_duration_seconds_sum{operation="result"} 0.0
+# HELP db_operation_duration_seconds_created Observed duration of bounded durable database operations.
+# TYPE db_operation_duration_seconds_created gauge
+db_operation_duration_seconds_created{operation="claim"} 1.786217358582478e+09
+db_operation_duration_seconds_created{operation="failure"} 1.786217358582504e+09
+db_operation_duration_seconds_created{operation="reaper"} 1.7862173585825243e+09
+db_operation_duration_seconds_created{operation="result"} 1.786217358582543e+09
+# HELP sse_connections Currently open SSE response iterators.
+# TYPE sse_connections gauge
+sse_connections 0.0
+# HELP redis_publish_failures_total Best-effort Redis progress publications that failed.
+# TYPE redis_publish_failures_total counter
+redis_publish_failures_total 0.0
+# HELP redis_publish_failures_created Best-effort Redis progress publications that failed.
+# TYPE redis_publish_failures_created gauge
+redis_publish_failures_created 1.7862173585825655e+09
+# HELP outbox_pending Durable progress events awaiting successful publication.
+# TYPE outbox_pending gauge
+outbox_pending 0.0
+# HELP outbox_oldest_pending_age_seconds Age of the oldest durable unpublished progress event.
+# TYPE outbox_oldest_pending_age_seconds gauge
+outbox_oldest_pending_age_seconds 0.0
+# HELP outbox_metrics_last_success_timestamp_seconds Unix timestamp of the most recent successful durable Outbox metrics refresh.
+# TYPE outbox_metrics_last_success_timestamp_seconds gauge
+outbox_metrics_last_success_timestamp_seconds 1.786217734262678e+09
+# HELP outbox_metrics_refresh_failures_total Durable Outbox metrics refreshes that failed in this process.
+# TYPE outbox_metrics_refresh_failures_total counter
+outbox_metrics_refresh_failures_total 0.0
+# HELP outbox_metrics_refresh_failures_created Durable Outbox metrics refreshes that failed in this process.
+# TYPE outbox_metrics_refresh_failures_created gauge
+outbox_metrics_refresh_failures_created 1.7862173585825877e+09
+# HELP outbox_retry_scheduled_total Durable progress publications rescheduled after a failed attempt.
+# TYPE outbox_retry_scheduled_total counter
+outbox_retry_scheduled_total 0.0
+# HELP outbox_retry_scheduled_created Durable progress publications rescheduled after a failed attempt.
+# TYPE outbox_retry_scheduled_created gauge
+outbox_retry_scheduled_created 1.7862173585825927e+09
+# HELP outbox_lease_lost_total Outbox publications whose acknowledgement or reschedule lost its lease.
+# TYPE outbox_lease_lost_total counter
+outbox_lease_lost_total 0.0
+# HELP outbox_lease_lost_created Outbox publications whose acknowledgement or reschedule lost its lease.
+# TYPE outbox_lease_lost_created gauge
+outbox_lease_lost_created 1.7862173585825982e+09
+# HELP outbox_cleanup_deleted_total Published Outbox rows deleted after the configured retention period.
+# TYPE outbox_cleanup_deleted_total counter
+outbox_cleanup_deleted_total 0.0
+# HELP outbox_cleanup_deleted_created Published Outbox rows deleted after the configured retention period.
+# TYPE outbox_cleanup_deleted_created gauge
+outbox_cleanup_deleted_created 1.7862173585826032e+09
