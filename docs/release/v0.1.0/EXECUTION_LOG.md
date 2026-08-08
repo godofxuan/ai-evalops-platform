@@ -398,3 +398,24 @@ push 需要同时让真实 integration RED 转 GREEN，并让原始 RC 走过双
 提交前最终本地结果：`614 passed, 13 deselected in 369.80s`；315 files formatted；Ruff
 passed；MyPy 133 source files passed；diff check passed。integration marker 的真实结论仍未提前
 声称为 GREEN。
+
+## 2026-08-08 — 第三次 CI：统一 cancellation 锁序
+
+第三次 source `2a76c74721ae4aae4b9c08f59c7e19467942d13e` 的 RC run `31261616628`
+越过前两次约 63 秒的双 Worker deadlock 点并持续运行 initial，说明 capacity 主路径锁环已解除。
+但标准 CI run `31261616651` 的真实 job-claiming integration 仍失败。
+
+公开 Actions summary 的 annotation 显示，新加的两个并发 result commit 已通过；失败发生在同一测试
+后半段既有 `cancel_run` 与 `commit_success` race，`race_outcomes` 中出现 BaseException。源码核对
+确认 cancellation 仍采用 `Jobs FOR UPDATE → Run FOR UPDATE`，与 result 的
+`Tenant → Run → Job` 相反。
+
+保持原断言“双方均不得抛异常”不变，先新增 cancellation tenant lock SQL 单元 RED；collection
+error 后实现 `build_tenant_key_share_for_cancellation_statement`，并把 cancellation transaction
+重排为：初读 tenant-scoped Run → Tenant KEY SHARE → Run FOR UPDATE → 按 ID Jobs FOR UPDATE →
+flush/aggregate。这样 cancellation、result completion 与 claim 都遵循 Tenant → Run → Job(s)。
+
+两个 outbox unit test 的 RecordingSession 结果队列同步改为真实调用顺序，没有屏蔽异常。局部
+16 tests passed，随后全仓结果为 `615 passed, 13 deselected in 372.41s`；315 files formatted；
+Ruff passed；MyPy 133 source files passed；diff check passed。更新 trigger 后必须再次让真实 race
+integration 转 GREEN；此前 source 的运行结果不外推到新 source。
