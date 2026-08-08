@@ -660,3 +660,67 @@ fair 64/64、q10k legacy 64/64 均为 10000。这个离线结果只验证修复�
 计划；原 bundle 的 immutable summary/manifest 仍保持 FAILED，不回填为成功。必须提交新 source
 并重新运行 source-bound 1k/10k/100k workflow，才可建立最终 release capacity 证据；此刻 release
 继续为 `NOT_READY`。
+
+## 2026-08-09 — current fair 1k/10k/100k 容量门完整通过
+
+### 精确运行身份与不可变产物
+
+修复提交 `4996fe0` 与独立触发提交 `f8b96fd` 推送后，精确 source
+`f8b96fdd8a4e88f0bd1b162b95daa166f2a49aef` 触发：
+
+- 标准 CI run `31266366601`：success；quality-and-integration 3m09s，Compose smoke 1m17s；
+- RC capacity run `31266366590`：success；fair-capacity job 1h10m；
+- artifact：`rc-gh-31266366590-1`，1.08 MB，
+  `sha256:1f4eb2e7ca1e49a43376e98a4e8c6d2e37fcb7cc1e0c163b8c70ac19a8c680ab`；
+- immutable evidence commit：`0c315cb`。
+
+采证期间本地没有推送或编辑证据目录；工作流结束后才 fetch 并 fast-forward。initial 与 large
+assessment 均为 `VERIFIED`，source/expected source 精确相等，blockers 为空：initial 32/32 arms，
+large 16/16 arms，均无 missing/duplicate/unexpected。
+
+### 独立重验及核验脚本中的两次假设错误
+
+没有只接受生成器自己的绿色状态，而是重新调用 release admission、重算 manifest 文件集/大小/
+SHA-256，并遍历全部 raw 与 EXPLAIN。第一次独立脚本错误地把 `lost_count` 当作 raw 顶层字段，实际
+schema 将一部分 correctness 字段放在 `correctness` 对象中；脚本因此 `KeyError`，没有说明证据
+失败。第二次错误地要求每份 EXPLAIN 重复包含 `source_commit`；真实合同由 stage manifest 与
+assessment 绑定 exact source，单份 EXPLAIN 不重复该字段，因而出现 384 个假阳性。两次都只修正
+临时只读核验逻辑，没有修改产物或生产代码。
+
+按真实 schema 的最终独立结果为零错误：
+
+| Stage | Arms | Raw | EXPLAIN | Manifest payload files | Submitted/terminal | Runtime/EXPLAIN errors |
+|---|---:|---:|---:|---:|---:|---:|
+| initial（1k/10k） | 32 | 32 | 256 | 290 | 3200/3200 | 0/0 |
+| large（100k） | 16 | 16 | 128 | 146 | 1600/1600 | 0/0 |
+| 合计 | 48 | 48 | 384 | 436 | 4800/4800 | 0/0 |
+
+所有 raw arm 的 lost、duplicate durable result、orphan、attempt mismatch、stale success/failure
+accepted 和 illegal transition 均为 0。384/384 EXPLAIN 的 candidate cardinality 与所属 queue size
+精确相等。20:1 分布中 fair 次租户最晚位置为 2；legacy FIFO 最早位置在 initial 为 953、在
+100k 为 95239，证明公平语义在三个队列规模均保持，而不是借用旧 source 的 correctness。
+
+### fixed-sample 性能、资源与瓶颈
+
+以下 Jobs/s 是“每臂在既定 backlog 中完成 100 个真实 worker 样本”，不是完整排空队列吞吐：
+
+| Queue | Jobs/s min / median / max | Claim p95 ms min / median / max | Fair plan median ms min / median / max | Legacy plan median ms min / median / max |
+|---:|---:|---:|---:|---:|
+| 1k | 3.066 / 32.164 / 54.012 | 18.478 / 144.108 / 2360.747 | 6.027 / 9.531 / 481.971 | 2.003 / 3.224 / 3.556 |
+| 10k | 4.452 / 7.433 / 13.245 | 69.096 / 440.842 / 3788.800 | 52.575 / 79.773 / 106.474 | 27.663 / 34.549 / 47.941 |
+| 100k | 0.282 / 0.462 / 0.921 | 2523.467 / 8541.875 / 48522.589 | 726.741 / 1218.029 / 2281.322 | 311.178 / 357.042 / 508.342 |
+
+100k 最慢 arm 是 many-small/w8：354.346s、0.282 Jobs/s；最快是 skew/w1：108.536s、
+0.921 Jobs/s。历史失败点 single-tenant/w8 本次完整 VERIFIED：298.133s、0.335 Jobs/s、claim p95
+48522.589ms、commit p95 1117.129ms、100/100 terminal、correctness 全零，证明 post-selection lease
+起点消除了该场景的假性过期，但没有消除昂贵 claim。
+
+100k fair/legacy paired plan latency 比值的 arm 中位数为 3.087，范围 2.213–6.156；最大值位于
+skew/w1（2039.292ms 对 331.271ms）。100k 最大 RSS 106,921,984 bytes、最大 PostgreSQL
+connections 12、最大 waiting-lock connections 2。证据因此支持的瓶颈判断是：fair 的全候选排序/
+窗口查询及其并发放大是主要容量成本，result commit 次之；但 correctness、source-bound gate 和
+240 分钟工作流均已通过，本 RC 阶段没有测得要求再次修改 production scheduler 的功能性回归。
+
+此时 1k/10k/100k current fair capacity gate 已完成，但 release 仍暂为 `NOT_READY`：尚需对同一
+current source 执行历史兼容的正式 500-case/32-arm worker-scaling 协议，并完成最终 release 文档与
+一致性审计。
