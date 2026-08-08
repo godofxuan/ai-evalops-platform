@@ -21,9 +21,11 @@ def test_release_candidate_workflow_stages_large_queue_after_initial_gate() -> N
     assert "python -m scripts.run_fair_capacity_test" in initial
     assert '--queue-sizes "1000,10000"' in initial
     assert "--stage initial" in initial
+    assert "--sample-jobs 100" in initial
     assert '--source-commit "$GITHUB_SHA"' in initial
     assert '--queue-sizes "100000"' in large
     assert "--stage large" in large
+    assert "--sample-jobs 100" in large
     assert '--prior-assessment "$RC_EXECUTION_ROOT/initial/assessment.json"' in large
     assert steps.index(named_steps["Execute and verify 1k and 10k queues"]) < steps.index(
         named_steps["Execute and verify 100k queue after initial gate"]

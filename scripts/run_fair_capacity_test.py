@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stage", choices=("initial", "large"), required=True)
     parser.add_argument("--queue-sizes", required=True)
     parser.add_argument("--prior-assessment", type=Path)
-    parser.add_argument("--sample-jobs", type=int, default=500)
+    parser.add_argument("--sample-jobs", type=int, default=100)
     parser.add_argument("--database-url-env", default="EVALOPS_EXPERIMENT_DATABASE_URL")
     parser.add_argument("--output-root", type=Path, default=Path("docs/results/release/v0.1.0"))
     return parser

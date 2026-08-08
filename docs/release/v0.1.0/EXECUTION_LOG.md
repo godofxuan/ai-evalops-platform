@@ -419,3 +419,20 @@ flush/aggregate。这样 cancellation、result completion 与 claim 都遵循 Te
 16 tests passed，随后全仓结果为 `615 passed, 13 deselected in 372.41s`；315 files formatted；
 Ruff passed；MyPy 133 source files passed；diff check passed。更新 trigger 后必须再次让真实 race
 integration 转 GREEN；此前 source 的运行结果不外推到新 source。
+
+## 2026-08-08 — 用实测结果校正 fixed-sample 协议
+
+第三次 RC 的 500-job 协议在 initial 持续超过 25 分钟仍未完成。第一份已保存 raw 显示 q1k、
+single Worker 的 500 jobs 需要 60.43 秒（8.27 jobs/s），而 fair selector 每次 claim 都要在当前
+queue 上执行候选排名；因此把固定 500 claims 原样扩到 q10k/100k × 48 arms，100k 很可能触及
+workflow 240 分钟上限。这是协议可执行性风险，不是生产 correctness 失败。
+
+先把 workflow contract 改为要求 `--sample-jobs 100`，RED 为 1 failed。随后把 CLI default 和
+initial/large 命令都改为 100。100 不是任意缩小：many-small 分布精确为 100 tenants，sample
+仍能验证每个 tenant 至少一次；p50/p95/p99、throughput、CPU/RSS、connections、lock waits 和
+20:1 secondary position 仍可计算。口径继续明确为“在大 backlog 下完成固定样本”，不宣称完整
+排空吞吐。历史 500-job 失败 raw 保留，不改写。
+
+本机没有 `gh` CLI。检查命令因 PowerShell `$LASTEXITCODE` 沿用旧值一度输出 version/auth=0，
+但实际两次均为 CommandNotFound；没有读取 Git credential 或绕过 GitHub 权限取消 run。新 push
+只会按既有 concurrency 规则替换 pending run，不取消仍在运行的旧 evidence。

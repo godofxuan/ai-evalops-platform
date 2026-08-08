@@ -72,7 +72,7 @@ jobs:
           --source-commit "$GITHUB_SHA"
           --stage initial
           --queue-sizes "1000,10000"
-          --sample-jobs 500
+          --sample-jobs 100
           --output-root "$RC_EXECUTION_ROOT"
 
       - name: Execute and verify 100k queue after initial gate
@@ -83,7 +83,7 @@ jobs:
           --stage large
           --queue-sizes "100000"
           --prior-assessment "$RC_EXECUTION_ROOT/initial/assessment.json"
-          --sample-jobs 500
+          --sample-jobs 100
           --output-root "$RC_EXECUTION_ROOT"
 
       - name: Preserve runner and Compose diagnostics
