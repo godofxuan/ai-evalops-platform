@@ -526,5 +526,12 @@ while keeping lexical quality and operational cost signals semantically separate
 
 Run provenance remains traceable through source commit, dataset/target/evaluator versions,
 configuration snapshots, and hashes. The caller-declared evaluator version is not yet a
-server-attested implementation version. Repository validation is GREEN, but remote CI is still
-pending, so this phase remains `LOCAL-GREEN` rather than `VERIFIED`.
+server-attested implementation version. At the local gate, repository validation was GREEN while
+remote CI was still pending, so the phase correctly remained `LOCAL-GREEN` at that point.
+
+### Remote authority
+
+Commit `5ef2e0c` triggered GitHub Actions run `31251984950`. `compose-smoke` completed successfully
+at `2026-08-08T10:06:09Z`, and `quality-and-integration` completed successfully at
+`2026-08-08T10:07:37Z`. The complete workflow conclusion is `success`, so the evaluator registry
+and retrieval/citation contract are now `VERIFIED` for the committed revision.

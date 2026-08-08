@@ -1,6 +1,6 @@
 # Evaluator registry and metric contract
 
-Status: `LOCAL-GREEN` (remote CI pending)
+Status: `VERIFIED`
 
 ## Decision before implementation
 
@@ -78,8 +78,10 @@ Local focused result:
 - repository Ruff: 303 files formatted and lint-clean;
 - repository strict MyPy: passed for 129 source files.
 
-These results prove the local contract only. The status must not be promoted to `VERIFIED` until the
-complete repository gates and remote GitHub Actions pass for the committed revision.
+Remote authority: commit `5ef2e0c` triggered GitHub Actions run `31251984950`. Both
+`compose-smoke` and `quality-and-integration` completed successfully. The former built and started
+the complete service topology; the latter passed the repository quality gates and real-service
+integration sequence. The tested registry contract is therefore `VERIFIED` for this revision.
 
 ## Known limitations
 
