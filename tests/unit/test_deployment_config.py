@@ -135,6 +135,17 @@ def test_integration_prerequisites_run_after_an_independent_unit_failure() -> No
     assert by_name["Apply migrations"]["if"] == "${{ !cancelled() }}"
 
 
+def test_nonintegration_failures_are_exported_to_ci_annotations() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["quality-and-integration"]["steps"]
+    by_name = {step["name"]: step for step in steps}
+
+    unit_command = by_name["Run tests without external services"]["run"]
+    annotation_command = by_name["Annotate test failures"]["run"]
+    assert "--junitxml=/tmp/junit-unit.xml" in unit_command
+    assert "/tmp/junit-unit.xml" in annotation_command
+
+
 def test_outbox_alert_rules_cover_stalled_backlog_and_lease_loss() -> None:
     rules_path = Path("deploy/prometheus/outbox-alerts.yml")
     loaded = yaml.safe_load(rules_path.read_text(encoding="utf-8"))

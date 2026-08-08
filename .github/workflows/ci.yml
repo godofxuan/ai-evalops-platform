@@ -70,7 +70,9 @@ jobs:
         run: uv run --no-sync mypy app scripts tests/integration tests/concurrency
 
       - name: Run tests without external services
-        run: uv run --no-sync pytest -m "not integration"
+        run: >-
+          uv run --no-sync pytest -m "not integration"
+          --junitxml=/tmp/junit-unit.xml
 
       - name: Prepare artifact directory
         if: ${{ !cancelled() }}
@@ -141,10 +143,11 @@ jobs:
           uv run --no-sync alembic downgrade 20260802_0009
           uv run --no-sync alembic upgrade head
 
-      - name: Annotate integration failures
+      - name: Annotate test failures
         if: ${{ failure() && !cancelled() }}
         run: >-
           uv run --no-sync python scripts/ci_annotations.py junit
+          /tmp/junit-unit.xml
           /tmp/junit-job-claiming.xml
           /tmp/junit-human-reviews.xml
           /tmp/junit-identity-datasets.xml
