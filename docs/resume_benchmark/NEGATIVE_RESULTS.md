@@ -43,6 +43,12 @@
   20 Jobs. The fixture now flushes Tenant first. The scheduler retains its fairness lock and adds a
   bounded eligibility-aware contention retry instead of weakening the prior concurrency invariant.
   This run remains `FAILED`; its intended 21-to-first-wave fairness comparison is not evidence.
+- CI run `31253257533` tested the first contention-retry correction at source `2563cd5`. Compose
+  passed, but quality/integration exposed a stale CTE candidate: a queued Job changed to running
+  while the outer query waited for its lock, then was returned because eligibility was not repeated
+  outside the ranking CTE. The resulting `running -> running` transition was rejected by the state
+  machine. The locking query now re-applies Job/Run eligibility for current-row revalidation. This
+  run remains `FAILED` and supplies no fairness result.
 
 ## Reporting rule
 

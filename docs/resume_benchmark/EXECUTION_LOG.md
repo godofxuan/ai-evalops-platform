@@ -598,3 +598,17 @@ probable lock contention, bounded at 20 retries. A new unit test proves this seq
 Corrected local validation passed `574 passed, 13 deselected` in `352.50s`, Ruff passed 307 files,
 and strict MyPy passed 130 source files. The first remote run remains `FAILED`; a new remote run is
 required before the fairness result can become evidence.
+
+### Second remote concurrency failure
+
+Correction commit `2563cd5` triggered Actions run `31253257533`. Compose smoke succeeded, but the
+existing 10-Worker test raised `InvalidJobStateTransition: running -> running`. The ranked CTE had
+captured queued candidate IDs before row locking. A competing transaction updated one candidate
+while this query waited; the outer query had no eligible predicate to recheck after obtaining the
+lock and returned the now-running row.
+
+The fix deliberately keeps eligibility in two places: inside the CTE for candidate ranking and in
+the outer locking query for current-row revalidation after concurrent updates. A SQL regression
+requires both layers. The third local gate passed `574 passed, 13 deselected` in `355.24s`, 307-file
+Ruff, and strict MyPy across 130 source files. Run `31253257533` remains `FAILED`; another remote run
+is required.

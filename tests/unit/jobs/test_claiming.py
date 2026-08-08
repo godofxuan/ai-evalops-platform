@@ -109,6 +109,7 @@ def test_claim_candidates_use_postgresql_skip_locked_and_deterministic_order() -
     assert "tenants.last_job_claimed_at ASC NULLS FIRST" in sql
     assert "FOR UPDATE OF evaluation_jobs, tenants SKIP LOCKED" in sql
     assert "evaluation_jobs.status" in sql
+    assert sql.count("evaluation_jobs.status") >= 4
     assert "evaluation_jobs.next_attempt_at" in sql
     assert "evaluation_runs.status" in sql
     assert "tenant_candidate_rank ASC" in sql

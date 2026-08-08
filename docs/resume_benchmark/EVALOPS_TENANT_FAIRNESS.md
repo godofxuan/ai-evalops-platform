@@ -76,6 +76,21 @@ runs a non-locking eligible-job probe. No eligible Job returns immediately; an e
 Corrected local gate: `574 passed, 13 deselected` in `352.50s`; Ruff passed 307 files; strict MyPy
 passed 130 source files. A corrected remote run remains required.
 
+## Second remote failure and lock-time recheck
+
+Commit `2563cd5` triggered Actions run `31253257533`. Compose smoke passed again. The former
+20-of-100 symptom was replaced by a more precise concurrency failure: a ranked CTE selected a
+queued Job before the outer query acquired its lock; while waiting, another transaction changed the
+Job to running. Because eligibility only existed inside the CTE, the outer query returned that stale
+candidate and attempted the illegal transition `running -> running`.
+
+The correction repeats the Job and Run eligibility predicates in the outer locking query. The CTE
+still supplies the fair rank, while the outer predicate is re-evaluated against the current row after
+concurrent lock/update resolution. A compiled-SQL regression requires both predicate layers.
+
+The third local gate passed `574 passed, 13 deselected` in `355.24s`; Ruff passed 307 files and
+strict MyPy passed 130 source files. A third remote run is required.
+
 ## Real-service proof contract
 
 The PostgreSQL integration test creates:
