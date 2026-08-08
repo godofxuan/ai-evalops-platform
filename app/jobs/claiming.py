@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -25,6 +26,10 @@ from app.persistence.orm_models import (
 
 class InvalidClaimRequest(ValueError):
     """A worker claim request has unsafe identity or batch parameters."""
+
+
+_MAX_CONTENTION_RETRIES = 20
+_CONTENTION_RETRY_SECONDS = 0.01
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,15 +66,6 @@ def build_claim_candidates_statement(
     now: datetime,
     limit: int,
 ) -> Select[tuple[EvaluationJob, EvaluationRun, Tenant]]:
-    eligible_job = or_(
-        EvaluationJob.status == JobStatus.QUEUED,
-        and_(
-            EvaluationJob.status == JobStatus.RETRY_WAIT,
-            EvaluationJob.next_attempt_at.is_not(None),
-            EvaluationJob.next_attempt_at <= now,
-        ),
-    )
-    eligible_run = EvaluationRun.status.in_((RunStatus.QUEUED, RunStatus.RUNNING))
     ranked_candidates = (
         select(
             EvaluationJob.id.label("job_id"),
@@ -85,7 +81,7 @@ def build_claim_candidates_statement(
             .label("tenant_candidate_rank"),
         )
         .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
-        .where(eligible_job, eligible_run)
+        .where(_eligible_job(now), _eligible_run())
         .cte("ranked_claim_candidates")
     )
     return (
@@ -103,6 +99,21 @@ def build_claim_candidates_statement(
         .limit(limit)
         .with_for_update(of=(EvaluationJob, Tenant), skip_locked=True)
     )
+
+
+def _eligible_job(now: datetime) -> Any:
+    return or_(
+        EvaluationJob.status == JobStatus.QUEUED,
+        and_(
+            EvaluationJob.status == JobStatus.RETRY_WAIT,
+            EvaluationJob.next_attempt_at.is_not(None),
+            EvaluationJob.next_attempt_at <= now,
+        ),
+    )
+
+
+def _eligible_run() -> Any:
+    return EvaluationRun.status.in_((RunStatus.QUEUED, RunStatus.RUNNING))
 
 
 class SQLAlchemyJobClaimer:
@@ -123,6 +134,38 @@ class SQLAlchemyJobClaimer:
         validate_claim_request(worker_id=worker_id, limit=limit)
         now = self._clock.now()
         lease_expires_at = now + self._lease_policy.duration
+        for retry_number in range(_MAX_CONTENTION_RETRIES + 1):
+            claims = await self._claim_once(
+                worker_id=worker_id,
+                limit=limit,
+                now=now,
+                lease_expires_at=lease_expires_at,
+            )
+            if claims:
+                return claims
+            if retry_number == _MAX_CONTENTION_RETRIES or not await self._has_eligible_jobs(now):
+                return ()
+            await asyncio.sleep(_CONTENTION_RETRY_SECONDS)
+        return ()
+
+    async def _has_eligible_jobs(self, now: datetime) -> bool:
+        async with self._session_factory() as session:
+            job_id = await session.scalar(
+                select(EvaluationJob.id)
+                .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+                .where(_eligible_job(now), _eligible_run())
+                .limit(1)
+            )
+        return job_id is not None
+
+    async def _claim_once(
+        self,
+        *,
+        worker_id: str,
+        limit: int,
+        now: datetime,
+        lease_expires_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
         claims: list[ClaimedJob] = []
         async with self._session_factory.begin() as session:
             rows = (

@@ -578,3 +578,23 @@ The new real PostgreSQL test records the legacy B position as 21, launches two c
 single-Job claimers, and requires the first wave to contain unique Jobs from both A and B. The CI
 workflow has a dedicated JUnit artifact/annotation entry. Local execution correctly skips without
 PostgreSQL; no fairness improvement is claimed as verified until the remote run succeeds.
+
+### First remote failure and evidence-based correction
+
+Commit `e43e785` triggered Actions run `31252705647`. `compose-smoke` succeeded in 49 seconds, but
+`quality-and-integration` failed. Public JUnit annotations provided both actionable failures.
+
+The new fairness fixture attempted Tenant and dependent APIKey inserts in the same flush; PostgreSQL
+raised `fk_api_keys_tenant_id_tenants`. The fixture now flushes Tenant rows first, following the
+existing real-service setup pattern.
+
+The existing 10-Worker test found the more important regression: only one concurrent transaction
+could lock the single Tenant, so one batch claimed 20 Jobs while the other nine calls returned empty;
+the expected one-wave total was 100. Weakening that assertion or removing the Tenant lock would hide
+either throughput or fairness loss. The corrected Claimer performs a non-locking eligibility probe
+after an empty selection. It returns immediately for a truly empty queue, but retries 10 ms under
+probable lock contention, bounded at 20 retries. A new unit test proves this sequence.
+
+Corrected local validation passed `574 passed, 13 deselected` in `352.50s`, Ruff passed 307 files,
+and strict MyPy passed 130 source files. The first remote run remains `FAILED`; a new remote run is
+required before the fairness result can become evidence.

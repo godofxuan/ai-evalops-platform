@@ -59,7 +59,10 @@ async def test_tenant_fair_claiming_prevents_older_flood_from_starving_new_tenan
     try:
         async with session_factory.begin() as session:
             for resource in resources.values():
-                session.add_all(resource.base_records())
+                session.add(resource.tenant())
+            await session.flush()
+            for resource in resources.values():
+                session.add_all(resource.dependent_records())
             await session.flush()
             for resource in resources.values():
                 session.add(resource.dataset_version())
@@ -182,13 +185,15 @@ class _TenantResources:
             digest=digest_char * 64,
         )
 
-    def base_records(self) -> list[object]:
+    def tenant(self) -> Tenant:
+        return Tenant(
+            id=self.tenant_id,
+            slug=f"fair-{self.tenant_id.hex}",
+            name="Fairness test tenant",
+        )
+
+    def dependent_records(self) -> list[object]:
         return [
-            Tenant(
-                id=self.tenant_id,
-                slug=f"fair-{self.tenant_id.hex}",
-                name="Fairness test tenant",
-            ),
             APIKey(
                 id=self.api_key_id,
                 tenant_id=self.tenant_id,

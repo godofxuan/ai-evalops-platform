@@ -36,6 +36,11 @@ class OneRowResult:
         return [self._row]
 
 
+class EmptyRowResult:
+    def all(self) -> list[tuple[EvaluationJob, EvaluationRun, Tenant]]:
+        return []
+
+
 class OneRowSession:
     def __init__(self, job: EvaluationJob, run: EvaluationRun, tenant: Tenant) -> None:
         self._result = OneRowResult(job, run, tenant)
@@ -48,6 +53,16 @@ class OneRowSession:
         self.added.append(value)
 
 
+class EmptyRowSession:
+    async def execute(self, _statement: object) -> EmptyRowResult:
+        return EmptyRowResult()
+
+
+class EligibleProbeSession:
+    async def scalar(self, _statement: object) -> UUID:
+        return JOB_ID
+
+
 class OneRowSessionFactory:
     def __init__(self, session: OneRowSession) -> None:
         self._session = session
@@ -55,6 +70,26 @@ class OneRowSessionFactory:
     @asynccontextmanager
     async def begin(self) -> AsyncIterator[OneRowSession]:
         yield self._session
+
+
+class ContendedThenAvailableSessionFactory:
+    def __init__(self, available_session: OneRowSession) -> None:
+        self._available_session = available_session
+        self.begin_count = 0
+        self.probe_count = 0
+
+    @asynccontextmanager
+    async def begin(self) -> AsyncIterator[EmptyRowSession | OneRowSession]:
+        self.begin_count += 1
+        if self.begin_count == 1:
+            yield EmptyRowSession()
+        else:
+            yield self._available_session
+
+    @asynccontextmanager
+    async def __call__(self) -> AsyncIterator[EligibleProbeSession]:
+        self.probe_count += 1
+        yield EligibleProbeSession()
 
 
 def compile_postgresql(statement: object) -> str:
@@ -128,6 +163,42 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
         "attempt_number": 1,
         "status": "running",
     }
+
+
+async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> None:
+    tenant = Tenant(id=TENANT_ID, slug="retry-tenant", name="Retry tenant")
+    run = EvaluationRun(
+        id=RUN_ID,
+        tenant_id=TENANT_ID,
+        status=RunStatus.RUNNING,
+        target_type="mock",
+        target_config_json={},
+        target_version="v1",
+        evaluator_type="execution",
+        evaluator_config_json={},
+        evaluator_version="v1",
+    )
+    job = EvaluationJob(
+        id=JOB_ID,
+        run_id=RUN_ID,
+        case_id="case-retry",
+        case_payload_json={"case_id": "case-retry"},
+        status=JobStatus.QUEUED,
+        attempt_count=0,
+        version=1,
+    )
+    factory = ContendedThenAvailableSessionFactory(OneRowSession(job, run, tenant))
+    claimer = SQLAlchemyJobClaimer(
+        factory,  # type: ignore[arg-type]
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(),
+    )
+
+    claims = await claimer.claim(worker_id="worker-retry")
+
+    assert [claim.job_id for claim in claims] == [JOB_ID]
+    assert factory.begin_count == 2
+    assert factory.probe_count == 1
 
 
 @pytest.mark.parametrize(("worker_id", "limit"), [("", 1), ("worker-1", 0), ("worker-1", 101)])

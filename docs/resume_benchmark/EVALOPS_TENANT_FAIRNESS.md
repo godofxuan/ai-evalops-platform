@@ -56,6 +56,26 @@ Local repository gate:
 - Ruff: 307 files formatted and lint-clean;
 - strict MyPy: 130 source files passed.
 
+## First remote failure and correction
+
+Commit `e43e785` triggered GitHub Actions run `31252705647`. Compose smoke passed, but the
+quality/integration job failed for two independent reasons:
+
+1. The new fairness fixture flushed Tenant and APIKey/Dataset dependants together. Real PostgreSQL
+   rejected the APIKey inserts because the Tenant rows were not yet present. The fixture now flushes
+   both Tenant rows first, matching the established integration setup pattern.
+2. Tenant row locking exposed a throughput regression in the existing 10-Worker/100-Job claim test.
+   One transaction claimed 20 Jobs and locked the Tenant; nine simultaneous claim calls skipped the
+   Tenant and returned empty, so the one-shot total was 20 rather than 100.
+
+The Tenant lock is required for strong first-wave fairness, so it was not removed. Instead,
+`claim()` now distinguishes an empty queue from lock contention: after an empty locked selection it
+runs a non-locking eligible-job probe. No eligible Job returns immediately; an eligible Job causes a
+10 ms retry, bounded at 20 retries. A unit regression proves empty-first/probe/second-attempt success.
+
+Corrected local gate: `574 passed, 13 deselected` in `352.50s`; Ruff passed 307 files; strict MyPy
+passed 130 source files. A corrected remote run remains required.
+
 ## Real-service proof contract
 
 The PostgreSQL integration test creates:
@@ -72,8 +92,9 @@ It retains both comparisons in the same test:
 - claimed Job IDs must remain unique.
 
 The test is wired into GitHub Actions after real migrations. Because local Docker/PostgreSQL is not
-available, the numeric improvement is not yet admitted as evidence. Remote success is required to
-promote this document to `VERIFIED`.
+available and the first remote attempt failed before the fairness assertions, the numeric
+improvement is not yet admitted as evidence. Corrected remote success is required to promote this
+document to `VERIFIED`.
 
 ## Trade-offs and limits
 
@@ -81,7 +102,8 @@ promote this document to `VERIFIED`.
   FIFO query. No large-queue query-plan or throughput comparison has been run yet.
 - This is fair scheduling, not an API rate limit, submission quota, storage quota, or billing policy.
 - One Tenant row becomes a coordination point for that tenant's concurrent claims. That is an
-  intentional bound, but its high-concurrency contention cost is not yet measured.
+  intentional bound. Bounded contention retries preserve the existing concurrent batch contract,
+  but their high-concurrency latency/DB-query cost is not yet measured.
 - A disabled Tenant's already queued Runs are not filtered by this scheduler; admission and
   cancellation policy remain separate concerns.
 - The current shared owner database role can see all tenants. A future RLS rollout for background

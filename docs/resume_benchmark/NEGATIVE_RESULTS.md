@@ -37,6 +37,12 @@
   volume; forcing UID/GID 1000 onto an unprepared fresh volume was the diagnosed configuration bug.
   A thin derived image now prepares a non-parent-volume directory for UID/GID 1000, and MinIO-first
   diagnostics prevent the same evidence loss. This run is retained as `FAILED`, not success evidence.
+- CI run `31252705647` was the first tenant-fair claiming attempt for source `e43e785`. Compose smoke
+  passed, but quality/integration failed: the new fixture violated APIKey-to-Tenant insert ordering,
+  and Tenant row locking reduced the existing simultaneous single-tenant batch result from 100 to
+  20 Jobs. The fixture now flushes Tenant first. The scheduler retains its fairness lock and adds a
+  bounded eligibility-aware contention retry instead of weakening the prior concurrency invariant.
+  This run remains `FAILED`; its intended 21-to-first-wave fairness comparison is not evidence.
 
 ## Reporting rule
 
