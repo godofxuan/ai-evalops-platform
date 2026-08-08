@@ -1,0 +1,66 @@
+{
+  "arm_id": "fair-q1000-skew_20_to_1-w1-b1",
+  "queue_size": 1000,
+  "distribution": "skew_20_to_1",
+  "worker_concurrency": 1,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "contention_retries": 0,
+  "max_retry_exits": 0,
+  "claim_latency_ms": {
+    "p50": 8.276206999994429,
+    "p95": 12.151235500016353,
+    "p99": 56.55686172001323
+  },
+  "result_commit_latency_ms": {
+    "p50": 10.01266850001059,
+    "p95": 14.115712950007262,
+    "p99": 16.526651779998094
+  },
+  "end_to_end_seconds": 2.097172439000019,
+  "jobs_per_second": 47.68325109578607,
+  "worker_process_cpu_percent": 67.52818731850537,
+  "worker_process_rss_bytes_peak": 103329792,
+  "postgres_connections_peak": 2,
+  "postgres_lock_waiting_connections_peak": 0,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "72be9e67-b69a-42e5-bce2-d592819c83bd": 1,
+    "e23f9390-fa37-4f69-8eae-44d8a95376f7": 2
+  },
+  "tenant_claim_counts": {
+    "72be9e67-b69a-42e5-bce2-d592819c83bd": 52,
+    "e23f9390-fa37-4f69-8eae-44d8a95376f7": 48
+  },
+  "fair_first_secondary_tenant_position": 2,
+  "legacy_fifo_first_secondary_tenant_position": 953,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3600287.9525,
+      "p95": 3602109.4281999995
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}
