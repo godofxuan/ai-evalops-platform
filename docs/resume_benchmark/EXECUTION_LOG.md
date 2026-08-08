@@ -406,3 +406,25 @@ non-integration pytest passed `561 passed, 12 deselected` in 368.12 seconds.
 The project can now select a shared S3-compatible backend without changing upper services, while
 Local remains the default. This is local GREEN only until GitHub verifies real MinIO conditional
 writes, corruption/failure behavior, and S3-backed Compose readiness.
+
+### First remote MinIO failure and evidence-based correction
+
+Commit `a98a5fb` started CI run `31250560395`. Compose image build, Python dependency sync, lock,
+format, lint, and MyPy gates succeeded. Both jobs then failed at MinIO startup: Compose reported
+PostgreSQL and Redis healthy while MinIO exited with status 1 immediately after logging
+`API: SYSTEM.storage`. Because integration steps use `!cancelled()`, the dedicated MinIO test also
+ran and failed after its prerequisite service was unavailable; that was a secondary failure.
+
+Unauthenticated raw GitHub job-log download returned HTTP 403. The bounded Compose annotation kept
+only the beginning and end of combined logs, truncating the detailed MinIO storage message from its
+middle. Rather than guess, the Docker registry manifest/config for the exact official image was
+queried. It declared no runtime `User`, used `/` as its workdir, and declared `/data` as a parent
+volume. The first Compose version overrode the process to UID/GID 1000 but mounted a fresh `/data`
+volume whose ownership had not been prepared for that UID.
+
+New RED deployment tests required a thin derived image, an owned non-parent-volume data path, the
+same non-root runtime identity, and MinIO-first failure diagnostics. They failed twice against the old
+Compose definition. The correction creates `/var/lib/evalops-minio` and assigns UID/GID 1000 during
+image build, switches to `USER 1000:1000`, mounts `minio_data` at that path, and leaves the runtime
+rootfs read-only with all capabilities dropped. Focused deployment/hardening GREEN: 17 tests. A new
+remote run is required; the result is not yet admitted as MinIO verification.

@@ -1,7 +1,7 @@
 # S3-compatible artifact backend
 
-Status: local contracts and complete non-integration suite `VERIFIED`; real MinIO execution
-`PENDING` on the next GitHub Actions run.
+Status: local contracts and complete non-integration suite `VERIFIED`; first real MinIO execution
+`FAILED`; non-root volume-ownership correction `PENDING` on the next GitHub Actions run.
 
 ## Decision and scope
 
@@ -63,10 +63,10 @@ change does not claim cross-system exactly-once deletion.
 - region and path/virtual addressing style;
 - an optional access/secret pair, or boto3's default credential chain when both are absent.
 
-The access and secret values are `SecretStr` and must be supplied together. Compose includes pinned
-MinIO, persistent `minio_data`, health checking, explicit non-root identity, read-only rootfs,
-dropped capabilities, and resource limits. Local storage remains selectable as a rollback/developer
-path.
+The access and secret values are `SecretStr` and must be supplied together. Compose builds a thin
+image from pinned MinIO, prepares `/var/lib/evalops-minio` for UID/GID 1000 at image-build time, and
+runs that non-root user with persistent `minio_data`, health checking, read-only rootfs, dropped
+capabilities, and resource limits. Local storage remains selectable as a rollback/developer path.
 
 ## Test evidence
 
@@ -85,3 +85,17 @@ The pending GitHub test will execute 12 concurrent conditional writes against re
 physical creation, verify download, simulate object corruption, refuse corrupt deletion, verify
 idempotent deletion, and confirm missing-bucket readiness/publish failures. Compose smoke will select
 the S3 backend, provision the bucket explicitly, and require API readiness through MinIO.
+
+## First remote negative result
+
+GitHub Actions run `31250560395` executed source `a98a5fb`. Both jobs built/synchronized their
+prerequisites, but MinIO exited during storage initialization. Compose diagnostics showed
+`API: SYSTEM.storage`; PostgreSQL and Redis were healthy. The quality job's MinIO test then failed
+because its `!cancelled()` contract deliberately continued after the failed startup.
+
+Registry inspection of the exact official image showed no declared runtime user and a parent-image
+volume at `/data`. The first Compose definition forced UID/GID 1000 directly onto that fresh volume,
+without preparing ownership. The correction does not relax runtime hardening to root: it creates and
+owns a non-parent-volume data directory during image build, switches back to UID/GID 1000, and mounts
+the named volume there. Compose failure annotation ordering was also changed to put MinIO-only logs
+before aggregate service logs so a future root cause is not truncated out of the bounded annotation.

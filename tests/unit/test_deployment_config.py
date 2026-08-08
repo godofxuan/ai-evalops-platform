@@ -112,7 +112,7 @@ def test_read_only_services_declare_only_their_required_writable_paths() -> None
 
     assert services["postgres"]["volumes"] == ["postgres_data:/var/lib/postgresql"]
     assert services["redis"]["volumes"] == ["redis_data:/data"]
-    assert services["minio"]["volumes"] == ["minio_data:/data"]
+    assert services["minio"]["volumes"] == ["minio_data:/var/lib/evalops-minio"]
     assert services["api"]["volumes"] == ["artifact_data:/data/artifacts"]
     assert services["worker"]["volumes"] == ["artifact_data:/data/artifacts"]
     assert "volumes" not in services["migrate"]
@@ -128,7 +128,15 @@ def test_s3_backend_and_minio_are_documented_and_exercised_in_ci() -> None:
     quality_steps = workflow["jobs"]["quality-and-integration"]["steps"]
     compose_job = workflow["jobs"]["compose-smoke"]
 
-    assert services["minio"]["image"] == "minio/minio:RELEASE.2025-09-07T16-13-09Z"
+    assert services["minio"]["image"] == "ai-evalops-minio:2025-09-07"
+    assert services["minio"]["build"] == {
+        "context": "..",
+        "dockerfile": "deploy/minio/Dockerfile",
+    }
+    minio_dockerfile = Path("deploy/minio/Dockerfile").read_text(encoding="utf-8")
+    assert "FROM minio/minio:RELEASE.2025-09-07T16-13-09Z" in minio_dockerfile
+    assert "chown 1000:1000 /var/lib/evalops-minio" in minio_dockerfile
+    assert "USER 1000:1000" in minio_dockerfile
     assert services["minio"]["healthcheck"]
     assert environment["EVALOPS_ARTIFACT_BACKEND"] == "${EVALOPS_ARTIFACT_BACKEND:-local}"
     assert environment["EVALOPS_ARTIFACT_S3_ENDPOINT_URL"] == (
@@ -143,6 +151,12 @@ def test_s3_backend_and_minio_are_documented_and_exercised_in_ci() -> None:
         in by_name["Integration - S3-compatible MinIO artifact storage"]["run"]
     )
     assert compose_job["env"]["EVALOPS_ARTIFACT_BACKEND"] == "s3"
+    annotation_command = {step["name"]: step for step in compose_job["steps"]}[
+        "Annotate Compose startup failure"
+    ]["run"]
+    assert annotation_command.index("logs --no-color --tail 120 minio") < (
+        annotation_command.index("ps --all")
+    )
 
 
 def test_compose_smoke_verifies_effective_runtime_hardening() -> None:

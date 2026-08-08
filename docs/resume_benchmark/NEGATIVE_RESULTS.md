@@ -29,6 +29,14 @@
   `UndefinedTable` failures. Public annotations exposed the cascade but GitHub required sign-in for
   the first step's raw log. The workflow prerequisites were changed to `!cancelled()`; the next CI
   run must determine whether the original unit failure was transient or reproducible.
+- CI run `31250560395` was the first real MinIO attempt for source `a98a5fb`. PostgreSQL and Redis
+  became healthy, but MinIO exited during `SYSTEM.storage`; both jobs therefore failed their MinIO
+  startup gate, and the continued MinIO integration test failed secondarily. Public raw-log download
+  returned 403, while the bounded combined-log annotation omitted the detailed storage line. Exact
+  registry metadata showed the official image defaults to root and declares `/data` as a parent
+  volume; forcing UID/GID 1000 onto an unprepared fresh volume was the diagnosed configuration bug.
+  A thin derived image now prepares a non-parent-volume directory for UID/GID 1000, and MinIO-first
+  diagnostics prevent the same evidence loss. This run is retained as `FAILED`, not success evidence.
 
 ## Reporting rule
 

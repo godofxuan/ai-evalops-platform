@@ -246,7 +246,8 @@ jobs:
       - name: Annotate Compose startup failure
         if: ${{ failure() && !cancelled() }}
         run: |
-          docker compose -f deploy/compose.yaml ps --all > /tmp/compose-diagnostics.txt
+          docker compose -f deploy/compose.yaml logs --no-color --tail 120 minio > /tmp/compose-diagnostics.txt
+          docker compose -f deploy/compose.yaml ps --all >> /tmp/compose-diagnostics.txt
           docker compose -f deploy/compose.yaml logs --no-color --tail 80 >> /tmp/compose-diagnostics.txt
           python3 scripts/ci_annotations.py text \
             --title "Compose startup failure" \
