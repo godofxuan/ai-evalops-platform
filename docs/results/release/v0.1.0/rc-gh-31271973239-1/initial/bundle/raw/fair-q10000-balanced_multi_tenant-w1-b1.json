@@ -1,0 +1,70 @@
+{
+  "arm_id": "fair-q10000-balanced_multi_tenant-w1-b1",
+  "queue_size": 10000,
+  "distribution": "balanced_multi_tenant",
+  "worker_concurrency": 1,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 9900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "contention_retries": 0,
+  "max_retry_exits": 0,
+  "claim_latency_ms": {
+    "p50": 28.449768499996253,
+    "p95": 32.398898799991116,
+    "p99": 36.33279841999966
+  },
+  "result_commit_latency_ms": {
+    "p50": 10.273937999997429,
+    "p95": 13.592736150013705,
+    "p99": 18.673925869996427
+  },
+  "end_to_end_seconds": 4.029903271000023,
+  "jobs_per_second": 24.814491384847788,
+  "worker_process_cpu_percent": 36.68672565019472,
+  "worker_process_rss_bytes_peak": 106164224,
+  "postgres_connections_peak": 2,
+  "postgres_lock_waiting_connections_peak": 0,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "ed36efdb-eb08-410c-9b8f-a9581bc1a07a": 4,
+    "0e6f9e67-2439-42d8-a6de-31e42845d074": 2,
+    "2952fc61-50bf-427c-8754-0e09fe621845": 3,
+    "5c5ebcd4-e28a-4822-9c19-5d270669c598": 1
+  },
+  "tenant_claim_counts": {
+    "5c5ebcd4-e28a-4822-9c19-5d270669c598": 25,
+    "0e6f9e67-2439-42d8-a6de-31e42845d074": 25,
+    "2952fc61-50bf-427c-8754-0e09fe621845": 25,
+    "ed36efdb-eb08-410c-9b8f-a9581bc1a07a": 25
+  },
+  "fair_first_secondary_tenant_position": null,
+  "legacy_fifo_first_secondary_tenant_position": null,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3602779.4255,
+      "p95": 3604540.46105
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}

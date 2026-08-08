@@ -1,0 +1,3 @@
+NAME                             IMAGE                      COMMAND                  SERVICE    CREATED         STATUS                   PORTS
+ai-evalops-platform-postgres-1   postgres:18.4-alpine3.24   "docker-entrypoint.s…"   postgres   3 minutes ago   Up 3 minutes (healthy)   127.0.0.1:5432->5432/tcp
+ai-evalops-platform-redis-1      redis:8.8.1-alpine3.23     "docker-entrypoint.s…"   redis      3 minutes ago   Up 3 minutes (healthy)   127.0.0.1:6379->6379/tcp
