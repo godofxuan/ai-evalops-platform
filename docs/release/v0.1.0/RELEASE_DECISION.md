@@ -4,6 +4,9 @@
 
 截至 2026-08-09，本分支不应创建或发布 `v0.1.0` Release。
 
+审阅入口：[Draft PR #1](https://github.com/godofxuan/ai-evalops-platform/pull/1)。Draft 状态表示证据可供
+审阅，不表示满足 release gate。
+
 | Gate | Result | Evidence |
 |---|---|---|
 | correctness | PASS | final A–I ×3 27/27，stale accepted 0，formal/capacity 无丢失或重复 |

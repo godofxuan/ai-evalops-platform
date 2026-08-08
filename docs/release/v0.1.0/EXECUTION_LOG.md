@@ -1078,3 +1078,12 @@ worker/fault workflow、日志上限和 experiment scripts 共 `73 passed, 1 war
 仍是 Windows pytest 临时目录清理 PermissionError，不是断言或产品路径失败。更早的完整非集成套件
 为 `629 passed, 13 skipped, 3 warnings`，最终 source 的两次 GitHub CI 和三条真实实验工作流均
 success。由此可以提交文档，但 release decision 保持 `NOT_READY`。
+
+最终文档提交 `7ca3a70` 推送后，CI run `31276177304` 的 `compose-smoke` 与
+`quality-and-integration` 两个 job 均 `completed/success`。公开仓库此前不存在该 head branch 的 PR；
+随后使用本机 Git credential helper 在内存中取得已有 GitHub 凭据，创建 Draft
+[PR #1](https://github.com/godofxuan/ai-evalops-platform/pull/1)：
+`codex/evidence-gate-1 → main`，标题明确 `NOT_READY performance gate`，正文包含 scope、三类 verified
+evidence、known limits、negative results 与禁止发布说明。credential 值没有输出；临时
+`.codex-tools/github-credential-request.txt` 已立即删除。PR 保持 Draft，不创建 tag/Release，不改变
+`NOT_READY` 决策。
