@@ -1,0 +1,83 @@
+redis-1     | Starting Redis Server
+redis-1     | 1:C 08 Aug 2026 14:05:25.885 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+redis-1     | 1:M 08 Aug 2026 14:05:25.932 # WARNING: Redis does not require authentication and is not protected by network restrictions. Redis will accept connections from any IP address on any network interface.
+postgres-1  | chmod: /var/run/postgresql: Operation not permitted
+postgres-1  | The files belonging to this database system will be owned by user "postgres".
+postgres-1  | This user must also own the server process.
+postgres-1  | 
+postgres-1  | The database cluster will be initialized with locale "en_US.utf8".
+postgres-1  | The default database encoding has accordingly been set to "UTF8".
+postgres-1  | The default text search configuration will be set to "english".
+postgres-1  | 
+postgres-1  | Data page checksums are enabled.
+postgres-1  | 
+postgres-1  | fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+postgres-1  | creating subdirectories ... ok
+postgres-1  | selecting dynamic shared memory implementation ... posix
+postgres-1  | selecting default "max_connections" ... 100
+postgres-1  | selecting default "shared_buffers" ... 128MB
+postgres-1  | selecting default time zone ... UTC
+postgres-1  | creating configuration files ... ok
+postgres-1  | running bootstrap script ... ok
+postgres-1  | sh: locale: not found
+postgres-1  | 2026-08-08 14:05:26.382 UTC [24] WARNING:  no usable system locales were found
+postgres-1  | performing post-bootstrap initialization ... ok
+postgres-1  | syncing data to disk ... ok
+postgres-1  | 
+postgres-1  | 
+postgres-1  | Success. You can now start the database server using:
+postgres-1  | 
+postgres-1  |     pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+postgres-1  | 
+postgres-1  | initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | waiting for server to start....2026-08-08 14:05:27.229 UTC [30] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-08 14:05:27.229 UTC [30] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-08 14:05:27.232 UTC [36] LOG:  database system was shut down at 2026-08-08 14:05:26 UTC
+postgres-1  | 2026-08-08 14:05:27.235 UTC [30] LOG:  database system is ready to accept connections
+postgres-1  |  done
+postgres-1  | server started
+postgres-1  | CREATE DATABASE
+postgres-1  | 
+postgres-1  | 
+postgres-1  | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 
+postgres-1  | waiting for server to shut down....2026-08-08 14:05:27.376 UTC [30] LOG:  received fast shutdown request
+postgres-1  | 2026-08-08 14:05:27.377 UTC [30] LOG:  aborting any active transactions
+postgres-1  | 2026-08-08 14:05:27.380 UTC [30] LOG:  background worker "logical replication launcher" (PID 39) exited with exit code 1
+postgres-1  | 2026-08-08 14:05:27.380 UTC [34] LOG:  shutting down
+postgres-1  | 2026-08-08 14:05:27.400 UTC [34] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-08-08 14:05:27.533 UTC [34] LOG:  checkpoint complete: wrote 943 buffers (5.8%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.076 s, sync=0.057 s, total=0.153 s; sync files=303, longest=0.040 s, average=0.001 s; distance=4362 kB, estimate=4362 kB; lsn=0/1BA6820, redo lsn=0/1BA6820
+postgres-1  | 2026-08-08 14:05:27.544 UTC [30] LOG:  database system is shut down
+postgres-1  |  done
+postgres-1  | server stopped
+postgres-1  | 
+postgres-1  | PostgreSQL init process complete; ready for start up.
+postgres-1  | 
+postgres-1  | 2026-08-08 14:05:27.637 UTC [1] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-08 14:05:27.637 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-08-08 14:05:27.637 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1  | 2026-08-08 14:05:27.638 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-08 14:05:27.641 UTC [52] LOG:  database system was shut down at 2026-08-08 14:05:27 UTC
+postgres-1  | 2026-08-08 14:05:27.645 UTC [1] LOG:  database system is ready to accept connections
+postgres-1  | 2026-08-08 14:06:35.243 UTC [672] ERROR:  deadlock detected
+postgres-1  | 2026-08-08 14:06:35.243 UTC [672] DETAIL:  Process 672 waits for ShareLock on transaction 1795; blocked by process 673.
+postgres-1  | 	Process 673 waits for ShareLock on transaction 1794; blocked by process 672.
+postgres-1  | 	Process 672: INSERT INTO audit_events (id, tenant_id, actor_id, action, resource_type, resource_id, metadata_json) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::UUID, $7::JSONB) RETURNING audit_events.created_at
+postgres-1  | 	Process 673: INSERT INTO progress_event_outbox (id, tenant_id, run_id, event_type, payload_json, occurred_at, available_at, attempt_count, lease_owner, lease_expires_at, published_at, last_error_code) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::JSONB, $6::TIMESTAMP WITH TIME ZONE, $7::TIMESTAMP WITH TIME ZONE, $8::INTEGER, $9::VARCHAR, $10::TIMESTAMP WITH TIME ZONE, $11::TIMESTAMP WITH TIME ZONE, $12::VARCHAR) RETURNING progress_event_outbox.created_at
+postgres-1  | 2026-08-08 14:06:35.243 UTC [672] HINT:  See server log for query details.
+postgres-1  | 2026-08-08 14:06:35.243 UTC [672] CONTEXT:  while locking tuple (0,235) in relation "tenants"
+postgres-1  | 	SQL statement "SELECT 1 FROM ONLY "public"."tenants" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+postgres-1  | 2026-08-08 14:06:35.243 UTC [672] STATEMENT:  INSERT INTO audit_events (id, tenant_id, actor_id, action, resource_type, resource_id, metadata_json) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::UUID, $7::JSONB) RETURNING audit_events.created_at
+postgres-1  | 2026-08-08 14:06:36.259 UTC [685] ERROR:  deadlock detected
+postgres-1  | 2026-08-08 14:06:36.259 UTC [685] DETAIL:  Process 685 waits for ShareLock on transaction 1797; blocked by process 686.
+postgres-1  | 	Process 686 waits for ShareLock on transaction 1796; blocked by process 685.
+postgres-1  | 	Process 685: DELETE FROM tenants WHERE id = ANY($1::uuid[])
+postgres-1  | 	Process 686: INSERT INTO audit_events (id, tenant_id, actor_id, action, resource_type, resource_id, metadata_json) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::UUID, $7::JSONB) RETURNING audit_events.created_at
+postgres-1  | 2026-08-08 14:06:36.259 UTC [685] HINT:  See server log for query details.
+postgres-1  | 2026-08-08 14:06:36.259 UTC [685] CONTEXT:  while deleting tuple (0,8) in relation "evaluation_runs"
+postgres-1  | 	SQL statement "DELETE FROM ONLY "public"."evaluation_runs" WHERE $1 OPERATOR(pg_catalog.=) "tenant_id""
+postgres-1  | 2026-08-08 14:06:36.259 UTC [685] STATEMENT:  DELETE FROM tenants WHERE id = ANY($1::uuid[])
+postgres-1  | 2026-08-08 14:06:36.262 UTC [686] ERROR:  canceling statement due to user request
+postgres-1  | 2026-08-08 14:06:36.262 UTC [686] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."evaluation_jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "run_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+postgres-1  | 2026-08-08 14:06:36.262 UTC [686] STATEMENT:  INSERT INTO case_results (id, job_id, run_id, tenant_id, case_id, answer_json, evidence_json, metrics_json, input_tokens, output_tokens, latency_ms, created_at) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::VARCHAR, $6::JSONB, $7::JSONB, $8::JSONB, $9::INTEGER, $10::INTEGER, $11::INTEGER, $12::TIMESTAMP WITH TIME ZONE)
