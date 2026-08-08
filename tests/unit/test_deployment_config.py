@@ -4,8 +4,9 @@ from typing import Any
 import yaml
 
 APP_SERVICES = ("migrate", "api", "worker", "reaper")
-STATEFUL_SERVICES = ("postgres", "redis", "minio")
-ALL_SERVICES = (*STATEFUL_SERVICES, *APP_SERVICES)
+STATEFUL_SERVICES = ("postgres", "redis", "minio", "prometheus")
+OBSERVABILITY_SERVICES = ("otel-collector",)
+ALL_SERVICES = (*STATEFUL_SERVICES, *OBSERVABILITY_SERVICES, *APP_SERVICES)
 
 
 def _load_compose() -> dict[str, Any]:
@@ -51,6 +52,8 @@ def test_every_compose_service_has_an_explicit_non_root_user() -> None:
         "postgres": "postgres",
         "redis": "redis",
         "minio": "1000:1000",
+        "prometheus": "65532:65532",
+        "otel-collector": "10001:10001",
         "migrate": "10001:10001",
         "api": "10001:10001",
         "worker": "10001:10001",
@@ -113,6 +116,11 @@ def test_read_only_services_declare_only_their_required_writable_paths() -> None
     assert services["postgres"]["volumes"] == ["postgres_data:/var/lib/postgresql"]
     assert services["redis"]["volumes"] == ["redis_data:/data"]
     assert services["minio"]["volumes"] == ["minio_data:/var/lib/evalops-minio"]
+    assert services["prometheus"]["volumes"] == [
+        "./prometheus:/etc/prometheus:ro",
+        "prometheus_data:/prometheus",
+    ]
+    assert services["otel-collector"]["volumes"] == ["./otel-collector:/etc/otelcol-contrib:ro"]
     assert services["api"]["volumes"] == ["artifact_data:/data/artifacts"]
     assert services["worker"]["volumes"] == ["artifact_data:/data/artifacts"]
     assert "volumes" not in services["migrate"]
@@ -159,6 +167,41 @@ def test_s3_backend_and_minio_are_documented_and_exercised_in_ci() -> None:
     )
 
 
+def test_prometheus_and_otel_collector_are_configured_and_verified() -> None:
+    compose = _load_compose()
+    services = compose["services"]
+    environment = compose["x-app-environment"]
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = {step["name"]: step for step in workflow["jobs"]["compose-smoke"]["steps"]}
+    prometheus = yaml.safe_load(
+        Path("deploy/prometheus/prometheus.yml").read_text(encoding="utf-8")
+    )
+    collector = yaml.safe_load(
+        Path("deploy/otel-collector/config.yaml").read_text(encoding="utf-8")
+    )
+
+    assert services["prometheus"]["image"] == "prom/prometheus:v3.13.2-distroless"
+    assert services["otel-collector"]["image"] == ("otel/opentelemetry-collector-contrib:0.158.0")
+    assert environment["EVALOPS_OTEL_EXPORTER_OTLP_ENDPOINT"] == (
+        "${EVALOPS_OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}"
+    )
+    targets = {
+        target
+        for scrape in prometheus["scrape_configs"]
+        for static in scrape["static_configs"]
+        for target in static["targets"]
+    }
+    assert targets == {"api:8000", "worker:9101", "reaper:9102"}
+    assert collector["receivers"]["otlp"]["protocols"]["http"]["endpoint"] == ("0.0.0.0:4318")
+    assert collector["exporters"]["debug"]["verbosity"] == "detailed"
+    verify = steps["Verify Prometheus and OpenTelemetry data paths"]["run"]
+    assert "verify_observability_stack.py" in verify
+    assert "prometheus" in verify
+    verifier = Path("scripts/verify_observability_stack.py").read_text(encoding="utf-8")
+    assert '"otel-collector"' in verifier
+    assert '"api", "worker", "reaper"' in verifier
+
+
 def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["compose-smoke"]["steps"]
@@ -169,7 +212,7 @@ def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
     assert len(matching_steps) == 1
     command = matching_steps[0]["run"]
     assert "python3 scripts/verify_compose_hardening.py" in command
-    assert "postgres redis minio api worker reaper" in command
+    assert "postgres redis minio prometheus otel-collector api worker reaper" in command
 
 
 def test_integration_prerequisites_run_after_an_independent_unit_failure() -> None:

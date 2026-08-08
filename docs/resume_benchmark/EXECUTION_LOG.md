@@ -444,3 +444,26 @@ integration issued 12 concurrent publishes of identical bytes and observed exact
 content, idempotent deletion, and missing-bucket readiness/publish failures. Every later integration,
 migration downgrade/re-upgrade, cleanup, and application image build passed. The overall workflow
 concluded `success`; the S3-compatible/MinIO backend is now `VERIFIED` for the tested contract.
+
+## 2026-08-08 — Prometheus and OpenTelemetry Compose wiring
+
+Official release APIs identified Prometheus `v3.13.2` and Collector `v0.158.0`; registry metadata
+identified their declared runtime UIDs as 65532 and `10001:10001`. Prometheus uses the distroless
+variant. Grafana was not added because queryable service/metric evidence and Collector receipt are
+the current gate, not dashboard presentation.
+
+RED deployment tests failed five times because Prometheus, Collector, their configs, and CI proof did
+not exist. Compose now supplies OTLP/HTTP + one-second batching + detailed debug export, and scrapes
+API/Worker/Reaper every two seconds. The application endpoint includes `/v1/traces`, matching the
+trace-specific Python OTLP exporter contract.
+
+The first focused GREEN left one brittle test failure: it required `otel-collector` in the workflow
+shell text even though the invoked verifier encapsulates the service name. The test was corrected to
+inspect the verifier rather than duplicate implementation details. A manual comparison with image
+metadata then caught `config.yml` versus the image's default `config.yaml` before remote execution.
+The file and contract were corrected.
+
+The verifier requires three healthy scrape pools, non-empty series for API, DB operation, queue,
+retry, and lease-expiration metrics, and Collector output from API/Worker/Reaper. Focused GREEN:
+21 tests, Ruff, and strict MyPy. Local Docker remains unavailable, so real Compose execution is
+pending and no remote observability claim is admitted yet.

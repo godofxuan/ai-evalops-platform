@@ -108,6 +108,7 @@ Phase 9 已建立：
 
 - API/Worker/Reaper 独立 Prometheus registry 与低基数指标；
 - API `/metrics`、Worker 9101、Reaper 9102 抓取入口；
+- Compose Prometheus 与 OpenTelemetry Collector 真实运行配置和 fail-closed 验证脚本；
 - API request、Run 创建、claim、Target、Evaluator、result、Reaper、SSE 业务 span；
 - W3C `traceparent` API 延续、Run 来源 carrier 持久化，以及 Worker/Reaper 异步 Span Link；
 - question/answer/evidence/credential 等敏感字段脱敏；
@@ -226,9 +227,10 @@ docker compose -f deploy/compose.yaml up --build --wait
 curl http://127.0.0.1:8000/health/ready
 ```
 
-Compose 会启动 PostgreSQL、Redis、MinIO、一次性 migration、API、Worker 和 Reaper。默认开发端口只绑定到 `127.0.0.1`。
+Compose 会启动 PostgreSQL、Redis、MinIO、Prometheus、OpenTelemetry Collector、一次性
+migration、API、Worker 和 Reaper。默认开发端口只绑定到 `127.0.0.1`。
 
-七个服务都显式使用非 root 用户、只读镜像根文件系统、`cap_drop: ALL` 与
+九个服务都显式使用非 root 用户、只读镜像根文件系统、`cap_drop: ALL` 与
 `no-new-privileges`，并设置 CPU、内存和 PID 上限。需要写入的目录只通过命名 volume 或有界
 tmpfs 开放：PostgreSQL/Redis/MinIO 写各自数据卷，API/Worker 保留 Local backend 的 artifact
 卷；migrate/Reaper 不挂载 artifact 卷。CI 还会用 `docker inspect` 验证 Docker 的有效
@@ -592,7 +594,8 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 - Worker/Reaper 是第一版轮询循环，尚无优雅的数据库断线重连策略；
 - HTTP Target 已固定经过验证的数值公网 IP，并在读取正文前校验实际 peer；仍依赖当前
   HTTPX/HTTPCore transport 元数据合同和部署级 egress 控制，不声称完全消除 SSRF；
-- 已有 Prometheus 指标和 OpenTelemetry SDK span，但本机未配置 Prometheus/Collector；
+- Prometheus/Collector 已进入 Compose；Collector debug exporter 只用于开发/CI，尚无生产
+  trace retention/search backend、日志聚合或真实告警投递链；
 - API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
   Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
