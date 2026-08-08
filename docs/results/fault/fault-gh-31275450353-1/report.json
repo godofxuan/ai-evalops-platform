@@ -1,0 +1,4873 @@
+{
+  "schema_version": 1,
+  "experiment": "gate1_fault_matrix",
+  "started_at": "2026-08-08T19:52:01.553022+00:00",
+  "configuration": {
+    "api_url": "http://127.0.0.1:8000",
+    "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+    "repetitions": 3,
+    "outage_seconds": 3.0,
+    "target_delay_ms": 5000,
+    "idempotency_concurrency": 20,
+    "scenario_names": {
+      "A": "worker_killed_immediately_after_claim",
+      "B": "lease_expires_during_execution",
+      "C": "reclaim_then_worker_a_late_result",
+      "D": "reclaim_then_worker_a_late_failure",
+      "E": "temporary_redis_outage",
+      "F": "temporary_postgresql_outage",
+      "G": "worker_restart_during_execution",
+      "H": "dual_reaper_competition",
+      "I": "duplicate_idempotency_key"
+    }
+  },
+  "status": "verified",
+  "results": [
+    {
+      "scenario_id": "A",
+      "scenario": "worker_killed_immediately_after_claim",
+      "repetition": 1,
+      "recovery_seconds": 38.51343283,
+      "worker_container_before": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_after": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_changed": false,
+      "api_final_status": "succeeded",
+      "run_id": "5dc29aca-f2c3-4602-8159-587b37c00f7f",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "5dc29aca-f2c3-4602-8159-587b37c00f7f",
+          "dataset_version_id": "41dc38be-ff4c-4fd7-af46-7d1e370adad6",
+          "dataset_hash": "06c90b7878c84fbd259219da4f6233e597a8be3f8075bff67de7ce1220523839",
+          "target_config_hash": "eaeae8f56dceaddf3ef63aeb15cbfc61dca214e5ab765b6d3121400118554903",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:01.985116+00:00",
+          "started_at": "2026-08-08T19:52:02.073766+00:00",
+          "finished_at": "2026-08-08T19:52:41.180747+00:00"
+        },
+        "jobs": [
+          {
+            "id": "a1a65fb4-7843-46a0-9135-78f8c91c82b5",
+            "run_id": "5dc29aca-f2c3-4602-8159-587b37c00f7f",
+            "case_id": "fault-a-1-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:52:01.985116+00:00",
+            "started_at": "2026-08-08T19:52:02.073766+00:00",
+            "finished_at": "2026-08-08T19:52:41.180747+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "a1a65fb4-7843-46a0-9135-78f8c91c82b5",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:01e87400",
+            "started_at": "2026-08-08T19:52:02.073766+00:00",
+            "finished_at": "2026-08-08T19:52:34.636322+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "a1a65fb4-7843-46a0-9135-78f8c91c82b5",
+            "attempt_number": 2,
+            "worker_id": "aab9c1387009:1:049a4b28",
+            "started_at": "2026-08-08T19:52:36.154544+00:00",
+            "finished_at": "2026-08-08T19:52:41.180747+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 5000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "a1a65fb4-7843-46a0-9135-78f8c91c82b5",
+            "run_id": "5dc29aca-f2c3-4602-8159-587b37c00f7f",
+            "case_id": "fault-a-1-00",
+            "latency_ms": 5000,
+            "created_at": "2026-08-08T19:52:41.180747+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "B",
+      "scenario": "lease_expires_during_execution",
+      "repetition": 1,
+      "recovery_seconds": 0.0407729419999896,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "5e54e034-0f86-4ecd-b3b3-d583ba299deb",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "5e54e034-0f86-4ecd-b3b3-d583ba299deb",
+          "dataset_version_id": "edaa7c78-5617-4d4f-8187-7027f94d6f4f",
+          "dataset_hash": "4050849c69f0e7fadbf29ce130b1db04a797b290d2314b4009903f33206a344e",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:42.203772+00:00",
+          "started_at": "2026-08-08T19:52:42.216688+00:00",
+          "finished_at": "2026-08-08T19:52:47.316688+00:00"
+        },
+        "jobs": [
+          {
+            "id": "155e09a0-db00-48b9-aab1-3ccc01724474",
+            "run_id": "5e54e034-0f86-4ecd-b3b3-d583ba299deb",
+            "case_id": "fault-b-1-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:42.203772+00:00",
+            "started_at": "2026-08-08T19:52:42.216688+00:00",
+            "finished_at": "2026-08-08T19:52:47.316688+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "155e09a0-db00-48b9-aab1-3ccc01724474",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-B-1",
+            "started_at": "2026-08-08T19:52:42.216688+00:00",
+            "finished_at": "2026-08-08T19:52:45.216688+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "155e09a0-db00-48b9-aab1-3ccc01724474",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-B-1",
+            "started_at": "2026-08-08T19:52:47.216688+00:00",
+            "finished_at": "2026-08-08T19:52:47.316688+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "155e09a0-db00-48b9-aab1-3ccc01724474",
+            "run_id": "5e54e034-0f86-4ecd-b3b3-d583ba299deb",
+            "case_id": "fault-b-1-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:47.316688+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "C",
+      "scenario": "reclaim_then_worker_a_late_result",
+      "repetition": 1,
+      "recovery_seconds": 0.04157858599998576,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "8b0ae5b8-c827-4898-b16a-daa4f403a5ed",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 1,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "8b0ae5b8-c827-4898-b16a-daa4f403a5ed",
+          "dataset_version_id": "5b15a0c3-f354-42f9-88e8-405f3ba992f5",
+          "dataset_hash": "0dce917b4814527d574975773f226e2044beec53e7b9c60c1efd96ffa978fafe",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:42.575685+00:00",
+          "started_at": "2026-08-08T19:52:42.581981+00:00",
+          "finished_at": "2026-08-08T19:52:47.681981+00:00"
+        },
+        "jobs": [
+          {
+            "id": "179f2bfe-44b6-442c-b2b6-fb2626f3327e",
+            "run_id": "8b0ae5b8-c827-4898-b16a-daa4f403a5ed",
+            "case_id": "fault-c-1-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:42.575685+00:00",
+            "started_at": "2026-08-08T19:52:42.581981+00:00",
+            "finished_at": "2026-08-08T19:52:47.681981+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "179f2bfe-44b6-442c-b2b6-fb2626f3327e",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-C-1",
+            "started_at": "2026-08-08T19:52:42.581981+00:00",
+            "finished_at": "2026-08-08T19:52:45.581981+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "179f2bfe-44b6-442c-b2b6-fb2626f3327e",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-C-1",
+            "started_at": "2026-08-08T19:52:47.581981+00:00",
+            "finished_at": "2026-08-08T19:52:47.681981+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "179f2bfe-44b6-442c-b2b6-fb2626f3327e",
+            "run_id": "8b0ae5b8-c827-4898-b16a-daa4f403a5ed",
+            "case_id": "fault-c-1-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:47.681981+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "D",
+      "scenario": "reclaim_then_worker_a_late_failure",
+      "repetition": 1,
+      "recovery_seconds": 0.04606879700000377,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "fa90c277-fae8-43cd-8cc1-6b1f524ddff9",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 1,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "fa90c277-fae8-43cd-8cc1-6b1f524ddff9",
+          "dataset_version_id": "c77c93e3-0f86-48f0-8173-0f7a4d6d4928",
+          "dataset_hash": "6752e78d17ea023d4cd248e5de0f20c6afba7af7d92261789b9e7d7a2a1404b4",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:42.878579+00:00",
+          "started_at": "2026-08-08T19:52:42.884723+00:00",
+          "finished_at": "2026-08-08T19:52:47.984723+00:00"
+        },
+        "jobs": [
+          {
+            "id": "58ec8eee-3f3a-4335-b086-b5e0ce8826ab",
+            "run_id": "fa90c277-fae8-43cd-8cc1-6b1f524ddff9",
+            "case_id": "fault-d-1-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:42.878579+00:00",
+            "started_at": "2026-08-08T19:52:42.884723+00:00",
+            "finished_at": "2026-08-08T19:52:47.984723+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "58ec8eee-3f3a-4335-b086-b5e0ce8826ab",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-D-1",
+            "started_at": "2026-08-08T19:52:42.884723+00:00",
+            "finished_at": "2026-08-08T19:52:45.884723+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "58ec8eee-3f3a-4335-b086-b5e0ce8826ab",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-D-1",
+            "started_at": "2026-08-08T19:52:47.884723+00:00",
+            "finished_at": "2026-08-08T19:52:47.984723+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "58ec8eee-3f3a-4335-b086-b5e0ce8826ab",
+            "run_id": "fa90c277-fae8-43cd-8cc1-6b1f524ddff9",
+            "case_id": "fault-d-1-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:47.984723+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "H",
+      "scenario": "dual_reaper_competition",
+      "repetition": 1,
+      "recovery_seconds": 0.43806101699999545,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 20,
+      "unique_reaped_count": 20,
+      "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+      "submitted_count": 20,
+      "unique_job_count": 20,
+      "completed_count": 20,
+      "succeeded_count": 20,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 20,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+          "dataset_version_id": "77f264c7-4a81-4cb9-90cf-50637552301d",
+          "dataset_hash": "d0cbc1bff1c8b1715f1150ba68402086b2ad9e5f538975511f9744d9d040eb49",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 20,
+          "succeeded_jobs": 20,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:43.179672+00:00",
+          "started_at": "2026-08-08T19:52:43.195610+00:00",
+          "finished_at": "2026-08-08T19:52:48.295610+00:00"
+        },
+        "jobs": [
+          {
+            "id": "ecbf54e4-ccd0-4ca6-855c-3b3ea36dca66",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "af6eb2e4-97b8-4387-bdd8-c7a8acff27b9",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-01",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "06a082a6-8074-456f-9ea5-a212ddcc296d",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-02",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "a4510690-057a-442a-b5ad-2c892e2c8808",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-03",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "6da8027d-a354-46a8-8542-ddae0f611fb8",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-04",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "bd4cb70d-93a2-4fea-a427-1f272865c9e6",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-05",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "4c37323a-78af-48f3-965c-7c662f328f82",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-06",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "df8268d6-262b-40c4-b6a2-460cde6b616f",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-07",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "c8e0fea7-13d0-4089-b117-9424abbeadb5",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-08",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "0c261b85-3cce-483f-bfb3-b2c4d96972fa",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-09",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "011ad95d-8411-42ce-9f46-563ab6549422",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-10",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "34d24208-c317-48fd-85ef-aa217fd00565",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-11",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "d8cc1f10-86b8-4da5-8753-045a0ccff908",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-12",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "774fef0b-5be1-49df-8e13-edd3aa4e989e",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-13",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "20bb7f1f-eb34-4e57-b5f4-89a396883aaf",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-14",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "9bd5d83c-73ca-4b5a-b791-4bc71e33b621",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-15",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "47c03046-a702-4771-b68c-7bab4785b391",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-16",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "f130b6bd-8551-4a53-8bf7-d51b4de96a9e",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-17",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "32aa2f9e-b90e-4690-98af-d580f71fef01",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-18",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "id": "0a148d67-588a-4d62-a071-85bd4c13c81c",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-19",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:43.179672+00:00",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "011ad95d-8411-42ce-9f46-563ab6549422",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "011ad95d-8411-42ce-9f46-563ab6549422",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "06a082a6-8074-456f-9ea5-a212ddcc296d",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "06a082a6-8074-456f-9ea5-a212ddcc296d",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "0a148d67-588a-4d62-a071-85bd4c13c81c",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "0a148d67-588a-4d62-a071-85bd4c13c81c",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "0c261b85-3cce-483f-bfb3-b2c4d96972fa",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "0c261b85-3cce-483f-bfb3-b2c4d96972fa",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "20bb7f1f-eb34-4e57-b5f4-89a396883aaf",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "20bb7f1f-eb34-4e57-b5f4-89a396883aaf",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "32aa2f9e-b90e-4690-98af-d580f71fef01",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "32aa2f9e-b90e-4690-98af-d580f71fef01",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "34d24208-c317-48fd-85ef-aa217fd00565",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "34d24208-c317-48fd-85ef-aa217fd00565",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "47c03046-a702-4771-b68c-7bab4785b391",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "47c03046-a702-4771-b68c-7bab4785b391",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "4c37323a-78af-48f3-965c-7c662f328f82",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "4c37323a-78af-48f3-965c-7c662f328f82",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "6da8027d-a354-46a8-8542-ddae0f611fb8",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "6da8027d-a354-46a8-8542-ddae0f611fb8",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "774fef0b-5be1-49df-8e13-edd3aa4e989e",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "774fef0b-5be1-49df-8e13-edd3aa4e989e",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "9bd5d83c-73ca-4b5a-b791-4bc71e33b621",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "9bd5d83c-73ca-4b5a-b791-4bc71e33b621",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "a4510690-057a-442a-b5ad-2c892e2c8808",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "a4510690-057a-442a-b5ad-2c892e2c8808",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "af6eb2e4-97b8-4387-bdd8-c7a8acff27b9",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "af6eb2e4-97b8-4387-bdd8-c7a8acff27b9",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "bd4cb70d-93a2-4fea-a427-1f272865c9e6",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "bd4cb70d-93a2-4fea-a427-1f272865c9e6",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "c8e0fea7-13d0-4089-b117-9424abbeadb5",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "c8e0fea7-13d0-4089-b117-9424abbeadb5",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "d8cc1f10-86b8-4da5-8753-045a0ccff908",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "d8cc1f10-86b8-4da5-8753-045a0ccff908",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "df8268d6-262b-40c4-b6a2-460cde6b616f",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "df8268d6-262b-40c4-b6a2-460cde6b616f",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "ecbf54e4-ccd0-4ca6-855c-3b3ea36dca66",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "ecbf54e4-ccd0-4ca6-855c-3b3ea36dca66",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "f130b6bd-8551-4a53-8bf7-d51b4de96a9e",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-1",
+            "started_at": "2026-08-08T19:52:43.195610+00:00",
+            "finished_at": "2026-08-08T19:52:46.195610+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "f130b6bd-8551-4a53-8bf7-d51b4de96a9e",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-1",
+            "started_at": "2026-08-08T19:52:48.195610+00:00",
+            "finished_at": "2026-08-08T19:52:48.295610+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "ecbf54e4-ccd0-4ca6-855c-3b3ea36dca66",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "af6eb2e4-97b8-4387-bdd8-c7a8acff27b9",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-01",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "06a082a6-8074-456f-9ea5-a212ddcc296d",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-02",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "a4510690-057a-442a-b5ad-2c892e2c8808",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-03",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "6da8027d-a354-46a8-8542-ddae0f611fb8",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-04",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "bd4cb70d-93a2-4fea-a427-1f272865c9e6",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-05",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "4c37323a-78af-48f3-965c-7c662f328f82",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-06",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "df8268d6-262b-40c4-b6a2-460cde6b616f",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-07",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "c8e0fea7-13d0-4089-b117-9424abbeadb5",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-08",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "0c261b85-3cce-483f-bfb3-b2c4d96972fa",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-09",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "011ad95d-8411-42ce-9f46-563ab6549422",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-10",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "34d24208-c317-48fd-85ef-aa217fd00565",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-11",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "d8cc1f10-86b8-4da5-8753-045a0ccff908",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-12",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "774fef0b-5be1-49df-8e13-edd3aa4e989e",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-13",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "20bb7f1f-eb34-4e57-b5f4-89a396883aaf",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-14",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "9bd5d83c-73ca-4b5a-b791-4bc71e33b621",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-15",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "47c03046-a702-4771-b68c-7bab4785b391",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-16",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "f130b6bd-8551-4a53-8bf7-d51b4de96a9e",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-17",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "32aa2f9e-b90e-4690-98af-d580f71fef01",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-18",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          },
+          {
+            "job_id": "0a148d67-588a-4d62-a071-85bd4c13c81c",
+            "run_id": "96ff23c0-126c-45bb-b4f3-c664d8891e21",
+            "case_id": "fault-h-1-19",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:52:48.295610+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "E",
+      "scenario": "temporary_redis_outage",
+      "repetition": 1,
+      "recovery_seconds": 0.010868909999999232,
+      "outbox_pending_before_recovery": 4,
+      "outbox_peak_pending_after_redis_start": 0,
+      "worker_restart_required": false,
+      "api_final_status": "succeeded",
+      "run_id": "e8f8ccdb-801e-4a31-8f63-f77a4ed313c1",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "e8f8ccdb-801e-4a31-8f63-f77a4ed313c1",
+          "dataset_version_id": "1c142138-6378-4721-9562-3262d6b5dc79",
+          "dataset_hash": "b68786a104aa1b2598cce443d604f6ea097e1bec4c7eca811ac044085268c92c",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:47.243748+00:00",
+          "started_at": "2026-08-08T19:52:47.843966+00:00",
+          "finished_at": "2026-08-08T19:52:47.869421+00:00"
+        },
+        "jobs": [
+          {
+            "id": "12225875-e341-4d20-a3a6-b82c723d8c43",
+            "run_id": "e8f8ccdb-801e-4a31-8f63-f77a4ed313c1",
+            "case_id": "fault-e-1-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:52:47.243748+00:00",
+            "started_at": "2026-08-08T19:52:47.843966+00:00",
+            "finished_at": "2026-08-08T19:52:47.869421+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "12225875-e341-4d20-a3a6-b82c723d8c43",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:fb8434d6",
+            "started_at": "2026-08-08T19:52:47.843966+00:00",
+            "finished_at": "2026-08-08T19:52:47.869421+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 0
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "12225875-e341-4d20-a3a6-b82c723d8c43",
+            "run_id": "e8f8ccdb-801e-4a31-8f63-f77a4ed313c1",
+            "case_id": "fault-e-1-00",
+            "latency_ms": 0,
+            "created_at": "2026-08-08T19:52:47.869421+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "F",
+      "scenario": "temporary_postgresql_outage",
+      "repetition": 1,
+      "recovery_seconds": 6.987127943000019,
+      "outage_seconds": 3.0,
+      "worker_restart_required": false,
+      "api_final_status": "succeeded",
+      "run_id": "9c428a3a-48ec-40ea-addb-fa20344382a7",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "9c428a3a-48ec-40ea-addb-fa20344382a7",
+          "dataset_version_id": "8375e32d-e8d7-4f26-844a-1e265f59d2dc",
+          "dataset_hash": "9e4bcc2cdef90c7b25e0f8e43c37cfdfcaf529e9919413ce2f4124c0363a8e32",
+          "target_config_hash": "aea6fc74c8a655a0cac22a899628a214d41969718ac2bb380f802bcb40fd37a1",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:52:53.967546+00:00",
+          "started_at": "2026-08-08T19:52:54.002190+00:00",
+          "finished_at": "2026-08-08T19:53:04.034968+00:00"
+        },
+        "jobs": [
+          {
+            "id": "d44bc1e5-89e2-48b7-93bb-742f07a0103f",
+            "run_id": "9c428a3a-48ec-40ea-addb-fa20344382a7",
+            "case_id": "fault-f-1-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:52:53.967546+00:00",
+            "started_at": "2026-08-08T19:52:54.002190+00:00",
+            "finished_at": "2026-08-08T19:53:04.034968+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "d44bc1e5-89e2-48b7-93bb-742f07a0103f",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:fb8434d6",
+            "started_at": "2026-08-08T19:52:54.002190+00:00",
+            "finished_at": "2026-08-08T19:53:04.034968+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 10000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "d44bc1e5-89e2-48b7-93bb-742f07a0103f",
+            "run_id": "9c428a3a-48ec-40ea-addb-fa20344382a7",
+            "case_id": "fault-f-1-00",
+            "latency_ms": 10000,
+            "created_at": "2026-08-08T19:53:04.034968+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "G",
+      "scenario": "worker_restart_during_execution",
+      "repetition": 1,
+      "recovery_seconds": 5.31993501300002,
+      "worker_container_before": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_after": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_changed": false,
+      "api_final_status": "succeeded",
+      "run_id": "832941c9-03e6-40c1-953b-1a940f109965",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "832941c9-03e6-40c1-953b-1a940f109965",
+          "dataset_version_id": "01d92643-0e0c-44e0-930d-7e06cf036ce5",
+          "dataset_hash": "535f695f6c6defc98fa7c7827c768fc90d968d9fe044792a49ba9ed10b13fed8",
+          "target_config_hash": "eaeae8f56dceaddf3ef63aeb15cbfc61dca214e5ab765b6d3121400118554903",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:04.672756+00:00",
+          "started_at": "2026-08-08T19:53:05.078848+00:00",
+          "finished_at": "2026-08-08T19:53:10.092217+00:00"
+        },
+        "jobs": [
+          {
+            "id": "aea1a33d-356b-425c-adeb-be2c5ed81fed",
+            "run_id": "832941c9-03e6-40c1-953b-1a940f109965",
+            "case_id": "fault-g-1-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:53:04.672756+00:00",
+            "started_at": "2026-08-08T19:53:05.078848+00:00",
+            "finished_at": "2026-08-08T19:53:10.092217+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "aea1a33d-356b-425c-adeb-be2c5ed81fed",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:fb8434d6",
+            "started_at": "2026-08-08T19:53:05.078848+00:00",
+            "finished_at": "2026-08-08T19:53:10.092217+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 5000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "aea1a33d-356b-425c-adeb-be2c5ed81fed",
+            "run_id": "832941c9-03e6-40c1-953b-1a940f109965",
+            "case_id": "fault-g-1-00",
+            "latency_ms": 5000,
+            "created_at": "2026-08-08T19:53:10.092217+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "I",
+      "scenario": "duplicate_idempotency_key",
+      "repetition": 1,
+      "recovery_seconds": 0.10973863199998846,
+      "concurrent_response_seconds": 1.7485257510000167,
+      "http_request_count": 20,
+      "http_success_count": 20,
+      "http_error_count": 0,
+      "unique_run_count": 1,
+      "api_final_status": "succeeded",
+      "run_id": "9c94f7e5-7590-4986-9111-a7d69dfa815f",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "9c94f7e5-7590-4986-9111-a7d69dfa815f",
+          "dataset_version_id": "f4eed5c6-730c-4343-a7c2-320e07e4a3dd",
+          "dataset_hash": "18c7616110ec205d490d7eb978a28838a83a7ebf127a99c6d627fa53508fd72c",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": null,
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:12.415270+00:00",
+          "started_at": "2026-08-08T19:53:12.638491+00:00",
+          "finished_at": "2026-08-08T19:53:12.708639+00:00"
+        },
+        "jobs": [
+          {
+            "id": "17134b09-a627-4c6a-93e9-6a84d4295e20",
+            "run_id": "9c94f7e5-7590-4986-9111-a7d69dfa815f",
+            "case_id": "fault-i-1-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:12.415270+00:00",
+            "started_at": "2026-08-08T19:53:12.638491+00:00",
+            "finished_at": "2026-08-08T19:53:12.708639+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "17134b09-a627-4c6a-93e9-6a84d4295e20",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:43489bd4",
+            "started_at": "2026-08-08T19:53:12.638491+00:00",
+            "finished_at": "2026-08-08T19:53:12.708639+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 0
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "17134b09-a627-4c6a-93e9-6a84d4295e20",
+            "run_id": "9c94f7e5-7590-4986-9111-a7d69dfa815f",
+            "case_id": "fault-i-1-00",
+            "latency_ms": 0,
+            "created_at": "2026-08-08T19:53:12.708639+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "A",
+      "scenario": "worker_killed_immediately_after_claim",
+      "repetition": 2,
+      "recovery_seconds": 40.66482532399999,
+      "worker_container_before": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_after": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_changed": false,
+      "api_final_status": "succeeded",
+      "run_id": "2912721c-7b44-48c0-bbf8-146a6ed2e641",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "2912721c-7b44-48c0-bbf8-146a6ed2e641",
+          "dataset_version_id": "c5f3055a-c9e5-426e-a6fc-91c79725b9c4",
+          "dataset_hash": "e532dc6219a156b579effb64c6280df0ede03e35a1a5d4527d7ee964f11637cd",
+          "target_config_hash": "eaeae8f56dceaddf3ef63aeb15cbfc61dca214e5ab765b6d3121400118554903",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:13.047640+00:00",
+          "started_at": "2026-08-08T19:53:13.295047+00:00",
+          "finished_at": "2026-08-08T19:53:54.230666+00:00"
+        },
+        "jobs": [
+          {
+            "id": "5af60955-98f6-40fa-a6ab-5da700e650ea",
+            "run_id": "2912721c-7b44-48c0-bbf8-146a6ed2e641",
+            "case_id": "fault-a-2-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:53:13.047640+00:00",
+            "started_at": "2026-08-08T19:53:13.295047+00:00",
+            "finished_at": "2026-08-08T19:53:54.230666+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "5af60955-98f6-40fa-a6ab-5da700e650ea",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:43489bd4",
+            "started_at": "2026-08-08T19:53:13.295047+00:00",
+            "finished_at": "2026-08-08T19:53:47.951996+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "5af60955-98f6-40fa-a6ab-5da700e650ea",
+            "attempt_number": 2,
+            "worker_id": "aab9c1387009:1:07b9453e",
+            "started_at": "2026-08-08T19:53:49.206796+00:00",
+            "finished_at": "2026-08-08T19:53:54.230666+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 5000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "5af60955-98f6-40fa-a6ab-5da700e650ea",
+            "run_id": "2912721c-7b44-48c0-bbf8-146a6ed2e641",
+            "case_id": "fault-a-2-00",
+            "latency_ms": 5000,
+            "created_at": "2026-08-08T19:53:54.230666+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "B",
+      "scenario": "lease_expires_during_execution",
+      "repetition": 2,
+      "recovery_seconds": 0.04361486999999897,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "ae9b3c46-b755-4d74-94f4-3b77e0a59fb6",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "ae9b3c46-b755-4d74-94f4-3b77e0a59fb6",
+          "dataset_version_id": "b8308ac8-47e1-4a06-abc1-63ddfbf795b2",
+          "dataset_hash": "d0bb2d402f257b128e4cc3369857d25d1ca62079bb69639146fe8ba94fd45ec1",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:55.576983+00:00",
+          "started_at": "2026-08-08T19:53:55.583292+00:00",
+          "finished_at": "2026-08-08T19:54:00.683292+00:00"
+        },
+        "jobs": [
+          {
+            "id": "168588cd-ee20-4b9d-8933-9756d126fa6e",
+            "run_id": "ae9b3c46-b755-4d74-94f4-3b77e0a59fb6",
+            "case_id": "fault-b-2-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:55.576983+00:00",
+            "started_at": "2026-08-08T19:53:55.583292+00:00",
+            "finished_at": "2026-08-08T19:54:00.683292+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "168588cd-ee20-4b9d-8933-9756d126fa6e",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-B-2",
+            "started_at": "2026-08-08T19:53:55.583292+00:00",
+            "finished_at": "2026-08-08T19:53:58.583292+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "168588cd-ee20-4b9d-8933-9756d126fa6e",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-B-2",
+            "started_at": "2026-08-08T19:54:00.583292+00:00",
+            "finished_at": "2026-08-08T19:54:00.683292+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "168588cd-ee20-4b9d-8933-9756d126fa6e",
+            "run_id": "ae9b3c46-b755-4d74-94f4-3b77e0a59fb6",
+            "case_id": "fault-b-2-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:00.683292+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "C",
+      "scenario": "reclaim_then_worker_a_late_result",
+      "repetition": 2,
+      "recovery_seconds": 0.04031658299999208,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "39d4ff1b-5e3a-4743-9a0b-1ef0411aa9b6",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 1,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "39d4ff1b-5e3a-4743-9a0b-1ef0411aa9b6",
+          "dataset_version_id": "2d16379c-52f7-45d4-9a94-4651609e3632",
+          "dataset_hash": "75d779fd4d409d66cccf7f529f40ab93e8e0f44bd4a7936abe4056899623172a",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:55.865641+00:00",
+          "started_at": "2026-08-08T19:53:55.871774+00:00",
+          "finished_at": "2026-08-08T19:54:00.971774+00:00"
+        },
+        "jobs": [
+          {
+            "id": "5a1d9c2b-5b5c-4b48-9160-1825a0a78b01",
+            "run_id": "39d4ff1b-5e3a-4743-9a0b-1ef0411aa9b6",
+            "case_id": "fault-c-2-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:55.865641+00:00",
+            "started_at": "2026-08-08T19:53:55.871774+00:00",
+            "finished_at": "2026-08-08T19:54:00.971774+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "5a1d9c2b-5b5c-4b48-9160-1825a0a78b01",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-C-2",
+            "started_at": "2026-08-08T19:53:55.871774+00:00",
+            "finished_at": "2026-08-08T19:53:58.871774+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "5a1d9c2b-5b5c-4b48-9160-1825a0a78b01",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-C-2",
+            "started_at": "2026-08-08T19:54:00.871774+00:00",
+            "finished_at": "2026-08-08T19:54:00.971774+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "5a1d9c2b-5b5c-4b48-9160-1825a0a78b01",
+            "run_id": "39d4ff1b-5e3a-4743-9a0b-1ef0411aa9b6",
+            "case_id": "fault-c-2-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:00.971774+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "D",
+      "scenario": "reclaim_then_worker_a_late_failure",
+      "repetition": 2,
+      "recovery_seconds": 0.03945732599999019,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "e6e74eae-bb3e-4bba-b452-a1e2011ca2a3",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 1,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "e6e74eae-bb3e-4bba-b452-a1e2011ca2a3",
+          "dataset_version_id": "4f7607de-69eb-4b11-ba15-532b2b661f47",
+          "dataset_hash": "a06d838ff9cc0eb0824cf51b3cc6a20e79a9f591d1cd09a54b4b58ca6128eb0e",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:56.159214+00:00",
+          "started_at": "2026-08-08T19:53:56.167710+00:00",
+          "finished_at": "2026-08-08T19:54:01.267710+00:00"
+        },
+        "jobs": [
+          {
+            "id": "0fe45486-6b70-4a3a-ad22-bda6ea1474e1",
+            "run_id": "e6e74eae-bb3e-4bba-b452-a1e2011ca2a3",
+            "case_id": "fault-d-2-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.159214+00:00",
+            "started_at": "2026-08-08T19:53:56.167710+00:00",
+            "finished_at": "2026-08-08T19:54:01.267710+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "0fe45486-6b70-4a3a-ad22-bda6ea1474e1",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-D-2",
+            "started_at": "2026-08-08T19:53:56.167710+00:00",
+            "finished_at": "2026-08-08T19:53:59.167710+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "0fe45486-6b70-4a3a-ad22-bda6ea1474e1",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-D-2",
+            "started_at": "2026-08-08T19:54:01.167710+00:00",
+            "finished_at": "2026-08-08T19:54:01.267710+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "0fe45486-6b70-4a3a-ad22-bda6ea1474e1",
+            "run_id": "e6e74eae-bb3e-4bba-b452-a1e2011ca2a3",
+            "case_id": "fault-d-2-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.267710+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "H",
+      "scenario": "dual_reaper_competition",
+      "repetition": 2,
+      "recovery_seconds": 0.40473560700002054,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 20,
+      "unique_reaped_count": 20,
+      "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+      "submitted_count": 20,
+      "unique_job_count": 20,
+      "completed_count": 20,
+      "succeeded_count": 20,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 20,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+          "dataset_version_id": "d4fb82c9-1483-41b9-aac5-ffc7b365a3d6",
+          "dataset_hash": "df7f6bacfdcae087af4fc75bcc43394c75c88cbcabc92e1f3a292b4e88f363b5",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 20,
+          "succeeded_jobs": 20,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:53:56.524191+00:00",
+          "started_at": "2026-08-08T19:53:56.535451+00:00",
+          "finished_at": "2026-08-08T19:54:01.635451+00:00"
+        },
+        "jobs": [
+          {
+            "id": "97d3c031-72e5-4ca8-8194-17d24a36139a",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "66abef8f-47f5-46b6-a009-daef742af9ad",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-01",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "5b52b6a1-9fe4-4dba-ba8f-e68213e1e581",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-02",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "b73e4e07-7bc6-44f8-8bd0-f0b7dae12b35",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-03",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "0bee7e3f-371c-428e-9ecd-0e6f985e4f06",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-04",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "0be38858-fed9-4287-a643-4981ecf92a8b",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-05",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "e156e0b8-60cc-4f2a-b582-5ffe54b3a439",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-06",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "de19e25b-6ab2-424b-ba48-2f5a1ab861fd",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-07",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "0c7eb035-69cd-4a86-82be-507a9518b3af",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-08",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "32192b68-0cf3-48e3-81f9-1f15931befb4",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-09",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "ec46b3c4-b31e-4381-97c0-f38ea80cdb2c",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-10",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "b90b8093-b097-4ab3-887d-04062b5f6367",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-11",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "bf30c1d7-c5e3-435c-ab70-eaa6e656d325",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-12",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "b4190602-2e19-4ac6-8cdb-c7f1bca7a0f4",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-13",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "ddc919b6-056e-49b3-89db-e12521273a94",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-14",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "94e56222-23f0-4091-9f98-3bb95a06fe81",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-15",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "f2675916-0b5d-4fe7-a983-7057ec6f16a2",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-16",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "656c5985-98b3-4783-9407-62fe6ec3968d",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-17",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "00adb677-a25e-486c-87ab-271e7ea66e16",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-18",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "id": "d039d628-53a3-4835-bee1-b7c2f42f8463",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-19",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:53:56.524191+00:00",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "00adb677-a25e-486c-87ab-271e7ea66e16",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "00adb677-a25e-486c-87ab-271e7ea66e16",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "0be38858-fed9-4287-a643-4981ecf92a8b",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "0be38858-fed9-4287-a643-4981ecf92a8b",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "0bee7e3f-371c-428e-9ecd-0e6f985e4f06",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "0bee7e3f-371c-428e-9ecd-0e6f985e4f06",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "0c7eb035-69cd-4a86-82be-507a9518b3af",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "0c7eb035-69cd-4a86-82be-507a9518b3af",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "32192b68-0cf3-48e3-81f9-1f15931befb4",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "32192b68-0cf3-48e3-81f9-1f15931befb4",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "5b52b6a1-9fe4-4dba-ba8f-e68213e1e581",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "5b52b6a1-9fe4-4dba-ba8f-e68213e1e581",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "656c5985-98b3-4783-9407-62fe6ec3968d",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "656c5985-98b3-4783-9407-62fe6ec3968d",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "66abef8f-47f5-46b6-a009-daef742af9ad",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "66abef8f-47f5-46b6-a009-daef742af9ad",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "94e56222-23f0-4091-9f98-3bb95a06fe81",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "94e56222-23f0-4091-9f98-3bb95a06fe81",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "97d3c031-72e5-4ca8-8194-17d24a36139a",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "97d3c031-72e5-4ca8-8194-17d24a36139a",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "b4190602-2e19-4ac6-8cdb-c7f1bca7a0f4",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "b4190602-2e19-4ac6-8cdb-c7f1bca7a0f4",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "b73e4e07-7bc6-44f8-8bd0-f0b7dae12b35",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "b73e4e07-7bc6-44f8-8bd0-f0b7dae12b35",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "b90b8093-b097-4ab3-887d-04062b5f6367",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "b90b8093-b097-4ab3-887d-04062b5f6367",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "bf30c1d7-c5e3-435c-ab70-eaa6e656d325",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "bf30c1d7-c5e3-435c-ab70-eaa6e656d325",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "d039d628-53a3-4835-bee1-b7c2f42f8463",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "d039d628-53a3-4835-bee1-b7c2f42f8463",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "ddc919b6-056e-49b3-89db-e12521273a94",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "ddc919b6-056e-49b3-89db-e12521273a94",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "de19e25b-6ab2-424b-ba48-2f5a1ab861fd",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "de19e25b-6ab2-424b-ba48-2f5a1ab861fd",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "e156e0b8-60cc-4f2a-b582-5ffe54b3a439",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "e156e0b8-60cc-4f2a-b582-5ffe54b3a439",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "ec46b3c4-b31e-4381-97c0-f38ea80cdb2c",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "ec46b3c4-b31e-4381-97c0-f38ea80cdb2c",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "f2675916-0b5d-4fe7-a983-7057ec6f16a2",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-2",
+            "started_at": "2026-08-08T19:53:56.535451+00:00",
+            "finished_at": "2026-08-08T19:53:59.535451+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "f2675916-0b5d-4fe7-a983-7057ec6f16a2",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-2",
+            "started_at": "2026-08-08T19:54:01.535451+00:00",
+            "finished_at": "2026-08-08T19:54:01.635451+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "97d3c031-72e5-4ca8-8194-17d24a36139a",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "66abef8f-47f5-46b6-a009-daef742af9ad",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-01",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "5b52b6a1-9fe4-4dba-ba8f-e68213e1e581",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-02",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "b73e4e07-7bc6-44f8-8bd0-f0b7dae12b35",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-03",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "0bee7e3f-371c-428e-9ecd-0e6f985e4f06",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-04",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "0be38858-fed9-4287-a643-4981ecf92a8b",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-05",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "e156e0b8-60cc-4f2a-b582-5ffe54b3a439",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-06",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "de19e25b-6ab2-424b-ba48-2f5a1ab861fd",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-07",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "0c7eb035-69cd-4a86-82be-507a9518b3af",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-08",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "32192b68-0cf3-48e3-81f9-1f15931befb4",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-09",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "ec46b3c4-b31e-4381-97c0-f38ea80cdb2c",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-10",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "b90b8093-b097-4ab3-887d-04062b5f6367",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-11",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "bf30c1d7-c5e3-435c-ab70-eaa6e656d325",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-12",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "b4190602-2e19-4ac6-8cdb-c7f1bca7a0f4",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-13",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "ddc919b6-056e-49b3-89db-e12521273a94",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-14",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "94e56222-23f0-4091-9f98-3bb95a06fe81",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-15",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "f2675916-0b5d-4fe7-a983-7057ec6f16a2",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-16",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "656c5985-98b3-4783-9407-62fe6ec3968d",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-17",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "00adb677-a25e-486c-87ab-271e7ea66e16",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-18",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          },
+          {
+            "job_id": "d039d628-53a3-4835-bee1-b7c2f42f8463",
+            "run_id": "be01c546-dd13-4abc-b95d-e29535ec7475",
+            "case_id": "fault-h-2-19",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:54:01.635451+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "E",
+      "scenario": "temporary_redis_outage",
+      "repetition": 2,
+      "recovery_seconds": 0.010810036999998829,
+      "outbox_pending_before_recovery": 4,
+      "outbox_peak_pending_after_redis_start": 0,
+      "worker_restart_required": false,
+      "api_final_status": "succeeded",
+      "run_id": "eec78e18-040a-4cde-95b1-35badb47e0c4",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "eec78e18-040a-4cde-95b1-35badb47e0c4",
+          "dataset_version_id": "6979aea6-8711-44dd-a77c-bced7b2ab255",
+          "dataset_hash": "c684e29315e03012bcdcdc6cff7cecd89bb00f78ccfa21cecfb773a98f695a54",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:54:00.458209+00:00",
+          "started_at": "2026-08-08T19:54:00.978004+00:00",
+          "finished_at": "2026-08-08T19:54:01.001143+00:00"
+        },
+        "jobs": [
+          {
+            "id": "bb44cacb-28f9-450a-882b-a9d93c547b4f",
+            "run_id": "eec78e18-040a-4cde-95b1-35badb47e0c4",
+            "case_id": "fault-e-2-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:54:00.458209+00:00",
+            "started_at": "2026-08-08T19:54:00.978004+00:00",
+            "finished_at": "2026-08-08T19:54:01.001143+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "bb44cacb-28f9-450a-882b-a9d93c547b4f",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:0ead28f6",
+            "started_at": "2026-08-08T19:54:00.978004+00:00",
+            "finished_at": "2026-08-08T19:54:01.001143+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 0
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "bb44cacb-28f9-450a-882b-a9d93c547b4f",
+            "run_id": "eec78e18-040a-4cde-95b1-35badb47e0c4",
+            "case_id": "fault-e-2-00",
+            "latency_ms": 0,
+            "created_at": "2026-08-08T19:54:01.001143+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "F",
+      "scenario": "temporary_postgresql_outage",
+      "repetition": 2,
+      "recovery_seconds": 6.935767244999965,
+      "outage_seconds": 3.0,
+      "worker_restart_required": false,
+      "api_final_status": "succeeded",
+      "run_id": "1121ee7b-961a-4baa-8f60-d7be158ae632",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "1121ee7b-961a-4baa-8f60-d7be158ae632",
+          "dataset_version_id": "5994b7a4-07ba-45e6-94e8-b08e3b34612d",
+          "dataset_hash": "f30e475bc57f18fb933f9a207846ca4fb28eac238772d6df71c04c3b5e5c0dfc",
+          "target_config_hash": "aea6fc74c8a655a0cac22a899628a214d41969718ac2bb380f802bcb40fd37a1",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:54:07.212958+00:00",
+          "started_at": "2026-08-08T19:54:07.642977+00:00",
+          "finished_at": "2026-08-08T19:54:17.679083+00:00"
+        },
+        "jobs": [
+          {
+            "id": "0ae570eb-60f5-4079-b7b0-5f8a7eb93bf4",
+            "run_id": "1121ee7b-961a-4baa-8f60-d7be158ae632",
+            "case_id": "fault-f-2-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:54:07.212958+00:00",
+            "started_at": "2026-08-08T19:54:07.642977+00:00",
+            "finished_at": "2026-08-08T19:54:17.679083+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "0ae570eb-60f5-4079-b7b0-5f8a7eb93bf4",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:0ead28f6",
+            "started_at": "2026-08-08T19:54:07.642977+00:00",
+            "finished_at": "2026-08-08T19:54:17.679083+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 10000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "0ae570eb-60f5-4079-b7b0-5f8a7eb93bf4",
+            "run_id": "1121ee7b-961a-4baa-8f60-d7be158ae632",
+            "case_id": "fault-f-2-00",
+            "latency_ms": 10000,
+            "created_at": "2026-08-08T19:54:17.679083+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "G",
+      "scenario": "worker_restart_during_execution",
+      "repetition": 2,
+      "recovery_seconds": 5.015901389000021,
+      "worker_container_before": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_after": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_changed": false,
+      "api_final_status": "succeeded",
+      "run_id": "0ede42b0-a224-496e-a873-c1cbfa5d3314",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "0ede42b0-a224-496e-a873-c1cbfa5d3314",
+          "dataset_version_id": "bf9cb69d-445c-4d1d-a112-6c687afc162e",
+          "dataset_hash": "13510824d5b2a973deb949951413b7f3067b7dd36b3212eed5096c2cbcadb1ec",
+          "target_config_hash": "eaeae8f56dceaddf3ef63aeb15cbfc61dca214e5ab765b6d3121400118554903",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:54:18.614749+00:00",
+          "started_at": "2026-08-08T19:54:18.723491+00:00",
+          "finished_at": "2026-08-08T19:54:23.733489+00:00"
+        },
+        "jobs": [
+          {
+            "id": "1df236b1-d9ee-4ff4-8534-9d290a2618a9",
+            "run_id": "0ede42b0-a224-496e-a873-c1cbfa5d3314",
+            "case_id": "fault-g-2-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:54:18.614749+00:00",
+            "started_at": "2026-08-08T19:54:18.723491+00:00",
+            "finished_at": "2026-08-08T19:54:23.733489+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "1df236b1-d9ee-4ff4-8534-9d290a2618a9",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:0ead28f6",
+            "started_at": "2026-08-08T19:54:18.723491+00:00",
+            "finished_at": "2026-08-08T19:54:23.733489+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 5000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "1df236b1-d9ee-4ff4-8534-9d290a2618a9",
+            "run_id": "0ede42b0-a224-496e-a873-c1cbfa5d3314",
+            "case_id": "fault-g-2-00",
+            "latency_ms": 5000,
+            "created_at": "2026-08-08T19:54:23.733489+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "I",
+      "scenario": "duplicate_idempotency_key",
+      "repetition": 2,
+      "recovery_seconds": 0.6243318010000394,
+      "concurrent_response_seconds": 1.8264414220000162,
+      "http_request_count": 20,
+      "http_success_count": 20,
+      "http_error_count": 0,
+      "unique_run_count": 1,
+      "api_final_status": "succeeded",
+      "run_id": "90260c87-a484-4cb3-bfe3-8e8d13fa834f",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "90260c87-a484-4cb3-bfe3-8e8d13fa834f",
+          "dataset_version_id": "8fb39bbc-99aa-4b30-b9cb-ebf46fc403be",
+          "dataset_hash": "bbefdcb85e6f22d6cc99496eb10627bc1fea9f42c87ceda2fbe14d6a02a8be03",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": null,
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:54:26.272026+00:00",
+          "started_at": "2026-08-08T19:54:26.755578+00:00",
+          "finished_at": "2026-08-08T19:54:26.777479+00:00"
+        },
+        "jobs": [
+          {
+            "id": "c4872df2-2ab8-46b8-a667-43f9d4e2e1cf",
+            "run_id": "90260c87-a484-4cb3-bfe3-8e8d13fa834f",
+            "case_id": "fault-i-2-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:54:26.272026+00:00",
+            "started_at": "2026-08-08T19:54:26.755578+00:00",
+            "finished_at": "2026-08-08T19:54:26.777479+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "c4872df2-2ab8-46b8-a667-43f9d4e2e1cf",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:1e3c51ff",
+            "started_at": "2026-08-08T19:54:26.755578+00:00",
+            "finished_at": "2026-08-08T19:54:26.777479+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 0
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "c4872df2-2ab8-46b8-a667-43f9d4e2e1cf",
+            "run_id": "90260c87-a484-4cb3-bfe3-8e8d13fa834f",
+            "case_id": "fault-i-2-00",
+            "latency_ms": 0,
+            "created_at": "2026-08-08T19:54:26.777479+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "A",
+      "scenario": "worker_killed_immediately_after_claim",
+      "repetition": 3,
+      "recovery_seconds": 40.75597836999998,
+      "worker_container_before": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_after": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_changed": false,
+      "api_final_status": "succeeded",
+      "run_id": "9b06ed09-60a1-4bb0-935d-336cd89df4cc",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "9b06ed09-60a1-4bb0-935d-336cd89df4cc",
+          "dataset_version_id": "8d6d4309-6884-4d79-b7b4-7d17c980ec7c",
+          "dataset_hash": "f8d3cf7bcf5864c9ebeffa79028d15ac5dda3620e697897feabe379486feace9",
+          "target_config_hash": "eaeae8f56dceaddf3ef63aeb15cbfc61dca214e5ab765b6d3121400118554903",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:54:27.266144+00:00",
+          "started_at": "2026-08-08T19:54:27.312170+00:00",
+          "finished_at": "2026-08-08T19:55:07.797230+00:00"
+        },
+        "jobs": [
+          {
+            "id": "c02aa193-b414-46bd-9732-db63417f7df8",
+            "run_id": "9b06ed09-60a1-4bb0-935d-336cd89df4cc",
+            "case_id": "fault-a-3-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:54:27.266144+00:00",
+            "started_at": "2026-08-08T19:54:27.312170+00:00",
+            "finished_at": "2026-08-08T19:55:07.797230+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "c02aa193-b414-46bd-9732-db63417f7df8",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:1e3c51ff",
+            "started_at": "2026-08-08T19:54:27.312170+00:00",
+            "finished_at": "2026-08-08T19:55:01.605051+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "c02aa193-b414-46bd-9732-db63417f7df8",
+            "attempt_number": 2,
+            "worker_id": "aab9c1387009:1:c6039f47",
+            "started_at": "2026-08-08T19:55:02.772830+00:00",
+            "finished_at": "2026-08-08T19:55:07.797230+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 5000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "c02aa193-b414-46bd-9732-db63417f7df8",
+            "run_id": "9b06ed09-60a1-4bb0-935d-336cd89df4cc",
+            "case_id": "fault-a-3-00",
+            "latency_ms": 5000,
+            "created_at": "2026-08-08T19:55:07.797230+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "B",
+      "scenario": "lease_expires_during_execution",
+      "repetition": 3,
+      "recovery_seconds": 0.043550756999991336,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "d0a03972-b923-4ab3-ae67-efa17505cc33",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "d0a03972-b923-4ab3-ae67-efa17505cc33",
+          "dataset_version_id": "20f3a573-5541-4110-be79-eb59434f24ef",
+          "dataset_hash": "ff6703b06be328b6946b175a4263b893e532d929c4137d2e13f0d05f551cfde4",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:09.162855+00:00",
+          "started_at": "2026-08-08T19:55:09.171656+00:00",
+          "finished_at": "2026-08-08T19:55:14.271656+00:00"
+        },
+        "jobs": [
+          {
+            "id": "222613ea-e23a-40aa-a624-0b5bf72b1bb4",
+            "run_id": "d0a03972-b923-4ab3-ae67-efa17505cc33",
+            "case_id": "fault-b-3-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:09.162855+00:00",
+            "started_at": "2026-08-08T19:55:09.171656+00:00",
+            "finished_at": "2026-08-08T19:55:14.271656+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "222613ea-e23a-40aa-a624-0b5bf72b1bb4",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-B-3",
+            "started_at": "2026-08-08T19:55:09.171656+00:00",
+            "finished_at": "2026-08-08T19:55:12.171656+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "222613ea-e23a-40aa-a624-0b5bf72b1bb4",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-B-3",
+            "started_at": "2026-08-08T19:55:14.171656+00:00",
+            "finished_at": "2026-08-08T19:55:14.271656+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "222613ea-e23a-40aa-a624-0b5bf72b1bb4",
+            "run_id": "d0a03972-b923-4ab3-ae67-efa17505cc33",
+            "case_id": "fault-b-3-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:14.271656+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "C",
+      "scenario": "reclaim_then_worker_a_late_result",
+      "repetition": 3,
+      "recovery_seconds": 0.0417201419999742,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "27392990-388b-41dc-9262-7cc8cfe12163",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 1,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "27392990-388b-41dc-9262-7cc8cfe12163",
+          "dataset_version_id": "8f3c2c7f-d10d-4d0e-b01b-ac77dbdf4a71",
+          "dataset_hash": "e985b97ec8a8aa68861974ffa391d75bd27b92647f1ae33cb59ef2c0a75df5cf",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:09.464269+00:00",
+          "started_at": "2026-08-08T19:55:09.472235+00:00",
+          "finished_at": "2026-08-08T19:55:14.572235+00:00"
+        },
+        "jobs": [
+          {
+            "id": "84706ecf-528f-4bba-8ad1-a13363003b25",
+            "run_id": "27392990-388b-41dc-9262-7cc8cfe12163",
+            "case_id": "fault-c-3-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:09.464269+00:00",
+            "started_at": "2026-08-08T19:55:09.472235+00:00",
+            "finished_at": "2026-08-08T19:55:14.572235+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "84706ecf-528f-4bba-8ad1-a13363003b25",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-C-3",
+            "started_at": "2026-08-08T19:55:09.472235+00:00",
+            "finished_at": "2026-08-08T19:55:12.472235+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "84706ecf-528f-4bba-8ad1-a13363003b25",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-C-3",
+            "started_at": "2026-08-08T19:55:14.472235+00:00",
+            "finished_at": "2026-08-08T19:55:14.572235+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "84706ecf-528f-4bba-8ad1-a13363003b25",
+            "run_id": "27392990-388b-41dc-9262-7cc8cfe12163",
+            "case_id": "fault-c-3-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:14.572235+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "D",
+      "scenario": "reclaim_then_worker_a_late_failure",
+      "repetition": 3,
+      "recovery_seconds": 0.047509617999992315,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 1,
+      "unique_reaped_count": 1,
+      "run_id": "5653525e-88f7-4cfc-b36b-e7f7f5ab517f",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 1,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 1,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "5653525e-88f7-4cfc-b36b-e7f7f5ab517f",
+          "dataset_version_id": "dffcc5e7-2046-46f8-bcdc-4ecf6413e509",
+          "dataset_hash": "f56857d2aae5cab7020c2a079629ff1f26bbf8c088c9e996649b4b0a11d9e1cc",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:09.774709+00:00",
+          "started_at": "2026-08-08T19:55:09.781483+00:00",
+          "finished_at": "2026-08-08T19:55:14.881483+00:00"
+        },
+        "jobs": [
+          {
+            "id": "658ae2a4-8148-4e96-8fe3-99c6dcb361ae",
+            "run_id": "5653525e-88f7-4cfc-b36b-e7f7f5ab517f",
+            "case_id": "fault-d-3-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:09.774709+00:00",
+            "started_at": "2026-08-08T19:55:09.781483+00:00",
+            "finished_at": "2026-08-08T19:55:14.881483+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "658ae2a4-8148-4e96-8fe3-99c6dcb361ae",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-D-3",
+            "started_at": "2026-08-08T19:55:09.781483+00:00",
+            "finished_at": "2026-08-08T19:55:12.781483+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "658ae2a4-8148-4e96-8fe3-99c6dcb361ae",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-D-3",
+            "started_at": "2026-08-08T19:55:14.781483+00:00",
+            "finished_at": "2026-08-08T19:55:14.881483+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "658ae2a4-8148-4e96-8fe3-99c6dcb361ae",
+            "run_id": "5653525e-88f7-4cfc-b36b-e7f7f5ab517f",
+            "case_id": "fault-d-3-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:14.881483+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "H",
+      "scenario": "dual_reaper_competition",
+      "repetition": 3,
+      "recovery_seconds": 0.3547940980000135,
+      "logical_lease_seconds": 2,
+      "logical_recovery_eligibility_seconds": 4,
+      "reaped_count": 20,
+      "unique_reaped_count": 20,
+      "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+      "submitted_count": 20,
+      "unique_job_count": 20,
+      "completed_count": 20,
+      "succeeded_count": 20,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 20,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+          "dataset_version_id": "d042faa0-f02f-45a8-a7ac-559c271582b3",
+          "dataset_hash": "a5ae6de7b3f5fb317845a4e168db405738f1d65680949b92d4d742f187c4c8cd",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 20,
+          "succeeded_jobs": 20,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:10.082127+00:00",
+          "started_at": "2026-08-08T19:55:10.094614+00:00",
+          "finished_at": "2026-08-08T19:55:15.194614+00:00"
+        },
+        "jobs": [
+          {
+            "id": "c9e2eeb0-060f-46e3-a49d-526f3264cbca",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-00",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "ff056f13-57af-4a53-a911-54d4e41ae583",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-01",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "a3ab63e7-37c4-4ccd-bece-25b8964c2240",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-02",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "9514b747-365b-42fa-ad86-64fd1bd13b2a",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-03",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "984e2745-6e29-4c29-88fc-a64a21fb2145",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-04",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "65067577-9f4c-4a06-8d23-87104977c865",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-05",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "524d143c-ddca-46bc-9758-cb7c78adbe4e",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-06",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "5e594a14-803c-4f4b-bc46-36b718f5f746",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-07",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "bb90f6c2-ed7b-4d6c-9cd7-52316527a817",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-08",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "c96124a8-f07e-4b69-a6bd-3d3580c88826",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-09",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "81b23418-9026-461f-af4c-7622e7656858",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-10",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "b121db2f-2177-4dd3-97d8-a20abeb03f41",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-11",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "d6028a98-1856-4ced-a121-1d7631513101",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-12",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "c454bbda-107f-4770-bf47-39f7369e51b8",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-13",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "89f37f62-fec5-4a75-8286-2f0d2d14f7f6",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-14",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "17525641-c958-4b16-bde1-55cae8bdc9a1",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-15",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "ef1f7ed8-ee50-4e9c-b6f4-a4d59f08af84",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-16",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "156826cf-4879-45ef-ab0e-25e43340d66a",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-17",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "301899ee-b696-4db3-989d-59f99aea40d9",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-18",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "id": "667d32f3-026a-4f35-ad4b-bf3e8a920a88",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-19",
+            "status": "succeeded",
+            "attempt_count": 2,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:10.082127+00:00",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "156826cf-4879-45ef-ab0e-25e43340d66a",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "156826cf-4879-45ef-ab0e-25e43340d66a",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "17525641-c958-4b16-bde1-55cae8bdc9a1",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "17525641-c958-4b16-bde1-55cae8bdc9a1",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "301899ee-b696-4db3-989d-59f99aea40d9",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "301899ee-b696-4db3-989d-59f99aea40d9",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "524d143c-ddca-46bc-9758-cb7c78adbe4e",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "524d143c-ddca-46bc-9758-cb7c78adbe4e",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "5e594a14-803c-4f4b-bc46-36b718f5f746",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "5e594a14-803c-4f4b-bc46-36b718f5f746",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "65067577-9f4c-4a06-8d23-87104977c865",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "65067577-9f4c-4a06-8d23-87104977c865",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "667d32f3-026a-4f35-ad4b-bf3e8a920a88",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "667d32f3-026a-4f35-ad4b-bf3e8a920a88",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "81b23418-9026-461f-af4c-7622e7656858",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "81b23418-9026-461f-af4c-7622e7656858",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "89f37f62-fec5-4a75-8286-2f0d2d14f7f6",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "89f37f62-fec5-4a75-8286-2f0d2d14f7f6",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "9514b747-365b-42fa-ad86-64fd1bd13b2a",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "9514b747-365b-42fa-ad86-64fd1bd13b2a",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "984e2745-6e29-4c29-88fc-a64a21fb2145",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "984e2745-6e29-4c29-88fc-a64a21fb2145",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "a3ab63e7-37c4-4ccd-bece-25b8964c2240",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "a3ab63e7-37c4-4ccd-bece-25b8964c2240",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "b121db2f-2177-4dd3-97d8-a20abeb03f41",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "b121db2f-2177-4dd3-97d8-a20abeb03f41",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "bb90f6c2-ed7b-4d6c-9cd7-52316527a817",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "bb90f6c2-ed7b-4d6c-9cd7-52316527a817",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "c454bbda-107f-4770-bf47-39f7369e51b8",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "c454bbda-107f-4770-bf47-39f7369e51b8",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "c96124a8-f07e-4b69-a6bd-3d3580c88826",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "c96124a8-f07e-4b69-a6bd-3d3580c88826",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "c9e2eeb0-060f-46e3-a49d-526f3264cbca",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "c9e2eeb0-060f-46e3-a49d-526f3264cbca",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "d6028a98-1856-4ced-a121-1d7631513101",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "d6028a98-1856-4ced-a121-1d7631513101",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "ef1f7ed8-ee50-4e9c-b6f4-a4d59f08af84",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "ef1f7ed8-ee50-4e9c-b6f4-a4d59f08af84",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          },
+          {
+            "job_id": "ff056f13-57af-4a53-a911-54d4e41ae583",
+            "attempt_number": 1,
+            "worker_id": "fault-worker-a-H-3",
+            "started_at": "2026-08-08T19:55:10.094614+00:00",
+            "finished_at": "2026-08-08T19:55:13.094614+00:00",
+            "outcome": "lease_expired",
+            "retryable": true,
+            "error_code": "lease_expired",
+            "upstream_status_code": null,
+            "latency_ms": null
+          },
+          {
+            "job_id": "ff056f13-57af-4a53-a911-54d4e41ae583",
+            "attempt_number": 2,
+            "worker_id": "fault-worker-b-H-3",
+            "started_at": "2026-08-08T19:55:15.094614+00:00",
+            "finished_at": "2026-08-08T19:55:15.194614+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 25
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "c9e2eeb0-060f-46e3-a49d-526f3264cbca",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-00",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "ff056f13-57af-4a53-a911-54d4e41ae583",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-01",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "a3ab63e7-37c4-4ccd-bece-25b8964c2240",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-02",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "9514b747-365b-42fa-ad86-64fd1bd13b2a",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-03",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "984e2745-6e29-4c29-88fc-a64a21fb2145",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-04",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "65067577-9f4c-4a06-8d23-87104977c865",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-05",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "524d143c-ddca-46bc-9758-cb7c78adbe4e",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-06",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "5e594a14-803c-4f4b-bc46-36b718f5f746",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-07",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "bb90f6c2-ed7b-4d6c-9cd7-52316527a817",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-08",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "c96124a8-f07e-4b69-a6bd-3d3580c88826",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-09",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "81b23418-9026-461f-af4c-7622e7656858",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-10",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "b121db2f-2177-4dd3-97d8-a20abeb03f41",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-11",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "d6028a98-1856-4ced-a121-1d7631513101",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-12",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "c454bbda-107f-4770-bf47-39f7369e51b8",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-13",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "89f37f62-fec5-4a75-8286-2f0d2d14f7f6",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-14",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "17525641-c958-4b16-bde1-55cae8bdc9a1",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-15",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "ef1f7ed8-ee50-4e9c-b6f4-a4d59f08af84",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-16",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "156826cf-4879-45ef-ab0e-25e43340d66a",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-17",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "301899ee-b696-4db3-989d-59f99aea40d9",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-18",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          },
+          {
+            "job_id": "667d32f3-026a-4f35-ad4b-bf3e8a920a88",
+            "run_id": "1fe98493-a539-471b-96a6-18de7f7ed81c",
+            "case_id": "fault-h-3-19",
+            "latency_ms": 25,
+            "created_at": "2026-08-08T19:55:15.194614+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "E",
+      "scenario": "temporary_redis_outage",
+      "repetition": 3,
+      "recovery_seconds": 0.01066688499997781,
+      "outbox_pending_before_recovery": 4,
+      "outbox_peak_pending_after_redis_start": 0,
+      "worker_restart_required": false,
+      "api_final_status": "succeeded",
+      "run_id": "ab98f202-4427-4b52-9d52-122db54ca72b",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "ab98f202-4427-4b52-9d52-122db54ca72b",
+          "dataset_version_id": "7531818c-357c-4533-bf0b-386b6e876efa",
+          "dataset_hash": "209be7140f8cbeab782b30626e619b2a97d632be68b07b5ce607c0a2b60a6013",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:13.876448+00:00",
+          "started_at": "2026-08-08T19:55:14.595195+00:00",
+          "finished_at": "2026-08-08T19:55:14.620806+00:00"
+        },
+        "jobs": [
+          {
+            "id": "400eb7e1-199c-446a-b5ce-8f247a6c616f",
+            "run_id": "ab98f202-4427-4b52-9d52-122db54ca72b",
+            "case_id": "fault-e-3-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:13.876448+00:00",
+            "started_at": "2026-08-08T19:55:14.595195+00:00",
+            "finished_at": "2026-08-08T19:55:14.620806+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "400eb7e1-199c-446a-b5ce-8f247a6c616f",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:e6151d7c",
+            "started_at": "2026-08-08T19:55:14.595195+00:00",
+            "finished_at": "2026-08-08T19:55:14.620806+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 0
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "400eb7e1-199c-446a-b5ce-8f247a6c616f",
+            "run_id": "ab98f202-4427-4b52-9d52-122db54ca72b",
+            "case_id": "fault-e-3-00",
+            "latency_ms": 0,
+            "created_at": "2026-08-08T19:55:14.620806+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "F",
+      "scenario": "temporary_postgresql_outage",
+      "repetition": 3,
+      "recovery_seconds": 6.943355338999993,
+      "outage_seconds": 3.0,
+      "worker_restart_required": false,
+      "api_final_status": "succeeded",
+      "run_id": "b6002c58-e04c-460f-a15d-a356bb3bcb78",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "b6002c58-e04c-460f-a15d-a356bb3bcb78",
+          "dataset_version_id": "56cf158d-0886-4ead-b557-69b63ebd7376",
+          "dataset_hash": "4d9fa2ed07524efc58eda103d16d6d67caea6c11212931f821946e0d9ab79e99",
+          "target_config_hash": "aea6fc74c8a655a0cac22a899628a214d41969718ac2bb380f802bcb40fd37a1",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:21.243511+00:00",
+          "started_at": "2026-08-08T19:55:21.286421+00:00",
+          "finished_at": "2026-08-08T19:55:31.324414+00:00"
+        },
+        "jobs": [
+          {
+            "id": "f42fdf38-57e0-44dd-a921-d2736d98574b",
+            "run_id": "b6002c58-e04c-460f-a15d-a356bb3bcb78",
+            "case_id": "fault-f-3-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:55:21.243511+00:00",
+            "started_at": "2026-08-08T19:55:21.286421+00:00",
+            "finished_at": "2026-08-08T19:55:31.324414+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "f42fdf38-57e0-44dd-a921-d2736d98574b",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:e6151d7c",
+            "started_at": "2026-08-08T19:55:21.286421+00:00",
+            "finished_at": "2026-08-08T19:55:31.324414+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 10000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "f42fdf38-57e0-44dd-a921-d2736d98574b",
+            "run_id": "b6002c58-e04c-460f-a15d-a356bb3bcb78",
+            "case_id": "fault-f-3-00",
+            "latency_ms": 10000,
+            "created_at": "2026-08-08T19:55:31.324414+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "G",
+      "scenario": "worker_restart_during_execution",
+      "repetition": 3,
+      "recovery_seconds": 5.4376167390000205,
+      "worker_container_before": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_after": "aab9c13870091e4a8b52db633725a1e90e23b151cbe7b7091508fe2ea210019f",
+      "worker_container_changed": false,
+      "api_final_status": "succeeded",
+      "run_id": "ff7ba0a2-51a9-4271-8bfe-ffbbfed57ab9",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "ff7ba0a2-51a9-4271-8bfe-ffbbfed57ab9",
+          "dataset_version_id": "e514787c-90a4-44e2-b34c-88518004b239",
+          "dataset_hash": "3a5fd025f4df69a0a6deddcbc74e0d69eb36ce8d8d0aaa3a5a7c6a8c2ee06b3e",
+          "target_config_hash": "eaeae8f56dceaddf3ef63aeb15cbfc61dca214e5ab765b6d3121400118554903",
+          "evaluator_config_hash": "8415432b76b7f5836b9eba6fb132f7fd4fcec08131b87476795706904c4db9ba",
+          "source_commit": "70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6",
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:31.906851+00:00",
+          "started_at": "2026-08-08T19:55:32.373365+00:00",
+          "finished_at": "2026-08-08T19:55:37.386450+00:00"
+        },
+        "jobs": [
+          {
+            "id": "73c2e87f-da3f-412a-af39-18c8a6cff285",
+            "run_id": "ff7ba0a2-51a9-4271-8bfe-ffbbfed57ab9",
+            "case_id": "fault-g-3-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 2,
+            "created_at": "2026-08-08T19:55:31.906851+00:00",
+            "started_at": "2026-08-08T19:55:32.373365+00:00",
+            "finished_at": "2026-08-08T19:55:37.386450+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "73c2e87f-da3f-412a-af39-18c8a6cff285",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:e6151d7c",
+            "started_at": "2026-08-08T19:55:32.373365+00:00",
+            "finished_at": "2026-08-08T19:55:37.386450+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 5000
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "73c2e87f-da3f-412a-af39-18c8a6cff285",
+            "run_id": "ff7ba0a2-51a9-4271-8bfe-ffbbfed57ab9",
+            "case_id": "fault-g-3-00",
+            "latency_ms": 5000,
+            "created_at": "2026-08-08T19:55:37.386450+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "I",
+      "scenario": "duplicate_idempotency_key",
+      "repetition": 3,
+      "recovery_seconds": 0.6275138500000139,
+      "concurrent_response_seconds": 1.9749025829999596,
+      "http_request_count": 20,
+      "http_success_count": 20,
+      "http_error_count": 0,
+      "unique_run_count": 1,
+      "api_final_status": "succeeded",
+      "run_id": "9c402523-6847-4da0-9743-82782516ed83",
+      "submitted_count": 1,
+      "unique_job_count": 1,
+      "completed_count": 1,
+      "succeeded_count": 1,
+      "failed_count": 0,
+      "cancelled_count": 0,
+      "lost_count": 0,
+      "retry_count": 0,
+      "duplicate_case_result_count": 0,
+      "duplicate_terminal_commit_count": 0,
+      "stale_result_attempted_count": 0,
+      "stale_result_accepted_count": 0,
+      "stale_failure_attempted_count": 0,
+      "stale_failure_accepted_count": 0,
+      "orphan_running_count": 0,
+      "final_run_status": "succeeded",
+      "final_state_correct": true,
+      "invariants_passed": true,
+      "violations": [],
+      "raw_reconciliation": {
+        "run_snapshot": {
+          "id": "9c402523-6847-4da0-9743-82782516ed83",
+          "dataset_version_id": "03bf80b0-6237-4a8c-bf63-ff42a09541e7",
+          "dataset_hash": "62b6b95da923fa2dd4756e03660e67c5df60abd9c89c3678dca22890408d86fe",
+          "target_config_hash": "e3e497ad20d9b1b8a709163d3f1bef58b78ce2444cbc98c3c9c5b903f54563b5",
+          "evaluator_config_hash": "958cb7c79c50925396cc120fd6115837b7df98802ebe58510ec78d2ae4d39735",
+          "source_commit": null,
+          "status": "succeeded",
+          "total_jobs": 1,
+          "succeeded_jobs": 1,
+          "failed_jobs": 0,
+          "cancelled_jobs": 0,
+          "created_at": "2026-08-08T19:55:40.302332+00:00",
+          "started_at": "2026-08-08T19:55:40.538678+00:00",
+          "finished_at": "2026-08-08T19:55:40.567621+00:00"
+        },
+        "jobs": [
+          {
+            "id": "c2822bf6-bbf1-4da2-8dbb-f91ba5f64d9f",
+            "run_id": "9c402523-6847-4da0-9743-82782516ed83",
+            "case_id": "fault-i-3-00",
+            "status": "succeeded",
+            "attempt_count": 1,
+            "max_attempts": 3,
+            "created_at": "2026-08-08T19:55:40.302332+00:00",
+            "started_at": "2026-08-08T19:55:40.538678+00:00",
+            "finished_at": "2026-08-08T19:55:40.567621+00:00"
+          }
+        ],
+        "attempts": [
+          {
+            "job_id": "c2822bf6-bbf1-4da2-8dbb-f91ba5f64d9f",
+            "attempt_number": 1,
+            "worker_id": "aab9c1387009:1:914990d2",
+            "started_at": "2026-08-08T19:55:40.538678+00:00",
+            "finished_at": "2026-08-08T19:55:40.567621+00:00",
+            "outcome": "succeeded",
+            "retryable": false,
+            "error_code": null,
+            "upstream_status_code": null,
+            "latency_ms": 0
+          }
+        ],
+        "case_results": [
+          {
+            "job_id": "c2822bf6-bbf1-4da2-8dbb-f91ba5f64d9f",
+            "run_id": "9c402523-6847-4da0-9743-82782516ed83",
+            "case_id": "fault-i-3-00",
+            "latency_ms": 0,
+            "created_at": "2026-08-08T19:55:40.567621+00:00"
+          }
+        ]
+      }
+    }
+  ],
+  "finished_at": "2026-08-08T19:55:41.144253+00:00"
+}
