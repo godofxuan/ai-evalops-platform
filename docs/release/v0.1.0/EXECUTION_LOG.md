@@ -436,3 +436,8 @@ initial/large 命令都改为 100。100 不是任意缩小：many-small 分布�
 本机没有 `gh` CLI。检查命令因 PowerShell `$LASTEXITCODE` 沿用旧值一度输出 version/auth=0，
 但实际两次均为 CommandNotFound；没有读取 Git credential 或绕过 GitHub 权限取消 run。新 push
 只会按既有 concurrency 规则替换 pending run，不取消仍在运行的旧 evidence。
+
+旧 500-job run 长时间占用原 concurrency group，导致 current 100-job run pending。先新增 workflow
+contract，要求 group 精确为 `release-candidate-fair-capacity-v2`；RED 为 1 failed。更新 group 后，
+current protocol 可使用独立 runner 立即验证，不删除或改写旧 run。旧 pending/旧 source 以后若
+执行，其 Git push 仍受 non-fast-forward 保护，不能覆盖当前分支；artifact 保留其独立价值。

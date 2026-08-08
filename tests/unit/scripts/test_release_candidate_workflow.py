@@ -5,6 +5,12 @@ import yaml
 WORKFLOW_PATH = Path(".github/workflows/release-candidate-evidence.yml")
 
 
+def test_release_candidate_workflow_uses_v2_capacity_concurrency_group() -> None:
+    workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+    assert workflow["concurrency"]["group"] == "release-candidate-fair-capacity-v2"
+
+
 def test_release_candidate_workflow_stages_large_queue_after_initial_gate() -> None:
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["fair-capacity"]["steps"]
