@@ -286,3 +286,71 @@ uv run mypy app scripts tests/integration tests/concurrency
 passed；MyPy 133 source files 无问题。13 个 deselected 是带 `integration` marker、需要真实外部服务
 的测试，并非失败或被静默跳过。真实 PostgreSQL/Compose capacity 运行仍由随后 GitHub Actions
 负责，不能用这 610 个本地测试替代。
+
+## 2026-08-08 — 首次远程 RC 失败与 result commit deadlock 修复
+
+### 原始远程反馈环
+
+推送 source `3170dbcdd6b84135103682e7dd6f40f148d73328` 后，GitHub Actions run
+`31260188889` 成功完成 checkout、依赖、Compose PostgreSQL/Redis 和 Alembic migration，随后
+在 initial 1k/10k step 失败。100k step 被正确 skip；diagnostics、artifact upload、失败证据
+commit 和 Compose cleanup 全部成功。bot evidence commit 为 `95c0799`。
+
+拉取证据后确认：
+
+- `fair-q1000-single_tenant-w1-b1` 完成 500/500，lost/duplicate/orphan/attempt mismatch 均为
+  0，arm assessment VERIFIED；
+- 双 Worker arm 已生成 8 份真实 EXPLAIN，但尚未生成 runtime raw；
+- `failure.json` 为 `OperationalError`；
+- PostgreSQL compose log 在 2026-08-08 13:44:24 UTC 明确记录 deadlock：process 686 等待
+  transaction 1808，process 685 等待 transaction 1807，双方都在
+  `SELECT evaluation_runs ... FOR UPDATE OF evaluation_runs`。
+
+因此失败不是文件合同、Compose 或资源 collector 造成，而是真实 Worker 并发 result commit
+路径的数据库死锁。失败 evidence 保留不改写，release 继续为 NOT_READY。
+
+### 假设、最小化与根因
+
+按 `diagnose` 流程列出并检验四个假设。最终证据支持：两个 transaction 各自先锁自己的 Job，
+向 `case_results` flush 时因外键分别持有同一 Run row 的 KEY SHARE，之后
+`aggregate_run_in_session` 都尝试升级为 Run `FOR UPDATE`，形成对称锁升级环。claim queued→running
+竞争、其他 run→job 路径和 collector 假设均与“双方 context 都是 evaluation_runs”不符。
+
+现有 PostgreSQL concurrency test 创建了 100 个同 run claims，却只串行提交第一个结果，因此
+没有覆盖真实模式。先把前两个 claim 改为 `asyncio.gather(commit_success, commit_success)`，并把
+后续 reaper 期望从 99 调整为 98。该测试需要远程 migrated PostgreSQL，本地不能伪造其 RED；
+原始 RC run 的 deadlock graph 是当前真实反馈环与失败证据。
+
+### 最小生产修复
+
+新增 `build_run_lock_for_completion_statement` 的单元 RED；首次运行 collection error，因为入口
+尚不存在。实现后，`SQLAlchemyResultCommitter.commit_success` 在 transaction 开始时先
+`FOR UPDATE OF evaluation_runs`，再验证并锁 owned Job，之后才 flush CaseResult/Attempt/Audit 与
+执行聚合。canonical order 由原来的 `job/FK-key-share → run upgrade` 改为明确 `run → job`。
+
+这是 result commit 锁序修复，不修改 fair claim scheduler。代价是同一 Run 的 result completion
+从 transaction 开始即串行；但原聚合本来就必须串行锁同一 Run，因此没有新增跨 Run 串行化。
+局部结果：2 unit tests passed；Ruff passed；strict MyPy passed。真实结论必须由更新后的并发
+integration test 和原始 RC workflow 重跑给出，因此新增
+`.github/release-candidate-trigger.txt` 触发下一次 source-bound run。
+
+### 修复后的本地回归
+
+第一次全仓非集成回归为 `1 failed, 612 passed, 13 deselected`。唯一失败不是状态机或锁语义，
+而是 `test_outbox_enqueuing.RecordingSession` 测试替身没有实现真实 `AsyncSession.scalar`，在新
+run-first lock 调用处产生 `AttributeError`。补齐 fake 的 scalar 结果队列，并显式加入
+`RUN_ID` 作为第一项后，相关 7 tests passed。
+
+再次从最终工作树完整执行：
+
+```powershell
+uv run pytest -m "not integration" -q
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy app scripts tests/integration tests/concurrency
+git diff --check
+```
+
+结果：`613 passed, 13 deselected in 361.11s`；315 files formatted；Ruff passed；MyPy 133
+source files passed；diff check passed。真实双提交 integration test 在本地仍因无 Docker/PostgreSQL
+被 marker 排除，必须以接下来的 GitHub CI 与 RC workflow 为最终反馈环。
