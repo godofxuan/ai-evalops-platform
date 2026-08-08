@@ -975,3 +975,11 @@ source 绑定一致，manifest 文件集、大小和 SHA-256 全部通过，候�
 Jobs/s 中位数 3.377，范围 0.628–5.488。高并发单租户仍显示明显 contention：w8 claim p95
 41,386.537 ms、504 retries，因此 release 文档必须把“大队列高并发热点租户延迟”列为限制；但查询
 计划数据已经否定“公平 SQL 比 legacy FIFO 慢 3×”这一特定门槛，不能据此引入新的队列基础设施。
+
+## 2026-08-09 — 串行触发物化后最终 32-arm worker 回归
+
+中间恢复证据已作为 `4a2748b` 单独提交并推送，远端分支不存在待回写的其他专用实验。此时才把
+`.github/evidence-gate-trigger.txt` 的请求时间更新为 `2026-08-09T03:27:15+08:00`。该次触发只运行
+标准 2 workloads × 4 workers × 4 repetitions 的 worker-scaling 协议，目的是在相对旧 formal
+baseline 的相同协议上判定 -15% release gate，同时复核 10W/100J 执行正确性、资源、DB 与 claim
+指标。fault matrix 尚不触发，避免两个证据机器人再次争抢同一目标分支。
