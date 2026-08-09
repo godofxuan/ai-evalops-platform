@@ -59,11 +59,30 @@ regression gate.
 - Moving Job/Attempt/lease writes into Phase A: enlarges the critical section and breaks the two-phase purpose.
 - Adding Redis/Kafka/Celery/Temporal coordination: outside scope and unnecessary for the demonstrated lock relation.
 
+## Candidate 2: bounded-path correction, not parameter tuning
+
+The strengthened 20-repetition 10W/100J contract exposed a new RED at source `5261e56`: push CI `31317175140`
+passed, while PR CI `31317179594` returned only 9 successful claims in one 10-request first wave. Ninety Jobs were
+still eligible. The old public claim path could make 21 nonblocking reservation attempts, sleep 10 ms after each miss,
+then return empty solely because the retry counter was exhausted.
+
+Candidate 2 (`e4dcb5e`) does not increase that counter or change its sleep. It removes both as the contention decision:
+
+1. try the existing `FOR NO KEY UPDATE ... SKIP LOCKED` fair-turn selector;
+2. if it returns empty, independently confirm that an eligible Job still exists;
+3. only then execute the same selector without `SKIP LOCKED`, waiting for one production-short fair-turn transaction;
+4. preserve the separate Phase-B Job-only durable claim unchanged.
+
+The fast path therefore still skips Tenant A and selects Tenant B. The waiting fallback is reachable only when no
+unlocked eligible Tenant was available while an eligible Job still existed. New compile RED/GREEN tests require the
+fallback to keep `FOR NO KEY UPDATE OF tenants`, reject `FOR UPDATE`, and omit only `SKIP LOCKED`. Targeted evidence
+records `waiting_fallbacks` separately from empty requests and reservation misses.
+
 ## Status
 
 Lock-mode hypothesis: `VERIFIED`.  
 Production-shaped overlap, mutual exclusion, cross-Tenant progress, reservation-crash, priority and initial 10W/100J
 contracts: `VERIFIED_REAL_POSTGRESQL_CI` by push run `31315634340` and PR run `31315639504` at source `9ac7088`.
-The 10W/100J contract was subsequently strengthened from one complete drain to 20 complete repetitions and therefore
-requires one more CI qualification before it may replace this initial result.  
+The strengthened 20-repetition version produced a real 9/10 RED at PR run `31317179594`. Candidate 2 is the final
+allowed production iteration and requires new push + PR CI before targeted performance may start.
 Release performance: `NOT_YET_QUALIFIED`.

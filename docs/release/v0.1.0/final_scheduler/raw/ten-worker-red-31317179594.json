@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "record_type": "focused_projection_of_ci_annotation",
+  "source_commit": "5261e56f9e8a994cf6eb069e0f3ea80a0c3d0737",
+  "push_control": {
+    "workflow_run_id": 31317175140,
+    "status": "success",
+    "quality_and_integration_duration": "4m24s",
+    "compose_smoke_duration": "1m00s"
+  },
+  "pr_red": {
+    "workflow_run_id": 31317179594,
+    "status": "failure",
+    "quality_and_integration_duration": "4m12s",
+    "compose_smoke_duration": "57s",
+    "test": "tests.concurrency.test_tenant_claim_parallelism.test_ten_workers_drain_one_hundred_same_tenant_jobs_with_limit_one",
+    "assertion": "expected 10 first-wave claims, observed 9",
+    "source_line": 844
+  },
+  "artifact": {
+    "name": "final-scheduler-lock-diagnostics-31317179594-1",
+    "display_size": "1.56 KB",
+    "sha256": "16049641da845d51b8832983f990dcacd84963be8ec1b8314d17fcc95d381a43"
+  },
+  "interpretation": "The strengthened repeated correctness contract found a false-empty claim response with eligible Jobs remaining. This is not a duplicate, deadlock, timeout, or release-performance result."
+}

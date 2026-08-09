@@ -34,6 +34,20 @@ release gate.
 The 10W/100J test has since been strengthened to 20 complete repetitions, so that stronger contract must pass the next
 CI source before final correctness promotion.
 
+## Strengthened-contract RED
+
+Source `5261e56` deliberately promoted the 10W/100J test from one drain to 20 independent complete drains. Its two CI
+entry points disagreed in a useful way:
+
+| Entry point | Actions run | Result | Observation |
+|---|---:|---|---|
+| push CI | [31317175140](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31317175140) | SUCCESS | all 20 repetitions passed |
+| PR CI | [31317179594](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31317179594) | FAILURE | one first wave returned 9 claims for 10 requests |
+
+The failure had no duplicate claim and no deadlock; it was a false empty return while the 100-Job fixture still had
+eligible work. Therefore `CORRECTNESS_PASS` is revoked for the strengthened contract, targeted performance remains
+blocked, and candidate 2 at `e4dcb5e` must pass both CI entry points.
+
 ## Artifact integrity
 
 Run `31315634340` uploaded `final-scheduler-lock-diagnostics-31315634340-1`:

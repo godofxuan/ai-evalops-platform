@@ -21,6 +21,11 @@ One short transaction:
 5. update only `Tenant.last_scheduler_turn_at`;
 6. commit and release the Tenant lock.
 
+The normal Phase-A selector is nonblocking. If it finds no unlocked Tenant but an independent eligibility probe still
+finds work, the claimer performs one waiting Phase-A selection with the same `FOR NO KEY UPDATE` lock and without
+`SKIP LOCKED`. This avoids returning a false empty result merely because a fixed retry budget expired. It does not run
+when another unlocked Tenant is available: the normal `SKIP LOCKED` query selects that Tenant first.
+
 Phase A creates no Attempt, no Job lease, no Audit event and no Outbox event. If the worker exits after commit, no Job
 is lost because no Job changed state.
 
@@ -89,7 +94,9 @@ The detailed explicit and implicit lock inventory is in `LOCK_ORDER.md`.
 
 ## Qualification state
 
-The production algorithm in commit `18fb876` and the production-shaped PostgreSQL contracts in commit `9ac7088`
+The minimum lock mode in commit `18fb876` and the initial production-shaped PostgreSQL contracts in commit `9ac7088`
 passed both push CI `31315634340` and PR CI `31315639504`. This establishes the transaction and correctness design; it
-does not establish the release performance claim. Repeated targeted scaling, capacity, current fault injection and
-formal 32-arm evidence remain separate gates.
+does not establish the release performance claim. The strengthened repeated 10W contract found a false-empty case, so
+commit `e4dcb5e` adds the single waiting fallback described above as the second and final production iteration. It is
+`PENDING_REAL_POSTGRESQL_CI`. Repeated targeted scaling, capacity, current fault injection and formal 32-arm evidence
+remain separate gates.

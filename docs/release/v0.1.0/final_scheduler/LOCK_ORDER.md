@@ -17,7 +17,10 @@ Audited source: `app/jobs/claiming.py`, `results.py`, `failures.py`, `heartbeat.
 ## Scheduler claim
 
 ```text
-Phase A: Tenant NKU+SL → update last_scheduler_turn_at → COMMIT
+Phase A fast path: Tenant NKU+SL → update last_scheduler_turn_at → COMMIT
+
+Phase A fallback after positive eligibility probe:
+                   Tenant NKU → update last_scheduler_turn_at → COMMIT
 
 Phase B: Job U+SL
          → Job fields / Attempt insert
@@ -27,8 +30,10 @@ Phase B: Job U+SL
          → COMMIT
 ```
 
-The crucial graph is `Tenant | COMMIT | Job → compatible Tenant FK`, not one long `Tenant → Job` transaction.
-Therefore it cannot form an incompatible production cycle with a concurrent `Job → Tenant` Phase-B FK check.
+The fallback keeps the same lock strength and transaction boundary; it omits only `SKIP LOCKED` after the fast path
+has found no unlocked eligible Tenant. The crucial graph remains
+`Tenant | COMMIT | Job → compatible Tenant FK`, not one long `Tenant → Job` transaction. Therefore it cannot form an
+incompatible production cycle with a concurrent `Job → Tenant` Phase-B FK check.
 
 ## Result success
 

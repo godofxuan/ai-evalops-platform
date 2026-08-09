@@ -1295,3 +1295,27 @@ format check 通过，CI 同范围 MyPy `app scripts tests/integration tests/con
 写成测试 GREEN 或源码失败。独立 collection 在 `5.4s` 内成功，报告 670 项中收集 645 项、25 项因 marker
 排除；本轮直接相关组合仍为 `27 passed, 12 skipped`，12 个 skip 均等待真实 PostgreSQL CI。最终完整
 结论继续以 GitHub Actions 的同源 run 为准。
+
+GitHub 页面预检还发现新 targeted workflow 未出现在 Actions 列表：它只声明 `workflow_dispatch`，而文件
+尚未存在于默认分支，不能把手动触发当成可用能力。为此新增严格 path-filtered 的 push 入口，只监听
+`.github/final-scheduler-targeted-trigger.txt`；修改工作流本身不会意外启动 benchmark。当前 CI 通过后再
+单独更新 trigger 文件，确保“CI GREEN 后才开始 targeted”的阶段顺序。
+
+## 2026-08-09 — 20 次 10W/100J RED 与最终 production iteration
+
+source `5261e56` 的 push CI `31317175140` 在 `4m24s` 完整通过，但同源 PR CI `31317179594` 在 `4m12s`
+失败。唯一失败是 20 次 10W/100J `limit=1` 合同中某轮第一波只返回 9 个 claim；fixture 尚有大量 eligible
+Job，没有 duplicate、deadlock 或 timeout。因此撤销 strengthened correctness PASS，并继续阻止 targeted。
+
+源码审计显示 public `claim()` 在 Phase-A `SKIP LOCKED` 返回空时，会先确认 eligible Job，再 sleep 10ms；
+最多 21 次仍未抢到短 Tenant turn 时，即使 eligible probe 始终为真也返回空。这里没有把 retry 20 提高到
+100。Candidate 2 先保留现有非阻塞 query；只有它返回空且 eligibility probe 为真，才使用相同
+`FOR NO KEY UPDATE`、但不含 `SKIP LOCKED` 的 query 等待一个生产短事务，然后保持 Phase B 完全不变。
+跨 Tenant 时快路径仍应选择未锁的 Tenant B，waiting path 仅在没有未锁 candidate 时触发。
+
+TDD 首个 RED 为新 waiting SQL builder 无法 import。GREEN compile contract 证明 waiting selector 含
+`FOR NO KEY UPDATE OF tenants`、不含 `FOR UPDATE`、仅移除 `SKIP LOCKED`。聚焦组合 `40 passed, 12 skipped`，
+Ruff/format 通过，CI 同范围 MyPy 135 source files 通过。容量与 8-worker instrumentation 同步增加
+`waiting_fallbacks`，20-repetition test 在 assertion 前逐轮写 attempts/probes/empty/fallback JSONL。提交
+`e4dcb5e` 是本 sprint 允许的第 2 次、也是最后一次 scheduler production iteration；若其真实 CI 或
+targeted 仍失败，不再做 Candidate 3。
