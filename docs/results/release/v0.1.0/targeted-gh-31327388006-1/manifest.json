@@ -1,0 +1,628 @@
+{
+  "claim_scope": "final_scheduler_targeted",
+  "files": {
+    "assessment.json": {
+      "sha256": "3f4f471cc5bf831dc8b2871b4d075ff3d434f12a2502548157d1fc17e2ad0221",
+      "size_bytes": 960
+    },
+    "environment/compose-log-policy.txt": {
+      "sha256": "49d5bb9bf3759178ee8c3b7ed1f196c35888aa0becf0aca4952306e95d4cd859",
+      "size_bytes": 89
+    },
+    "environment/compose-ps.txt": {
+      "sha256": "8c4b3ec74bc8f00fd3a34ba20fa02979aa818555b07e0123cb0d70adc8b32016",
+      "size_bytes": 501
+    },
+    "environment/compose.log": {
+      "sha256": "d5684fd19f9afe4057417708b286eef9a158b7fd844d254d06773784a8568318",
+      "size_bytes": 4847
+    },
+    "environment/runner.txt": {
+      "sha256": "43df65f84b48b7db324a4c9f6e275418b0e8ce470915fd24e7fb0c447f348936",
+      "size_bytes": 4559
+    },
+    "environment/source.txt": {
+      "sha256": "3502136c851a118f604f7be2d7761a7df701da4ff60e18033a1b0414a9ce8806",
+      "size_bytes": 238
+    },
+    "rep1/assessment.json": {
+      "sha256": "cc9d4d213dccc4a604a91e443de38352f72b02721ea44477b92955f3ce699883",
+      "size_bytes": 476
+    },
+    "rep1/bundle/arms.csv": {
+      "sha256": "9aff25d691b75f1ba4a3e4f9ddb530a03596d245d97a392f95021fc1b29ca1b6",
+      "size_bytes": 11145
+    },
+    "rep1/bundle/configuration.json": {
+      "sha256": "9f2dd599c8ab4f44740491de99d4e791372ffce3739057584c12f73b2d839d71",
+      "size_bytes": 657
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-fair-r01.json": {
+      "sha256": "b2e77aa04c1a9f312b698a7b8498cf20cb9bef27b52cd1e95129c9b446b4b5b8",
+      "size_bytes": 37169
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-fair-r02.json": {
+      "sha256": "76f7cda62cf6d7cb67bf60b01a24193f16eda212f76ff30b8dedc9c8f9e705bf",
+      "size_bytes": 37170
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-fair-r03.json": {
+      "sha256": "d6cf38625d11e3ac7553d209c7816f71ae6941aeccfd62b70f138c58e88c8df8",
+      "size_bytes": 37171
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-fair-r04.json": {
+      "sha256": "ddc36d31a4f8f34c714925a2a6e8b11db72a37612c5fa0c323f05e7ec8151107",
+      "size_bytes": 37167
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-legacy_fifo-r01.json": {
+      "sha256": "1bc3fc1f1c67e113b5bdf6c41e9aef4ad607c0679e5093749501ef18b3cbd9a7",
+      "size_bytes": 14574
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-legacy_fifo-r02.json": {
+      "sha256": "28864ab9c51bc9b9336ccde7233e7f318408d8a525fbb296106b11483672fb38",
+      "size_bytes": 14571
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-legacy_fifo-r03.json": {
+      "sha256": "2fa431aceb39d78aa30ffe8b6ecbc04f2b9220e368a651810f3ae311cb70a56a",
+      "size_bytes": 14573
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w1-b1-legacy_fifo-r04.json": {
+      "sha256": "1b15fc03398957b42f255281f41660019b5a7cee4d93baa1231de8c46a2d49c1",
+      "size_bytes": 14573
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-fair-r01.json": {
+      "sha256": "629cd8254d16b12d189d8a317e71b7725f9ad50facfc42086338445a4ecada63",
+      "size_bytes": 37175
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-fair-r02.json": {
+      "sha256": "9cdb0dfd01129bc85bb7cc1224db86c97e2ee0179dc53b93b46881b27e2b2852",
+      "size_bytes": 37177
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-fair-r03.json": {
+      "sha256": "42f395a881ecf217886823955483f3a4e335ab9281093203a37c5edcd4df8221",
+      "size_bytes": 37180
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-fair-r04.json": {
+      "sha256": "e12ed26009c735814b0ed9631190027c6e187beb121073e4e180e4126fa3959f",
+      "size_bytes": 37175
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-legacy_fifo-r01.json": {
+      "sha256": "39763dd9af64eb5c0d4004b3bb2133297e8c1912b133b566b3b0f8516063e892",
+      "size_bytes": 14576
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-legacy_fifo-r02.json": {
+      "sha256": "8a4d615dda897ce3fece694efc13e7b500c30af2f291b3f4fa46582e0b07a7d4",
+      "size_bytes": 14578
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-legacy_fifo-r03.json": {
+      "sha256": "9bc1ee91a217eb76766b2cf09cc37916b976f88e900f18167ecc67a56d7c1565",
+      "size_bytes": 14578
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w2-b1-legacy_fifo-r04.json": {
+      "sha256": "f045ae0372ce9d3c5f41754c485f72df1acbf6b7d702b3ff0954c6745380e601",
+      "size_bytes": 14575
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-fair-r01.json": {
+      "sha256": "22ce0369a1a53a3d195fbf1be5910678f89ed5855bbc56ac9a66dea42007e001",
+      "size_bytes": 40393
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-fair-r02.json": {
+      "sha256": "4c063d7abf9b9005798d013af8b33b211faee66405550411daecbd8147c9959b",
+      "size_bytes": 40393
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-fair-r03.json": {
+      "sha256": "421caa1784a4abc61f7eec9dcac789e9b280e3bb33f2b79568ac35b142770f87",
+      "size_bytes": 40392
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-fair-r04.json": {
+      "sha256": "2626482bc78d621155bcce022068e61efe8a280546d7a93c7f73131c5b459621",
+      "size_bytes": 40395
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-legacy_fifo-r01.json": {
+      "sha256": "1ea28b1e703416c7591a5b3572c30c4c2b10b9cb25327642dea305202c0703c3",
+      "size_bytes": 16281
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-legacy_fifo-r02.json": {
+      "sha256": "1a94164c6a200f9d5dfc97767f09f18d806a890d9a5e14bd78382b30644906b6",
+      "size_bytes": 16278
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-legacy_fifo-r03.json": {
+      "sha256": "56495a31f980e0a9f15796fb16d48f709511ac2d56ebad6f4f7dd3c95d516da1",
+      "size_bytes": 16281
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w4-b1-legacy_fifo-r04.json": {
+      "sha256": "76a320a865971fe85b0c7fc4214abbb949d45580fe5fe0b3e58b937f5747133e",
+      "size_bytes": 16277
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-fair-r01.json": {
+      "sha256": "e693d2c9d024a9eab49cccd38951eede7e3bb98190480e50d96c679787d9f098",
+      "size_bytes": 40400
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-fair-r02.json": {
+      "sha256": "791472f501cccaf2276579a6a8b14b8cc81d5a789341d26a48a5a95f471c389e",
+      "size_bytes": 40400
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-fair-r03.json": {
+      "sha256": "be2faf4ea2bd6c97152943e0617f4e28e5c1cf012c31d68177353548ef4cc861",
+      "size_bytes": 40397
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-fair-r04.json": {
+      "sha256": "cb18586776c420379538dc3f04ea83948f3ff8fed7c7d9f882381ae07326b5cc",
+      "size_bytes": 40398
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-legacy_fifo-r01.json": {
+      "sha256": "6ffdaaed4c144078510f7a24b5a574f46ab8a38db604ad91638dd2e3fe8fcaec",
+      "size_bytes": 16280
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-legacy_fifo-r02.json": {
+      "sha256": "0d1d213968b3fd145900f87d9af21b7d1ed83f21f73bbf0f268173725d2a09a8",
+      "size_bytes": 16280
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-legacy_fifo-r03.json": {
+      "sha256": "7bcb3118e5e9a9d5834f95ff948302650743d59ebcb781db4479af378e1ec41b",
+      "size_bytes": 16283
+    },
+    "rep1/bundle/explain/fair-q1000-balanced_multi_tenant-w8-b1-legacy_fifo-r04.json": {
+      "sha256": "99a798c85308297beafa96f15cf46a27b0a6257843668170c8660d4f7f1b7b9f",
+      "size_bytes": 16281
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-fair-r01.json": {
+      "sha256": "be4e68af5c553d8c9160d13b660a66940ffb0d06ac94077a7aae824025a88c60",
+      "size_bytes": 40523
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-fair-r02.json": {
+      "sha256": "21aff5b4ca3b204fe4149cd9331d31161ef3615c351affb246b4517b7363e0ef",
+      "size_bytes": 40519
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-fair-r03.json": {
+      "sha256": "28cd76a785f9123c4c3adb3de1fa8f489bcc8f95ec7d6ba5c6d00dd45f58fa92",
+      "size_bytes": 40520
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-fair-r04.json": {
+      "sha256": "07bf844292dffc5bd4c45dfe1041a10ed1c7e056ba66ff3ada0c4332e3121123",
+      "size_bytes": 40521
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-legacy_fifo-r01.json": {
+      "sha256": "18cbf0d144894ad1d096e3e3b99dce268380dee094259f8ffd81da0383f70cae",
+      "size_bytes": 16331
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-legacy_fifo-r02.json": {
+      "sha256": "ddbad9163c0bb6e769228ec2e9e8b931fccb4da53dd41bcb16eb91fe42753492",
+      "size_bytes": 16330
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-legacy_fifo-r03.json": {
+      "sha256": "572ad45f8b319e33e9174eb58bd307f4cc97a04266c2e1fe73a0e5e1f502d1cf",
+      "size_bytes": 16330
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w1-b1-legacy_fifo-r04.json": {
+      "sha256": "fc7f436bc4ef0d57c9bc4778530b1a3d0b71e02b91ff3cca769ff79adf92309b",
+      "size_bytes": 16332
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-fair-r01.json": {
+      "sha256": "500b37371b0eefec205cf0540fed29b4966a229ceb1d93f146799774132c8d29",
+      "size_bytes": 40702
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-fair-r02.json": {
+      "sha256": "1d2dfc6c3e2c78044442d2683b0c4ed74bff50da6cf9034ad21d7f01b75e608b",
+      "size_bytes": 40699
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-fair-r03.json": {
+      "sha256": "5eb9cc6b9b9b19ceaaafb9b8e5da6693efc2a3b866449df0582c54515fc3f821",
+      "size_bytes": 40697
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-fair-r04.json": {
+      "sha256": "9326a8065636aff1cfbfb15672b9ef80d370d9035caf4b3e4a83cb0b687f37b1",
+      "size_bytes": 40700
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-legacy_fifo-r01.json": {
+      "sha256": "d73fe8930fad00ed33f0301594580f1e1753db57909580786a8329a68dccfb89",
+      "size_bytes": 16334
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-legacy_fifo-r02.json": {
+      "sha256": "a4af32e25a9927a1af88efb662aaacd509249e184c43f81df413aeed0aa05579",
+      "size_bytes": 16336
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-legacy_fifo-r03.json": {
+      "sha256": "e1cd6b2e30bfa294c064079e0f7ea7f6f11afac7f0a78a534ed02e9b29979cf5",
+      "size_bytes": 16336
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w2-b1-legacy_fifo-r04.json": {
+      "sha256": "4639511db78513c277493598aa96b016e1ac419479c04b3d0d86c5d825b07361",
+      "size_bytes": 16337
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-fair-r01.json": {
+      "sha256": "37cc1c52b36bd75ddda5133c9ece2adf79814149dcf060861ccf8c4a8d80fba4",
+      "size_bytes": 43810
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-fair-r02.json": {
+      "sha256": "38333ceb0dad1110257871674cc99999832269bdbff772595a2a596f87412478",
+      "size_bytes": 43812
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-fair-r03.json": {
+      "sha256": "ea638c430a1c5c9a501e77cd009a66d220018a3f5cc2cf5dc63c4de8a3e9c322",
+      "size_bytes": 43811
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-fair-r04.json": {
+      "sha256": "af32c7795e75196a17be06f438788ae014c0cd8e80ef83fb4cac39c4342019ad",
+      "size_bytes": 43814
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-legacy_fifo-r01.json": {
+      "sha256": "dc7179540754574dceed927a8c5780732a7ce8aa6339c4adaf4aa3de9c906edc",
+      "size_bytes": 18012
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-legacy_fifo-r02.json": {
+      "sha256": "4df837a54bc92e0eecbd6bb3ccdc8ee571aba345001b15d94fbc5b75fc14d6ad",
+      "size_bytes": 18018
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-legacy_fifo-r03.json": {
+      "sha256": "9e39f91f09a7bbe9a85a3914757ec381756764831a8185b85f66c9b3870dbdd7",
+      "size_bytes": 18017
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w4-b1-legacy_fifo-r04.json": {
+      "sha256": "39bba9741cb8ae43c24a3fa3100c1412eed2bed7fd67fa3477b49936ab346103",
+      "size_bytes": 18013
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-fair-r01.json": {
+      "sha256": "0aef1f3189c8a6b1173f4bcd1b703206d7fbe0422c772dcb5a9bd72ba5068d0a",
+      "size_bytes": 43815
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-fair-r02.json": {
+      "sha256": "3f73e3c90c519bcef8811355b74b72ca7d981d8c7a10fae0749e8a5a2835f49d",
+      "size_bytes": 43810
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-fair-r03.json": {
+      "sha256": "74210b52996fb881732c09266f96f6cc00edbd12fbcf152124cdc7e3339af953",
+      "size_bytes": 43808
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-fair-r04.json": {
+      "sha256": "81c8646f91b0d057de8f20a3d2e9c5f465750a21eb407d0a7de910ed4697553b",
+      "size_bytes": 43816
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-legacy_fifo-r01.json": {
+      "sha256": "d23ca0824ec27486622ce531531b659bd2465151ca48fa555f06d6bf04726a85",
+      "size_bytes": 18018
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-legacy_fifo-r02.json": {
+      "sha256": "42319276693370ab07268571a905d5db228962c6669a4ff50eb39f3829ce703c",
+      "size_bytes": 18019
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-legacy_fifo-r03.json": {
+      "sha256": "2105d50e502ebfa5afaaa7415711c3ec644060f76040aa50438fa778aa78969c",
+      "size_bytes": 18018
+    },
+    "rep1/bundle/explain/fair-q1000-many_small_tenants-w8-b1-legacy_fifo-r04.json": {
+      "sha256": "f55dd36309fbf61b3ed660dc0ff3e9d71edd61bc32fe111f29c994d7158e5f98",
+      "size_bytes": 18015
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-fair-r01.json": {
+      "sha256": "87fed3a9d12baeaf435d21b4b8af60e9d86987542572089075bf678b2a9d97ac",
+      "size_bytes": 34539
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-fair-r02.json": {
+      "sha256": "782879c6f13e8d9a13bdb6fd54faf23eed5d89f40fc3319ec0bd3ec12c3aae19",
+      "size_bytes": 34538
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-fair-r03.json": {
+      "sha256": "3eef5b60f0f5d155604fcfcc915457fbea37b705fb1b6f4f568135894def8d29",
+      "size_bytes": 34535
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-fair-r04.json": {
+      "sha256": "f1f49818f82a7633c57aac62125a37670246c1452170066b8fdaa77bde0e3c77",
+      "size_bytes": 34535
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-legacy_fifo-r01.json": {
+      "sha256": "4193ef678e15514533d1eff56793d1283ace37d611988d2811849138cf358ed9",
+      "size_bytes": 13143
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-legacy_fifo-r02.json": {
+      "sha256": "c885f6ceeb534b5fd575df3bdff6ac1b582ab96c73a73d392c7878a5306c1087",
+      "size_bytes": 13143
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-legacy_fifo-r03.json": {
+      "sha256": "33eadb755b364f6367095e8a72512ea3bfffbdf1313a40f79ef8a0d6c4bb9809",
+      "size_bytes": 13144
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w1-b1-legacy_fifo-r04.json": {
+      "sha256": "3b737d773db1bec1cc6e130113a0290ee2dfe904a35bccf21a6c5d152873e160",
+      "size_bytes": 13145
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-fair-r01.json": {
+      "sha256": "bc367c3ec7395b8c01ce0c010ec8ca0ce506403edb2db5e7c485eb9658ad3862",
+      "size_bytes": 37146
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-fair-r02.json": {
+      "sha256": "08dd87a12ee66a045e9a4a4215f41671af0c1c6088ba42c3b636d79f84b741f5",
+      "size_bytes": 37141
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-fair-r03.json": {
+      "sha256": "990328367e8d5babefdeba9ec2227fb7539ab6ad03b6900b52bae95538fa98c7",
+      "size_bytes": 37144
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-fair-r04.json": {
+      "sha256": "5fdc7e7802b1aebffce8d3fd8ff1bff3f0741cad95e950214dda1d231fc2f7f3",
+      "size_bytes": 37142
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-legacy_fifo-r01.json": {
+      "sha256": "a774bc6651258c61a55d56cee9b35a44c99fdab244e9981f8f8eb0c07bd3ad1d",
+      "size_bytes": 14557
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-legacy_fifo-r02.json": {
+      "sha256": "4befc46a6b560df47ba75b23450c0d2b4a7c3e8c0bb71255ebbf5d8942f46683",
+      "size_bytes": 14561
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-legacy_fifo-r03.json": {
+      "sha256": "55f2d29d6057e46c707e34ad1046e65b992c4dabbe9824a40db44953ee358457",
+      "size_bytes": 14558
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w2-b1-legacy_fifo-r04.json": {
+      "sha256": "2b8f960f2928558e0ac1bcd14b261f7fed176e9741b77ddbc0026a2b47f3f664",
+      "size_bytes": 14558
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-fair-r01.json": {
+      "sha256": "69315b7c7fee49475dbb71dc1e919a6b0c2ff7e2874f56ec3120691f073c24ae",
+      "size_bytes": 37154
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-fair-r02.json": {
+      "sha256": "3a42e9138cac4b3c6334ef9592d7f0362a6ce206f4226ceabb21a84d899cb3ad",
+      "size_bytes": 37152
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-fair-r03.json": {
+      "sha256": "d2f45b8d5b45626fefe942391d2501691727513902e5e01886cac0c3e53dc143",
+      "size_bytes": 37147
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-fair-r04.json": {
+      "sha256": "b208377bc7a8125cf9c6ac5ebe31139a75dfd8ed6900f6b04886675c05b0d2e8",
+      "size_bytes": 37144
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-legacy_fifo-r01.json": {
+      "sha256": "648fc158988c2b4a87a5763ad4776a6e90cf97f2f96ae320ac3bfd5b98a6e102",
+      "size_bytes": 14561
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-legacy_fifo-r02.json": {
+      "sha256": "b0d2d80010c0c0ebbe98dfe6f5b5936f90611aaed6c5b392b269eb2f35781a63",
+      "size_bytes": 14561
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-legacy_fifo-r03.json": {
+      "sha256": "6201800ea93fc7aa5d0893df9984e363849d04e686dfc9fa2e49eab72e677eb5",
+      "size_bytes": 14563
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w4-b1-legacy_fifo-r04.json": {
+      "sha256": "6c7e94303d4f23e7855dca012a263d2d2c295db8585eccb24f50273622e5e692",
+      "size_bytes": 14564
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-fair-r01.json": {
+      "sha256": "d3e08fe56bc933913c6f3e8e33e9722249a3a44d57b4489118fd64e8b0fa08b1",
+      "size_bytes": 37152
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-fair-r02.json": {
+      "sha256": "c5a0387a4adc186174f39fec35c447e8735f686fd019e71eab8c838faa7a1e32",
+      "size_bytes": 37153
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-fair-r03.json": {
+      "sha256": "e7f59ef3ee11d23b0499c24b35f924ebce1e41a7f47fd592d108ee88b7e812e3",
+      "size_bytes": 37151
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-fair-r04.json": {
+      "sha256": "55c02d3486891929de1ec24ee3cecbf0c81a9cc4a82eee7df577b936e852c879",
+      "size_bytes": 37151
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-legacy_fifo-r01.json": {
+      "sha256": "faf2e9ddbd732bde477c4fcc62a3c5eceee25dd8ced7740fe97c90c726ceab3f",
+      "size_bytes": 14566
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-legacy_fifo-r02.json": {
+      "sha256": "1fdf9aa5cdb016b692f9bfe6cca31e60ee3b164ad950986e9551d74d64444e81",
+      "size_bytes": 14563
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-legacy_fifo-r03.json": {
+      "sha256": "07cfe37d61d397b2f3b883bed3f6c1d6e84b81c11fd2aa737bbd76b38b0c68d4",
+      "size_bytes": 14565
+    },
+    "rep1/bundle/explain/fair-q1000-single_tenant-w8-b1-legacy_fifo-r04.json": {
+      "sha256": "d277895a5c43f8a7567a4725e1846133af59341f3ad9c2352107151cd32682cb",
+      "size_bytes": 14565
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-fair-r01.json": {
+      "sha256": "bf9d96ee17bb562bffced8b153bc1ac9948782255cf62d2748dd7837808798fb",
+      "size_bytes": 40396
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-fair-r02.json": {
+      "sha256": "1041c9bf4a5d801ff70f8ba0dfe5d3745783fa413b2ee2470ec446e7c3f9a7dc",
+      "size_bytes": 40397
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-fair-r03.json": {
+      "sha256": "60ec80b0fdc072f6fd2e1b9a8411cb7d9951390f0c7c659ed3d4b2326251f994",
+      "size_bytes": 40395
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-fair-r04.json": {
+      "sha256": "4f6a2c07eb75dc3ab429553d9d6c4b9c2fcf2964b3273b317880e83e4670a454",
+      "size_bytes": 40396
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-legacy_fifo-r01.json": {
+      "sha256": "2adb8c71c90b259375ffb9edf02259b982f876c8208595fa7c2fe995555d972c",
+      "size_bytes": 16277
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-legacy_fifo-r02.json": {
+      "sha256": "1f96e2b5e17a0e0cd6e62f6ed1aae952406b54ffda8a17163dc182cf4b960921",
+      "size_bytes": 16271
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-legacy_fifo-r03.json": {
+      "sha256": "70b1fdec67f51bc2bf3315c71d35b0d37fb8c50440573dad84528947caa3a7b5",
+      "size_bytes": 16276
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w1-b1-legacy_fifo-r04.json": {
+      "sha256": "c1fb76491057cf62bac01d0a1d7d9377158480d5069a583b1e5beb860c4e537e",
+      "size_bytes": 16272
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-fair-r01.json": {
+      "sha256": "738f8d8815628b7c834d9dfcea8aca389f7669e0560bc308b6a603f41fd56ea1",
+      "size_bytes": 40406
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-fair-r02.json": {
+      "sha256": "06df38e38606d6ae47ee69801b2ad6d99c47e5859c71bc42c6813493496a4b27",
+      "size_bytes": 40404
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-fair-r03.json": {
+      "sha256": "2bb5095b05880fb9885827f448e3c43b8575d88911f20d7e33ba79781397c940",
+      "size_bytes": 40398
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-fair-r04.json": {
+      "sha256": "69f9ebf7528afa16ec78d3abfe995931a6ab38d01a202d77aaeabfb69449ae6a",
+      "size_bytes": 40403
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-legacy_fifo-r01.json": {
+      "sha256": "a4e2a5e69d76c0a581b1c3ca959099fa542cf435726061b325a9e91073f28caa",
+      "size_bytes": 16279
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-legacy_fifo-r02.json": {
+      "sha256": "6e7f6fcdaf5404dd1127cf24d00af9d2d245e8ce1f4c791b520223e7a689e3be",
+      "size_bytes": 16278
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-legacy_fifo-r03.json": {
+      "sha256": "38002a4881c9cd7fb7c24721ade45bd3db08f28f16db1a5745f74678378dc9c5",
+      "size_bytes": 16276
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w2-b1-legacy_fifo-r04.json": {
+      "sha256": "f7771725a2c1081f1d606e9ce793f4b0da26d302eaa9bfd75a3dbc42ccf038ed",
+      "size_bytes": 16280
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-fair-r01.json": {
+      "sha256": "d742430c5f385c10b25d626fcea8bce01093a0261de7b46e19bbfa073f0192a3",
+      "size_bytes": 40402
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-fair-r02.json": {
+      "sha256": "64e3ba29041292ba193900b0d21ad8e3df4600caeb93e9c9ec31717d0d07d8d7",
+      "size_bytes": 40397
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-fair-r03.json": {
+      "sha256": "e347881eca284d157467d405782aeb69f893a031dd9c32559a42228a3fbf9632",
+      "size_bytes": 40404
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-fair-r04.json": {
+      "sha256": "c0cc0de838f638c09e81751e999e1b12b2908a4c4ee75c427f170bb0583318f4",
+      "size_bytes": 40401
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-legacy_fifo-r01.json": {
+      "sha256": "63bb1ee1865b0281861c79fe5d714f24cf3d3b61431114c3db85970af821fea6",
+      "size_bytes": 16277
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-legacy_fifo-r02.json": {
+      "sha256": "6bc02daea9b89779c302393224c8f85a074df27eef1689f5c5655503278d9225",
+      "size_bytes": 16279
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-legacy_fifo-r03.json": {
+      "sha256": "b541f33dcde21d6f91e99db1dd8c302e38084a81abecfeda354a56c4bc6288fb",
+      "size_bytes": 16274
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w4-b1-legacy_fifo-r04.json": {
+      "sha256": "0c39877b643a0ff2cb40701db6e1dd45650e5db6f993fcc462df473f5de1cb55",
+      "size_bytes": 16278
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-fair-r01.json": {
+      "sha256": "07e25ab9feb7bc4b9a54dad3caff9a963123f93480eef963f2a7143418aa0be9",
+      "size_bytes": 40400
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-fair-r02.json": {
+      "sha256": "469d55740b0ca245db7fe556374e66c51211c367415344bcb94a75455f29511e",
+      "size_bytes": 40403
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-fair-r03.json": {
+      "sha256": "021608087507cf3b3ebfe540d61181a77dbeefa95df65d157aeb67388e8dd211",
+      "size_bytes": 40405
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-fair-r04.json": {
+      "sha256": "e78a372b5e98b97f396267f57a4f66f41b677e51549d39f242454cccb2681f88",
+      "size_bytes": 40399
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-legacy_fifo-r01.json": {
+      "sha256": "fcd72ae7db884c068d154de98a34106233d361a85d7407cf31c47ecf4e93565b",
+      "size_bytes": 16276
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-legacy_fifo-r02.json": {
+      "sha256": "d8057658fb3628cb07079bd1a811840d3645cbde8601d9ec9430d416a13f0b3f",
+      "size_bytes": 16275
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-legacy_fifo-r03.json": {
+      "sha256": "ba09a9def9874ea011cb23f734493894fe1a3c21ee7aa63d4739bc158a5a8582",
+      "size_bytes": 16281
+    },
+    "rep1/bundle/explain/fair-q1000-skew_20_to_1-w8-b1-legacy_fifo-r04.json": {
+      "sha256": "c00ae5ea64a78667fc5281df4168220a3527a59ca198b55df03a91a5081a6af4",
+      "size_bytes": 16280
+    },
+    "rep1/bundle/manifest.json": {
+      "sha256": "91088fd3b109ca50843b5163b2ed9057c60a20fa9edb829f18d7ead4bf878283",
+      "size_bytes": 26889
+    },
+    "rep1/bundle/raw/fair-q1000-balanced_multi_tenant-w1-b1.json": {
+      "sha256": "8eafd85ee4209bfcfd843c1699d10316acaf67b78ce96fd2ef639f2eb7df5574",
+      "size_bytes": 2916
+    },
+    "rep1/bundle/raw/fair-q1000-balanced_multi_tenant-w2-b1.json": {
+      "sha256": "902d150d936c2c8c0b820f135dd0f2298fb135f610f35ab4cb707ba5a96bcfc0",
+      "size_bytes": 2908
+    },
+    "rep1/bundle/raw/fair-q1000-balanced_multi_tenant-w4-b1.json": {
+      "sha256": "da8f19434c1bbb509554cb2bfd156ea424f49da424aae9942a14cfe7af28fb1e",
+      "size_bytes": 2907
+    },
+    "rep1/bundle/raw/fair-q1000-balanced_multi_tenant-w8-b1.json": {
+      "sha256": "e7b34b70a300afd49d70d98777b9cbcb00a863fbde8e53147fb32e7e8fb59a4b",
+      "size_bytes": 2911
+    },
+    "rep1/bundle/raw/fair-q1000-many_small_tenants-w1-b1.json": {
+      "sha256": "750f9f9a58cb05be54fac0c5e039512bc13facf138ebe84a95ae9ed1e1fcef11",
+      "size_bytes": 16627
+    },
+    "rep1/bundle/raw/fair-q1000-many_small_tenants-w2-b1.json": {
+      "sha256": "5fb67c60ced40b0178577a8df043bb5c7823ab895ad5cc32f9d5aada8224f7e1",
+      "size_bytes": 16627
+    },
+    "rep1/bundle/raw/fair-q1000-many_small_tenants-w4-b1.json": {
+      "sha256": "ed83e66fa14f7f1109684c0260b9a01ccdac946fa77719632f70886dc02c45c4",
+      "size_bytes": 16623
+    },
+    "rep1/bundle/raw/fair-q1000-many_small_tenants-w8-b1.json": {
+      "sha256": "128a4332c13199b5b9eb9be90b7f65373404949fd12854bc604744f6033787f4",
+      "size_bytes": 16620
+    },
+    "rep1/bundle/raw/fair-q1000-single_tenant-w1-b1.json": {
+      "sha256": "ee39b9dfe3177ddffd72986692639fa2764caa83662d24a7a62755ccd4d3fa2a",
+      "size_bytes": 2470
+    },
+    "rep1/bundle/raw/fair-q1000-single_tenant-w2-b1.json": {
+      "sha256": "08f447fceab3199438952d9c5967c17eb7040ded5f331c1b4e4fea811cd91b9e",
+      "size_bytes": 2473
+    },
+    "rep1/bundle/raw/fair-q1000-single_tenant-w4-b1.json": {
+      "sha256": "39cb48a5eb78455948e92ca4102d3dc9e32d111630c3ad7e04535b2013460e03",
+      "size_bytes": 2477
+    },
+    "rep1/bundle/raw/fair-q1000-single_tenant-w8-b1.json": {
+      "sha256": "6bdb915a666e8f659a0e8447590e20ba5fe64c8b79dd1912bfadabfb7d1a5089",
+      "size_bytes": 2478
+    },
+    "rep1/bundle/raw/fair-q1000-skew_20_to_1-w1-b1.json": {
+      "sha256": "a8f978516a69d5480c6d8cf2f5346a49fcf9dce80fbf4a2924653481423c6438",
+      "size_bytes": 2603
+    },
+    "rep1/bundle/raw/fair-q1000-skew_20_to_1-w2-b1.json": {
+      "sha256": "3c93249c057908ffef7be58a32618d62864a9a41acdf3130a77b1474081bb46a",
+      "size_bytes": 2615
+    },
+    "rep1/bundle/raw/fair-q1000-skew_20_to_1-w4-b1.json": {
+      "sha256": "f0c5879ee06e64616cdbf4223cac17008e216f6952a416d6a27dd7a633ceedae",
+      "size_bytes": 2617
+    },
+    "rep1/bundle/raw/fair-q1000-skew_20_to_1-w8-b1.json": {
+      "sha256": "c26cefcb4431def4eb86f26e27b3612600ea707f663c67fe476079812f56c48f",
+      "size_bytes": 2611
+    },
+    "rep1/failure.json": {
+      "sha256": "b7268aac40a06282667afc1ee61f3e804dd25d88f3f11f90804885c30198e532",
+      "size_bytes": 1539
+    }
+  },
+  "schema_version": 1,
+  "source_commit": "02f5e680e71d05c76c145da6895122a2cf04ba14",
+  "status": "complete"
+}

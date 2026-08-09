@@ -1,0 +1,93 @@
+{
+  "arm_id": "fair-q1000-balanced_multi_tenant-w1-b1",
+  "queue_size": 1000,
+  "distribution": "balanced_multi_tenant",
+  "worker_concurrency": 1,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "empty_while_eligible": 0,
+  "contention_retries": 0,
+  "contention_retry_per_success": 0.0,
+  "max_retry_exits": 0,
+  "waiting_fallbacks": 0,
+  "tenant_turn_reserved": 100,
+  "tenant_turn_without_job": 0,
+  "reservation_miss_rate": 0.0,
+  "claim_latency_ms": {
+    "p50": 13.118968999975777,
+    "p95": 23.56514845001243,
+    "p99": 26.815539339966872
+  },
+  "reservation_latency_ms": {
+    "p50": 2.3996990000227925,
+    "p95": 10.851262200031895,
+    "p99": 16.02015342997574
+  },
+  "job_claim_latency_ms": {
+    "p50": 10.462260999986484,
+    "p95": 14.74663129995406,
+    "p99": 19.153448209978045
+  },
+  "result_commit_latency_ms": {
+    "p50": 9.448923500031015,
+    "p95": 13.446945150008105,
+    "p99": 17.97404793999821
+  },
+  "end_to_end_seconds": 2.642081148999978,
+  "jobs_per_second": 37.84895102024016,
+  "worker_process_cpu_percent": 63.44056425497833,
+  "worker_process_rss_bytes_peak": 103084032,
+  "postgres_connections_peak": 2,
+  "postgres_lock_waiting_connections_peak": 0,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "3d373a12-e78f-46fd-a775-d76c4cde8f55": 1,
+    "79c11b69-1417-4b80-8dbd-60c28307afd7": 2,
+    "c2a2d77f-aa6f-4b0b-a066-9c3d24588e0b": 4,
+    "888809bf-ced4-415d-b42d-43e4746238ef": 3
+  },
+  "database_claim_sequence_complete": true,
+  "database_tenant_first_claim_positions": {
+    "3d373a12-e78f-46fd-a775-d76c4cde8f55": 1,
+    "79c11b69-1417-4b80-8dbd-60c28307afd7": 2,
+    "c2a2d77f-aa6f-4b0b-a066-9c3d24588e0b": 4,
+    "888809bf-ced4-415d-b42d-43e4746238ef": 3
+  },
+  "tenant_claim_counts": {
+    "3d373a12-e78f-46fd-a775-d76c4cde8f55": 25,
+    "79c11b69-1417-4b80-8dbd-60c28307afd7": 25,
+    "888809bf-ced4-415d-b42d-43e4746238ef": 25,
+    "c2a2d77f-aa6f-4b0b-a066-9c3d24588e0b": 25
+  },
+  "fair_first_secondary_tenant_position": null,
+  "legacy_fifo_first_secondary_tenant_position": null,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3601533.324,
+      "p95": 3602650.6078500003
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}

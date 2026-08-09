@@ -1,0 +1,11 @@
+{
+  "status": "FAILED",
+  "error_type": "ExperimentError",
+  "error_message": "fair-capacity release bundle did not verify",
+  "recorded_at": "2026-08-09T17:50:08.457039+00:00",
+  "exception": {
+    "error_type": "ExperimentError",
+    "error_message": "fair-capacity release bundle did not verify"
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/ai-evalops-platform/ai-evalops-platform/scripts/run_fair_capacity_test.py\", line 980, in main\n    assessment = asyncio.run(_run(args, queue_sizes=queue_sizes))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/uv-python-dir/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/uv-python-dir/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/uv-python-dir/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/base_events.py\", line 691, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/runner/work/ai-evalops-platform/ai-evalops-platform/scripts/run_fair_capacity_test.py\", line 972, in _run\n    raise ExperimentError(\"fair-capacity release bundle did not verify\")\nscripts.experiment_support.ExperimentError: fair-capacity release bundle did not verify\n"
+}
