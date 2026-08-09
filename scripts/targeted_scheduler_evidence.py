@@ -32,6 +32,7 @@ TARGETED_METRICS: Final = (
     "reservation_miss_rate",
     "contention_retries",
     "contention_retry_per_success",
+    "waiting_fallbacks",
     "empty_while_eligible",
     "postgres_lock_waiting_connections_peak",
     "worker_process_cpu_percent",

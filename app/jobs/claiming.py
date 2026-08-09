@@ -1,4 +1,3 @@
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -27,10 +26,6 @@ from app.persistence.orm_models import (
 
 class InvalidClaimRequest(ValueError):
     """A worker claim request has unsafe identity or batch parameters."""
-
-
-_MAX_CONTENTION_RETRIES = 20
-_CONTENTION_RETRY_SECONDS = 0.01
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +61,25 @@ def build_claim_candidates_statement(
     *,
     now: datetime,
     limit: int,
+) -> Select[tuple[EvaluationJob, EvaluationRun, Tenant]]:
+    return _build_claim_candidates_statement(now=now, limit=limit, skip_locked=True)
+
+
+def build_waiting_claim_candidate_statement(
+    *,
+    now: datetime,
+    limit: int,
+) -> Select[tuple[EvaluationJob, EvaluationRun, Tenant]]:
+    """Wait for one short fair-turn row only after the nonblocking path found none."""
+
+    return _build_claim_candidates_statement(now=now, limit=limit, skip_locked=False)
+
+
+def _build_claim_candidates_statement(
+    *,
+    now: datetime,
+    limit: int,
+    skip_locked: bool,
 ) -> Select[tuple[EvaluationJob, EvaluationRun, Tenant]]:
     ranked_candidates = (
         select(
@@ -104,7 +118,7 @@ def build_claim_candidates_statement(
             EvaluationJob.id.asc(),
         )
         .limit(limit)
-        .with_for_update(of=Tenant, skip_locked=True, key_share=True)
+        .with_for_update(of=Tenant, skip_locked=skip_locked, key_share=True)
     )
 
 
@@ -166,23 +180,23 @@ class SQLAlchemyJobClaimer:
         validate_claim_request(worker_id=worker_id, limit=limit)
         claimed_batch: list[ClaimedJob] = []
         for _batch_slot in range(limit):
-            for retry_number in range(_MAX_CONTENTION_RETRIES + 1):
-                eligible_at = self._clock.now()
-                claims = await self._claim_once(
+            eligible_at = self._clock.now()
+            claims = await self._claim_once(
+                worker_id=worker_id,
+                limit=1,
+                eligible_at=eligible_at,
+            )
+            if not claims:
+                if not await self._has_eligible_jobs(self._clock.now()):
+                    return tuple(claimed_batch)
+                claims = await self._claim_once_waiting_for_turn(
                     worker_id=worker_id,
                     limit=1,
-                    eligible_at=eligible_at,
+                    eligible_at=self._clock.now(),
                 )
-                if claims:
-                    claimed_batch.extend(claims)
-                    break
-                if retry_number == _MAX_CONTENTION_RETRIES or not await self._has_eligible_jobs(
-                    self._clock.now()
-                ):
-                    return tuple(claimed_batch)
-                await asyncio.sleep(_CONTENTION_RETRY_SECONDS)
-            else:
+            if not claims:
                 return tuple(claimed_batch)
+            claimed_batch.extend(claims)
         return tuple(claimed_batch)
 
     async def _has_eligible_jobs(self, now: datetime) -> bool:
@@ -205,6 +219,35 @@ class SQLAlchemyJobClaimer:
         tenant_id = await self._reserve_tenant_turn(eligible_at=eligible_at)
         if tenant_id is None:
             return ()
+        return await self._claim_after_reserved_turn(
+            worker_id=worker_id,
+            tenant_id=tenant_id,
+            eligible_at=eligible_at,
+        )
+
+    async def _claim_once_waiting_for_turn(
+        self,
+        *,
+        worker_id: str,
+        limit: int,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
+        tenant_id = await self._wait_for_tenant_turn(eligible_at=eligible_at)
+        if tenant_id is None:
+            return ()
+        return await self._claim_after_reserved_turn(
+            worker_id=worker_id,
+            tenant_id=tenant_id,
+            eligible_at=eligible_at,
+        )
+
+    async def _claim_after_reserved_turn(
+        self,
+        *,
+        worker_id: str,
+        tenant_id: UUID,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
         if self._metrics is not None:
             self._metrics.record_tenant_turn_reserved()
         claims = await self._claim_reserved_tenant(
@@ -220,6 +263,19 @@ class SQLAlchemyJobClaimer:
         async with self._session_factory.begin() as session:
             row = (
                 await session.execute(build_claim_candidates_statement(now=eligible_at, limit=1))
+            ).first()
+            if row is None:
+                return None
+            tenant: Tenant = row[2]
+            tenant.last_scheduler_turn_at = self._clock.now()
+            return tenant.id
+
+    async def _wait_for_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
+        async with self._session_factory.begin() as session:
+            row = (
+                await session.execute(
+                    build_waiting_claim_candidate_statement(now=eligible_at, limit=1)
+                )
             ).first()
             if row is None:
                 return None

@@ -70,6 +70,7 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         self.empty_attempts = 0
         self.eligible_probes = 0
         self.empty_while_eligible = 0
+        self.waiting_fallbacks = 0
 
     async def _claim_once(
         self,
@@ -78,8 +79,26 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
+        self.waiting_fallbacks += 1
         self.claim_attempts += 1
         claims = await super()._claim_once(
+            worker_id=worker_id,
+            limit=limit,
+            eligible_at=eligible_at,
+        )
+        if not claims:
+            self.empty_attempts += 1
+        return claims
+
+    async def _claim_once_waiting_for_turn(
+        self,
+        *,
+        worker_id: str,
+        limit: int,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
+        self.claim_attempts += 1
+        claims = await super()._claim_once_waiting_for_turn(
             worker_id=worker_id,
             limit=limit,
             eligible_at=eligible_at,
@@ -267,7 +286,7 @@ async def test_worker_claims_next_job_while_same_tenant_head_claim_is_uncommitte
     install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 8, 0, tzinfo=UTC)
-    claimer = SQLAlchemyJobClaimer(
+    claimer = InstrumentedClaimer(
         session_factory,
         lease_policy=LeasePolicy(timedelta(seconds=30)),
         clock=FixedClock(now),
@@ -786,7 +805,7 @@ async def test_ten_workers_drain_one_hundred_same_tenant_jobs_with_limit_one() -
     install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
-    claimer = SQLAlchemyJobClaimer(
+    claimer = InstrumentedClaimer(
         session_factory,
         lease_policy=LeasePolicy(timedelta(seconds=30)),
         clock=FixedClock(now),
@@ -823,6 +842,11 @@ async def test_ten_workers_drain_one_hundred_same_tenant_jobs_with_limit_one() -
                 job_count=100,
             )
             first_wave_barrier = asyncio.Barrier(11)
+            attempts_before = claimer.claim_attempts
+            empty_attempts_before = claimer.empty_attempts
+            eligible_probes_before = claimer.eligible_probes
+            empty_while_eligible_before = claimer.empty_while_eligible
+            waiting_fallbacks_before = claimer.waiting_fallbacks
 
             try:
                 first_tasks = [
@@ -841,8 +865,35 @@ async def test_ten_workers_drain_one_hundred_same_tenant_jobs_with_limit_one() -
                     operation=f"ten-worker limit-one first wave repetition {repetition + 1}",
                 )
                 first_claims = tuple(claim for batch in first_wave for claim in batch)
-                assert len(first_claims) == 10
-                assert len({claim.job_id for claim in first_claims}) == 10
+                first_wave_diagnostics = {
+                    "repetition": repetition + 1,
+                    "claim_requests": len(first_wave),
+                    "successful_requests": sum(bool(batch) for batch in first_wave),
+                    "claimed_jobs": len(first_claims),
+                    "unique_claimed_jobs": len({claim.job_id for claim in first_claims}),
+                    "claim_attempts": claimer.claim_attempts - attempts_before,
+                    "empty_attempts": claimer.empty_attempts - empty_attempts_before,
+                    "eligible_probes": claimer.eligible_probes - eligible_probes_before,
+                    "empty_while_eligible": (
+                        claimer.empty_while_eligible - empty_while_eligible_before
+                    ),
+                    "waiting_fallbacks": claimer.waiting_fallbacks - waiting_fallbacks_before,
+                }
+                write_lock_diagnostic(
+                    {
+                        "test": "ten_worker_limit_one_repetition",
+                        "source": "real_postgresql_ci",
+                        "diagnostics": first_wave_diagnostics,
+                    }
+                )
+                assert len(first_claims) == 10, json.dumps(
+                    first_wave_diagnostics,
+                    sort_keys=True,
+                )
+                assert len({claim.job_id for claim in first_claims}) == 10, json.dumps(
+                    first_wave_diagnostics,
+                    sort_keys=True,
+                )
 
                 drained_batches = await wait_for_lock_sensitive(
                     asyncio.gather(*(drain(index, repetition=repetition) for index in range(10))),
@@ -926,6 +977,7 @@ async def test_same_tenant_eight_worker_contention_diagnostics() -> None:
         "empty_while_eligible": claimer.empty_while_eligible,
         "contention_retries": retries,
         "retry_per_success": retry_per_success,
+        "waiting_fallbacks": claimer.waiting_fallbacks,
         "latency_ms": {
             "points": latencies_ms,
             "p50": median(latencies_ms),

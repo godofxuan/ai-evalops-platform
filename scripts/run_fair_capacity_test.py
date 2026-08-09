@@ -27,7 +27,6 @@ from sqlalchemy.dialects import postgresql
 
 from app.core.config import Settings
 from app.domain.evaluation import EvaluationResult, TargetResult
-from app.jobs import claiming as claiming_module
 from app.jobs.claiming import ClaimedJob, SQLAlchemyJobClaimer, build_claim_candidates_statement
 from app.jobs.failures import SQLAlchemyFailureCommitter
 from app.jobs.heartbeat import SQLAlchemyHeartbeatService
@@ -79,6 +78,7 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         self.max_retry_exits = 0
         self.tenant_turn_reserved = 0
         self.tenant_turn_without_job = 0
+        self.waiting_fallbacks = 0
         self._attempts: contextvars.ContextVar[int] = contextvars.ContextVar(
             "fair_capacity_claim_attempts",
             default=0,
@@ -101,8 +101,6 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
             self.claimed_events.extend((observed_at, claim) for claim in claims)
         else:
             self.empty_claims += 1
-            if attempts == claiming_module._MAX_CONTENTION_RETRIES + 1:
-                self.max_retry_exits += 1
         return claims
 
     async def _claim_once(
@@ -123,10 +121,39 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
             self.tenant_turn_without_job += 1
         return claims
 
+    async def _claim_once_waiting_for_turn(
+        self,
+        *,
+        worker_id: str,
+        limit: int,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
+        self.waiting_fallbacks += 1
+        self._attempts.set(self._attempts.get() + 1)
+        reserved_before = self.tenant_turn_reserved
+        claims = await super()._claim_once_waiting_for_turn(
+            worker_id=worker_id,
+            limit=limit,
+            eligible_at=eligible_at,
+        )
+        if self.tenant_turn_reserved > reserved_before and not claims:
+            self.tenant_turn_without_job += 1
+        return claims
+
     async def _reserve_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
         started_at = perf_counter()
         try:
             tenant_id = await super()._reserve_tenant_turn(eligible_at=eligible_at)
+        finally:
+            self.reservation_latencies_ms.append((perf_counter() - started_at) * 1_000)
+        if tenant_id is not None:
+            self.tenant_turn_reserved += 1
+        return tenant_id
+
+    async def _wait_for_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
+        started_at = perf_counter()
+        try:
+            tenant_id = await super()._wait_for_tenant_turn(eligible_at=eligible_at)
         finally:
             self.reservation_latencies_ms.append((perf_counter() - started_at) * 1_000)
         if tenant_id is not None:
@@ -652,6 +679,7 @@ async def _run_worker_sample(
             sum(claimer.contention_retries for claimer in claimers) / len(claims) if claims else 0.0
         ),
         "max_retry_exits": sum(claimer.max_retry_exits for claimer in claimers),
+        "waiting_fallbacks": sum(claimer.waiting_fallbacks for claimer in claimers),
         "tenant_turn_reserved": tenant_turn_reserved,
         "tenant_turn_without_job": tenant_turn_without_job,
         "reservation_miss_rate": (
@@ -733,6 +761,7 @@ def _arm_csv_row(
         "contention_retries": runtime["contention_retries"],
         "contention_retry_per_success": runtime["contention_retry_per_success"],
         "max_retry_exits": runtime["max_retry_exits"],
+        "waiting_fallbacks": runtime["waiting_fallbacks"],
         "tenant_turn_reserved": runtime["tenant_turn_reserved"],
         "tenant_turn_without_job": runtime["tenant_turn_without_job"],
         "reservation_miss_rate": runtime["reservation_miss_rate"],
