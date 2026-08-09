@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "record_type": "focused_projection_of_ci_lock_artifact",
+  "projection_note": "The complete 14339-byte JSONL record remains in the GitHub Actions artifact named below. This source-controlled projection preserves the decisive pg_stat_activity, pg_blocking_pids and pg_locks fields without pretending to be the complete artifact.",
+  "artifact": {
+    "workflow_run_id": 31314586983,
+    "artifact_id": 9038393415,
+    "name": "final-scheduler-lock-diagnostics-31314586983-1",
+    "compressed_size_bytes": 1192,
+    "expanded_jsonl_size_bytes": 14339,
+    "sha256": "71dd44d0bbc4b1b4589b419154246e84d8b2719a21a21038c056fbfc6f926df4",
+    "created_at": "2026-08-09T13:01:10Z",
+    "expires_at": "2026-11-07T12:57:44Z"
+  },
+  "test_record": {
+    "hypothesis": "H2_FK_LOCK_INTERACTION",
+    "test": "external_tenant_for_update",
+    "expected_outcome": "lock_timeout",
+    "captured_at": "2026-08-09T13:01:08.151270+00:00",
+    "target_application_name": "final-scheduler-durable-for-update",
+    "target_pids": [399],
+    "blocking_pids": [397]
+  },
+  "pg_stat_activity_projection": [
+    {
+      "pid": 397,
+      "application_name": "",
+      "state": "idle in transaction",
+      "wait_event_type": "Client",
+      "wait_event": "ClientRead",
+      "blocking_pids": [],
+      "query": "SELECT tenants.id FROM tenants WHERE tenants.id = $1::UUID FOR UPDATE",
+      "xact_start": "2026-08-09T13:01:08.101401+00:00"
+    },
+    {
+      "pid": 399,
+      "application_name": "final-scheduler-durable-for-update",
+      "state": "idle in transaction",
+      "wait_event_type": "Lock",
+      "wait_event": "transactionid",
+      "blocking_pids": [397],
+      "query_text_caveat": "The snapshot query field displayed the begin-hook SET LOCAL statement; CI exception text independently identified INSERT audit_events and the Tenant FK FOR KEY SHARE context.",
+      "xact_start": "2026-08-09T13:01:08.119496+00:00"
+    }
+  ],
+  "pg_locks_projection": [
+    {
+      "pid": 397,
+      "locktype": "transactionid",
+      "mode": "ExclusiveLock",
+      "granted": true,
+      "transactionid": "1191"
+    },
+    {
+      "pid": 399,
+      "locktype": "transactionid",
+      "mode": "ShareLock",
+      "granted": false,
+      "transactionid": "1191"
+    },
+    {
+      "pid": 399,
+      "locktype": "relation",
+      "mode": "RowExclusiveLock",
+      "granted": true,
+      "relation": "audit_events"
+    },
+    {
+      "pid": 399,
+      "locktype": "tuple",
+      "mode": "AccessShareLock",
+      "granted": true,
+      "relation": "tenants",
+      "page": 0,
+      "tuple": 88
+    }
+  ],
+  "ci_exception_projection": {
+    "sqlstate": "55P03",
+    "exception": "psycopg.errors.LockNotAvailable",
+    "statement": "INSERT INTO audit_events ...",
+    "context": "SELECT 1 FROM ONLY public.tenants ... FOR KEY SHARE OF x"
+  }
+}

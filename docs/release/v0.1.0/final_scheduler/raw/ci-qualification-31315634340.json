@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "record_type": "focused_projection_of_ci_qualification_artifact",
+  "source_commit": "9ac70886c03c2d3a21ae667f47c5b5971c90ed4d",
+  "ci": {
+    "push_run_id": 31315634340,
+    "push_result": "success",
+    "push_duration": "4m02s",
+    "pr_run_id": 31315639504,
+    "pr_result": "success",
+    "pr_duration": "3m58s"
+  },
+  "artifact": {
+    "workflow_run_id": 31315634340,
+    "artifact_id": 9038687051,
+    "name": "final-scheduler-lock-diagnostics-31315634340-1",
+    "compressed_size_bytes": 1589,
+    "expanded_jsonl_size_bytes": 14768,
+    "sha256": "fc87667fba75230e916b5302bce818db49ced9fc41589fcf8040240c17fbc124",
+    "created_at": "2026-08-09T13:25:42Z",
+    "expires_at": "2026-11-07T13:22:17Z"
+  },
+  "same_tenant_eight_worker": {
+    "claim_attempts": 12,
+    "claim_requests": 8,
+    "successful_requests": 8,
+    "claimed_jobs": 8,
+    "unique_claimed_jobs": 8,
+    "contention_retries": 4,
+    "retry_per_success": 0.5,
+    "eligible_probes": 4,
+    "empty_attempts": 4,
+    "empty_requests": 0,
+    "empty_while_eligible": 4,
+    "latency_ms": {
+      "p50": 117.39962449998131,
+      "p95": 157.0487125499838,
+      "max": 164.3728149999788,
+      "points": [
+        84.35615900000926,
+        98.58615099997792,
+        115.3544009999905,
+        116.63221199998475,
+        118.16703699997788,
+        137.65824000000748,
+        143.4468079999931,
+        164.3728149999788
+      ]
+    }
+  },
+  "projection_note": "The complete lock rows remain in the digest-bound 90-day GitHub Actions artifact. This file preserves the exact CI identity and the complete emitted 8-worker diagnostic record."
+}

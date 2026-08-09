@@ -1250,3 +1250,48 @@ reservation miss observability 也先写 RED：给 claimer 传 `metrics` 得到�
 reservation latency、job-claim latency、reserved/miss/rate，不新增 coordinator 或第三阶段。聚焦 unit
 `14 passed`；随后组合验证 `35 passed, 12 skipped`，Ruff 与 MyPy 通过。真实 12 项 PostgreSQL 结果必须
 由下一轮 CI 给出。
+
+## 2026-08-09 — 最终调度器真实 PostgreSQL CI qualification
+
+提交 `9ac7088` 在两个独立入口都完整通过：push CI `31315634340` 为 `4m02s`，PR CI `31315639504`
+为 `3m58s`。这次 GREEN 覆盖了 H2 负向诊断、H3 对照、短 fair-turn/durable-claim overlap、reservation
+互斥、跨 Tenant `SKIP LOCKED`、reservation crash、priority、初版 10W/100J `limit=1` drain 与 8-worker
+诊断。不能把它解释成性能门禁通过。
+
+push artifact id `9038687051` 的压缩包 SHA-256 为
+`fc87667fba75230e916b5302bce818db49ced9fc41589fcf8040240c17fbc124`，本地独立下载校验一致。8-worker
+记录为 12 attempts、4 retries、`retry/success=0.5`、8/8 unique、p50 `117.400ms`、p95 `157.049ms`、max
+`164.373ms`。完整锁记录留在 90 天 artifact，版本库保存明确标注的 focused projection。
+
+复核最终任务文本时发现，10W/100J `limit=1` 不仅要求一个 100-Job drain，还要求至少 20 次或足够稳定
+次数。已有测试只完成一次 drain；虽然它比只测第一波更深，但重复数不明确。为避免把“更深一次”偷换为
+“稳定重复”，测试被增强为 20 个独立 100-Job fixture，每次先验证 10 个并发请求得到 10 个 unique Job，
+再由 10 Worker 以 `limit=1` drain 至 100 unique/100 Attempt。该增强只改测试，不改 production，并将在
+下一 CI source 重新 qualification。
+
+## 2026-08-09 — Targeted benchmark 执行器 RED→GREEN
+
+性能阶段复用现有真实 EvaluationWorker/PostgreSQL 容量 runner。先增加纯评估测试，要求 4 个完整重复、
+16 个固定 arm、完整 metrics、correctness fail-closed，以及任一 distribution 的中位
+`throughput_8 < throughput_4 * 0.95` 必须返回 `NEGATIVE_SCALING`。第一次 pytest 在 collection 阶段得到
+预期 RED：`ModuleNotFoundError: scripts.targeted_scheduler_evidence`。
+
+最小 GREEN 增加独立 `targeted` stage（只接受 queue 1000）、显式 `contention_retry_per_success` 与
+`empty_while_eligible` 字段、四重复聚合器和手动 GitHub Actions 工作流。工作流固定 4 distributions ×
+1/2/4/8 Workers × `limit=1` × 4 repetitions，每个 arm 测 100 Job、保留 900 background eligible Job；
+每个重复和总执行均 source-bound，失败也上传并提交 immutable evidence。聚焦测试 `27 passed`，MyPy
+通过；Ruff 首轮发现 2 个 import-order 与 2 个 format 差异，机械修正后全绿。此时只证明执行器合同，
+真实 targeted 结果尚未运行。
+
+### 推送前验证中遇到的问题
+
+把 10W/100J 扩为循环后，首轮 Ruff 报告 `B023`：循环内部的 `first_claim` / `drain` 闭包没有绑定
+`repetition` 和 barrier。虽然当前代码在每轮结束前 await 全部 task，实际未观察到串轮，但该写法依赖调度
+时序，不能作为并发测试本身的基础。修正为 helper 的显式 keyword 参数后，Ruff 全仓通过、345 文件
+format check 通过，CI 同范围 MyPy `app scripts tests/integration tests/concurrency` 通过 134 source files。
+
+随后尝试一次性运行 `pytest -m "not integration" -q`，本地 PowerShell 工具在总命令 `303.8s` 上限到达时
+终止且 stdout flush 报 Windows `EINVAL`，过程中没有产生可归因到某个测试的失败。因此没有把这次超时
+写成测试 GREEN 或源码失败。独立 collection 在 `5.4s` 内成功，报告 670 项中收集 645 项、25 项因 marker
+排除；本轮直接相关组合仍为 `27 passed, 12 skipped`，12 个 skip 均等待真实 PostgreSQL CI。最终完整
+结论继续以 GitHub Actions 的同源 run 为准。

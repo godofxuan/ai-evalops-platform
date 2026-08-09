@@ -72,7 +72,7 @@ The focused claiming suite then passed `10/10` and the broader Job/Worker/config
 - Job, Attempt, lease/version, Run transition, Audit and Outbox remain one atomic Phase B transaction.
 - No retry threshold, uniqueness assertion, priority rule, fairness rule or failure expectation was relaxed.
 
-## Remaining qualification work
+## Qualification result and remaining work
 
 The SQL compile GREEN is necessary but not sufficient. The next contract slice adds:
 
@@ -82,5 +82,8 @@ The SQL compile GREEN is necessary but not sufficient. The next contract slice a
 4. `tenant_turn_reserved`, `tenant_turn_without_job` and `reservation_miss_rate` process metrics;
 5. per-arm reservation/job-claim latency and miss fields in capacity evidence.
 
-These remain subject to real PostgreSQL CI. After that, the lock-order audit and required paired/formal performance
-protocols still remain.
+The listed contracts passed real PostgreSQL in push CI `31315634340` and PR CI `31315639504` at source `9ac7088`.
+After that GREEN, the 10W/100J `limit=1` test was strengthened to repeat its complete 100-Job drain 20 times instead of
+relying on one drain. That stronger form remains pending the next CI run. The lock-order audit is now recorded in
+`LOCK_ORDER.md`; repeated targeted, same-runner paired, capacity, current fault and formal performance protocols still
+remain.

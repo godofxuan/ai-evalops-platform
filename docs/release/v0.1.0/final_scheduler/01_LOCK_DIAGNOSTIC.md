@@ -64,6 +64,10 @@ Artifact metadata:
 The JSONL record contains the complete relevant rows from `pg_stat_activity`, `pg_blocking_pids(pid)` and
 `pg_locks`. Its decisive fields are:
 
+A source-controlled focused projection is preserved at
+`raw/h2-lock-projection-31314586983.json`. It explicitly identifies itself as a projection; the complete raw record is
+the digest-bound GitHub artifact above.
+
 | Evidence | Value |
 |---|---|
 | Blocker PID | `397` |
