@@ -103,7 +103,7 @@ def build_claim_candidates_statement(
             EvaluationJob.id.asc(),
         )
         .limit(limit)
-        .with_for_update(of=Tenant, skip_locked=True)
+        .with_for_update(of=Tenant)
     )
 
 

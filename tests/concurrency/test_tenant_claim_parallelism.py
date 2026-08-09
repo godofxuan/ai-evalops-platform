@@ -16,7 +16,7 @@ from app.domain.enums import ArtifactType, JobStatus, RunStatus
 from app.jobs.claiming import (
     ClaimedJob,
     SQLAlchemyJobClaimer,
-    build_claim_candidates_statement,
+    build_tenant_job_claim_statement,
 )
 from app.jobs.lease import LeasePolicy
 from app.persistence.database import (
@@ -84,6 +84,19 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         if eligible:
             self.empty_while_eligible += 1
         return eligible
+
+    async def claim_reserved_for_diagnostic(
+        self,
+        *,
+        worker_id: str,
+        tenant_id: UUID,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
+        return await self._claim_reserved_tenant(
+            worker_id=worker_id,
+            tenant_id=tenant_id,
+            eligible_at=eligible_at,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,10 +269,13 @@ async def test_worker_claims_next_job_while_same_tenant_head_claim_is_uncommitte
                 async with session_factory.begin() as worker_a_session:
                     worker_a_rows = (
                         await worker_a_session.execute(
-                            build_claim_candidates_statement(now=now, limit=1)
+                            build_tenant_job_claim_statement(
+                                now=now,
+                                tenant_id=fixture.tenant_id,
+                            )
                         )
                     ).all()
-                    assert [job.id for job, _run, _tenant in worker_a_rows] == [fixture.job_ids[0]]
+                    assert [job.id for job, _run in worker_a_rows] == [fixture.job_ids[0]]
 
                     worker_b_claims = await claimer.claim(
                         worker_id=f"parallel-worker-b-{repetition}",
@@ -344,7 +360,7 @@ async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
     engine = create_database_engine(settings)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 10, 0, tzinfo=UTC)
-    claimer = SQLAlchemyJobClaimer(
+    claimer = InstrumentedClaimer(
         session_factory,
         lease_policy=LeasePolicy(timedelta(seconds=30)),
         clock=FixedClock(now),
@@ -363,9 +379,10 @@ async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
                     )
                     assert locked_tenant_id == fixture.tenant_id
 
-                    worker_b_claims = await claimer.claim(
+                    worker_b_claims = await claimer.claim_reserved_for_diagnostic(
                         worker_id=f"tenant-hot-row-worker-b-{repetition}",
-                        limit=1,
+                        tenant_id=fixture.tenant_id,
+                        eligible_at=now,
                     )
                     outcomes.append(
                         (
