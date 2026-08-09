@@ -1,6 +1,6 @@
 # Candidate 2 durable-claim overtaking trace
 
-Status: `ROOT_CAUSE_FROZEN`; deterministic PostgreSQL trace pending RED execution
+Status: `ROOT_CAUSE_VERIFIED_ON_POSTGRESQL`
 
 ## Source-bound observed failure
 
@@ -67,4 +67,34 @@ Candidate 2's one bounded waiting fallback repairs a different liveness problem:
 
 ## Evidence completion plan
 
-`tests/concurrency/test_tenant_durable_fairness.py` will emit, for each coordinated Worker, reservation attempt/success/commit, selected Tenant, Phase B start, Job/commit receipt, fallback/miss when observable, plus a monotonically ordered application event. Candidate 2 must fail the `position <= 2` assertion on real PostgreSQL before production code changes. After Candidate 3, the exact same scenario and receipt oracle must turn GREEN; any database-linearized sequence is reported alongside it, never substituted for it.
+`tests/concurrency/test_tenant_durable_fairness.py` emits, for each coordinated Worker, reservation attempt/commit, selected Tenant, Phase B start/pause/release, Job transaction return and application receipt, plus a monotonic event sequence. Candidate 2 failed the unchanged `position <= 2` assertion on real PostgreSQL before production code changes. After Candidate 3, the same receipt oracle must turn GREEN; any database-linearized sequence is reported alongside it, never substituted for it.
+
+## Deterministic PostgreSQL RED result
+
+| Field | Value |
+|---|---|
+| source | `551f6b4fe01fec8ec8550527579772040f1a7b20` |
+| push Actions run | `31325521253` |
+| job | `quality-and-integration` (`93275134510`) |
+| environment | GitHub-hosted runner, PostgreSQL 18.4 service |
+| compose-smoke | PASS in 1m00s |
+| quality job | expected FAIL in 3m53s |
+| artifact | `final-scheduler-lock-diagnostics-31325521253-1` |
+| artifact digest | `sha256:0342e7c7562d5ec294747355c8bf929550ee49fbd3149a210df9c2440d8d8e1e` |
+| secondary receipt | position 8 |
+| frozen threshold | position <=2 |
+
+The decisive observed events were:
+
+| Event | Monotonic ns | Worker | Meaning |
+|---:|---:|---|---|
+| 2 | 215385576122 | `primary-1` | A reservation committed. |
+| 5 | 215394975044 | `primary-1` | A first committed receipt became application-visible. |
+| 7 | 215400044979 | `secondary-1` | B reservation committed early. |
+| 9 | 215400052040 | `secondary-1` | B paused before Phase B. |
+| 10–39 | bounded trace middle | `primary-2` through `primary-7` | Six later A reservation/Job transaction/receipt chains completed. |
+| 40 | 215452326843 | `secondary-1` | B Phase B was released. |
+| 41 | 215456675569 | `secondary-1` | B Job transaction committed/returned. |
+| 42 | 215456680316 | `secondary-1` | B committed receipt became application-visible at position 8. |
+
+No random sleep participates in the schedule. An `asyncio.Barrier` proves six overtaking Worker tasks are ready; six individual `Event` gates advance them one at a time while B remains paused. That makes the causal order deterministic and separates the design failure from runner speed.
