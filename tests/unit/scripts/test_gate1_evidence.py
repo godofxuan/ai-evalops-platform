@@ -6,9 +6,21 @@ from scripts.gate1_evidence import (
     evaluate_gate1_gate_flags,
     merge_prometheus_evidence,
     reconcile_arm,
+    relative_change_percent,
     summarize_arm,
     summarize_worker_cluster_resources,
 )
+
+
+def test_relative_change_percent_uses_baseline_as_denominator() -> None:
+    assert relative_change_percent(
+        baseline=39.6504130226613,
+        current=24.4268660996694,
+    ) == pytest.approx(-38.394422056313)
+    assert relative_change_percent(
+        baseline=34.2668528741652,
+        current=22.61741850029,
+    ) == pytest.approx(-33.9962190769438)
 
 
 def test_reconciliation_rejects_duplicate_durable_results() -> None:

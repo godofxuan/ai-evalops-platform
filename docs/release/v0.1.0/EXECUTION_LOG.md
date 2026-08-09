@@ -1017,7 +1017,9 @@ collector gap 与 blocker 均为 0。第一次核验命令错误地从 final man
 
 8 个主要 worker 组中 5 个回退超过 15%；组变化中位数 `-24.05%`，最差 `-63.44%`；32 个
 同名 repetition arm 的配对变化中位数 `-29.55%`，范围 `-80.41%` 至 `+10.84%`。current run
-内部也出现 4→8 负扩展：io `-15.22%`、transient `-11.65%`。pre-fair runner 是 4-vCPU AMD
+内部也出现 4→8 负扩展：io `-38.39%`、transient `-34.00%`。旧值 `-15.22` 与 `-11.65`
+实际是 Jobs/s 绝对差值，不是百分比；完整修正记录见
+`perf_fix/01_EVIDENCE_CORRECTION.md`。pre-fair runner 是 4-vCPU AMD
 EPYC 7763，current 是 4-vCPU AMD EPYC 9V74；因此百分比不是跨硬件生产 SLO，但协议、Compose
 形状、job 数与 arm 顺序相同，且两个 workload 的高并发回退和 current-run 内部负扩展方向一致。
 按本次 release gate 必须定为 `NOT_READY`，唯一 blocker 是公平 claim 在 4/8 workers 的吞吐与

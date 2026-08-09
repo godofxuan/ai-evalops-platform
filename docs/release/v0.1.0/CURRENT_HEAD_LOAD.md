@@ -33,7 +33,10 @@ Historical baseline 是 source `15e7ac2e28b70430acd0bff88ee6cc78e5b86a86`、run
 
 8 个主要 worker 组中 5 个回退超过 15%；组变化中位数 -24.05%，最差 -63.44%。32 个同名
 repetition arm 的配对变化中位数 -29.55%，范围 -80.41% 至 +10.84%。current run 内部 4→8
-也负扩展：io -15.22%，transient -11.65%。
+也负扩展：io 从 39.650413 降至 24.426866 Jobs/s，相对变化 -38.39%；transient 从
+34.266853 降至 22.617419 Jobs/s，相对变化 -34.00%。旧文档中的 `-15.22%` 与 `-11.65%`
+分别是 `-15.223547 Jobs/s` 与 `-11.649434 Jobs/s` 的绝对差值被误加百分号，修正过程见
+[`perf_fix/01_EVIDENCE_CORRECTION.md`](perf_fix/01_EVIDENCE_CORRECTION.md)。
 
 pre-fair runner 为 4-vCPU AMD EPYC 7763，current runner 为 4-vCPU AMD EPYC 9V74；这些百分比
 不能外推为生产 SLO或严格的纯 scheduler 因果效应。不过相同协议的两个 workload 都在 4/8 workers

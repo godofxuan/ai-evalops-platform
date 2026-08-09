@@ -24,6 +24,11 @@ JOB_STATUSES = (
 TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled"}
 
 
+def relative_change_percent(*, baseline: float, current: float) -> float:
+    """Return current throughput change relative to the baseline throughput."""
+    return (current / baseline - 1) * 100
+
+
 def _derive_run_status(status_counts: dict[str, int]) -> str:
     present = {status for status, count in status_counts.items() if count}
     if present == {"succeeded"}:
