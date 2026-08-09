@@ -1337,3 +1337,31 @@ fallback 合计 148、每轮 6–9。8-worker 记录为 11 attempts、3 fallback
 
 至此 `CORRECTNESS_PASS` 与 CI scope `EVIDENCE_COMPLETE` 恢复。下一提交只增加 source-bound trigger 与
 证据文档，启动 frozen targeted gate；不再修改 scheduler production。
+
+### Targeted attempt 1：benchmark 前置正确性 RED
+
+提交 `0e19f64` 触发 targeted run `31318923861`。工作流在 `48s` 后失败，但 `always()` 证据路径正常上传
+artifact（SHA-256 `78506cf95177e9f883c47f58be1253974da52a695ff5fc620e0aa970ab581b97`），并由 bot 提交
+`511d6f1` 把 26 个 source-bound 文件保存在仓库。assessment 为 `FAILED/repetition_count=0`，不能解释成
+`NEGATIVE_SCALING`。唯一完整 arm 是 single-Tenant/w1：100/100 unique、0 lost/duplicate/empty、
+`12.398905 Jobs/s`。
+
+`rep1/failure.json` 与 PostgreSQL log 同时记录 2-worker arm 的真实 deadlock：一个 ResultCommitter 事务已持有
+Run `FOR UPDATE`，随后等待另一事务已锁定的 Job；后者在插入 `progress_event_outbox` 时为复合 Run FK 请求
+`KEY SHARE`，反向等待前者。此前 `7d54f97` 引入 Run-first 是为了阻止多个 result transaction 的 FK lock
+upgrade deadlock，因此不能删除预锁或改回 Job-first。
+
+TDD RED 将 compile contract 改为预期 `FOR NO KEY UPDATE OF evaluation_runs`，旧实现按预期失败。最小 GREEN
+提交 `3350c23` 仅给 Run-first `with_for_update` 增加 `key_share=True`：两个 Run writer 仍互斥，但 Outbox FK
+`KEY SHARE` 可并行。真实 PostgreSQL 回归在一个事务持 Run guard、另一个事务持 Job 并 flush Outbox 的形状
+下验证兼容性，并沿用数据库/Python fail-fast timeout。本地 `75 passed, 14 skipped`；14 个 skip 全部明确依赖
+CI PostgreSQL。Ruff、206-file format 与 MyPy 93 app source files 通过。下一步先等待 source `3350c23` 的
+push/PR CI 双 GREEN，不提前重跑 targeted。
+
+### Run guard 双入口 GREEN，允许 targeted attempt 2
+
+source `3350c23` 的 push CI `31319292162` 在 `4m27s` 完成（quality/integration `4m24s`、Compose `1m01s`）；
+PR CI `31319295583` 在 `4m21s` 完成（quality/integration `4m19s`、Compose `59s`）。两者均 SUCCESS，真实
+PostgreSQL FK compatibility regression 因此不是本地推断。触发文件升级为 v2，同时绑定 Candidate 2、
+原 correctness qualification、Run guard fix、双 CI IDs 与上一失败 run。该提交只启动 frozen protocol，
+不修改 scheduler production，也不把 attempt 1 的唯一 w1 arm promotion 为性能结果。
