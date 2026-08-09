@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import SecretStr
 from sqlalchemy import delete, select
+from sqlalchemy.exc import DBAPIError
 
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
@@ -38,8 +40,11 @@ from app.persistence.orm_models import (
     Tenant,
 )
 from tests.postgres_test_support import (
+    create_postgres_test_engine,
     install_postgres_test_timeouts,
     wait_for_lock_sensitive,
+    wait_for_postgres_lock_snapshot,
+    write_lock_diagnostic,
 )
 
 
@@ -361,7 +366,7 @@ async def test_fair_selector_skips_locked_tenant_head_job() -> None:
 
 
 @pytest.mark.integration
-async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
+async def test_job_selector_is_independent_of_tenant_scheduler_lock() -> None:
     if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
         pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
     database_url = os.getenv("EVALOPS_DATABASE_URL")
@@ -372,48 +377,152 @@ async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
     engine = create_database_engine(settings)
     install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
+    selector_engine = create_postgres_test_engine(
+        database_url,
+        application_name="final-scheduler-selector-only",
+    )
+    selector_session_factory = create_session_factory(selector_engine)
     now = datetime(2026, 8, 9, 10, 0, tzinfo=UTC)
+    fixture = await _create_claim_fixture(session_factory, created_at=now)
+    try:
+        async with session_factory.begin() as worker_a_session:
+            locked_tenant_id = await worker_a_session.scalar(
+                select(Tenant.id).where(Tenant.id == fixture.tenant_id).with_for_update()
+            )
+            assert locked_tenant_id == fixture.tenant_id
+
+            async with selector_session_factory.begin() as worker_b_session:
+                rows = (
+                    await wait_for_lock_sensitive(
+                        worker_b_session.execute(
+                            build_tenant_job_claim_statement(
+                                now=now,
+                                tenant_id=fixture.tenant_id,
+                            )
+                        ),
+                        operation="Job-only selector under Tenant FOR UPDATE",
+                    )
+                ).all()
+            assert [job.id for job, _run in rows] == [fixture.job_ids[0]]
+    finally:
+        await _delete_claim_fixture(session_factory, fixture)
+        await selector_engine.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_external_tenant_for_update_exposes_fk_lock_diagnostic() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    fixture_engine = create_database_engine(settings)
+    install_postgres_test_timeouts(fixture_engine)
+    fixture_session_factory = create_session_factory(fixture_engine)
+    application_name = "final-scheduler-durable-for-update"
+    claim_engine = create_postgres_test_engine(database_url, application_name=application_name)
+    claim_session_factory = create_session_factory(claim_engine)
+    now = datetime(2026, 8, 9, 10, 15, tzinfo=UTC)
     claimer = InstrumentedClaimer(
-        session_factory,
+        claim_session_factory,
         lease_policy=LeasePolicy(timedelta(seconds=30)),
         clock=FixedClock(now),
     )
-    outcomes: list[tuple[UUID, tuple[UUID, ...]]] = []
+    fixture = await _create_claim_fixture(fixture_session_factory, created_at=now)
+    claim_task: asyncio.Task[tuple[ClaimedJob, ...]] | None = None
     try:
-        for repetition in range(20):
-            fixture = await _create_claim_fixture(
-                session_factory,
-                created_at=now + timedelta(minutes=repetition),
+        async with fixture_session_factory.begin() as worker_a_session:
+            locked_tenant_id = await worker_a_session.scalar(
+                select(Tenant.id).where(Tenant.id == fixture.tenant_id).with_for_update()
             )
-            try:
-                async with session_factory.begin() as worker_a_session:
-                    locked_tenant_id = await worker_a_session.scalar(
-                        select(Tenant.id).where(Tenant.id == fixture.tenant_id).with_for_update()
-                    )
-                    assert locked_tenant_id == fixture.tenant_id
+            assert locked_tenant_id == fixture.tenant_id
 
-                    worker_b_claims = await wait_for_lock_sensitive(
-                        claimer.claim_reserved_for_diagnostic(
-                            worker_id=f"tenant-hot-row-worker-b-{repetition}",
-                            tenant_id=fixture.tenant_id,
-                            eligible_at=now,
-                        ),
-                        operation="durable claim under external Tenant FOR UPDATE",
-                    )
-                    outcomes.append(
-                        (
-                            fixture.job_ids[0],
-                            tuple(claim.job_id for claim in worker_b_claims),
-                        )
-                    )
-            finally:
-                await _delete_claim_fixture(session_factory, fixture)
+            claim_task = asyncio.create_task(
+                claimer.claim_reserved_for_diagnostic(
+                    worker_id="durable-for-update-worker",
+                    tenant_id=fixture.tenant_id,
+                    eligible_at=now,
+                )
+            )
+            snapshot = await wait_for_postgres_lock_snapshot(
+                database_url,
+                target_application_name=application_name,
+            )
+            write_lock_diagnostic(
+                {
+                    "hypothesis": "H2_FK_LOCK_INTERACTION",
+                    "test": "external_tenant_for_update",
+                    "tenant_id": str(fixture.tenant_id),
+                    "expected_outcome": "lock_timeout",
+                    "snapshot": snapshot,
+                }
+            )
+
+            with pytest.raises(DBAPIError) as captured:
+                await wait_for_lock_sensitive(
+                    claim_task,
+                    operation="durable claim under external Tenant FOR UPDATE",
+                )
+            assert getattr(captured.value.orig, "sqlstate", None) == "55P03"
     finally:
-        await engine.dispose()
+        if claim_task is not None and not claim_task.done():
+            claim_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await claim_task
+        await _delete_claim_fixture(fixture_session_factory, fixture)
+        await claim_engine.dispose()
+        await fixture_engine.dispose()
 
-    assert all(observed == (expected,) for expected, observed in outcomes), (
-        f"TENANT_HOT_ROW_RED: {outcomes}"
+
+@pytest.mark.integration
+async def test_external_tenant_no_key_update_allows_full_durable_claim() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    fixture_engine = create_database_engine(settings)
+    install_postgres_test_timeouts(fixture_engine)
+    fixture_session_factory = create_session_factory(fixture_engine)
+    claim_engine = create_postgres_test_engine(
+        database_url,
+        application_name="final-scheduler-durable-no-key-update",
     )
+    claim_session_factory = create_session_factory(claim_engine)
+    now = datetime(2026, 8, 9, 10, 30, tzinfo=UTC)
+    claimer = InstrumentedClaimer(
+        claim_session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    fixture = await _create_claim_fixture(fixture_session_factory, created_at=now)
+    try:
+        async with fixture_session_factory.begin() as worker_a_session:
+            locked_tenant_id = await worker_a_session.scalar(
+                select(Tenant.id)
+                .where(Tenant.id == fixture.tenant_id)
+                .with_for_update(key_share=True)
+            )
+            assert locked_tenant_id == fixture.tenant_id
+
+            claims = await wait_for_lock_sensitive(
+                claimer.claim_reserved_for_diagnostic(
+                    worker_id="durable-no-key-update-worker",
+                    tenant_id=fixture.tenant_id,
+                    eligible_at=now,
+                ),
+                operation="durable claim under Tenant FOR NO KEY UPDATE",
+            )
+            assert [claim.job_id for claim in claims] == [fixture.job_ids[0]]
+    finally:
+        await _delete_claim_fixture(fixture_session_factory, fixture)
+        await claim_engine.dispose()
+        await fixture_engine.dispose()
 
 
 @pytest.mark.integration

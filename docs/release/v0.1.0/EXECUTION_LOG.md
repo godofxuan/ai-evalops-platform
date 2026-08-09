@@ -1160,3 +1160,41 @@ collection RED：`ModuleNotFoundError: tests.concurrency.postgres_test_support`�
 聚焦 pytest 结果：`3 passed, 6 skipped`。6 个 skip 都是本机没有 migrated PostgreSQL，不能算真实
 lock GREEN。MyPy：134 source files 无问题。下一步先推送该 fail-fast milestone；其目标是把旧的
 6 小时无限等待转换成秒级、可诊断的 PostgreSQL failure，不把预期失败误报为 qualification PASS。
+
+## 2026-08-09 — CI 止血结果与 H2 锁诊断基础设施
+
+### fail-fast 的实际效果
+
+提交 `1b6a2f8` 推送后，push CI `31314066767` 在 `3m49s` 内以 failure 结束，PR CI
+`31314070743` 在 `3m57s` 内以 failure 结束。相同测试在前两个 current-head run
+`31297535370` / `31297538171` 均等待满约 6 小时后才被取消。因此本阶段达成的效果不是“让测试变绿”，
+而是把不可诊断的 6 小时挂起转换成约 4 分钟内带 PostgreSQL 原因的确定性失败。
+
+push CI 的公开 annotation 给出两个彼此独立的事实：
+
+1. 原 `test_job_claim_does_not_serialize_on_locked_tenant_row` 在插入 `audit_events` 时失败；
+   PostgreSQL context 是对 `tenants` 执行外键检查所需的 `FOR KEY SHARE`，而外部事务正持有
+   `Tenant FOR UPDATE`，最终由 `lock_timeout` 报 `55P03`。这证明阻塞点不是 Job-only selector，
+   而是完整 durable claim 的 Tenant 外键写入。
+2. 8 个并发请求仍正确取得 8 个不重复 Job，但产生 17 次 claim attempt、9 次 contention retry，
+   `retry_per_success=1.125`，p50 `151.639ms`、max `171.872ms`。正确性成立，但争用合同失败。
+
+### H2 RED 与测试边界修正
+
+先修改测试合同，不修改 production scheduler：
+
+- 把旧测试拆成 selector-only、完整 durable claim + 外部 `FOR UPDATE`、完整 durable claim + 外部
+  `FOR NO KEY UPDATE` 三个实验，避免用一个测试混淆 SQL 选择阶段与外键写入阶段；
+- 给 durable claim 的连接设置固定 `application_name`，使观察者能从 `pg_stat_activity` 精确找到目标；
+- 新增测试要求保存 `pg_stat_activity`、`pg_blocking_pids()` 和 `pg_locks` 的相关 PID 快照；
+- CI 在同租户并发步骤后无条件上传 JSONL artifact，即便测试失败也保留诊断证据。
+
+第一次收集测试得到预期 RED：`ImportError`，缺少
+`create_postgres_test_engine` 与 `wait_for_postgres_lock_snapshot`。随后只实现 test-only helper：命名
+SQLAlchemy engine、在 1.25 秒内轮询真实 PostgreSQL lock wait、解析 target/blocker PID、采集活动与锁行，
+并以 UTF-8 JSONL 追加保存。observer 本身使用独立 `application_name`，不会把观察连接误识别成被测连接。
+
+本机没有 PostgreSQL，所以本轮只能证明 collection、unit 与静态合同 GREEN，不能把 H2 集成测试记为
+GREEN。聚焦结果为 `19 passed, 6 skipped`；Ruff 全仓检查与 335 文件 format check 通过；仓库 CI 同范围
+MyPy 为 134 source files 无问题。下一步推送该诊断切片，让 GitHub Actions 在真实 PostgreSQL 上生成
+原始锁快照；只有快照与三个实验结果一致后，才允许把 H3 的 `FOR NO KEY UPDATE` 候选写入生产 selector。

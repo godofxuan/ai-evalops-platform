@@ -244,6 +244,19 @@ def test_same_tenant_lock_integration_has_a_bounded_step_timeout() -> None:
     assert lock_step["timeout-minutes"] == 10
 
 
+def test_same_tenant_lock_diagnostics_are_uploaded_even_on_failure() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    job = workflow["jobs"]["quality-and-integration"]
+    by_name = {step["name"]: step for step in job["steps"]}
+
+    assert job["env"]["EVALOPS_SCHEDULER_DIAGNOSTIC_DIR"] == ("/tmp/evalops-final-scheduler")
+    upload = by_name["Upload final scheduler lock diagnostics"]
+    assert "always()" in upload["if"]
+    assert upload["uses"] == "actions/upload-artifact@v6"
+    assert upload["with"]["path"] == "/tmp/evalops-final-scheduler"
+    assert upload["with"]["if-no-files-found"] == "warn"
+
+
 def test_ci_executes_and_annotates_real_postgresql_rls_integration() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["quality-and-integration"]["steps"]

@@ -46,6 +46,7 @@ jobs:
       EVALOPS_TEST_MINIO_ACCESS_KEY: minioadmin
       EVALOPS_TEST_MINIO_SECRET_KEY: minioadmin
       EVALOPS_TEST_MINIO_BUCKET: evalops-integration
+      EVALOPS_SCHEDULER_DIAGNOSTIC_DIR: /tmp/evalops-final-scheduler
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -111,6 +112,14 @@ jobs:
         run: >-
           uv run --no-sync pytest tests/concurrency/test_tenant_claim_parallelism.py
           --junitxml=/tmp/junit-tenant-claim-parallelism.xml
+
+      - name: Upload final scheduler lock diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: final-scheduler-lock-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/evalops-final-scheduler
+          if-no-files-found: warn
 
       - name: Integration - blinded human review
         if: ${{ !cancelled() }}
