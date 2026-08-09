@@ -1198,3 +1198,25 @@ SQLAlchemy engine、在 1.25 秒内轮询真实 PostgreSQL lock wait、解析 ta
 GREEN。聚焦结果为 `19 passed, 6 skipped`；Ruff 全仓检查与 335 文件 format check 通过；仓库 CI 同范围
 MyPy 为 134 source files 无问题。下一步推送该诊断切片，让 GitHub Actions 在真实 PostgreSQL 上生成
 原始锁快照；只有快照与三个实验结果一致后，才允许把 H3 的 `FOR NO KEY UPDATE` 候选写入生产 selector。
+
+## 2026-08-09 — H2 确认与 H3 第一轮最小 production 修改
+
+push CI `31314586983` 在 `3m52s` 内结束，唯一测试断言失败是仍然保留的 8-worker contention gate；
+`retry_per_success=0.625`、5 retries、13 attempts、8/8 unique claims、p50 `128.250ms`、max
+`157.404ms`。因为 CI 在 same-tenant step 之后成功上传了诊断 artifact，且 annotations 没有其他测试错误，
+selector-only、外部 `FOR UPDATE` 预期 `55P03`、外部 `FOR NO KEY UPDATE` 完整 durable claim 三个 H2
+实验均通过。PR CI `31314589931` 同样 fail-fast。
+
+artifact `final-scheduler-lock-diagnostics-31314586983-1`（id `9038393415`）下载后独立 SHA-256 与
+GitHub digest 一致：`71dd44d0bbc4b1b4589b419154246e84d8b2719a21a21038c056fbfc6f926df4`。
+原始记录显示 blocker PID 397 对 Tenant 执行 `FOR UPDATE` 并持有 transaction 1191 ExclusiveLock；
+target PID 399 的 `pg_blocking_pids` 为 `[397]`，等待同一 transaction 1191 的未授予 ShareLock，同时
+已经取得 `audit_events` RowExclusiveLock。结合 CI 的 FK `FOR KEY SHARE` exception，H2 判为 CONFIRMED。
+
+随后才进入 H3 TDD。SQL compile contract 先改为要求
+`FOR NO KEY UPDATE OF tenants SKIP LOCKED` 并排除 `FOR UPDATE OF tenants`；第一次聚焦 pytest 得到预期
+RED，compiled SQL 仍是旧锁。production 只把 Phase A 的 `.with_for_update` 增加 `key_share=True`，没有改
+Phase B 或 retry threshold；同时把错误的“one transaction”类 docstring 改为“两阶段含义”。聚焦 claiming
+`10 passed`，Job/Worker/config/support 扩展集 `76 passed`，Ruff 和 MyPy 通过。这是 final sprint 的第 1 次
+production scheduler iteration；下一步必须推送并用真实 PostgreSQL 检查 8-worker gate，结果不通过时也只
+允许再做一次基于新证据的 production scheduler 修改。

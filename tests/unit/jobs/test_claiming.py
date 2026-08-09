@@ -117,13 +117,14 @@ def compile_postgresql(statement: object) -> str:
     )
 
 
-def test_claim_candidates_use_nonblocking_short_tenant_turn_and_deterministic_order() -> None:
+def test_claim_candidates_use_non_key_updating_tenant_turn_and_deterministic_order() -> None:
     sql = compile_postgresql(build_claim_candidates_statement(now=NOW, limit=10))
 
     assert "row_number() OVER (PARTITION BY evaluation_runs.tenant_id" in sql
     assert "JOIN tenants" in sql
     assert "tenants.last_scheduler_turn_at ASC NULLS FIRST" in sql
-    assert "FOR UPDATE OF tenants SKIP LOCKED" in sql
+    assert "FOR NO KEY UPDATE OF tenants SKIP LOCKED" in sql
+    assert "FOR UPDATE OF tenants" not in sql
     assert "evaluation_jobs.status" in sql
     assert sql.count("evaluation_jobs.status") >= 4
     assert "evaluation_jobs.next_attempt_at" in sql

@@ -103,7 +103,7 @@ def build_claim_candidates_statement(
             EvaluationJob.id.asc(),
         )
         .limit(limit)
-        .with_for_update(of=Tenant, skip_locked=True)
+        .with_for_update(of=Tenant, skip_locked=True, key_share=True)
     )
 
 
@@ -146,7 +146,7 @@ def _eligible_run() -> Any:
 
 
 class SQLAlchemyJobClaimer:
-    """Claim jobs and create attempt records inside one short PostgreSQL transaction."""
+    """Reserve a fair tenant turn, then commit each durable Job claim atomically."""
 
     def __init__(
         self,
