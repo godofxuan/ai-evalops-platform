@@ -105,6 +105,12 @@ jobs:
           uv run --no-sync pytest tests/concurrency/test_tenant_fair_claiming.py
           --junitxml=/tmp/junit-tenant-fair-claiming.xml
 
+      - name: Integration - same-tenant claim parallelism
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/concurrency/test_tenant_claim_parallelism.py
+          --junitxml=/tmp/junit-tenant-claim-parallelism.xml
+
       - name: Integration - blinded human review
         if: ${{ !cancelled() }}
         run: >-
@@ -179,6 +185,7 @@ jobs:
           /tmp/junit-unit.xml
           /tmp/junit-job-claiming.xml
           /tmp/junit-tenant-fair-claiming.xml
+          /tmp/junit-tenant-claim-parallelism.xml
           /tmp/junit-human-reviews.xml
           /tmp/junit-identity-datasets.xml
           /tmp/junit-tenant-rls.xml
