@@ -282,3 +282,54 @@ async def test_fair_selector_skips_locked_tenant_head_job() -> None:
     assert all(observed == (expected,) for expected, observed in outcomes), (
         f"RANK_PRUNING_CONCURRENCY_RED: {outcomes}"
     )
+
+
+@pytest.mark.integration
+async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    session_factory = create_session_factory(engine)
+    now = datetime(2026, 8, 9, 10, 0, tzinfo=UTC)
+    claimer = SQLAlchemyJobClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    outcomes: list[tuple[UUID, tuple[UUID, ...]]] = []
+    try:
+        for repetition in range(20):
+            fixture = await _create_claim_fixture(
+                session_factory,
+                created_at=now + timedelta(minutes=repetition),
+            )
+            try:
+                async with session_factory.begin() as worker_a_session:
+                    locked_tenant_id = await worker_a_session.scalar(
+                        select(Tenant.id).where(Tenant.id == fixture.tenant_id).with_for_update()
+                    )
+                    assert locked_tenant_id == fixture.tenant_id
+
+                    worker_b_claims = await claimer.claim(
+                        worker_id=f"tenant-hot-row-worker-b-{repetition}",
+                        limit=1,
+                    )
+                    outcomes.append(
+                        (
+                            fixture.job_ids[0],
+                            tuple(claim.job_id for claim in worker_b_claims),
+                        )
+                    )
+            finally:
+                await _delete_claim_fixture(session_factory, fixture)
+    finally:
+        await engine.dispose()
+
+    assert all(observed == (expected,) for expected, observed in outcomes), (
+        f"TENANT_HOT_ROW_RED: {outcomes}"
+    )
