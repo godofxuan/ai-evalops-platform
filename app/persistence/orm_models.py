@@ -129,6 +129,97 @@ class Tenant(Base):
     last_scheduler_turn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class SchedulerCoordination(Base):
+    __tablename__ = "scheduler_coordination"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton_id"),
+        CheckConstraint("active_generation >= 0", name="active_generation_nonnegative"),
+        CheckConstraint(
+            "durable_claim_sequence >= 0",
+            name="claim_sequence_nonnegative",
+        ),
+        CheckConstraint("version > 0", name="version_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    active_generation: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    active_priority: Mapped[int | None] = mapped_column()
+    durable_claim_sequence: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class TenantSchedulerState(Base):
+    __tablename__ = "tenant_scheduler_states"
+    __table_args__ = (
+        UniqueConstraint(
+            "generation",
+            "tenant_id",
+            name="uq_tenant_scheduler_states_generation_tenant_id",
+        ),
+        CheckConstraint("generation > 0", name="generation_positive"),
+        CheckConstraint("permit_order > 0", name="permit_order_positive"),
+        CheckConstraint(
+            "status IN ('pending', 'consumed', 'empty')",
+            name="status_known",
+        ),
+        CheckConstraint("version > 0", name="version_positive"),
+        Index(
+            "ix_tenant_scheduler_states_active_permits",
+            "generation",
+            "status",
+            "permit_order",
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    round_priority: Mapped[int] = mapped_column(nullable=False)
+    permit_order: Mapped[int] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+    )
+    version: Mapped[int] = mapped_column(nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class APIKey(Base):
     __tablename__ = "api_keys"
     __table_args__ = (
@@ -491,6 +582,14 @@ class JobAttempt(Base):
             name="uq_job_attempts_job_id_attempt_number",
         ),
         CheckConstraint("attempt_number > 0", name="attempt_number_positive"),
+        UniqueConstraint(
+            "scheduler_claim_sequence",
+            name="uq_job_attempts_scheduler_claim_sequence",
+        ),
+        CheckConstraint(
+            "scheduler_claim_sequence IS NULL OR scheduler_claim_sequence > 0",
+            name="scheduler_claim_sequence_positive",
+        ),
         CheckConstraint("latency_ms IS NULL OR latency_ms >= 0", name="latency_ms_nonnegative"),
         Index("ix_job_attempts_job_id_started_at", "job_id", "started_at"),
     )
@@ -504,6 +603,7 @@ class JobAttempt(Base):
     attempt_number: Mapped[int] = mapped_column(nullable=False)
     worker_id: Mapped[str] = mapped_column(String(128), nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduler_claim_sequence: Mapped[int | None] = mapped_column(BigInteger)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     outcome: Mapped[AttemptOutcome | None] = mapped_column(attempt_outcome_enum)
     retryable: Mapped[bool | None] = mapped_column()

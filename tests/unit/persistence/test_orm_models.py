@@ -17,7 +17,9 @@ from app.persistence.orm_models import (
     JobAttempt,
     ProgressEventOutbox,
     RunMetric,
+    SchedulerCoordination,
     Tenant,
+    TenantSchedulerState,
 )
 
 
@@ -72,6 +74,8 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
         "job_attempts",
         "progress_event_outbox",
         "run_metrics",
+        "scheduler_coordination",
+        "tenant_scheduler_states",
         "tenants",
     }
 
@@ -79,6 +83,38 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
 def test_tenant_metadata_includes_fair_claim_scheduling_state() -> None:
     assert "last_scheduler_turn_at" in Tenant.__table__.columns
     assert "ix_tenants_last_scheduler_turn_at" in {index.name for index in Tenant.__table__.indexes}
+
+
+def test_candidate3_scheduler_state_is_bounded_and_tenant_owned() -> None:
+    assert set(SchedulerCoordination.__table__.columns.keys()) >= {
+        "id",
+        "active_generation",
+        "active_priority",
+        "durable_claim_sequence",
+        "version",
+    }
+    assert foreign_key_targets(TenantSchedulerState.__table__, "tenant_id") == {"tenants.id"}
+    assert frozenset({"generation", "tenant_id"}) in unique_column_sets(
+        TenantSchedulerState.__table__
+    )
+    assert {
+        "generation > 0",
+        "permit_order > 0",
+        "status IN ('pending', 'consumed', 'empty')",
+        "version > 0",
+    } <= check_expressions(TenantSchedulerState.__table__)
+    assert "ix_tenant_scheduler_states_active_permits" in {
+        index.name for index in TenantSchedulerState.__table__.indexes
+    }
+
+
+def test_job_attempt_claim_sequence_is_nullable_unique_and_positive() -> None:
+    sequence = JobAttempt.__table__.columns.scheduler_claim_sequence
+    assert sequence.nullable
+    assert frozenset({"scheduler_claim_sequence"}) in unique_column_sets(JobAttempt.__table__)
+    assert "scheduler_claim_sequence IS NULL OR scheduler_claim_sequence > 0" in check_expressions(
+        JobAttempt.__table__
+    )
 
 
 def test_api_key_metadata_never_defines_a_plaintext_secret_column() -> None:
