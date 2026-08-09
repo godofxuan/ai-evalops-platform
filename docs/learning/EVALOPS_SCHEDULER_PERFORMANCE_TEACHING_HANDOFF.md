@@ -1,16 +1,16 @@
 # AI EvalOps Scheduler Performance — Teaching Handoff
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 Audience: 下一位负责带用户学习本项目的 ChatGPT/Codex
-Release context: Candidate 2 correctness-qualified, concurrent 20:1 fairness failed, v0.1.0 `NOT_READY`
+Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED, v0.1.0 `NOT_READY`
 
 ## 教学使用方式
 
 每章都从本仓库的一段真实源码、测试和 GitHub Actions 实验出发。讲解时先让学习者预测，再打开证据；
 不要把结论变成背诵题。路径默认相对仓库根目录。当前证据主入口是
-`docs/release/v0.1.0/final_scheduler/`，真实失败 bundle 在
+`docs/release/v0.1.0/fairness_redesign/`，真实失败 bundle 在
 `docs/results/release/v0.1.0/targeted-gh-31318923861-1/` 与
-`targeted-gh-31319556885-1/`。
+`targeted-gh-31319556885-1/`、`targeted-gh-31327388006-1/`。
 
 ## 1. PostgreSQL MVCC
 
@@ -411,14 +411,210 @@ Release context: Candidate 2 correctness-qualified, concurrent 20:1 fairness fai
   一致性边界。当前问题是 PostgreSQL scheduler 的并发公平不变量，不是消息传输能力缺失。
 - **源码/测试/真实实验：** PostgreSQL 已承担 Job/lease/Attempt/Outbox，10W correctness 和故障历史证据存在；
   targeted `31319556885` 精确暴露 w8 fairness failure，换框架不会自动证明它。
-- **历史错误、失败原因与最终方法：** 架构升级容易绕开根因并扩大 sprint。最终按停止规则不做 Candidate 3，也不
-  引入 broker；下一阶段只写 concurrent-fairness-invariant-driven redesign proposal。
+- **历史错误、失败原因与最终方法：** 架构升级容易绕开根因并扩大 sprint。最终只实现一次 Candidate 3 数据库内
+  fair-round redesign；targeted evidence 失败后停止，没有引入 broker 或 Candidate 4。
 - **Trade-off/面试角度：** 当前方案基础设施少、事务边界清晰；若未来吞吐、跨区、长工作流或团队边界有证据再评估。
 - **练习：** ①为三种工具分别列触发条件；②说明 Outbox 的角色；③写一份“何时迁移”的证据门。
 
+## PART 41 — 什么叫 Fairness Invariant
+
+- **概念：** fairness invariant 是对所有允许并发交错都应成立的可观察性质，不是“多数时候看起来平均”。本项目把
+  priority、公平、无饥饿、唯一性、liveness、fencing、crash safety 与 bounded coordination 写成 F1–F8。
+- **项目实际问题：** Candidate 2 只保证 Tenant reservation 较早，却没有约束最终 durable receipt；如果不先定义
+  observable point，工程师可以在失败后改口径。
+- **对应源码：** `docs/release/v0.1.0/fairness_redesign/01_FAIRNESS_INVARIANT.md`；
+  `app/jobs/claiming.py` 的 round/permit/claim transaction。
+- **对应 RED：** `tests/concurrency/test_tenant_durable_fairness.py` 强制 Candidate 2 secondary receipt 到位置 8。
+- **对应实验：** RED run `31325521253`；Candidate 3 ordinary GREEN `31327012832`；targeted
+  `31327388006` 只有 rep1 diagnostic，不能变成正式 invariant PASS。
+- **失败历史：** Candidate 2 targeted w8 position 4；Candidate 3 targeted evidence contract 又在完成协议前失败。
+- **最终方案：** 冻结 F1–F8 和 application committed receipt `<=2`，增加 DB sequence 只作第二观测点；gate
+  失败即停止。
+- **trade-off：** invariant 越强，协调和证明成本越高；但定义不清会让任何结果都可被事后解释。
+- **面试官怎么问：** “请把公平从价值判断变成一个能在线性化历史上检查的性质。”
+- **练习题：** ①为三 Tenant 写 F2；②给 F2 与 F3 各造一个反例；③说明 F1 为什么独立；④标出 F8 的边界。
+
+## PART 42 — Reservation Order vs Durable Claim Order
+
+- **概念：** reservation order 是 scheduler turn 被提交的顺序；durable claim order 是 Job/Attempt 等状态事务提交并
+  返回 receipt 的顺序。中间还有 Phase-B 锁等待和事务工作。
+- **项目实际问题：** B 可先获得 reservation，但 B Phase-B 暂停时，A 的其他 Worker 继续 reservation+claim，最终
+  receipt 越过 B。
+- **对应源码：** Candidate 2 trace 在 `02_CANDIDATE2_OVERTAKE_TRACE.md`；Candidate 3 路径在
+  `SQLAlchemyJobClaimer._claim_active_scheduler_permit()`。
+- **对应 RED：** Barrier/Event 让 B reservation commit 后暂停，并允许 6 个 A receipt 完成。
+- **对应实验：** `31325521253` 同时记录 reservation event、Job transaction 和 application receipt。
+- **失败历史：** “turn 是公平的，所以 Job claim 也公平”是 Candidate 2 的错误推导。
+- **最终方案：** pending round member 必须和 Job claim 同事务消费；B pending 时下一 round 不得开启。
+- **trade-off：** 重新耦合提高顺序保证，但增加 scheduler-state 写入和短热点锁。
+- **面试官怎么问：** “给一个先预约却后提交的具体 interleaving，并指出每个事务边界。”
+- **练习题：** ①画 Candidate 2 两事务时序；②画 Candidate 3 单次消费；③找 rollback 点；④解释为何 result order 无关。
+
+## PART 43 — 什么是 Linearization Point
+
+- **概念：** linearization point 是把一个并发操作视作瞬时生效的事件；选定后才能把并发历史映射为合法顺序历史。
+- **项目实际问题：** Python coroutine 完成、SQL flush、transaction commit、`claim()` return 都可能不同序。
+- **对应源码：** `JobAttempt.scheduler_claim_sequence` 和 Candidate 3 tail-only singleton sequence allocation；
+  harness 保留 post-commit monotonic receipt。
+- **对应 RED：** RED 同时记录 DB sequence 与 application receipt，排除纯 event-loop 排序假象。
+- **对应实验：** Candidate 2 两种顺序均显示 B 被 overtaken；Candidate 3 deterministic GREEN 两种均在 2 内。
+- **失败历史：** 只观察 reservation 或 result completion 会选择错误的 linearization point。
+- **最终方案：** release gate 继续使用冻结 application committed receipt；数据库 sequence 作 durable diagnostic，不能
+  偷换 gate。
+- **trade-off：** DB sequence 提高可诊断性，但增加一个短 singleton lock，且 sequence 本身不等于用户完成时间。
+- **面试官怎么问：** “你的 Job claim 在哪一行线性化？sequence 分配失败时事务是什么状态？”
+- **练习题：** ①标出 commit/return；②解释 sequence gap 是否允许；③比较 serializable 与 linearizable；④设计日志字段。
+
+## PART 44 — 为什么公平 reservation 不能自动保证公平 completion
+
+- **概念：** happens-before 只会沿真实依赖传播；reservation 提交与 Job claim 提交之间若无强制依赖，就没有顺序保证。
+- **项目实际问题：** A2/A3 的 Phase-B 可以在 B1 的 Phase-B 前完成，即使 B1 reservation 先提交。
+- **对应源码：** Candidate 2 Phase A/Phase B；Candidate 3 active generation 与 pending/consumed state transition。
+- **对应 RED：** B Phase-B Event 被关闭，A Worker 继续循环。
+- **对应实验：** Candidate 2 B receipt 8；原 targeted run B receipt 4。
+- **失败历史：** 把逻辑“应该轮到 B”误当作数据库锁/事务“必须等 B”。
+- **最终方案：** current round 任一 Tenant pending 时禁止 refill；每 Tenant 每 round 最多一个可消费 state。
+- **trade-off：** completion fairness 仍不等于 result execution fairness；慢 Tenant 只阻止下一 round，不持锁跨外部执行。
+- **面试官怎么问：** “你靠哪条数据库 invariant 阻止 A2 在 B1 前进入下一 round？”
+- **练习题：** ①列出无依赖的两个 commit；②为 A/B 画 partial order；③解释 crash 后 rollback；④说明为何不用长全局锁。
+
+## PART 45 — 并发 Overtaking
+
+- **概念：** overtaking 是后获得逻辑资格的操作先完成可观察提交；一次可能是调度抖动，无界发生则可能饥饿。
+- **项目实际问题：** primary Tenant 的多个 Worker 让 later A claims 越过 earlier B reservation。
+- **对应源码：** deterministic hook `_after_scheduler_permit_locked` 与测试 Event；Candidate 2 trace events 7–42。
+- **对应 RED：** B 锁到逻辑资格后暂停，测试断言 secondary receipt position >2。
+- **对应实验：** RED position 8；旧 targeted position 4；Candidate 3 rep1 observed 2，但整体 qualification failed。
+- **失败历史：** 随机 sleep 只能偶发复现，无法证明具体交错或排除 harness 假象。
+- **最终方案：** Barrier 冻结 first wave，Event 精确控制 B，数据库 state 让下一轮无法绕过 pending B。
+- **trade-off：** deterministic test 更可信但只覆盖注册交错；仍需真实 targeted repetitions。
+- **面试官怎么问：** “如何不用 sleep 稳定复现一个 overtaking race？”
+- **练习题：** ①写 Barrier 参与者；②写 Event 状态图；③列需要采集的 6 类事件；④设计超时避免 hang。
+
+## PART 46 — Strong Fairness vs Weak Fairness vs No Starvation
+
+- **概念：** strong fairness 常指反复 enabled 的动作最终执行；weak fairness 指持续 enabled 的动作最终执行；no
+  starvation 是工程上任何持续 eligible Tenant 最终被服务。项目 F2 的 bounded first position 比三者更具体。
+- **项目实际问题：** `<=2` 检查短期两 Tenant equal-priority 顺序，不能自动证明任意长期负载无饥饿。
+- **对应源码：** highest-priority round membership、pending/consumed/empty state 和 generation progression。
+- **对应 RED：** cross-Tenant progress、empty member、crash rollback/recovery 与 deterministic 20:1。
+- **对应实验：** ordinary CI 通过 liveness tests；formal long-run fairness 未完成。
+- **失败历史：** 把一次 position 2 写成 strong fairness SLO 会超出证据。
+- **最终方案：** F2 bounded gate + F3 no-starvation invariant + round state machine；对外只报告完成的 scope。
+- **trade-off：** stronger fairness 需要更长期 adversarial tests，并可能减少热点 Tenant 吞吐。
+- **面试官怎么问：** “position<=2 和 no starvation 是什么逻辑关系？互相能否推出？”
+- **练习题：** ①写 weak fairness 反例；②写 F2 PASS/F3 FAIL 轨迹；③设计 10 Tenant test；④说明 priority 与 starvation。
+
+## PART 47 — 为什么 position <=2 必须先定义 observation point
+
+- **概念：** position 只有在 event type、计时域、ties 和事务可见性明确时才有语义。
+- **项目实际问题：** reservation position、DB claim sequence、application receipt 和 result completion 会给出不同序列。
+- **对应源码：** `01_FAIRNESS_INVARIANT.md` 的 A–E 分类；harness `order_timed_values()`；Attempt sequence 字段。
+- **对应 RED：** 同时输出旧 receipt 与 DB sequence，不能只选有利观测点。
+- **对应实验：** Candidate 2 两种诊断均 FAIL；Candidate 3 rep1 两种均观测 2，但协议不完整。
+- **失败历史：** 看到 position 4 后改用 reservation position 会把失败“定义掉”。
+- **最终方案：** frozen gate 固定为 `claim()` committed receipt；DB sequence 不替代它。
+- **trade-off：** application receipt 会受事务返回调度影响；保留 DB sequence 能解释差异但增加复杂度。
+- **面试官怎么问：** “如果 DB sequence=2、return position=4，你如何判 release？”
+- **练习题：** ①定义 tie-break；②列五个 observation points；③给 commit/return 反序案例；④选择一个线上指标并辩护。
+
+## PART 48 — 为什么不能看到 RED 再修改 fairness metric
+
+- **概念：** 事后修改指标造成 researcher degrees of freedom，使测试不再是独立验证。
+- **项目实际问题：** Candidate 2 position 4 后若改 threshold 或换 reservation order，就无法知道设计是否解决原问题。
+- **对应源码：** frozen workflow inputs、`01_FAIRNESS_INVARIANT.md`、`06_TARGETED.md`。
+- **对应 RED：** Candidate 3 仍运行原 application receipt gate，并只新增 DB diagnostic。
+- **对应实验：** `31327388006` 即使 rep1 observed 2，也因证据 contract failure 保持 FAILED。
+- **失败历史：** historical experiments 曾暴露 cardinality summarizer 和 manifest mismatch；失败 bundle 均未覆写。
+- **最终方案：** 先 preregister protocol，失败后停止；任何未来 evidence semantic repair 必须成为新授权阶段。
+- **trade-off：** fail-closed 可能因 harness 问题阻断好代码，但保护发布结论的可信度。
+- **面试官怎么问：** “测试工具有 bug 时，修后重跑和 p-hacking 的边界是什么？”
+- **练习题：** ①写 preregistration；②区分 oracle bug/production bug；③列允许修复条件；④设计 immutable artifact policy。
+
+## PART 49 — Scheduler Permit / Ticket 是什么
+
+- **概念：** permit/ticket 是持久化的服务资格；Job claim 必须消费它，资格顺序因而能约束提交路径。
+- **项目实际问题：** Candidate 2 reservation 只是更新 Tenant 时间，不能阻止同 Tenant 产生多条可 overtaking claim。
+- **对应源码：** `TenantSchedulerState` 的 generation/order/status/version；本项目没有建立无限增长的通用 ticket 表。
+- **对应 RED：** duplicate permit、crash rollback、stale state、cross-Tenant progress、deterministic overtaking。
+- **对应实验：** ordinary CI permit crash rollback/recovery PASS；targeted release evidence仍失败。
+- **失败历史：** 一个独立、可泄漏、需 lease/GC 的 ticket 系统会复制 Job lease 的复杂度。
+- **最终方案：** 使用每 Tenant 可复用的 round-state row 充当 bounded permit；同事务 `PENDING→CONSUMED`，rollback
+  自动恢复 pending，无独立 permit GC。
+- **trade-off：** 状态行有热点与迁移成本；换来明确 identity、generation fencing 和 bounded storage。
+- **面试官怎么问：** “Worker 在拿 permit 后 crash，为什么不会永久阻塞？”
+- **练习题：** ①列 permit 状态；②写 unique constraint；③模拟 rollback；④比较 reusable row 与 append-only ticket。
+
+## PART 50 — Dedicated scheduler state vs Tenant business row
+
+- **概念：** dedicated scheduler state 把高频协调与业务 Tenant metadata 解耦，减少不相关 FK/更新锁冲突。
+- **项目实际问题：** 旧 `Tenant.last_scheduler_turn_at` 是业务主行热点，Attempt/Audit/Outbox 的 FK 又会请求 key locks。
+- **对应源码：** migration `20260810_0018_fair_scheduler_rounds.py`；`SchedulerCoordination` 与
+  `TenantSchedulerState` ORM。
+- **对应 RED：** migration roundtrip、FK/unique/index contract、cross-Tenant SKIP LOCKED、deadlock regressions。
+- **对应实验：** ordinary CI real PostgreSQL migration + lock tests PASS。
+- **失败历史：** 直接持 Tenant strong lock 曾制造 6h test wait；Candidate 2 NKU 仍不能推出 durable receipt fairness。
+- **最终方案：** singleton 仅管理 generation/sequence，per-Tenant row 管 permit；Tenant business row只在必要兼容路径更新。
+- **trade-off：** 多一张表和 join/upsert；但 lock ownership、rollback 与 observability 更清楚。
+- **面试官怎么问：** “为什么不继续往 tenants 表加 status/version 字段？”
+- **练习题：** ①画 FK/index；②分析 delete cascade；③列热点概率；④写 downgrade 风险。
+
+## PART 51 — 为什么 global lock 可能保证顺序但伤害吞吐
+
+- **概念：** 单一互斥点能建立全序，但把原本可并行的 Job/Attempt/Audit/Outbox 串行化，形成 convoy。
+- **项目实际问题：** F2 需要阻止 round overtaking，F8 又禁止 global lock 穿越完整 claim 或外部 execution。
+- **对应源码：** `_ensure_active_scheduler_round()` 的短 singleton lock；tail sequence assignment；Job claim使用 per-state row。
+- **对应 RED：** 10W/100J、cross-Tenant progress、lock timeout、deadlock test。
+- **对应实验：** correctness CI PASS；targeted rep1 w8 p95/retry 增大，完整 performance 未建立。
+- **失败历史：** Tenant hot-row 和 WindowAgg 路径证明“正确的串行点”也可能造成 retry amplification。
+- **最终方案：** global lock 只在 refill/sequence 的短事务窗口使用，不跨 Target/Evaluator/Worker work。
+- **trade-off：** 仍有 generation/sequence tail contention；若完全去掉则难以给 durable rounds 排序。
+- **面试官怎么问：** “请量化你的 global critical section 包含哪些 SQL，不包含哪些工作。”
+- **练习题：** ①画锁持有区间；②用 Amdahl 估上限；③找可拆分步骤；④设计 lock-wait metric。
+
+## PART 52 — 如何同时验证 correctness、fairness、liveness、performance
+
+- **概念：** 四类性质正交：结果不重复不代表公平，公平不代表不会空转，吞吐高也不代表正确。
+- **项目实际问题：** Candidate 3 rep1 16 arms correctness clean、20:1 observed 2，但 evidence contract 与性能链未完成。
+- **对应源码：** correctness counters、receipt/DB position、empty-while-eligible/fallback、Jobs/s/latency/retry/locks。
+- **对应 RED：** uniqueness/full drain/fencing；deterministic fairness；cross-Tenant/crash liveness；frozen targeted scaling。
+- **对应实验：** ordinary CI `31327012832` PASS；targeted `31327388006` FAILED；downstream NOT_RUN。
+- **失败历史：** Candidate 2 correctness PASS 但 fairness FAIL；historical SQL EXPLAIN 改善但 multi-worker scaling FAIL。
+- **最终方案：** gate matrix 逐级执行，任何先决 gate fail 都停止，不能用一个绿色列覆盖另一列。
+- **trade-off：** 完整证据昂贵且慢，但防止把局部优化误报为 release readiness。
+- **面试官怎么问：** “给我一个 correctness PASS、fairness FAIL 的真实项目证据。”
+- **练习题：** ①给四类各写两个指标；②设计 gate order；③解释 fail-closed；④分类 rep1 结果。
+
+## PART 53 — 为什么 benchmark 必须有 current source binding
+
+- **概念：** benchmark 只有绑定 Git SHA、protocol、environment、raw payload、manifest 与 digest 才能指向具体程序。
+- **项目实际问题：** scheduler SQL/lock/state 每次候选方案都变化，旧吞吐不能证明新 Candidate 3。
+- **对应源码：** `scripts/experiment_support.py`、manifest assessor、workflow expected source commit checks。
+- **对应 RED：** source mismatch、missing/duplicate/unexpected arms、digest/cardinality mismatch tests。
+- **对应实验：** targeted `31327388006` source/expected source 都为 `02f5e68`；artifact digest 与 bot commit被保存。
+- **失败历史：** historical pre-fair/fair runs使用不同 source/runner；并发 evidence bot 曾遇 non-fast-forward。
+- **最终方案：** 每个 workflow 单独 dispatch、artifact 先上传、manifest fail-closed、current/historical 严格分层。
+- **trade-off：** evidence 体积和 workflow 复杂度增加；换来可复核、可追责、不可偷换的结论。
+- **面试官怎么问：** “一个 CSV 为什么不能单独证明性能？最少还需要哪些 identity？”
+- **练习题：** ①列 manifest 字段；②验证一个 SHA；③设计 source mismatch test；④解释 artifact digest 与 Git commit。
+
+## PART 54 — 为什么 historical capacity 不能代表 Candidate 3
+
+- **概念：** 性能/正确性结果只对被执行的 implementation、schema、protocol 和 environment 有效；跨版本外推不是验证。
+- **项目实际问题：** `9987a28` capacity、`70a9b2b` fault、`6acf72c` formal 都早于 Candidate 3 fair rounds/migration。
+- **对应源码：** Candidate 3 migration/claiming 改变 SQL round trips、锁热点和 EXPLAIN candidate unit。
+- **对应 RED：** current-source gate 要求 exact SHA；缺当前 bundle 就是 NOT_RUN，不能填历史值。
+- **对应实验：** Candidate 3 targeted 已显示新的 w8 p95/retry 与 cardinality语义；capacity/fault/formal 未执行。
+- **失败历史：** historical `-63.44%`、41s、504 retries、0.628 Jobs/s 曾被误放在 current narrative。
+- **最终方案：** 历史结果保留 `VERIFIED_HISTORICAL`，Candidate 3 downstream 全部 `NOT_RUN_STOPPED`。
+- **trade-off：** 简历少了漂亮容量数字，但避免不可复现或误导性 claim。
+- **面试官怎么问：** “旧 source 和新 source 只改了一张表，为什么仍必须重跑 fault/capacity？”
+- **练习题：** ①列实现差异；②写不可外推理由；③分类四个历史 run；④为未来重跑写 preregistration。
+
 ## 教学结束时应让学习者能回答
 
-学习者应能从 raw lock graph 推导 U/NKU/KS 的选择，从两阶段事务画出 crash/recovery，从 manifest 区分
-current/historical/limited/not-run，并能解释为什么四次 CI 绿色仍不能覆盖一次冻结公平门禁失败。最终答案
-必须是：当前项目有很强的 correctness 与证据工程基础，但 v0.1.0 仍是 `NOT_READY`；下一步先定义可证明的
-并发公平不变量，而不是继续调参或换消息队列。
+学习者应能从 raw lock graph 推导 U/NKU/KS 的选择，从 Candidate 2 overtaking 画出 Candidate 3 durable
+round，从 manifest 区分 current/historical/limited/failed/not-run，并解释为什么 ordinary CI GREEN 与 rep1
+position 2 仍不能覆盖 targeted evidence FAILED。最终答案必须是：当前项目有很强的 correctness 与证据
+工程基础，但 v0.1.0 仍是 `NOT_READY`；本阶段已按停止规则结束 scheduler 开发，不调参、不换 gate、不做
+Candidate 4。

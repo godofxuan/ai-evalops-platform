@@ -130,13 +130,105 @@ CPU/RSS 与连接等待；再设计同 runner 实验。historical 41s p95/504 re
 
 ## 25. 最终为什么停止 scheduler 开发？
 
-回答线索：Candidate 2 是明确允许的第二次也是最后一次生产 iteration；冻结公平门失败。继续改参数/做 Candidate 3
-会违反预注册停止规则并增加 p-hacking 风险。下一阶段唯一合理动作是先写“并发公平不变量驱动的 scheduler redesign
-proposal”，经 RED 与同 runner 证据计划审阅后再决定是否开启实现。
+回答线索：用户后来只授权一个 invariant-driven Candidate 3。它通过 ordinary correctness，但 targeted run
+`31327388006` 的 source-bound release bundle 失败；规则明确 `targeted fail -> STOP`。继续修 assessor 后重跑、
+改参数或做 Candidate 4 都会违反本阶段预注册停止条件。
+
+## 26. 为什么公平 reservation 不等于公平 Job claim？
+
+回答线索：reservation 和 Phase-B Job/Attempt/Audit/Outbox 提交是两个事务；B reservation 可先提交，但 B
+Phase-B 等待时 A2/A3 仍可提交。确定性 RED 让 B 的 application receipt 到位置 8。
+
+## 27. Candidate 3 的 linearization point 在哪里？
+
+回答线索：Job/lease/version/Attempt/Audit/Outbox 与 per-Tenant permit `PENDING→CONSUMED` 在一个短事务提交；
+application receipt 仍是冻结 gate，`scheduler_claim_sequence` 是额外 DB-linearized diagnostic。
+
+## 28. 为什么 current position 4 不是单纯吞吐问题？
+
+回答线索：position 4 违反 equal-priority secondary receipt `<=2` 的顺序性质；即使 Jobs/s 很高，也不能用总量
+抵消被越过的可观察顺序。
+
+## 29. 为什么不能把门禁从 <=2 改成 <=4？
+
+回答线索：阈值在 Candidate 2 结果前已冻结。看到失败后放宽会改变被验证的假设，属于事后适配，失去独立证据价值。
+
+## 30. deterministic concurrency RED 为什么使用 Barrier/Event 而不是 sleep？
+
+回答线索：Barrier 定义 first wave，Event 精确暂停 B Phase-B 并释放 A；sleep 依赖 runner 调度，可能偶发绿/红且不能
+说明哪个事务先发生。
+
+## 31. reusable permit row 在 Worker crash 后如何恢复？
+
+回答线索：permit consumption 与 Job claim 同事务；commit 前 crash 自动 rollback，state 仍 pending，其他 Worker 可再次
+锁定；没有独立 permit lease 或无限增长 ticket 需要 GC。
+
+## 32. 为什么不能让 permit 永久占用？
+
+回答线索：current round 有 pending member 时禁止下一 round；永久 pending 会阻塞同 priority 所有 Tenant，直接违反
+liveness/no-starvation。rollback、EMPTY transition 和 retry path 必须完整。
+
+## 33. global scheduler lock 什么时候合理？
+
+回答线索：只在 refill generation 或 tail sequence assignment 的极短数据库窗口合理；不能穿过完整 durable writes，更
+不能穿过 Target/Evaluator/Worker 外部执行，否则 convoy 和吞吐上限会被放大。
+
+## 34. 怎样证明 priority 没有被 Tenant fairness 破坏？
+
+回答线索：round membership 只从最高 eligible priority 聚合，Job selector 再使用 exact round priority；真实 PostgreSQL
+priority regression 在 Candidate 3 ordinary CI 中通过。
+
+## 35. no starvation 怎么测试？
+
+回答线索：不能只看一次 20:1 position。要让多个 Tenant 持续 eligible，控制 crash/empty/lock contention，断言 generation
+持续推进且每个持续 eligible Tenant 在有限 rounds 内被消费；本轮只完成了 preregistered liveness regressions，未建立长期 SLO。
+
+## 36. 为什么 application return order 和 DB commit order 可能不同？
+
+回答线索：事务 commit 后 coroutine 仍需恢复并返回，event loop 可让后提交的调用先记录 receipt；所以保留 DB sequence
+诊断差异，但不能事后换掉 application gate。
+
+## 37. 为什么仍要保留旧 harness？
+
+回答线索：旧 harness 是预先冻结的用户可见 committed receipt oracle。删除它只保留新 DB sequence 会让 Candidate 3
+针对新指标自证，无法证明 Candidate 2 的原始失败被修复。
+
+## 38. 为什么 correctness PASS 仍不能 release？
+
+回答线索：2,000 unique claims、fencing、crash 和 1,600/1,600 rep1 correctness只覆盖状态安全；targeted bundle、四次
+fairness repetitions、capacity、fault、formal 与 manifest 完整性仍是独立 gates。
+
+## 39. Candidate 3 targeted 到底失败了什么？
+
+回答线索：不是 16 个 raw arms 的 Job correctness，它们全部 VERIFIED；失败码是
+`postgres_explain_candidate_cardinality_mismatch`。fair EXPLAIN 现在输出 Tenant round membership（1/2/4/100），
+而 assessor 仍要求 Job queue size 1000，64/128 summaries mismatch。
+
+## 40. 为什么 rep1 的 2/2/2/2 不能写成“公平调度已解决”？
+
+回答线索：协议要求四次 repetition；rep1 bundle 自身未 verify，顶层 repetition_count=0。它只能作为 LIMITED diagnostic，
+不能替代完整 targeted fairness evidence。
+
+## 41. 为什么 targeted evidence 工具问题仍触发 STOP？
+
+回答线索：预注册规则写的是 `targeted fail -> STOP`，不是“只有 production bug 才停止”。fail-closed 会牺牲一次机会，但
+避免在看到结果后修 oracle、重跑直到绿色；未来修复必须是单独授权、先注册语义的新阶段。
+
+## 42. 为什么 historical capacity 不能代表 Candidate 3？
+
+回答线索：Candidate 3 增加表、round refill、permit row 和 sequence lock，SQL round trips/锁热点/候选单位都变了。
+`9987a28` 的 1k/10k/100k bundle 只能标 VERIFIED_HISTORICAL。
+
+## 43. 为什么当前仍不需要 Kafka/Celery/Temporal？
+
+回答线索：当前失败是 PostgreSQL scheduler/evidence invariant，不是消息传输或长工作流功能缺失；换基础设施会增加 durable
+truth 和运维边界，也不会自动证明 application receipt fairness。
 
 ## 面试表达红线
 
 - 可以说“在真实 PostgreSQL CI 中证明并修复两类锁问题，并让失败在秒级可诊断”。
-- 可以说“20×10W/100J 取得 2,000 unique claims/Attempts，随后 targeted 公平门 fail-closed”。
+- 可以说“Candidate 3 ordinary CI 的 20×10W/100J 取得 2,000 unique claims/Attempts，随后 targeted evidence
+  fail-closed”。
 - 不可以说“v0.1.0 已发布/production-ready”“current 32-arm 已通过”“线性扩展”“强公平 SLO”。
-- 必须主动说清 historical、current、limited 与 not-run；这是本项目最有价值的证据工程能力之一。
+- 不可以把 rep1 20:1 `2/2/2/2` 写成完整 fairness PASS。
+- 必须主动说清 historical、current、limited、failed 与 not-run；这是本项目最有价值的证据工程能力之一。
