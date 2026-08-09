@@ -1124,3 +1124,39 @@ README 仍描述同时锁 Job/Tenant，release decision 仍只写历史 performa
 Docker/Compose/psql 均不可用，TCP 5432 没有监听者；系统 Python 是 3.14.3，项目可继续使用仓库内
 uv 环境做 unit/compile/static checks。真实 PostgreSQL lock evidence 必须在 GitHub Actions 获取，
 本机 integration skip 不能计为通过。
+
+## 2026-08-09 — 锁敏感测试 fail-fast 合同
+
+### RED 与为什么这样测
+
+先新增两个独立行为合同，而不是直接修改 YAML 或测试 helper：
+
+1. CI 中 `Integration - same-tenant claim parallelism` 必须有 `timeout-minutes: 10`；
+2. Python-side bounded wait 必须在超时时包含具体 operation 和秒数，PostgreSQL transaction 必须使用
+   `SET LOCAL lock_timeout='1500ms'` 与 `SET LOCAL statement_timeout='8000ms'`。
+
+第一次组合 pytest 不是有效 RED，因为 uv 默认 cache 位于当前 sandbox 不可写的用户目录，命令在
+collection 前以 access denied 退出。改用仓库内既有 `.codex-tools/uv-cache` 后，helper test 得到预期
+collection RED：`ModuleNotFoundError: tests.concurrency.postgres_test_support`。单独运行 workflow contract
+得到预期行为 RED：`KeyError: timeout-minutes`。两项失败都直接对应尚未实现的 contract。
+
+### 最小 GREEN
+
+新增 test-only `tests/postgres_test_support.py`：
+
+- 对测试 engine 的每个 transaction begin 注入两个 `SET LOCAL`，不修改 production PostgreSQL
+  配置，也不改变 lease；
+- 用 `asyncio.wait_for` 把 Python 等待限制为默认 15 秒，并把 operation name 写入断言；
+- current three concurrency suites 均使用同一 helper；所有并发 gather 与外部锁下的 claim 都有
+  Python 上限；
+- CI 的 same-tenant step 增加 10 分钟 last-resort timeout。
+
+首轮静态检查发现两个开发问题：Ruff 要求 Python 3.12 PEP 695 泛型语法；将 helper 放在
+`tests/concurrency/` 又使 MyPy 同时以 `postgres_test_support` 与
+`tests.concurrency.postgres_test_support` 发现同一文件。没有屏蔽规则：helper 移到 `tests/` 根层，
+使 CI 的 `mypy ... tests/concurrency` 只通过 import 读取一次，并采用 PEP 695 类型参数。第二轮 Ruff
+又要求 public generic type parameter 不使用下划线前缀，改为 `ResultT`。
+
+聚焦 pytest 结果：`3 passed, 6 skipped`。6 个 skip 都是本机没有 migrated PostgreSQL，不能算真实
+lock GREEN。MyPy：134 source files 无问题。下一步先推送该 fail-fast milestone；其目标是把旧的
+6 小时无限等待转换成秒级、可诊断的 PostgreSQL failure，不把预期失败误报为 qualification PASS。

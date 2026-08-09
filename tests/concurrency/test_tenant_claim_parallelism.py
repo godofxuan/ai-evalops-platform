@@ -37,6 +37,10 @@ from app.persistence.orm_models import (
     ProgressEventOutbox,
     Tenant,
 )
+from tests.postgres_test_support import (
+    install_postgres_test_timeouts,
+    wait_for_lock_sensitive,
+)
 
 
 class FixedClock:
@@ -251,6 +255,7 @@ async def test_worker_claims_next_job_while_same_tenant_head_claim_is_uncommitte
 
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
     engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 8, 0, tzinfo=UTC)
     claimer = SQLAlchemyJobClaimer(
@@ -277,9 +282,12 @@ async def test_worker_claims_next_job_while_same_tenant_head_claim_is_uncommitte
                     ).all()
                     assert [job.id for job, _run in worker_a_rows] == [fixture.job_ids[0]]
 
-                    worker_b_claims = await claimer.claim(
-                        worker_id=f"parallel-worker-b-{repetition}",
-                        limit=1,
+                    worker_b_claims = await wait_for_lock_sensitive(
+                        claimer.claim(
+                            worker_id=f"parallel-worker-b-{repetition}",
+                            limit=1,
+                        ),
+                        operation="locked-head fallback claim",
                     )
                     outcomes.append(
                         (
@@ -305,6 +313,7 @@ async def test_fair_selector_skips_locked_tenant_head_job() -> None:
 
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
     engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 9, 0, tzinfo=UTC)
     claimer = SQLAlchemyJobClaimer(
@@ -328,9 +337,12 @@ async def test_fair_selector_skips_locked_tenant_head_job() -> None:
                     )
                     assert locked_job_id == fixture.job_ids[0]
 
-                    worker_b_claims = await claimer.claim(
-                        worker_id=f"rank-pruning-worker-b-{repetition}",
-                        limit=1,
+                    worker_b_claims = await wait_for_lock_sensitive(
+                        claimer.claim(
+                            worker_id=f"rank-pruning-worker-b-{repetition}",
+                            limit=1,
+                        ),
+                        operation="rank-pruning fallback claim",
                     )
                     outcomes.append(
                         (
@@ -358,6 +370,7 @@ async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
 
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
     engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 10, 0, tzinfo=UTC)
     claimer = InstrumentedClaimer(
@@ -379,10 +392,13 @@ async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
                     )
                     assert locked_tenant_id == fixture.tenant_id
 
-                    worker_b_claims = await claimer.claim_reserved_for_diagnostic(
-                        worker_id=f"tenant-hot-row-worker-b-{repetition}",
-                        tenant_id=fixture.tenant_id,
-                        eligible_at=now,
+                    worker_b_claims = await wait_for_lock_sensitive(
+                        claimer.claim_reserved_for_diagnostic(
+                            worker_id=f"tenant-hot-row-worker-b-{repetition}",
+                            tenant_id=fixture.tenant_id,
+                            eligible_at=now,
+                        ),
+                        operation="durable claim under external Tenant FOR UPDATE",
                     )
                     outcomes.append(
                         (
@@ -410,6 +426,7 @@ async def test_same_tenant_eight_worker_contention_diagnostics() -> None:
 
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
     engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 11, 0, tzinfo=UTC)
     fixture = await _create_claim_fixture(
@@ -436,7 +453,10 @@ async def test_same_tenant_eight_worker_contention_diagnostics() -> None:
     try:
         tasks = [asyncio.create_task(claim_one(worker_number)) for worker_number in range(8)]
         await barrier.wait()
-        results = await asyncio.gather(*tasks)
+        results = await wait_for_lock_sensitive(
+            asyncio.gather(*tasks),
+            operation="eight-worker same-tenant claim wave",
+        )
     finally:
         await _delete_claim_fixture(session_factory, fixture)
         await engine.dispose()

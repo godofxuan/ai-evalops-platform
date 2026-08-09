@@ -107,6 +107,7 @@ jobs:
 
       - name: Integration - same-tenant claim parallelism
         if: ${{ !cancelled() }}
+        timeout-minutes: 10
         run: >-
           uv run --no-sync pytest tests/concurrency/test_tenant_claim_parallelism.py
           --junitxml=/tmp/junit-tenant-claim-parallelism.xml

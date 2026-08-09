@@ -25,6 +25,10 @@ from app.persistence.orm_models import (
     JobAttempt,
     Tenant,
 )
+from tests.postgres_test_support import (
+    install_postgres_test_timeouts,
+    wait_for_lock_sensitive,
+)
 
 
 class FixedClock:
@@ -45,6 +49,7 @@ async def test_tenant_fair_claiming_prevents_older_flood_from_starving_new_tenan
 
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
     engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     tenant_a, tenant_b = uuid4(), uuid4()
     run_a, run_b = uuid4(), uuid4()
@@ -125,9 +130,12 @@ async def test_tenant_fair_claiming_prevents_older_flood_from_starving_new_tenan
             lease_policy=LeasePolicy(timedelta(seconds=30)),
             clock=FixedClock(now),
         )
-        first_wave = await asyncio.gather(
-            claimer.claim(worker_id="fair-worker-1", limit=1),
-            claimer.claim(worker_id="fair-worker-2", limit=1),
+        first_wave = await wait_for_lock_sensitive(
+            asyncio.gather(
+                claimer.claim(worker_id="fair-worker-1", limit=1),
+                claimer.claim(worker_id="fair-worker-2", limit=1),
+            ),
+            operation="two-tenant fair claim wave",
         )
         claims = tuple(claim for batch in first_wave for claim in batch)
 

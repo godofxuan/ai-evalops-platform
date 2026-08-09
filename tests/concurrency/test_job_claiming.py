@@ -32,6 +32,10 @@ from app.persistence.orm_models import (
     JobAttempt,
     Tenant,
 )
+from tests.postgres_test_support import (
+    install_postgres_test_timeouts,
+    wait_for_lock_sensitive,
+)
 
 
 class FixedClock:
@@ -63,6 +67,7 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
 
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
     engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
     clock = FixedClock(now)
@@ -165,8 +170,11 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             lease_policy=LeasePolicy(timedelta(seconds=30)),
             clock=clock,
         )
-        batches = await asyncio.gather(
-            *(claimer.claim(worker_id=f"worker-{index}", limit=20) for index in range(10))
+        batches = await wait_for_lock_sensitive(
+            asyncio.gather(
+                *(claimer.claim(worker_id=f"worker-{index}", limit=20) for index in range(10))
+            ),
+            operation="ten-worker historical claim contract",
         )
         claims = tuple(claim for batch in batches for claim in batch)
 
@@ -218,19 +226,22 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
         )
         evaluation_result = EvaluationResult(metrics={"execution_success": True})
         second = claims[1]
-        await asyncio.gather(
-            committer.commit_success(
-                claim=first,
-                lease_version=receipt.version,
-                target_result=target_result,
-                evaluation_result=evaluation_result,
+        await wait_for_lock_sensitive(
+            asyncio.gather(
+                committer.commit_success(
+                    claim=first,
+                    lease_version=receipt.version,
+                    target_result=target_result,
+                    evaluation_result=evaluation_result,
+                ),
+                committer.commit_success(
+                    claim=second,
+                    lease_version=second.version,
+                    target_result=target_result,
+                    evaluation_result=evaluation_result,
+                ),
             ),
-            committer.commit_success(
-                claim=second,
-                lease_version=second.version,
-                target_result=target_result,
-                evaluation_result=evaluation_result,
-            ),
+            operation="parallel result commits",
         )
         with pytest.raises(LeaseLostError):
             await committer.commit_success(
@@ -264,9 +275,12 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             clock=FixedClock(expired_at),
             reaper_id="reaper-b",
         )
-        reaped_batches = await asyncio.gather(
-            reaper_a.reap(limit=100),
-            reaper_b.reap(limit=100),
+        reaped_batches = await wait_for_lock_sensitive(
+            asyncio.gather(
+                reaper_a.reap(limit=100),
+                reaper_b.reap(limit=100),
+            ),
+            operation="dual reaper claim wave",
         )
         reaped = tuple(item for batch in reaped_batches for item in batch)
         assert len(reaped) == 98
@@ -338,18 +352,21 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             api_key_id=api_key_id,
             key_prefix="race_key",
         )
-        race_outcomes = await asyncio.gather(
-            cancellation.cancel_run(
-                principal=principal,
-                run_id=race_run_id,
+        race_outcomes = await wait_for_lock_sensitive(
+            asyncio.gather(
+                cancellation.cancel_run(
+                    principal=principal,
+                    run_id=race_run_id,
+                ),
+                committer.commit_success(
+                    claim=race_claim,
+                    lease_version=race_claim.version,
+                    target_result=target_result,
+                    evaluation_result=evaluation_result,
+                ),
+                return_exceptions=True,
             ),
-            committer.commit_success(
-                claim=race_claim,
-                lease_version=race_claim.version,
-                target_result=target_result,
-                evaluation_result=evaluation_result,
-            ),
-            return_exceptions=True,
+            operation="cancellation and result commit race",
         )
         assert not any(isinstance(outcome, BaseException) for outcome in race_outcomes)
         async with session_factory() as session:

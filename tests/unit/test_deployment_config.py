@@ -235,6 +235,15 @@ def test_nonintegration_failures_are_exported_to_ci_annotations() -> None:
     assert "/tmp/junit-unit.xml" in annotation_command
 
 
+def test_same_tenant_lock_integration_has_a_bounded_step_timeout() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["quality-and-integration"]["steps"]
+    by_name = {step["name"]: step for step in steps}
+
+    lock_step = by_name["Integration - same-tenant claim parallelism"]
+    assert lock_step["timeout-minutes"] == 10
+
+
 def test_ci_executes_and_annotates_real_postgresql_rls_integration() -> None:
     workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
     steps = workflow["jobs"]["quality-and-integration"]["steps"]
