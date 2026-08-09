@@ -103,7 +103,7 @@ class Tenant(Base):
         UniqueConstraint("slug", name="uq_tenants_slug"),
         CheckConstraint("char_length(slug) > 0", name="slug_not_empty"),
         CheckConstraint("char_length(name) > 0", name="name_not_empty"),
-        Index("ix_tenants_last_job_claimed_at", "last_job_claimed_at"),
+        Index("ix_tenants_last_scheduler_turn_at", "last_scheduler_turn_at"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -126,7 +126,7 @@ class Tenant(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    last_job_claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_scheduler_turn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class APIKey(Base):

@@ -77,8 +77,8 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
 
 
 def test_tenant_metadata_includes_fair_claim_scheduling_state() -> None:
-    assert "last_job_claimed_at" in Tenant.__table__.columns
-    assert "ix_tenants_last_job_claimed_at" in {index.name for index in Tenant.__table__.indexes}
+    assert "last_scheduler_turn_at" in Tenant.__table__.columns
+    assert "ix_tenants_last_scheduler_turn_at" in {index.name for index in Tenant.__table__.indexes}
 
 
 def test_api_key_metadata_never_defines_a_plaintext_secret_column() -> None:

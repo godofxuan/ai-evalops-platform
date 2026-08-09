@@ -11,6 +11,7 @@ from app.jobs.claiming import (
     InvalidClaimRequest,
     SQLAlchemyJobClaimer,
     build_claim_candidates_statement,
+    build_tenant_job_claim_statement,
     validate_claim_request,
 )
 from app.jobs.lease import LeasePolicy
@@ -40,12 +41,19 @@ class OneRowResult:
     def __init__(self, job: EvaluationJob, run: EvaluationRun, tenant: Tenant) -> None:
         self._row = (job, run, tenant)
 
-    def all(self) -> list[tuple[EvaluationJob, EvaluationRun, Tenant]]:
-        return [self._row]
+    def first(self) -> tuple[EvaluationJob, EvaluationRun, Tenant]:
+        return self._row
+
+    def all(self) -> list[tuple[EvaluationJob, EvaluationRun]]:
+        job, run, _tenant = self._row
+        return [(job, run)]
 
 
 class EmptyRowResult:
-    def all(self) -> list[tuple[EvaluationJob, EvaluationRun, Tenant]]:
+    def first(self) -> None:
+        return None
+
+    def all(self) -> list[tuple[EvaluationJob, EvaluationRun]]:
         return []
 
 
@@ -114,14 +122,24 @@ def test_claim_candidates_use_postgresql_skip_locked_and_deterministic_order() -
 
     assert "row_number() OVER (PARTITION BY evaluation_runs.tenant_id" in sql
     assert "JOIN tenants" in sql
-    assert "tenants.last_job_claimed_at ASC NULLS FIRST" in sql
-    assert "FOR UPDATE OF evaluation_jobs, tenants SKIP LOCKED" in sql
+    assert "tenants.last_scheduler_turn_at ASC NULLS FIRST" in sql
+    assert "FOR UPDATE OF tenants SKIP LOCKED" in sql
     assert "evaluation_jobs.status" in sql
     assert sql.count("evaluation_jobs.status") >= 4
     assert "evaluation_jobs.next_attempt_at" in sql
     assert "evaluation_runs.status" in sql
     assert "tenant_candidate_rank ASC" in sql
     assert "LIMIT 10" in sql
+
+
+def test_tenant_job_claim_skips_locked_jobs_without_locking_tenant() -> None:
+    sql = compile_postgresql(build_tenant_job_claim_statement(now=NOW, tenant_id=TENANT_ID))
+
+    assert "evaluation_runs.tenant_id" in sql
+    assert "evaluation_jobs.priority DESC" in sql
+    assert "FOR UPDATE OF evaluation_jobs SKIP LOCKED" in sql
+    assert "FOR UPDATE OF tenants" not in sql
+    assert "LIMIT 1" in sql
 
 
 def test_claim_candidates_prune_tenant_ranks_that_cannot_enter_the_batch() -> None:
@@ -174,7 +192,7 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
 
     assert len(claims) == 1
     assert claims[0].origin_traceparent == ORIGIN_TRACEPARENT
-    assert tenant.last_job_claimed_at == NOW
+    assert tenant.last_scheduler_turn_at == NOW
     events = [item for item in session.added if isinstance(item, ProgressEventOutbox)]
     assert len(events) == 1
     assert events[0].event_type == "job_progress"
@@ -187,6 +205,7 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
 
 
 async def test_claim_lease_starts_after_candidate_query_completes() -> None:
+    reserved_at = NOW + timedelta(seconds=10)
     claimed_at = NOW + timedelta(seconds=20)
     tenant = Tenant(id=TENANT_ID, slug="slow-query-tenant", name="Slow query tenant")
     run = EvaluationRun(
@@ -212,7 +231,7 @@ async def test_claim_lease_starts_after_candidate_query_completes() -> None:
     claimer = SQLAlchemyJobClaimer(
         OneRowSessionFactory(OneRowSession(job, run, tenant)),  # type: ignore[arg-type]
         lease_policy=LeasePolicy(timedelta(seconds=30)),
-        clock=AdvancingClock(NOW, claimed_at),
+        clock=AdvancingClock(NOW, reserved_at, claimed_at),
     )
 
     claim = (await claimer.claim(worker_id="worker-slow-query"))[0]
@@ -220,7 +239,7 @@ async def test_claim_lease_starts_after_candidate_query_completes() -> None:
     assert claim.lease_expires_at == claimed_at + timedelta(seconds=30)
     assert job.heartbeat_at == claimed_at
     assert job.started_at == claimed_at
-    assert tenant.last_job_claimed_at == claimed_at
+    assert tenant.last_scheduler_turn_at == reserved_at
 
 
 async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> None:
@@ -254,6 +273,7 @@ async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> No
             NOW,
             NOW + timedelta(seconds=5),
             NOW + timedelta(seconds=10),
+            NOW + timedelta(seconds=15),
             claimed_at,
         ),
     )
@@ -262,8 +282,8 @@ async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> No
 
     assert [claim.job_id for claim in claims] == [JOB_ID]
     assert claims[0].lease_expires_at == claimed_at + timedelta(seconds=30)
-    assert tenant.last_job_claimed_at == claimed_at
-    assert factory.begin_count == 2
+    assert tenant.last_scheduler_turn_at == NOW + timedelta(seconds=15)
+    assert factory.begin_count == 3
     assert factory.probe_count == 1
 
 

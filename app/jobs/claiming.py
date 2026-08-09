@@ -98,12 +98,35 @@ def build_claim_candidates_statement(
         .order_by(
             EvaluationJob.priority.desc(),
             ranked_candidates.c.tenant_candidate_rank.asc(),
-            Tenant.last_job_claimed_at.asc().nulls_first(),
+            Tenant.last_scheduler_turn_at.asc().nulls_first(),
             EvaluationJob.created_at.asc(),
             EvaluationJob.id.asc(),
         )
         .limit(limit)
-        .with_for_update(of=(EvaluationJob, Tenant), skip_locked=True)
+        .with_for_update(of=Tenant, skip_locked=True)
+    )
+
+
+def build_tenant_job_claim_statement(
+    *,
+    now: datetime,
+    tenant_id: UUID,
+) -> Select[tuple[EvaluationJob, EvaluationRun]]:
+    return (
+        select(EvaluationJob, EvaluationRun)
+        .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+        .where(
+            EvaluationRun.tenant_id == tenant_id,
+            _eligible_job(now),
+            _eligible_run(),
+        )
+        .order_by(
+            EvaluationJob.priority.desc(),
+            EvaluationJob.created_at.asc(),
+            EvaluationJob.id.asc(),
+        )
+        .limit(1)
+        .with_for_update(of=EvaluationJob, skip_locked=True)
     )
 
 
@@ -138,21 +161,26 @@ class SQLAlchemyJobClaimer:
 
     async def claim(self, *, worker_id: str, limit: int = 1) -> tuple[ClaimedJob, ...]:
         validate_claim_request(worker_id=worker_id, limit=limit)
-        for retry_number in range(_MAX_CONTENTION_RETRIES + 1):
-            eligible_at = self._clock.now()
-            claims = await self._claim_once(
-                worker_id=worker_id,
-                limit=limit,
-                eligible_at=eligible_at,
-            )
-            if claims:
-                return claims
-            if retry_number == _MAX_CONTENTION_RETRIES or not await self._has_eligible_jobs(
-                self._clock.now()
-            ):
-                return ()
-            await asyncio.sleep(_CONTENTION_RETRY_SECONDS)
-        return ()
+        claimed_batch: list[ClaimedJob] = []
+        for _batch_slot in range(limit):
+            for retry_number in range(_MAX_CONTENTION_RETRIES + 1):
+                eligible_at = self._clock.now()
+                claims = await self._claim_once(
+                    worker_id=worker_id,
+                    limit=1,
+                    eligible_at=eligible_at,
+                )
+                if claims:
+                    claimed_batch.extend(claims)
+                    break
+                if retry_number == _MAX_CONTENTION_RETRIES or not await self._has_eligible_jobs(
+                    self._clock.now()
+                ):
+                    return tuple(claimed_batch)
+                await asyncio.sleep(_CONTENTION_RETRY_SECONDS)
+            else:
+                return tuple(claimed_batch)
+        return tuple(claimed_batch)
 
     async def _has_eligible_jobs(self, now: datetime) -> bool:
         async with self._session_factory() as session:
@@ -171,19 +199,48 @@ class SQLAlchemyJobClaimer:
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
+        tenant_id = await self._reserve_tenant_turn(eligible_at=eligible_at)
+        if tenant_id is None:
+            return ()
+        return await self._claim_reserved_tenant(
+            worker_id=worker_id,
+            tenant_id=tenant_id,
+            eligible_at=eligible_at,
+        )
+
+    async def _reserve_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
+        async with self._session_factory.begin() as session:
+            row = (
+                await session.execute(build_claim_candidates_statement(now=eligible_at, limit=1))
+            ).first()
+            if row is None:
+                return None
+            tenant: Tenant = row[2]
+            tenant.last_scheduler_turn_at = self._clock.now()
+            return tenant.id
+
+    async def _claim_reserved_tenant(
+        self,
+        *,
+        worker_id: str,
+        tenant_id: UUID,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
         claims: list[ClaimedJob] = []
         async with self._session_factory.begin() as session:
             rows = (
                 await session.execute(
-                    build_claim_candidates_statement(now=eligible_at, limit=limit)
+                    build_tenant_job_claim_statement(
+                        now=eligible_at,
+                        tenant_id=tenant_id,
+                    )
                 )
             ).all()
             if not rows:
                 return ()
             claimed_at = self._clock.now()
             lease_expires_at = claimed_at + self._lease_policy.duration
-            for job, run, tenant in rows:
-                tenant.last_job_claimed_at = claimed_at
+            for job, run in rows:
                 run_started_now = False
                 if job.status is JobStatus.RETRY_WAIT:
                     retry_due = transition_job(
