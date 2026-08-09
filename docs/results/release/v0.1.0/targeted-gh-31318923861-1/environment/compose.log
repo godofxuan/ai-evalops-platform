@@ -1,0 +1,72 @@
+redis-1     | Starting Redis Server
+redis-1     | 1:C 09 Aug 2026 14:37:42.533 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+redis-1     | 1:M 09 Aug 2026 14:37:42.545 # WARNING: Redis does not require authentication and is not protected by network restrictions. Redis will accept connections from any IP address on any network interface.
+postgres-1  | chmod: /var/run/postgresql: Operation not permitted
+postgres-1  | The files belonging to this database system will be owned by user "postgres".
+postgres-1  | This user must also own the server process.
+postgres-1  | 
+postgres-1  | The database cluster will be initialized with locale "en_US.utf8".
+postgres-1  | The default database encoding has accordingly been set to "UTF8".
+postgres-1  | The default text search configuration will be set to "english".
+postgres-1  | 
+postgres-1  | Data page checksums are enabled.
+postgres-1  | 
+postgres-1  | fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+postgres-1  | creating subdirectories ... ok
+postgres-1  | selecting dynamic shared memory implementation ... posix
+postgres-1  | selecting default "max_connections" ... 100
+postgres-1  | selecting default "shared_buffers" ... 128MB
+postgres-1  | selecting default time zone ... UTC
+postgres-1  | creating configuration files ... ok
+postgres-1  | running bootstrap script ... ok
+postgres-1  | sh: locale: not found
+postgres-1  | 2026-08-09 14:37:43.408 UTC [24] WARNING:  no usable system locales were found
+postgres-1  | performing post-bootstrap initialization ... ok
+postgres-1  | initdb: warning: enabling "trust" authentication for local connections
+postgres-1  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1  | syncing data to disk ... ok
+postgres-1  | 
+postgres-1  | 
+postgres-1  | Success. You can now start the database server using:
+postgres-1  | 
+postgres-1  |     pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+postgres-1  | 
+postgres-1  | waiting for server to start....2026-08-09 14:37:43.952 UTC [30] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-09 14:37:43.952 UTC [30] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-09 14:37:43.955 UTC [36] LOG:  database system was shut down at 2026-08-09 14:37:43 UTC
+postgres-1  | 2026-08-09 14:37:43.958 UTC [30] LOG:  database system is ready to accept connections
+postgres-1  |  done
+postgres-1  | server started
+postgres-1  | CREATE DATABASE
+postgres-1  | 
+postgres-1  | 
+postgres-1  | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+postgres-1  | 
+postgres-1  | waiting for server to shut down....2026-08-09 14:37:44.110 UTC [30] LOG:  received fast shutdown request
+postgres-1  | 2026-08-09 14:37:44.111 UTC [30] LOG:  aborting any active transactions
+postgres-1  | 2026-08-09 14:37:44.113 UTC [30] LOG:  background worker "logical replication launcher" (PID 39) exited with exit code 1
+postgres-1  | 2026-08-09 14:37:44.115 UTC [34] LOG:  shutting down
+postgres-1  | 2026-08-09 14:37:44.115 UTC [34] LOG:  checkpoint starting: shutdown immediate
+postgres-1  | 2026-08-09 14:37:44.131 UTC [34] LOG:  checkpoint complete: wrote 943 buffers (5.8%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.014 s, sync=0.002 s, total=0.017 s; sync files=303, longest=0.001 s, average=0.001 s; distance=4362 kB, estimate=4362 kB; lsn=0/1BA6820, redo lsn=0/1BA6820
+postgres-1  | 2026-08-09 14:37:44.153 UTC [30] LOG:  database system is shut down
+postgres-1  |  done
+postgres-1  | server stopped
+postgres-1  | 
+postgres-1  | PostgreSQL init process complete; ready for start up.
+postgres-1  | 
+postgres-1  | 2026-08-09 14:37:44.235 UTC [1] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1  | 2026-08-09 14:37:44.235 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1  | 2026-08-09 14:37:44.235 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1  | 2026-08-09 14:37:44.235 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1  | 2026-08-09 14:37:44.239 UTC [52] LOG:  database system was shut down at 2026-08-09 14:37:44 UTC
+postgres-1  | 2026-08-09 14:37:44.243 UTC [1] LOG:  database system is ready to accept connections
+postgres-1  | 2026-08-09 14:38:01.515 UTC [156] ERROR:  deadlock detected
+postgres-1  | 2026-08-09 14:38:01.515 UTC [156] DETAIL:  Process 156 waits for ShareLock on transaction 1069; blocked by process 155.
+postgres-1  | 	Process 155 waits for ShareLock on transaction 1070; blocked by process 156.
+postgres-1  | 	Process 156: SELECT evaluation_jobs.id, evaluation_jobs.run_id, evaluation_jobs.case_id, evaluation_jobs.case_payload_json, evaluation_jobs.status, evaluation_jobs.priority, evaluation_jobs.attempt_count, evaluation_jobs.max_attempts, evaluation_jobs.next_attempt_at, evaluation_jobs.lease_owner, evaluation_jobs.lease_expires_at, evaluation_jobs.heartbeat_at, evaluation_jobs.cancel_requested_at, evaluation_jobs.last_error_code, evaluation_jobs.last_error_message, evaluation_jobs.created_at, evaluation_jobs.started_at, evaluation_jobs.finished_at, evaluation_jobs.version, evaluation_runs.id AS id_1, evaluation_runs.tenant_id, evaluation_runs.dataset_version_id, evaluation_runs.dataset_hash, evaluation_runs.idempotency_key, evaluation_runs.request_hash, evaluation_runs.target_type, evaluation_runs.target_config_json, evaluation_runs.target_config_hash, evaluation_runs.evaluator_type, evaluation_runs.evaluator_config_json, evaluation_runs.evaluator_config_hash, evaluation_runs.target_version, evaluation_runs.evaluator_versio
+postgres-1  | 	Process 155: INSERT INTO progress_event_outbox (id, tenant_id, run_id, event_type, payload_json, occurred_at, available_at, attempt_count, lease_owner, lease_expires_at, published_at, last_error_code) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::JSONB, $6::TIMESTAMP WITH TIME ZONE, $7::TIMESTAMP WITH TIME ZONE, $8::INTEGER, $9::VARCHAR, $10::TIMESTAMP WITH TIME ZONE, $11::TIMESTAMP WITH TIME ZONE, $12::VARCHAR) RETURNING progress_event_outbox.created_at
+postgres-1  | 2026-08-09 14:38:01.515 UTC [156] HINT:  See server log for query details.
+postgres-1  | 2026-08-09 14:38:01.515 UTC [156] CONTEXT:  while locking tuple (62,1) in relation "evaluation_jobs"
+postgres-1  | 2026-08-09 14:38:01.515 UTC [156] STATEMENT:  SELECT evaluation_jobs.id, evaluation_jobs.run_id, evaluation_jobs.case_id, evaluation_jobs.case_payload_json, evaluation_jobs.status, evaluation_jobs.priority, evaluation_jobs.attempt_count, evaluation_jobs.max_attempts, evaluation_jobs.next_attempt_at, evaluation_jobs.lease_owner, evaluation_jobs.lease_expires_at, evaluation_jobs.heartbeat_at, evaluation_jobs.cancel_requested_at, evaluation_jobs.last_error_code, evaluation_jobs.last_error_message, evaluation_jobs.created_at, evaluation_jobs.started_at, evaluation_jobs.finished_at, evaluation_jobs.version, evaluation_runs.id AS id_1, evaluation_runs.tenant_id, evaluation_runs.dataset_version_id, evaluation_runs.dataset_hash, evaluation_runs.idempotency_key, evaluation_runs.request_hash, evaluation_runs.target_type, evaluation_runs.target_config_json, evaluation_runs.target_config_hash, evaluation_runs.evaluator_type, evaluation_runs.evaluator_config_json, evaluation_runs.evaluator_config_hash, evaluation_runs.target_version, evaluation_runs.evaluator_version, evaluation_runs.source_commit, evaluation_runs.origin_traceparent, evaluation_runs.status AS status_1, evaluation_runs.total_jobs, evaluation_runs.succeeded_jobs, evaluation_runs.failed_jobs, evaluation_runs.cancelled_jobs, evaluation_runs.created_by, evaluation_runs.created_at AS created_at_1, evaluation_runs.started_at AS started_at_1, evaluation_runs.finished_at AS finished_at_1, evaluation_runs.cancel_requested_at AS cancel_requested_at_1, evaluation_runs.version AS version_1 
+postgres-1  | 	FROM evaluation_jobs JOIN evaluation_runs ON evaluation_runs.id = evaluation_jobs.run_id 
+postgres-1  | 	WHERE evaluation_jobs.id = $1::UUID AND evaluation_jobs.run_id = $2::UUID AND evaluation_jobs.status IN ($3, $4) AND evaluation_jobs.lease_owner = $5::VARCHAR AND evaluation_jobs.version = $6::INTEGER AND evaluation_jobs.lease_expires_at IS NOT NULL AND evaluation_jobs.lease_expires_at > $7::TIMESTAMP WITH TIME ZONE FOR UPDATE OF evaluation_jobs

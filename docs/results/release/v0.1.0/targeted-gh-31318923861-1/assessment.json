@@ -1,0 +1,36 @@
+{
+  "claim_batch_size": 1,
+  "failures": [
+    "repetition_count_must_equal_4"
+  ],
+  "groups": [],
+  "metric_contract": [
+    "jobs_per_second",
+    "claim_latency_p50_ms",
+    "claim_latency_p95_ms",
+    "claim_latency_p99_ms",
+    "reservation_latency_p50_ms",
+    "reservation_latency_p95_ms",
+    "reservation_latency_p99_ms",
+    "job_claim_latency_p50_ms",
+    "job_claim_latency_p95_ms",
+    "job_claim_latency_p99_ms",
+    "tenant_turn_reserved",
+    "tenant_turn_without_job",
+    "reservation_miss_rate",
+    "contention_retries",
+    "contention_retry_per_success",
+    "waiting_fallbacks",
+    "empty_while_eligible",
+    "postgres_lock_waiting_connections_peak",
+    "worker_process_cpu_percent",
+    "worker_process_rss_bytes_peak"
+  ],
+  "queue_size": 1000,
+  "repetition_count": 0,
+  "schema_version": 1,
+  "self_scaling": [],
+  "self_scaling_floor": 0.95,
+  "source_commit": "0e19f645e30338e68b6bfc060dd848927ed9d6c1",
+  "status": "FAILED"
+}
