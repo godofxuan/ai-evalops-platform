@@ -1,12 +1,14 @@
 # Final scheduler CI qualification
 
 Date: 2026-08-09  
-Qualified source: `9ac70886c03c2d3a21ae667f47c5b5971c90ed4d`
+Current qualified source: `ed095cc338ac6708bf5d9cce71bf509b5447358e`
+
+Initial qualified source: `9ac70886c03c2d3a21ae667f47c5b5971c90ed4d`
 
 ## Outcome first
 
-The candidate scheduler and its initial production-shaped PostgreSQL contracts passed both independent CI entry
-points at the same source:
+The initial candidate scheduler and its production-shaped PostgreSQL contracts passed both independent CI entry
+points at source `9ac7088`:
 
 | Entry point | Actions run | Result | Duration |
 |---|---:|---|---:|
@@ -48,6 +50,24 @@ The failure had no duplicate claim and no deadlock; it was a false empty return 
 eligible work. Therefore `CORRECTNESS_PASS` is revoked for the strengthened contract, targeted performance remains
 blocked, and candidate 2 at `e4dcb5e` must pass both CI entry points.
 
+## Candidate 2 GREEN
+
+After correcting only the diagnostic counter placement, exact source `ed095cc` passed both entry points:
+
+| Entry point | Actions run | Result | Quality duration |
+|---|---:|---|---:|
+| push CI | [31318294569](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31318294569) | SUCCESS | 4m36s |
+| PR CI | [31318298660](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31318298660) | SUCCESS | 4m18s |
+
+The PR artifact independently downloaded with matching SHA-256. Across 20 repetitions the first waves produced
+200/200 successful requests and 200 unique Jobs, with zero empty requests; every 100-Job queue then drained to 100
+unique claims and 100 Attempts, for 2,000/2,000 across isolated fixtures. The source-controlled projection is
+`raw/candidate2-ci-31318298660.json`.
+
+The first Candidate-2 artifact (`31317940732`) had correct behavioral assertions but an incorrect test-only
+`waiting_fallbacks` counter placement. That known-bad field is excluded from promoted metrics. The corrected artifact
+reports 148 waiting fallbacks across 200 first-wave requests; the per-repetition range is 6–9.
+
 ## Artifact integrity
 
 Run `31315634340` uploaded `final-scheduler-lock-diagnostics-31315634340-1`:
@@ -66,12 +86,12 @@ the digest-bound artifact instead of being silently truncated in documentation.
 
 ## Six-state interpretation
 
-| State | Result at `9ac7088` | Boundary |
+| State | Current result at `ed095cc` | Boundary |
 |---|---|---|
-| `WORKFLOW_EXECUTED` | PASS | both push and PR workflows completed |
-| `TESTS_PASS` | PASS | complete CI jobs green |
-| `CORRECTNESS_PASS` | PASS for initial contracts | stronger 20-repetition 10W contract awaits re-run |
-| `EVIDENCE_COMPLETE` | PASS for CI scope | targeted/capacity/fault/formal evidence not included |
+| `WORKFLOW_EXECUTED` | PASS | push `31318294569` and PR `31318298660` completed |
+| `TESTS_PASS` | PASS | complete CI jobs green at both entry points |
+| `CORRECTNESS_PASS` | PASS | strengthened 20-repetition 10W contract passed twice |
+| `EVIDENCE_COMPLETE` | PASS for CI scope | targeted/capacity/fault/formal evidence remain separate |
 | `PERFORMANCE_PASS` | NOT RUN | one 8-worker diagnostic is not a benchmark |
 | `RELEASE_READY` | NO | release performance chain is still open |
 

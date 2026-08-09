@@ -84,5 +84,7 @@ Lock-mode hypothesis: `VERIFIED`.
 Production-shaped overlap, mutual exclusion, cross-Tenant progress, reservation-crash, priority and initial 10W/100J
 contracts: `VERIFIED_REAL_POSTGRESQL_CI` by push run `31315634340` and PR run `31315639504` at source `9ac7088`.
 The strengthened 20-repetition version produced a real 9/10 RED at PR run `31317179594`. Candidate 2 is the final
-allowed production iteration and requires new push + PR CI before targeted performance may start.
+allowed production iteration. It passed push CI `31318294569` and PR CI `31318298660` at source `ed095cc`, including
+20/20 complete 10W/100J drains and zero first-wave empty requests. Candidate 2 is therefore the final scheduler design;
+no Candidate 3 is permitted.
 Release performance: `NOT_YET_QUALIFIED`.

@@ -8,7 +8,7 @@ Initial real-PostgreSQL qualification source: `9ac70886c03c2d3a21ae667f47c5b5971
 All initial production-shaped scheduler contracts passed push CI `31315634340` and PR CI `31315639504`. No lease,
 version, Attempt, Audit, Outbox, result or stale-worker fence was weakened. The strengthened 20-drain 10W/100J
 `limit=1` contract then found a 9/10 first-wave failure in PR CI `31317179594`; current final correctness is therefore
-`PENDING_CANDIDATE_2_CI`, not PASS.
+`VERIFIED_CANDIDATE_2_CI` at source `ed095cc`, after push run `31318294569` and PR run `31318298660` both passed.
 
 ## Contract matrix
 
@@ -48,6 +48,13 @@ requests in one first wave. Because the fixture began with 100 eligible Jobs, th
 as queue exhaustion. Candidate 2 replaces fixed-budget polling with a single waiting short-turn fallback after an
 eligibility probe. The test now emits per-repetition attempts, probes, empty-while-eligible and waiting-fallback counts
 before asserting, so any next failure remains diagnostic.
+
+Candidate 2 then passed all 20 isolated repetitions: 200/200 first-wave requests returned 200 unique Jobs, zero
+first-wave requests were empty, and all 20 queues drained to 100 unique Jobs and 100 Attempts. The aggregate complete
+drain is therefore 2,000 unique claims and 2,000 Attempts. This is a correctness count, not a throughput result.
+
+The corrected same-Tenant 8-worker diagnostic at PR run `31318298660` recorded 11 attempts, 3 contention fallbacks,
+`retry/success=0.375`, zero empty requests, p50 `129.754ms`, p95 `137.596ms`, max `139.828ms`, and 8/8 unique Jobs.
 
 ## Preserved durable invariants
 

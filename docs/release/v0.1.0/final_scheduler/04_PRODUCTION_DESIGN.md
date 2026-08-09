@@ -98,5 +98,5 @@ The minimum lock mode in commit `18fb876` and the initial production-shaped Post
 passed both push CI `31315634340` and PR CI `31315639504`. This establishes the transaction and correctness design; it
 does not establish the release performance claim. The strengthened repeated 10W contract found a false-empty case, so
 commit `e4dcb5e` adds the single waiting fallback described above as the second and final production iteration. It is
-`PENDING_REAL_POSTGRESQL_CI`. Repeated targeted scaling, capacity, current fault injection and formal 32-arm evidence
-remain separate gates.
+`VERIFIED_REAL_POSTGRESQL_CI` by push run `31318294569` and PR run `31318298660` at source `ed095cc`. Repeated
+targeted scaling, capacity, current fault injection and formal 32-arm evidence remain separate gates.

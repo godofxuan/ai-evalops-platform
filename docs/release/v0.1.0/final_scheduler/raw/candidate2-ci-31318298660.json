@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "record_type": "focused_projection_of_candidate2_ci_artifact",
+  "source_commit": "ed095cc338ac6708bf5d9cce71bf509b5447358e",
+  "production_candidate_commit": "e4dcb5ea0a337bf234e807ccde3a01e9eb988224",
+  "ci": {
+    "push_run_id": 31318294569,
+    "push_result": "success",
+    "push_quality_duration": "4m36s",
+    "pr_run_id": 31318298660,
+    "pr_result": "success",
+    "pr_quality_duration": "4m18s"
+  },
+  "artifact": {
+    "workflow_run_id": 31318298660,
+    "artifact_id": 9039448960,
+    "name": "final-scheduler-lock-diagnostics-31318298660-1",
+    "compressed_size_bytes": 1724,
+    "expanded_jsonl_size_bytes": 20996,
+    "sha256": "2b3bc253e01aee7998f9a731377339e049927ebbe99bb59bc0a6a8388542921c",
+    "created_at": "2026-08-09T14:26:54Z",
+    "expires_at": "2026-11-07T14:23:03Z"
+  },
+  "ten_worker_limit_one": {
+    "repetitions": 20,
+    "queue_jobs_per_repetition": 100,
+    "first_wave_requests": 200,
+    "first_wave_successes": 200,
+    "first_wave_claimed_jobs": 200,
+    "first_wave_unique_jobs": 200,
+    "complete_drain_claimed_jobs": 2000,
+    "complete_drain_unique_jobs": 2000,
+    "complete_drain_job_attempts": 2000,
+    "first_wave_empty_requests": 0,
+    "first_wave_attempts": {
+      "sum": 348,
+      "min_per_repetition": 16,
+      "max_per_repetition": 19
+    },
+    "waiting_fallbacks": {
+      "sum": 148,
+      "min_per_repetition": 6,
+      "max_per_repetition": 9
+    }
+  },
+  "same_tenant_eight_worker": {
+    "claim_requests": 8,
+    "successful_requests": 8,
+    "claimed_jobs": 8,
+    "unique_claimed_jobs": 8,
+    "claim_attempts": 11,
+    "contention_retries": 3,
+    "retry_per_success": 0.375,
+    "waiting_fallbacks": 3,
+    "empty_requests": 0,
+    "latency_ms": {
+      "p50": 129.75433200000452,
+      "p95": 137.5964579999902,
+      "max": 139.8278899999923
+    }
+  },
+  "projection_note": "The complete 20-repetition JSONL remains in the digest-bound GitHub artifact. Full-drain totals are asserted by the passing source test; the JSONL emits first-wave diagnostics before each assertion."
+}

@@ -1319,3 +1319,21 @@ Ruff/format 通过，CI 同范围 MyPy 135 source files 通过。容量与 8-wor
 `waiting_fallbacks`，20-repetition test 在 assertion 前逐轮写 attempts/probes/empty/fallback JSONL。提交
 `e4dcb5e` 是本 sprint 允许的第 2 次、也是最后一次 scheduler production iteration；若其真实 CI 或
 targeted 仍失败，不再做 Candidate 3。
+
+### Candidate 2 双 GREEN 与 evidence counter 校正
+
+Candidate 2 在 source `aa77051` 的 push CI `31317936846`（`4m09s`）和 PR CI `31317940732`（`4m06s`）
+首次双绿。下载 PR artifact 后确认 20/20 第一波均为 10/10，但发现 test-only `waiting_fallbacks` 被错误地
+放在 fast-path override 中：显示每轮 10，与 `attempts - requests` 及 positive probes 的 5–9 不一致。
+correctness assertion 不依赖此字段，所以 GREEN 有效；该字段不能 promotion。
+
+把计数 increment 移入 waiting override 后，source `ed095cc` 再次通过 push CI `31318294569`（`4m36s`）
+与 PR CI `31318298660`（`4m18s`）。PR artifact id `9039448960`，压缩 `1,724` bytes、展开 JSONL
+`20,996` bytes，下载 SHA-256 与 GitHub digest 同为
+`2b3bc253e01aee7998f9a731377339e049927ebbe99bb59bc0a6a8388542921c`。20 次第一波合计 200/200 成功、
+200 unique、0 empty；完整测试同时证明 20 个 100-Job fixture 均 drain 至 100 unique/100 Attempt。可信
+fallback 合计 148、每轮 6–9。8-worker 记录为 11 attempts、3 fallback、ratio `0.375`、p95 `137.596ms`、
+8/8 unique、0 empty request。
+
+至此 `CORRECTNESS_PASS` 与 CI scope `EVIDENCE_COMPLETE` 恢复。下一提交只增加 source-bound trigger 与
+证据文档，启动 frozen targeted gate；不再修改 scheduler production。
