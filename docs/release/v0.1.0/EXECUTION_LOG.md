@@ -1392,3 +1392,69 @@ Candidate 2 是本 sprint 允许的第 2 次也是最后一次 scheduler product
 不做 Candidate 3，不放宽 `<=2`，不通过 retry/sleep/pool/batch/lease 参数赌博，不运行 current capacity、
 same-runner A/B/C、A–I fault 或 formal 32-arm。最终 release 状态是 `NOT_READY`，唯一 blocker 是当前
 scheduler 未满足冻结的并发 20:1 公平不变量；PR #1 保持 Draft，不 merge、不 tag、不创建 Release。
+
+## 2026-08-10 — Candidate 3 concurrent-fairness redesign 与最终停止
+
+### 预检、指标冻结与 Candidate 2 因果 RED
+
+用户显式授权在新的 invariant-driven 阶段只实现一个 Candidate 3。预检确认分支
+`codex/evidence-gate-1`、审计基准 `138f2cb`、PR #1 Draft、无 tag/release；PR 标题/正文先把 current
+Candidate 2 fairness blocker 与 historical capacity/fault/formal 分开。
+
+在 production 修改前冻结 F1–F8：priority preservation、equal-priority 20:1/w8 secondary application
+receipt `<=2`、no starvation、Job uniqueness、no false empty、fencing、crash safety、bounded coordination。
+observable point 明确区分 reservation、Job lock、durable transaction、`claim()` committed receipt 与
+result completion；旧 gate 继续约束 committed receipt，数据库 sequence 只能补充诊断。
+
+新的真实 PostgreSQL deterministic test 使用 Barrier/Event 控制 8 个 Worker，不依赖随机 sleep。Candidate
+2 中 secondary reservation 先提交却在 Phase-B 暂停，随后 6 个 primary receipt 完成；secondary 的数据库
+事务和 application receipt 最终均为位置 8。source `551f6b4`、Actions `31325521253` 按预期 RED，artifact
+digest `0342e7c7562d5ec294747355c8bf929550ee49fbd3149a210df9c2440d8d8e1e`。因此根因不是预约不公平，
+而是 reservation 与 durable claim 被拆成两个事务后，下一轮仍可产生多个可越过的 primary Phase-B。
+
+### 仅有的 Candidate 3 设计和 TDD
+
+在三类最小方案比较后选择“durable fair rounds + reusable per-Tenant scheduler state”。Migration `0018`
+增加 singleton `scheduler_coordination`、每 Tenant 可复用 `tenant_scheduler_states` 与 nullable positive unique
+`JobAttempt.scheduler_claim_sequence`。只有当前 generation 没有 pending permit 时才 refill 最高 priority
+Tenant round；Worker 锁一个 pending state 和该 Tenant 的 exact-priority Job，将 Job/lease/version/Attempt/
+Audit/Outbox 与 permit `PENDING→CONSUMED` 同事务提交。round B pending 时 A2 不可能进入下一轮。tail-only
+singleton lock 只分配诊断 sequence，不跨 Worker 外部执行。
+
+Schema RED 先因找不到 `20260810_0018` 失败，SQL RED 先因 statement builder 无法 import 失败；实现中发现
+并修复 SQLAlchemy aggregate join source ambiguity。旧 Candidate 2 unit fake 只模拟两事务，不能可信模拟
+singleton MVCC/row-lock/fallback，故保留共享 durable-write unit assertions，把锁、crash、liveness 与
+fairness 放到真实 PostgreSQL。高风险本地 subset `100 passed`；Ruff 369 files、lint、MyPy 136 source files
+通过。本机无 PostgreSQL/Docker，integration 明确 skip；完整非 integration 两次 wrapper timeout 未冒充
+PASS。
+
+source `02f5e680e71d05c76c145da6895122a2cf04ba14` 的 push CI `31327012832` 与 PR CI
+`31327016117` 均 SUCCESS。真实 PostgreSQL 覆盖 deterministic receipt/DB sequence GREEN、priority、
+20×10W/100J（2,000 unique Jobs/Attempts）、permit crash rollback/recovery、cross-Tenant progress、full drain、
+deadlock/lock diagnostics、migration roundtrip 与 fencing。push artifact digest
+`fe1dd4651f40ea9b8ce3ea1507549ea608d57d251283ef0e07b6869135c622a6`。
+
+### Targeted qualification FAILED
+
+只在普通 CI 双绿后 dispatch `final-scheduler-targeted.yml`。run `31327388006` 绑定 exact source `02f5e68`，
+计划 queue 1000、4 distributions、Workers 1/2/4/8、batch 1、4 repetitions。rep1 的 16/16 arms 全部完成，
+每个 raw arm assessment 为 `VERIFIED`，合计 1,600/1,600 unique terminal；所有 correctness/fencing counters
+为 0。20:1 secondary application receipt 和 DB claim sequence 在 w1/w2/w4/w8 均为 `2/2/2/2`。
+
+然而 repetition assessor 失败 `postgres_explain_candidate_cardinality_mismatch`。Candidate 3 的 fair
+EXPLAIN 是 `build_scheduler_round_members_statement()`，其候选单位已经是 active Tenant membership：single
+为 1、balanced 为 4、20:1 为 2、many-small 为 100；冻结 assessor 仍把每个 selector 的
+`candidate_cardinality` 与 Job queue size 1000 比较。64 个 fair summaries 全 mismatch，64 个 legacy
+summaries 均为 1000。因此 rep1 bundle 未 verify，顶层保存 `status=FAILED`、`repetition_count=0`、
+`repetition_count_must_equal_4`。
+
+artifact `targeted-gh-31327388006-1`（404 KB）digest 为
+`b9db8fc934b3e736c5a30868833218cc470ab011fcfa24f12dc4892cdfe47a1a`，bot commit `90a4e03`
+保留 156 个文件、82,024 行。rep1 4→8 ratio 为 single `0.678104`、balanced `0.785456`、20:1
+`0.749962`、many-small `0.954809`；前三个低于 0.95，但因 repetition bundle 失败且 repetitions 2–4
+未运行，只能标 `LIMITED`，不是 formal performance verdict。
+
+冻结规则明确 `targeted fail -> STOP`。因此没有修改 assessor 后重跑，没有 Candidate 4，没有调整
+threshold/workload/Worker/batch/seed/retry/pool/sleep/lease，也没有启动 current capacity、same-runner、fault
+或 formal。最终状态 `NOT_READY_TARGETED_EVIDENCE`；PR 保持 Draft，无 merge/tag/release。Candidate 3
+正确性 GREEN 与 targeted evidence FAILED 同时成立，任何对外材料都必须保留这个边界。

@@ -1,24 +1,29 @@
 # v0.1.0 RC correctness
 
-Current state/fencing correctness is `PASS`; release fairness is separately `FAIL`.
+Candidate 3 scheduler/state/fencing correctness is `PASS`; complete release qualification is separately `FAILED`.
 
-## Current Candidate 2 evidence
+## Current Candidate 3 evidence
 
-- push/PR CI `31318294569` and `31318298660`: 20 isolated 10W/100J `limit=1` drains, 2,000 unique claims and
-  2,000 Attempts; zero first-wave empty requests;
-- push/PR CI `31319292162` and `31319295583`: result-completion Run guard FK compatibility regression passed real
-  PostgreSQL and Compose;
-- targeted attempt 2 `31319556885`: 12 completed arms, 1,200/1,200 unique terminal successes; zero lost,
-  duplicate durable result, orphan, attempt mismatch, stale accepted, illegal transition and empty-while-eligible;
-- no Run/Job deadlock recurred after `3350c23`.
+- source `02f5e68`, push CI `31327012832` and PR CI `31327016117` both passed real PostgreSQL, Redis, migration and
+  Compose paths;
+- the unchanged 20-repetition 10W/100J `limit=1` contract completed 2,000 unique Job claims and Attempts with no
+  first-wave empty return;
+- deterministic Candidate 2 overtaking RED used Barrier/Event coordination and observed secondary receipt position
+  `8`; Candidate 3 passed the same application receipt oracle and database sequence oracle within position `2`;
+- priority preservation, first-wave uniqueness, complete drain, cross-Tenant progress, permit rollback/recovery,
+  false-empty, lock/deadlock and result/lease/version fencing regressions passed;
+- targeted rep1 ran 16 arms and reconciled 1,600/1,600 terminal Jobs with zero lost, duplicate durable result,
+  orphan, attempt mismatch, stale success/failure accepted, illegal transition and empty-while-eligible counts.
 
-The current targeted run failed the independent 20:1 fairness invariant at w8. `CORRECTNESS_PASS` here means durable
-state, uniqueness, lease/version fencing and reconciliation; it does not mean release READY.
+`CORRECTNESS_PASS` means the completed correctness obligations are green. It does not override the targeted evidence
+failure, complete four-repetition fairness requirement, missing current capacity/fault/formal bundles or the release
+decision.
 
 ## Historical fault boundary
 
-Run `31275450353` remains `VERIFIED_HISTORICAL`: A-I ×3, 27/27 records, zero lost/duplicate/orphan/invariant failures,
-stale success attempted/accepted 3/0 and stale failure 3/0. Because the current fault workflow was not run after the
-targeted failure, these values cannot be promoted as current Candidate 2 fault evidence.
+Run `31275450353` remains `VERIFIED_HISTORICAL`: A–I ×3, 27/27 records, zero lost/duplicate/orphan/invariant
+failures, stale success attempted/accepted 3/0 and stale failure 3/0. Candidate 3 fault qualification is `NOT_RUN`, so
+these values cannot be promoted as current.
 
-No exactly-once, unlimited fault tolerance or production reliability certification is claimed.
+No exactly-once, unlimited fault tolerance, universal deadlock freedom or production reliability certification is
+claimed.

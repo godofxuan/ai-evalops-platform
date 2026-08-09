@@ -1,5 +1,6 @@
 # Candidate 3 same-runner comparison
 
-Status: `NOT_RUN`
+Status: `NOT_RUN_STOPPED`
 
-Prerequisite: targeted and capacity PASS. This benchmark is performance-causality evidence and cannot replace correctness or fairness.
+No A/B/C paired benchmark was dispatched because targeted qualification failed. Same-runner evidence is a
+performance-causality aid; it cannot replace correctness, fairness or the failed source-bound manifest.

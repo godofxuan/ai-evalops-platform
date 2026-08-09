@@ -590,15 +590,17 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 
 ## v0.1.0 Release Candidate 证据结论
 
-当前决定：**`NOT_READY`，不得发布 v0.1.0 tag/Release**。唯一 blocker 是最终 Candidate 2 在当前
-targeted run `31319556885` 中未通过冻结的并发 20:1 公平门禁：8 Worker 时 secondary Tenant 的首个
-durable claim 位于第 4 个，合同要求不晚于第 2 个。完整判定见
+当前决定：**`NOT_READY`，不得发布 v0.1.0 tag/Release**。唯一授权的 Candidate 3 已完成 durable
+fair-round redesign，并在 source `02f5e68` 的普通 PostgreSQL CI 中通过 priority、20×10W/100J、
+deterministic overtaking、crash recovery、liveness、uniqueness 与 fencing；但 source-bound targeted run
+`31327388006` 在第 1 次 repetition 后因 `postgres_explain_candidate_cardinality_mismatch` 失败。完整判定见
 [v0.1.0 Release Decision](docs/release/v0.1.0/RELEASE_DECISION.md)。
 
-6 小时 CI hang 已通过 PostgreSQL lock evidence 解释并修复测试合同；Candidate 2 与独立 Run-lock fix
-分别取得真实 push/PR CI 双 GREEN。targeted attempt 2 的 12 个已完成 arms 共 1,200/1,200 unique
-terminal Jobs，lost/duplicate/orphan/empty-while-eligible 均为 0，但公平门禁 fail-closed。按“两次
-scheduler production iteration”停止规则，不再做 Candidate 3，也不运行当前 capacity、A/B/C
+Candidate 3 targeted rep1 的 16/16 arms 各自 correctness VERIFIED，共 1,600/1,600 terminal Jobs；20:1
+secondary application receipt 和 DB claim sequence 在 w1/w2/w4/w8 均观察到位置 `2`。但 Candidate 3
+的 fair EXPLAIN 现在衡量 scheduler-round Tenant membership，而冻结 assessor 仍要求 Job queue
+cardinality `1000`；64/128 summaries 因语义不兼容而失败，四次 repetitions 没有完成。按
+`targeted fail -> STOP` 规则，不修门禁后重跑、不做 Candidate 4，也不运行当前 capacity、A/B/C
 same-runner、A–I fault 或 formal 32-arm。
 
 最终 source-bound 证据：
@@ -608,9 +610,9 @@ same-runner、A–I fault 或 formal 32-arm。
 - formal load source `6acf72c` / run `31274490704`：32/32 arms、16,000 jobs、correctness failure 0；
 - fault source `70a9b2b` / run `31275450353`：A–I ×3 共 27/27，stale success/failure accepted 0。
 
-上述 capacity/formal/fault 数字全部是 `VERIFIED_HISTORICAL`，不是最终 Candidate 2 的当前结果，也不是
-生产 SLO。当前 evidence chain、停止原因和 `NOT_RUN` disposition 见
-[final scheduler 文档](docs/release/v0.1.0/final_scheduler/11_FINAL_DECISION.md)。
+上述 capacity/formal/fault 数字全部是 `VERIFIED_HISTORICAL`，不是 Candidate 3 的当前结果，也不是
+生产 SLO。Candidate 3 的 current evidence chain、停止原因和 `NOT_RUN` disposition 见
+[fairness redesign 文档](docs/release/v0.1.0/fairness_redesign/11_FINAL_DECISION.md)。
 
 ## 当前限制
 
@@ -631,9 +633,9 @@ same-runner、A–I fault 或 formal 32-arm。
 - API 与 Worker/Reaper 刻意保持不同 trace，并用持久化 Run carrier 建立 Span Link；尚无真实
   Collector/backend 查询、采样、保留和多副本导出证据；
 - 多 Worker 指标要求 Prometheus 抓取每一个副本，尚未验证 service discovery/告警；
-- 多租户公平领取不是提交限流、容量配额或计费策略；1k/10k/100k 容量实验已经完成，但 100k
-  热点单租户 w8 claim p95 为 41,386.537 ms、504 retries，且正式 32-arm 的 4/8 Worker 吞吐未过
-  release performance gate；
+- 多租户公平领取不是提交限流、容量配额或计费策略；Candidate 3 的完整 targeted/capacity/formal
+  qualification 未完成，因此不声称 strong-fairness 或 current performance SLO。历史 100k 热点单租户
+  w8 的 41,386.537 ms claim p95、504 retries 和 0.628 Jobs/s 仅保留为旧 source 的负面证据；
 - 当前 evaluator registry 只有确定性 lexical/retrieval-citation 与 operational execution
   指标；尚无 LLM judge，且调用方提供的 evaluator version 仍是可追踪字段而非服务端签名证明；
 - Gate 1 能自动检查客观质量、expected-arm 完整性和 Worker 集群资源证据；

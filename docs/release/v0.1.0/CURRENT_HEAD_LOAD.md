@@ -1,28 +1,35 @@
 # v0.1.0 RC current-candidate load status
 
-结论：最终 Candidate 2 没有完成正式 32-arm load protocol。当前 formal status 是 `NOT_RUN`，不是
-`VERIFIED`。
+Conclusion: Candidate 3 has no complete formal load qualification. Current formal status is `NOT_RUN`, not
+`VERIFIED`.
 
 ## Current evidence
 
-- targeted source: `246252e30e63f046a4a1fb5d684a35449aaef9e3`;
-- workflow: `31319556885`, FAILED by frozen 20:1 fairness check;
-- preserved bot commit: `f1a276f`;
-- artifact: `targeted-gh-31319556885-1`, 280 KB;
-- digest: `ed75825c310e52d31e8c0bb54432411bd31f57f520a244462c9aefdf06f68d58`;
-- completed: 12 arms in repetition 1, 1,200/1,200 unique terminal Jobs;
-- correctness: lost/duplicate durable result/orphan/empty-while-eligible all zero;
-- blocker: `skew_20_to_1/w8` secondary durable claim position 4, required `<= 2`.
+- production source: `02f5e680e71d05c76c145da6895122a2cf04ba14`;
+- ordinary CI: push `31327012832` and PR `31327016117`, both PASS;
+- targeted workflow: `31327388006`, FAILED after repetition 1;
+- evidence bot commit: `90a4e03ae75d0ae391f16f32934c144430de196d`;
+- artifact: `targeted-gh-31327388006-1`, 404 KB;
+- artifact digest: `b9db8fc934b3e736c5a30868833218cc470ab011fcfa24f12dc4892cdfe47a1a`;
+- completed: 16/16 arms in rep1, 1,600/1,600 unique terminal Jobs;
+- per-arm assessment: 16 `VERIFIED`, with zero lost, duplicate durable result, orphan, attempt mismatch,
+  stale-accepted, illegal transition and empty-while-eligible counts;
+- observed 20:1 secondary application receipt positions: w1/w2/w4/w8 = `2/2/2/2`;
+- database sequence diagnostics: complete, with the same `2/2/2/2` positions;
+- formal targeted blocker: `postgres_explain_candidate_cardinality_mismatch`;
+- top-level status: `FAILED`, `repetition_count=0` because no repetition-level bundle verified.
 
-The partial 4-to-8 ratios were 0.8952 single-Tenant, 0.9083 balanced and 0.8907 for 20:1. They are `LIMITED`
-diagnostics because repetitions 2–4 and many-small-Tenants did not run.
+Observed rep1 4→8 ratios were `0.678104` single-Tenant, `0.785456` balanced, `0.749962` 20:1 and `0.954809`
+many-small-Tenants. They are `LIMITED` diagnostics, not a four-repetition verdict. The frozen formal capacity,
+same-runner, fault and 32-arm workflows were not dispatched after the stop condition.
 
 ## Historical evidence boundary
 
 Source `6acf72c3aa73c9fdc1664fe4e847fc8b8e90efd7`, run `31274490704`, remains a complete historical broken-fair
 32-arm bundle with 16,000 unique terminal Jobs and severe 4/8-worker regression. Source
-`15e7ac2e28b70430acd0bff88ee6cc78e5b86a86` remains the historical pre-fair baseline. Different runner CPUs weaken
-cross-runner causality; neither bundle is current Candidate 2 throughput.
+`15e7ac2e28b70430acd0bff88ee6cc78e5b86a86` remains the historical pre-fair baseline. Complete historical capacity
+belongs to `9987a28`/`31272789199`; historical A–I ×3 fault belongs to `70a9b2b`/`31275450353`.
 
-Allowed claim: the current candidate passed the completed arms' correctness reconciliation but failed its fairness
-gate. Forbidden claim: current 32-arm VERIFIED, current linear scaling, or current 1/2/4/8 formal throughput.
+Allowed claim: Candidate 3 passed ordinary correctness and generated one complete diagnostic repetition whose 16
+arms reconciled correctly. Forbidden claim: current formal scaling, complete targeted fairness, current capacity,
+linear scaling or a production performance SLO.

@@ -1,27 +1,24 @@
 # v0.1.0 RC environment and reproducibility
 
-真实 PostgreSQL/Redis/Compose 实验运行在 GitHub-hosted Linux runner；本机没有把 skipped integration
-当作通过。三个最终协议的 runner 都记录为 4 logical CPU、AMD EPYC 9V74、约 16.77 GB RAM、
-Linux 6.17.0-1020-azure、Docker 28.0.4、Compose 2.38.2、Python 3.12.13。
+The local Windows host has no Docker, PostgreSQL client/server or reachable port 5432. Local PostgreSQL tests were
+therefore collected and explicitly skipped; they were never reported as passed. Local Candidate 3 checks were Ruff
+format (369 files), Ruff lint, MyPy (136 source files) and a 100-test high-risk subset. Two full non-integration
+wrapper attempts timed out at approximately 124s and 304s without an assertion report and are recorded as
+environment-limited, not PASS.
 
-| Protocol | Run | Source | Runner CPU |
+Authoritative Candidate 3 execution used GitHub-hosted Linux with real PostgreSQL/Redis/Compose:
+
+| Protocol | Run | Source | Result |
 |---|---:|---|---|
-| 1k/10k/100k fair capacity | `31272789199` | `9987a28…` | AMD EPYC 9V74, 4 vCPU |
-| current formal 32-arm | `31274490704` | `6acf72c…` | AMD EPYC 9V74, 4 vCPU |
-| final A–I ×3 fault | `31275450353` | `70a9b2b…` | AMD EPYC 9V74, 4 vCPU |
+| ordinary push CI | `31327012832` | `02f5e68…` | PASS |
+| ordinary PR CI | `31327016117` | `02f5e68…` | PASS |
+| targeted qualification | `31327388006` | `02f5e68…` | FAILED evidence contract |
 
-每个 bundle 保留 `runner.txt`、`source.txt`、`compose-ps.txt` 与有界 `compose.log`。Compose 日志保存
-策略为最多末尾 10 MiB，并在 `compose-log-policy.txt` 记录原始字节数、保留字节数和命令退出码；
-实验 raw/final manifest payload 不因日志裁剪而改写。artifact digest 提供 GitHub 上传对象身份，Git
-内 manifest 则逐文件绑定内容。
+The targeted runner record contains Linux 6.17.0-1020-azure, Python 3.12.13, Docker 28.0.4 and Compose 2.38.2.
+Its directory preserves `runner.txt`, `source.txt`, `compose-ps.txt`, bounded `compose.log`, raw arms, 128 raw
+EXPLAIN summaries, manifests and assessment files. The GitHub artifact `targeted-gh-31327388006-1` has digest
+`sha256:b9db8fc934b3e736c5a30868833218cc470ab011fcfa24f12dc4892cdfe47a1a`; Git commit `90a4e03`
+preserves the same evidence in the branch.
 
-Historical pre-fair formal baseline 使用 AMD EPYC 7763，而 current formal run 使用 EPYC 9V74；
-因此跨 run 性能百分比只用于本次 release gate，不是跨硬件性能 SLO。容量优化前后的 RC paired
-run `31266366590` 与 `31272789199` 恰好都使用 EPYC 9V74，可支持“物化显著改善当前 fair SQL”
-这一较窄结论。
-
-本机完整非集成验证为 Ruff format 318 files、Ruff all passed、MyPy 133 source files、pytest
-629 passed / 13 skipped / 3 Windows temp-cleanup warnings。真实数据库、Redis、migration、image 与
-Compose 路径由 GitHub CI `31274490725` 和 `31275450358` 覆盖。加入最终 evidence/docs 后的封版
-复核为 Ruff format 325 files、Ruff all passed、MyPy 133 source files，以及 73 个 release/evidence/
-claiming/workflow 聚焦测试通过（1 个相同类型的 Windows temp-cleanup warning）。
+Historical capacity/formal/fault bundles remain source-bound to `9987a28`, `6acf72c` and `70a9b2b`. Their runner
+and protocol records are preserved but cannot substitute for Candidate 3 downstream qualification.
