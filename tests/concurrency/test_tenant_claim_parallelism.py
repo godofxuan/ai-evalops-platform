@@ -1,6 +1,10 @@
+import asyncio
+import json
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from statistics import median
+from time import perf_counter
 from uuid import UUID, uuid4
 
 import pytest
@@ -9,7 +13,11 @@ from sqlalchemy import delete, select
 
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
-from app.jobs.claiming import SQLAlchemyJobClaimer, build_claim_candidates_statement
+from app.jobs.claiming import (
+    ClaimedJob,
+    SQLAlchemyJobClaimer,
+    build_claim_candidates_statement,
+)
 from app.jobs.lease import LeasePolicy
 from app.persistence.database import (
     AsyncSessionFactory,
@@ -39,6 +47,45 @@ class FixedClock:
         return self._value
 
 
+class InstrumentedClaimer(SQLAlchemyJobClaimer):
+    def __init__(
+        self,
+        session_factory: AsyncSessionFactory,
+        *,
+        lease_policy: LeasePolicy,
+        clock: FixedClock,
+    ) -> None:
+        super().__init__(session_factory, lease_policy=lease_policy, clock=clock)
+        self.claim_attempts = 0
+        self.empty_attempts = 0
+        self.eligible_probes = 0
+        self.empty_while_eligible = 0
+
+    async def _claim_once(
+        self,
+        *,
+        worker_id: str,
+        limit: int,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
+        self.claim_attempts += 1
+        claims = await super()._claim_once(
+            worker_id=worker_id,
+            limit=limit,
+            eligible_at=eligible_at,
+        )
+        if not claims:
+            self.empty_attempts += 1
+        return claims
+
+    async def _has_eligible_jobs(self, now: datetime) -> bool:
+        self.eligible_probes += 1
+        eligible = await super()._has_eligible_jobs(now)
+        if eligible:
+            self.empty_while_eligible += 1
+        return eligible
+
+
 @dataclass(frozen=True, slots=True)
 class ClaimFixture:
     tenant_id: UUID
@@ -55,6 +102,7 @@ async def _create_claim_fixture(
     session_factory: AsyncSessionFactory,
     *,
     created_at: datetime,
+    job_count: int = 4,
 ) -> ClaimFixture:
     tenant_id = uuid4()
     fixture = ClaimFixture(
@@ -65,7 +113,7 @@ async def _create_claim_fixture(
         version_id=uuid4(),
         artifact_id=uuid4(),
         digest=tenant_id.hex * 2,
-        job_ids=tuple(uuid4() for _ in range(4)),
+        job_ids=tuple(uuid4() for _ in range(job_count)),
     )
     async with session_factory.begin() as session:
         session.add(
@@ -114,7 +162,7 @@ async def _create_claim_fixture(
                 version=1,
                 schema_version="1",
                 sha256=fixture.digest,
-                case_count=4,
+                case_count=job_count,
             )
         )
         await session.flush()
@@ -135,7 +183,7 @@ async def _create_claim_fixture(
                 target_version="v1",
                 evaluator_version="v1",
                 status=RunStatus.RUNNING,
-                total_jobs=4,
+                total_jobs=job_count,
                 created_by=fixture.api_key_id,
                 created_at=created_at,
             )
@@ -332,4 +380,76 @@ async def test_job_claim_does_not_serialize_on_locked_tenant_row() -> None:
 
     assert all(observed == (expected,) for expected, observed in outcomes), (
         f"TENANT_HOT_ROW_RED: {outcomes}"
+    )
+
+
+@pytest.mark.integration
+async def test_same_tenant_eight_worker_contention_diagnostics() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    session_factory = create_session_factory(engine)
+    now = datetime(2026, 8, 9, 11, 0, tzinfo=UTC)
+    fixture = await _create_claim_fixture(
+        session_factory,
+        created_at=now,
+        job_count=100,
+    )
+    claimer = InstrumentedClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    barrier = asyncio.Barrier(9)
+
+    async def claim_one(worker_number: int) -> tuple[tuple[ClaimedJob, ...], float]:
+        await barrier.wait()
+        started_at = perf_counter()
+        claims = await claimer.claim(
+            worker_id=f"diagnostic-worker-{worker_number}",
+            limit=1,
+        )
+        return claims, (perf_counter() - started_at) * 1_000
+
+    try:
+        tasks = [asyncio.create_task(claim_one(worker_number)) for worker_number in range(8)]
+        await barrier.wait()
+        results = await asyncio.gather(*tasks)
+    finally:
+        await _delete_claim_fixture(session_factory, fixture)
+        await engine.dispose()
+
+    claimed_job_ids = [claim.job_id for claims, _latency in results for claim in claims]
+    latencies_ms = sorted(latency for _claims, latency in results)
+    successful_requests = sum(bool(claims) for claims, _latency in results)
+    retries = claimer.claim_attempts - len(results)
+    retry_per_success = retries / successful_requests if successful_requests else None
+    diagnostics = {
+        "claim_requests": len(results),
+        "claim_attempts": claimer.claim_attempts,
+        "successful_requests": successful_requests,
+        "empty_requests": len(results) - successful_requests,
+        "claimed_jobs": len(claimed_job_ids),
+        "unique_claimed_jobs": len(set(claimed_job_ids)),
+        "empty_attempts": claimer.empty_attempts,
+        "eligible_probes": claimer.eligible_probes,
+        "empty_while_eligible": claimer.empty_while_eligible,
+        "contention_retries": retries,
+        "retry_per_success": retry_per_success,
+        "latency_ms": {
+            "points": latencies_ms,
+            "p50": median(latencies_ms),
+            "max": max(latencies_ms),
+        },
+    }
+
+    assert len(claimed_job_ids) == 8, json.dumps(diagnostics, sort_keys=True)
+    assert len(set(claimed_job_ids)) == 8, json.dumps(diagnostics, sort_keys=True)
+    assert retry_per_success is not None and retry_per_success <= 0.25, (
+        "SAME_TENANT_CONTENTION_DIAGNOSTIC_RED: " + json.dumps(diagnostics, sort_keys=True)
     )
