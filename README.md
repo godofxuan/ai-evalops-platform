@@ -61,6 +61,8 @@ Phase 3 已建立：
 - 同优先级下按租户候选轮次与最久未服务时间排序；Phase B 不显式获取 Tenant scheduler row lock，
   但 tenant-referencing durable writes 仍受 PostgreSQL foreign-key lock semantics 约束；
 - Phase B 在一个 durable transaction 内原子更新状态、lease、version、Attempt、审计与 Outbox；
+- result completion 先用 `FOR NO KEY UPDATE` 串行化同一 Run writer，再锁 owned Job；该 Run guard 与
+  claim/Outbox 外键的 `KEY SHARE` 兼容，避免 Run→Job / Job→Run 锁环；
 - owner/version/live-expiry 保护的心跳条件更新；
 - 10 Worker 真实 PostgreSQL 并发测试合同。
 
@@ -588,17 +590,16 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 
 ## v0.1.0 Release Candidate 证据结论
 
-当前决定：**`NOT_READY`，不得发布 v0.1.0 tag/Release**。correctness、fairness、current-head
-1k/10k/100k capacity、CI 与 evidence manifest 均已通过；唯一 blocker 是 current fair scheduler
-相对 historical pre-fair formal baseline 的性能门：8 个 workload/worker 中位数组有 5 个回退
-超过 15%，最差为 -63.44%。完整判定见
+当前决定：**`NOT_READY`，不得发布 v0.1.0 tag/Release**。唯一 blocker 是最终 Candidate 2 在当前
+targeted run `31319556885` 中未通过冻结的并发 20:1 公平门禁：8 Worker 时 secondary Tenant 的首个
+durable claim 位于第 4 个，合同要求不晚于第 2 个。完整判定见
 [v0.1.0 Release Decision](docs/release/v0.1.0/RELEASE_DECISION.md)。
 
-上述 capacity/formal/fault 数字属于历史 source-bound RC 证据。当前 scheduler candidate 已在
-`2879b4c` 拆分为 short fair-turn reservation 与 Job-only explicit durable claim，但它的 push/PR
-CI `31297535370` / `31297538171` 都在 same-tenant integration step 运行满 6 小时后被取消。因此
-当前 blocker 已先收敛为：取得 PostgreSQL lock evidence、校正会自锁等待的测试合同并让普通 CI
-bounded GREEN；在此之前不得把历史绿色证据外推为当前 candidate 已通过，也不得开始正式发布。
+6 小时 CI hang 已通过 PostgreSQL lock evidence 解释并修复测试合同；Candidate 2 与独立 Run-lock fix
+分别取得真实 push/PR CI 双 GREEN。targeted attempt 2 的 12 个已完成 arms 共 1,200/1,200 unique
+terminal Jobs，lost/duplicate/orphan/empty-while-eligible 均为 0，但公平门禁 fail-closed。按“两次
+scheduler production iteration”停止规则，不再做 Candidate 3，也不运行当前 capacity、A/B/C
+same-runner、A–I fault 或 formal 32-arm。
 
 最终 source-bound 证据：
 
@@ -607,9 +608,9 @@ bounded GREEN；在此之前不得把历史绿色证据外推为当前 candidate
 - formal load source `6acf72c` / run `31274490704`：32/32 arms、16,000 jobs、correctness failure 0；
 - fault source `70a9b2b` / run `31275450353`：A–I ×3 共 27/27，stale success/failure accepted 0。
 
-这些是 GitHub-hosted 4-vCPU runner 的实验结果，不是生产 SLO。旧 source `15e7ac2` 的
-500-case/32-arm 仍是 VERIFIED historical pre-fair experiment，不得描述为 current v0.1.0
-throughput。容量、公平性、环境和负面结果见 [v0.1.0 RC 文档](docs/release/v0.1.0/RC_AUDIT.md)。
+上述 capacity/formal/fault 数字全部是 `VERIFIED_HISTORICAL`，不是最终 Candidate 2 的当前结果，也不是
+生产 SLO。当前 evidence chain、停止原因和 `NOT_RUN` disposition 见
+[final scheduler 文档](docs/release/v0.1.0/final_scheduler/11_FINAL_DECISION.md)。
 
 ## 当前限制
 

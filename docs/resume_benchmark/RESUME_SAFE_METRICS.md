@@ -1,34 +1,40 @@
 # Resume-safe metrics
 
-Status: the following scoped claims are backed by post-Git hash-verified evidence.
+## VERIFIED_CURRENT
 
-## Admitted claims
+- Real PostgreSQL push/PR CI passed 20 isolated 10-worker/100-job `limit=1` drains: 2,000 unique durable claims,
+  2,000 Attempts, zero first-wave empty requests. Source `ed095cc`; runs `31318294569`/`31318298660`.
+- After a RED exposed a Run→Job / Job→Run deadlock, a key-preserving Run guard passed real PostgreSQL push/PR CI.
+  Source `3350c23`; runs `31319292162`/`31319295583`.
+- Targeted source `246252e` completed 12 production-worker arms with 1,200/1,200 unique terminal Jobs and zero
+  lost/duplicate durable result/orphan/empty-while-eligible counts before the fairness gate stopped execution.
 
-- 下述 32-arm throughput 数字绑定到 pre-fair source
-  `15e7ac2e28b70430acd0bff88ee6cc78e5b86a86`，是 VERIFIED historical baseline，不是当前
-  fair scheduler 或 v0.1.0 RC throughput；在 current-head rerun 完成前不得省略该边界。
-- Executed a real Docker Compose worker-scaling matrix with 500 measured cases per arm, Worker counts
-  1/2/4/8, two workloads, and four repetitions: 32 arms and 16,000 Jobs, with 16,000 successful,
-  zero failed/lost/orphan Jobs, zero duplicate durable results, and 400 successful retry events.
-- Observed median throughput scaling from 21.48 to 66.80 Jobs/s for the I/O workload (3.11× speedup
-  at eight Workers) and from 19.59 to 60.76 Jobs/s for the 5% transient-failure workload (3.10×).
-- Ran a nine-scenario fault matrix three times after the database reconnect change: 84/84 logical
-  Jobs succeeded, 72 deliberate retries completed, and failed/lost/duplicate/orphan counts were zero.
-- Deliberately attempted three stale success commits and three stale failure commits after lease
-  recovery; zero were accepted. Sixty concurrent duplicate-idempotency-key HTTP submissions all
-  succeeded and resolved to one Run per repetition.
-- Recovered from three 3-second PostgreSQL outages without restarting the Worker; median recovery
-  after PostgreSQL restart was 6.83 seconds (range 6.28–6.83 seconds), with zero Job retries or
-  correctness violations.
-- In a real-PostgreSQL equal-priority 20:1 tenant-starvation test, the legacy FIFO candidate position
-  for the later Tenant B Job was 21; the fair claimant served B within the first two concurrent
-  claims with zero duplicate first-wave Jobs.
+## VERIFIED_HISTORICAL
 
-## Scope rules
+- Pre-fair 32-arm/16,000-job scaling and its throughput values belong only to source `15e7ac2`, run `31177702100`.
+- A-I ×3 27/27 fault evidence, stale success/failure accepted 0 and idempotency evidence belong only to historical
+  source/run `70a9b2b`/`31275450353`.
+- Complete 1k/10k/100k capacity belongs only to historical source/run `9987a28`/`31272789199`.
 
-These are experiment results, not universal production guarantees. Keep the workload names, Worker
-counts, repetition count, source/evidence reference, pre-fair historical boundary, and “observed”
-wording. Do not claim linear
-scaling: eight-Worker parallel efficiency was about 0.39. Do not claim the reconnect backoff made
-recovery faster; the before/after difference is too small and based on only three repetitions.
-The fairness result is a controlled 20:1 first-wave test, not a general queue-latency SLO.
+## LIMITED
+
+- Targeted attempt 2 has one incomplete repetition. Its 4→8 ratios (0.8952 single, 0.9083 balanced, 0.8907 20:1)
+  are diagnostic only and must include the incomplete-protocol limitation.
+
+## FAILED
+
+- Current concurrent 20:1 fairness: w8 secondary durable claim position 4, required `<= 2`.
+- Historical broken-fair formal release comparison failed the >15% regression gate.
+
+## NOT_SAFE
+
+- Any current Candidate 2 throughput, linear scaling, production capacity SLO or strong fairness SLO.
+- Historical -63.44%, 41s p95 and 0.628 Jobs/s in resume正文; keep them in engineering/interview evidence only.
+- Calling historical fault/capacity/formal values current.
+
+## NOT_RUN
+
+- Current 1k/10k/100k capacity qualification.
+- Current A/B/C same-runner paired benchmark.
+- Current A-I ×3 fault rerun.
+- Current formal 32-arm/16,000-job worker scaling.

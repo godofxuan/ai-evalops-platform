@@ -1,7 +1,9 @@
 # Final scheduler CI qualification
 
 Date: 2026-08-09  
-Current qualified source: `ed095cc338ac6708bf5d9cce71bf509b5447358e`
+Candidate-2 qualified source: `ed095cc338ac6708bf5d9cce71bf509b5447358e`
+
+Run-guard qualified source: `3350c2315a8a7e92e97a73218de321582294fdc8`
 
 Initial qualified source: `9ac70886c03c2d3a21ae667f47c5b5971c90ed4d`
 
@@ -84,16 +86,35 @@ Run `31315634340` uploaded `final-scheduler-lock-diagnostics-31315634340-1`:
 A source-controlled metric projection is in `raw/ci-qualification-31315634340.json`. The complete lock rows remain in
 the digest-bound artifact instead of being silently truncated in documentation.
 
+## Independent Run/Job deadlock RED and GREEN
+
+Targeted attempt 1 (`31318923861`) was the first real worker workload to overlap result completion and fresh claims at
+the required intensity. It exposed a PostgreSQL deadlock: a result transaction held Run `FOR UPDATE` and waited for a
+Job, while a claim transaction held a Job and its Outbox Run FK requested `KEY SHARE`. This is a production-shaped
+correctness RED, not a benchmark verdict.
+
+The compile contract first failed against the old Run lock. Commit `3350c23` then changed only the Run-first guard to
+`FOR NO KEY UPDATE` and added a real-PostgreSQL regression in which one transaction holds that Run guard while another
+holds a Job and flushes its Run-referencing Outbox row. Both entry points passed:
+
+| Entry point | Actions run | Result | Duration |
+|---|---:|---|---:|
+| push CI | [31319292162](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31319292162) | SUCCESS | 4m27s |
+| PR CI | [31319295583](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31319295583) | SUCCESS | 4m21s |
+
+Targeted attempt 2 completed 1,200/1,200 terminal Jobs without a deadlock recurrence. It nevertheless failed the
+separate frozen fairness gate, so CI correctness GREEN must not be promoted to release READY.
+
 ## Six-state interpretation
 
-| State | Current result at `ed095cc` | Boundary |
+| State | Final result | Boundary |
 |---|---|---|
-| `WORKFLOW_EXECUTED` | PASS | push `31318294569` and PR `31318298660` completed |
-| `TESTS_PASS` | PASS | complete CI jobs green at both entry points |
-| `CORRECTNESS_PASS` | PASS | strengthened 20-repetition 10W contract passed twice |
-| `EVIDENCE_COMPLETE` | PASS for CI scope | targeted/capacity/fault/formal evidence remain separate |
-| `PERFORMANCE_PASS` | NOT RUN | one 8-worker diagnostic is not a benchmark |
-| `RELEASE_READY` | NO | release performance chain is still open |
+| `WORKFLOW_EXECUTED` | PASS | both targeted attempts executed and preserved evidence |
+| `TESTS_PASS` | PASS | Candidate 2 and Run-guard push/PR CI entry points are green |
+| `CORRECTNESS_PASS` | PASS for state/fencing | 20 drains plus 1,200 completed targeted Jobs reconciled |
+| `EVIDENCE_COMPLETE` | FAIL for release | attempt 2 stopped in repetition 1; downstream current bundles do not exist |
+| `PERFORMANCE_PASS` | NOT ESTABLISHED | four repetitions and formal protocol did not complete |
+| `RELEASE_READY` | NO | concurrent 20:1 fairness failed at w8 |
 
 ## Local validation supporting the push
 

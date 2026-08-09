@@ -38,16 +38,18 @@ incompatible production cycle with a concurrent `Job → Tenant` Phase-B FK chec
 ## Result success
 
 ```text
-Tenant KS → Run U → owned Job U → active Attempt U
-          → CaseResult insert (Tenant/Run/Job FK checks)
-          → Audit insert
-          → aggregate Run while already held
-          → Outbox insert
-          → COMMIT
+Tenant KS → Run NKU → owned Job U → active Attempt U
+            → CaseResult insert (Tenant/Run/Job FK checks)
+            → Audit insert
+            → aggregate Run while already held
+            → Outbox insert
+            → COMMIT
 ```
 
 Tenant KS was introduced before the Run/Job locks to avoid the historical Tenant↔Run FK upgrade deadlock. KS is
-compatible with the scheduler's Tenant NKU lock.
+compatible with the scheduler's Tenant NKU lock. The Run guard was narrowed from U to NKU after targeted attempt 1:
+two result writers remain mutually exclusive, while a concurrent claim that already holds a Job can obtain the Run
+FK KS required by its Outbox insert.
 
 ## Failure commit
 
@@ -113,7 +115,7 @@ held.
 | Entity | Explicit row locks | Important implicit/write locks |
 |---|---|---|
 | Tenant | Phase A NKU+SL; result/cancellation KS | FK checks from Audit, Outbox, CaseResult and other tenant-owned rows |
-| Run | result/cancellation/aggregation U | conditional UPDATE during first claim; FK checks from Outbox/Result |
+| Run | result NKU; cancellation/aggregation U | conditional UPDATE during first claim; FK checks from Outbox/Result |
 | Job | claim/reaper U+SL; result/failure/cancellation U; heartbeat UPDATE | FK checks from Attempt/Result |
 | Attempt | result/failure/reaper U | unique `(job_id, attempt_number)` and Job FK on insert |
 | Audit | no pre-existing row lock; INSERT | Tenant FK and resource metadata |
@@ -134,7 +136,9 @@ Tenant FK lock, but that lock is compatible with Phase A NKU and with result/can
 diagnostic that holds external `Tenant FOR UPDATE` is the only reproduced incompatible edge; it is bounded and expected
 to yield `55P03`, not a production scheduler path.
 
-Run/Job ordering differs among older completion paths, but the audited waits do not supply the reverse dependency
-needed for the scheduler Tenant↔Job cycle: result/cancellation already hold Run while later locking their target Jobs;
-failure/Reaper aggregate Run after their Job locks but do not then acquire another conflicting Job lock. Existing real
-concurrency/fault tests remain required; this audit does not replace them.
+Targeted attempt 1 proved a separate Run↔Job cycle in the old result path: result held Run U then waited Job U, while
+claim held Job U and waited for Run FK KS. The final result guard uses Run NKU, which is compatible with that FK KS and
+therefore removes the incompatible second edge without changing Run-first ordering. Push/PR CI
+`31319292162`/`31319295583` and 1,200 subsequent targeted Jobs found no recurrence. Failure/Reaper still aggregate
+Run after their Job locks and remain covered by existing concurrency/fault tests; this lock audit does not replace
+those tests.

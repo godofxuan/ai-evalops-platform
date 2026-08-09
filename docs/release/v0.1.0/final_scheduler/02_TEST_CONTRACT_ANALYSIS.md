@@ -74,7 +74,7 @@ The focused claiming suite then passed `10/10` and the broader Job/Worker/config
 
 ## Qualification result and remaining work
 
-The SQL compile GREEN is necessary but not sufficient. The next contract slice adds:
+The SQL compile GREEN was necessary but not sufficient. The next contract slice added:
 
 1. a full durable claim completing while another worker holds a bounded, real Phase-A turn lock;
 2. explicit same-row reservation mutual exclusion and cross-Tenant `SKIP LOCKED` progress;
@@ -84,6 +84,10 @@ The SQL compile GREEN is necessary but not sufficient. The next contract slice a
 
 The listed contracts passed real PostgreSQL in push CI `31315634340` and PR CI `31315639504` at source `9ac7088`.
 After that GREEN, the 10W/100J `limit=1` test was strengthened to repeat its complete 100-Job drain 20 times instead of
-relying on one drain. That stronger form remains pending the next CI run. The lock-order audit is now recorded in
-`LOCK_ORDER.md`; repeated targeted, same-runner paired, capacity, current fault and formal performance protocols still
-remain.
+relying on one drain. Candidate 2 passed the strengthened form in push/PR CI `31318294569`/`31318298660`: 2,000 unique
+Jobs and Attempts, zero first-wave empty requests. An independent Run-lock regression then passed
+`31319292162`/`31319295583`.
+
+Targeted attempt 2 stopped on the concurrent 20:1 fairness contract at w8. Therefore repeated targeted is incomplete,
+and same-runner paired, current capacity/fault and formal protocols are deliberately `NOT_RUN`; there is no pending
+Candidate 3.

@@ -88,7 +88,10 @@ reserved/miss/rate values per arm.
 - no relaxed fencing, idempotency or tenant isolation;
 - no retry/sleep/pool/lease parameter tuning;
 - no claim batch-size change;
-- no change to result commit, failure commit, heartbeat or Reaper algorithms.
+- no change to failure commit, heartbeat or Reaper algorithms;
+- after targeted attempt 1 produced a real Run/Job deadlock, result completion retained its Run-first order but
+  narrowed the Run guard from `FOR UPDATE` to `FOR NO KEY UPDATE`. This is a separate correctness repair, not a third
+  scheduler candidate: it preserves Run-writer mutual exclusion while admitting claim/Outbox FK `KEY SHARE`.
 
 The detailed explicit and implicit lock inventory is in `LOCK_ORDER.md`.
 
@@ -98,5 +101,10 @@ The minimum lock mode in commit `18fb876` and the initial production-shaped Post
 passed both push CI `31315634340` and PR CI `31315639504`. This establishes the transaction and correctness design; it
 does not establish the release performance claim. The strengthened repeated 10W contract found a false-empty case, so
 commit `e4dcb5e` adds the single waiting fallback described above as the second and final production iteration. It is
-`VERIFIED_REAL_POSTGRESQL_CI` by push run `31318294569` and PR run `31318298660` at source `ed095cc`. Repeated
-targeted scaling, capacity, current fault injection and formal 32-arm evidence remain separate gates.
+`VERIFIED_REAL_POSTGRESQL_CI` by push run `31318294569` and PR run `31318298660` at source `ed095cc`.
+
+Targeted attempt 1 then exposed the independent result-completion Run/Job lock cycle. Commit `3350c23` applied the
+key-preserving Run guard above and passed push/PR CI `31319292162`/`31319295583`. Attempt 2 completed 1,200 Jobs
+without recurrence, but failed the frozen concurrent 20:1 fairness contract at `skew_20_to_1/w8` (secondary durable
+claim position 4, required `<= 2`). Therefore the design is correctness-qualified but release-rejected; capacity,
+same-runner, current fault and formal runs are intentionally `NOT_RUN`.

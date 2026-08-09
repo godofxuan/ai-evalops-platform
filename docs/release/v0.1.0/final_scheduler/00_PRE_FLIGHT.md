@@ -2,6 +2,10 @@
 
 记录时间：2026-08-09（Asia/Shanghai）
 
+> 本文件是 sprint 开始时的不可变 pre-flight 快照，其中的 “current” 只指起始 source `2879b4c`，不代表
+> 最终状态。最终状态见 `11_FINAL_DECISION.md`：Candidate 2 targeted 并发 20:1 公平门失败，release
+> `NOT_READY`。
+
 ## 1. Git 与工作区
 
 - 目标分支：`codex/evidence-gate-1`；

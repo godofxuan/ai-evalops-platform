@@ -22,7 +22,7 @@ version, Attempt, Audit, Outbox, result or stale-worker fence was weakened. The 
 | cross-Tenant `SKIP LOCKED` progress | PASS | Tenant B progresses while Tenant A is held |
 | reservation-only crash | PASS | queued Job has no lease/Attempt and is recoverable |
 | priority before fairness | PASS | high-priority Job remains first across Tenants |
-| 10W/100J, `limit=1` | PASS for one full drain | 100 unique claims and 100 Attempts; 20 repetitions pending |
+| 10W/100J, `limit=1` | PASS | 20 isolated drains, 2,000 unique claims and 2,000 Attempts |
 | 8W/100J first wave, `limit=1` | PASS | eight successful requests, eight unique Jobs |
 
 The existing real claim-path 20:1 test also remains unchanged: legacy FIFO first serves the secondary Tenant at
@@ -55,6 +55,12 @@ drain is therefore 2,000 unique claims and 2,000 Attempts. This is a correctness
 
 The corrected same-Tenant 8-worker diagnostic at PR run `31318298660` recorded 11 attempts, 3 contention fallbacks,
 `retry/success=0.375`, zero empty requests, p50 `129.754ms`, p95 `137.596ms`, max `139.828ms`, and 8/8 unique Jobs.
+
+Targeted attempt 1 exposed a separate Run/Job lock-order deadlock. Commit `3350c23` changed the result-completion Run
+guard from `FOR UPDATE` to `FOR NO KEY UPDATE`, retaining writer mutual exclusion while admitting the claim Outbox
+foreign-key `KEY SHARE`. Push CI `31319292162` and PR CI `31319295583` both passed the new real-PostgreSQL regression.
+Attempt 2 completed 12 production-worker arms with 1,200/1,200 unique terminal Jobs and zero lost, duplicate durable
+result, orphan or empty-while-eligible counts. The release still fails the separate 20:1 fairness contract at w8.
 
 ## Preserved durable invariants
 

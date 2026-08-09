@@ -1,37 +1,24 @@
 # v0.1.0 RC correctness
 
-结论：在本次定义的 correctness、fairness、lease/fencing 与短暂依赖中断协议内，没有发现回归。
-这不等于 exactly-once、无限故障容忍或生产可靠性认证。
+Current state/fencing correctness is `PASS`; release fairness is separately `FAIL`.
 
-## Final fault evidence
+## Current Candidate 2 evidence
 
-- source：`70a9b2b9d6d4cd7f42d7fa9654771a64e6d707b6`；
-- Actions run：`31275450353`，`completed/success`；
-- immutable bundle：`docs/results/fault/fault-gh-31275450353-1/`；
-- artifact：`9026907209`，147,158 bytes；
-- digest：`sha256:30ff97585f4ac1ec433b87a79e7f364284517d850eb7efd7748f1c2b14d46531`；
-- manifest：6/6 payload，独立 fileset/size/SHA-256 校验通过；
-- report：A–I 各 3 次，共 27/27 records，`verified`。
+- push/PR CI `31318294569` and `31318298660`: 20 isolated 10W/100J `limit=1` drains, 2,000 unique claims and
+  2,000 Attempts; zero first-wave empty requests;
+- push/PR CI `31319292162` and `31319295583`: result-completion Run guard FK compatibility regression passed real
+  PostgreSQL and Compose;
+- targeted attempt 2 `31319556885`: 12 completed arms, 1,200/1,200 unique terminal successes; zero lost,
+  duplicate durable result, orphan, attempt mismatch, stale accepted, illegal transition and empty-while-eligible;
+- no Run/Job deadlock recurred after `3350c23`.
 
-| Invariant | Result |
-|---|---:|
-| lost jobs | 0 |
-| duplicate CaseResult | 0 |
-| duplicate terminal commit | 0 |
-| orphan running | 0 |
-| invariant failures | 0 |
-| stale success attempted / accepted | 3 / 0 |
-| stale failure attempted / accepted | 3 / 0 |
+The current targeted run failed the independent 20:1 fairness invariant at w8. `CORRECTNESS_PASS` here means durable
+state, uniqueness, lease/version fencing and reconciliation; it does not mean release READY.
 
-覆盖场景包括 claim 后杀 Worker、执行中 lease expiry、reclaim 后旧 Worker 晚到 success/failure、
-Redis/PostgreSQL 3 秒中断、Worker restart、双 Reaper 竞争和重复 idempotency key。
+## Historical fault boundary
 
-## Capacity and formal-load cross-checks
+Run `31275450353` remains `VERIFIED_HISTORICAL`: A-I ×3, 27/27 records, zero lost/duplicate/orphan/invariant failures,
+stale success attempted/accepted 3/0 and stale failure 3/0. Because the current fault workflow was not run after the
+targeted failure, these values cannot be promoted as current Candidate 2 fault evidence.
 
-最终 fair-capacity 48 arms（1k/10k/100k，每臂 100 sample jobs）全部满足
-submitted=unique=terminal，lost/duplicate/stale accepted/illegal transition/orphan/attempt mismatch 为 0。
-最终 formal load 的 32 arms、16,000 jobs 全部是 unique terminal success，collector gap 为 0。
-
-production scheduler 的 rank 剪枝与 CTE materialization 没有改变 resume-safe claim：attempt/version、
-lease owner/expiry、heartbeat、Tenant→Run→Job 锁序、stale result fencing 与 durable result commit
-合同保持不变；最终 fault evidence 在修改后的 source 上再次通过。
+No exactly-once, unlimited fault tolerance or production reliability certification is claimed.

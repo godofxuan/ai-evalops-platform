@@ -87,4 +87,7 @@ The strengthened 20-repetition version produced a real 9/10 RED at PR run `31317
 allowed production iteration. It passed push CI `31318294569` and PR CI `31318298660` at source `ed095cc`, including
 20/20 complete 10W/100J drains and zero first-wave empty requests. Candidate 2 is therefore the final scheduler design;
 no Candidate 3 is permitted.
-Release performance: `NOT_YET_QUALIFIED`.
+Release performance: `NOT_ESTABLISHED`. Final release disposition: `NOT_READY`. Targeted attempt 2 (`31319556885`)
+failed the separate frozen concurrent 20:1
+fairness invariant at w8 (secondary durable claim position 4, required `<=2`). The four-repetition performance verdict
+is incomplete, and downstream current experiments are `NOT_RUN` under the stop rule.

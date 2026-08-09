@@ -1365,3 +1365,30 @@ PR CI `31319295583` 在 `4m21s` 完成（quality/integration `4m19s`、Compose `
 PostgreSQL FK compatibility regression 因此不是本地推断。触发文件升级为 v2，同时绑定 Candidate 2、
 原 correctness qualification、Run guard fix、双 CI IDs 与上一失败 run。该提交只启动 frozen protocol，
 不修改 scheduler production，也不把 attempt 1 的唯一 w1 arm promotion 为性能结果。
+
+## 2026-08-09 — Targeted attempt 2 公平门禁失败与自动停止
+
+触发 source `246252e30e63f046a4a1fb5d684a35449aaef9e3` 的 workflow run `31319556885` 在 `1m11s`
+后按 fail-closed 规则失败。artifact `targeted-gh-31319556885-1` 为约 280 KB，SHA-256
+`ed75825c310e52d31e8c0bb54432411bd31f57f520a244462c9aefdf06f68d58`；bot commit `f1a276f`
+把 117 个 manifest-bound 文件保存到
+`docs/results/release/v0.1.0/targeted-gh-31319556885-1/`，没有覆盖 attempt 1 或历史 bundle。
+
+本次在 repetition 1 完成 single、balanced、20:1 skew 三种 distribution 的 1/2/4/8 Worker，共 12 arms。
+每个 arm 都是 100/100 unique terminal Jobs，合计 1,200/1,200；lost、duplicate durable result、orphan、
+attempt mismatch、stale accepted、illegal transition 与 empty-while-eligible 均为 0，attempt 1 的 Run/Job
+deadlock 未复发。失败点是 `skew_20_to_1/w8`：secondary Tenant 的首个 durable claim 完成位置为 4，冻结
+合同要求 `<= 2`，错误码为 `skew_secondary_tenant_first_claim_position_exceeds_2`。
+
+为排除收集器排序伪影，复核了 `InstrumentedClaimer`：每次 `SQLAlchemyJobClaimer.claim()` 返回、数据库事务
+已经提交之后，才用同一进程的 `perf_counter()` 记录事件，最终按该单调时间全局排序。因此 position 4 是
+durable claim 完成序，不是 result collector 或 Job completion 顺序；这是有效 fairness RED，门禁不调整。
+
+唯一已完成 repetition 的 4→8 ratio 分别为 single `0.8952`、balanced `0.9083`、20:1 `0.8907`。
+由于冻结协议要求 4 个完整重复，且 many-small-Tenants 尚未执行，这些仅是 `LIMITED` 诊断，不得写成正式
+`NEGATIVE_SCALING` 或 current 1/2/4/8 throughput。并发公平失败本身已经足以拒绝 release。
+
+Candidate 2 是本 sprint 允许的第 2 次也是最后一次 scheduler production iteration。停止规则立即生效：
+不做 Candidate 3，不放宽 `<=2`，不通过 retry/sleep/pool/batch/lease 参数赌博，不运行 current capacity、
+same-runner A/B/C、A–I fault 或 formal 32-arm。最终 release 状态是 `NOT_READY`，唯一 blocker 是当前
+scheduler 未满足冻结的并发 20:1 公平不变量；PR #1 保持 Draft，不 merge、不 tag、不创建 Release。

@@ -1,7 +1,7 @@
 # Final scheduler targeted performance
 
 Date: 2026-08-09
-Status: `ATTEMPT_2_TRIGGER_READY`
+Status: `FAILED_FAIRNESS_GATE`
 
 ## Attempt 1: correctness RED, no performance decision
 
@@ -48,3 +48,29 @@ This targeted investigation boundary does not replace or relax the frozen releas
 Candidate 2 scheduler correctness was qualified by push CI `31318294569` and PR CI `31318298660`. Attempt 1 then
 exposed the independent Run/Job lock-order RED above. Any retry must use a new source-bound trigger; results must be
 appended without overwriting attempt 1 or any historical negative bundle.
+
+## Attempt 2: frozen fairness gate FAILED
+
+Workflow run [31319556885](https://github.com/godofxuan/ai-evalops-platform/actions/runs/31319556885) executed at exact
+source `246252e30e63f046a4a1fb5d684a35449aaef9e3`. It failed in 1m11s after completing 12 arms in repetition 1.
+Artifact `targeted-gh-31319556885-1` is 280 KB with SHA-256
+`ed75825c310e52d31e8c0bb54432411bd31f57f520a244462c9aefdf06f68d58`; bot commit `f1a276f` preserves 117
+manifest-bound files under `docs/results/release/v0.1.0/targeted-gh-31319556885-1/`.
+
+All 12 completed arms reconciled 100/100 unique terminal Jobs with zero lost Jobs, duplicate durable results,
+orphans and empty-while-eligible claims. The Run-lock deadlock from attempt 1 did not recur. The
+`skew_20_to_1/w8` arm nevertheless recorded the secondary Tenant's first durable claim at position 4. The frozen
+contract requires position `<= 2`, so `assess_arm_runtime` returned
+`skew_secondary_tenant_first_claim_position_exceeds_2` and the protocol stopped before repetition 2.
+
+The position is ordered by a global monotonic timestamp taken only after `SQLAlchemyJobClaimer.claim()` returns from
+its committed transaction. It is not result-completion or collector order. The failure is therefore a current
+scheduler fairness RED, not a harness ordering artifact. The gate is not relaxed.
+
+The one available repetition also showed 4-to-8 throughput ratios of `0.8952` for single Tenant, `0.9083` for
+balanced Tenants and `0.8907` for 20:1. These are `LIMITED` diagnostics only: the formal targeted scaling decision
+requires four repetitions and is therefore `NOT_COMPLETED`. The independent fairness failure is sufficient to reject
+the release.
+
+Candidate 2 is the second and final allowed scheduler production iteration. No Candidate 3, capacity run,
+same-runner paired run, fault rerun or formal scaling run is permitted in this sprint.
