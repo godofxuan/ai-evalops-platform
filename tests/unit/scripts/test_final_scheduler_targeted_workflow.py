@@ -8,7 +8,12 @@ WORKFLOW_PATH = Path(".github/workflows/final-scheduler-targeted.yml")
 def test_targeted_workflow_is_manually_started_after_ci_qualification() -> None:
     workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
-    assert workflow[True] == {"workflow_dispatch": None}
+    triggers = workflow[True]
+    assert triggers["workflow_dispatch"] is None
+    assert triggers["push"] == {
+        "branches": ["codex/evidence-gate-1"],
+        "paths": [".github/final-scheduler-targeted-trigger.txt"],
+    }
     assert workflow["concurrency"]["group"] == "final-scheduler-targeted-v1"
     assert workflow["concurrency"]["cancel-in-progress"] is False
 

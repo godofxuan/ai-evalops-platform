@@ -1,6 +1,11 @@
 name: Final Scheduler - Targeted Qualification
 
 on:
+  push:
+    branches:
+      - codex/evidence-gate-1
+    paths:
+      - .github/final-scheduler-targeted-trigger.txt
   workflow_dispatch:
 
 permissions:
