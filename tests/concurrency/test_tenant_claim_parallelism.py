@@ -79,7 +79,6 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
-        self.waiting_fallbacks += 1
         self.claim_attempts += 1
         claims = await super()._claim_once(
             worker_id=worker_id,
@@ -97,6 +96,7 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
+        self.waiting_fallbacks += 1
         self.claim_attempts += 1
         claims = await super()._claim_once_waiting_for_turn(
             worker_id=worker_id,
