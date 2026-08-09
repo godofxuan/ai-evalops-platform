@@ -375,6 +375,7 @@ def test_explain_summary_does_not_multiply_repeated_full_table_scans() -> None:
 
 
 def test_100k_stage_requires_verified_1k_10k_correctness() -> None:
+    assert queue_sizes_for_stage(stage="targeted", prior_status=None) == (1_000,)
     assert queue_sizes_for_stage(stage="initial", prior_status=None) == (1_000, 10_000)
     assert queue_sizes_for_stage(stage="large", prior_status="VERIFIED") == (100_000,)
 
@@ -407,6 +408,23 @@ def test_stage_rejects_queue_sizes_outside_frozen_plan() -> None:
             requested_queue_sizes=(1_000,),
             source_commit="a" * 40,
             prior_assessment=None,
+        )
+
+
+def test_targeted_stage_is_an_independent_one_thousand_job_gate() -> None:
+    assert validate_stage_request(
+        stage="targeted",
+        requested_queue_sizes=(1_000,),
+        source_commit="a" * 40,
+        prior_assessment=None,
+    ) == (1_000,)
+
+    with pytest.raises(ValueError, match="must not consume"):
+        validate_stage_request(
+            stage="targeted",
+            requested_queue_sizes=(1_000,),
+            source_commit="a" * 40,
+            prior_assessment={"status": "VERIFIED", "source_commit": "a" * 40},
         )
 
 

@@ -182,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--stage", choices=("initial", "large"), required=True)
+    parser.add_argument("--stage", choices=("targeted", "initial", "large"), required=True)
     parser.add_argument("--queue-sizes", required=True)
     parser.add_argument("--prior-assessment", type=Path)
     parser.add_argument("--sample-jobs", type=int, default=100)
@@ -644,7 +644,13 @@ async def _run_worker_sample(
         "successful_claim_calls": sum(claimer.successful_claim_calls for claimer in claimers),
         "claimed_jobs": len(claims),
         "empty_claims": sum(claimer.empty_claims for claimer in claimers),
+        # Each targeted/capacity arm leaves eligible background Jobs behind,
+        # so an empty request inside the bounded sample occurred while eligible.
+        "empty_while_eligible": sum(claimer.empty_claims for claimer in claimers),
         "contention_retries": sum(claimer.contention_retries for claimer in claimers),
+        "contention_retry_per_success": (
+            sum(claimer.contention_retries for claimer in claimers) / len(claims) if claims else 0.0
+        ),
         "max_retry_exits": sum(claimer.max_retry_exits for claimer in claimers),
         "tenant_turn_reserved": tenant_turn_reserved,
         "tenant_turn_without_job": tenant_turn_without_job,
@@ -723,7 +729,9 @@ def _arm_csv_row(
         "claim_calls": runtime["claim_calls"],
         "successful_claim_calls": runtime["successful_claim_calls"],
         "empty_claims": runtime["empty_claims"],
+        "empty_while_eligible": runtime["empty_while_eligible"],
         "contention_retries": runtime["contention_retries"],
+        "contention_retry_per_success": runtime["contention_retry_per_success"],
         "max_retry_exits": runtime["max_retry_exits"],
         "tenant_turn_reserved": runtime["tenant_turn_reserved"],
         "tenant_turn_without_job": runtime["tenant_turn_without_job"],

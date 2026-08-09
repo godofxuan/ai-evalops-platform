@@ -66,6 +66,8 @@ def build_failure_report(
 
 
 def queue_sizes_for_stage(*, stage: str, prior_status: str | None) -> tuple[int, ...]:
+    if stage == "targeted":
+        return (1_000,)
     if stage == "initial":
         return (1_000, 10_000)
     if stage == "large":
@@ -84,9 +86,9 @@ def validate_stage_request(
 ) -> tuple[int, ...]:
     """Bind the 100k stage to a VERIFIED initial assessment from the same source."""
 
-    if stage == "initial":
+    if stage in ("targeted", "initial"):
         if prior_assessment is not None:
-            raise ValueError("initial stage must not consume a prior assessment")
+            raise ValueError(f"{stage} stage must not consume a prior assessment")
         prior_status = None
     else:
         if prior_assessment is None:
