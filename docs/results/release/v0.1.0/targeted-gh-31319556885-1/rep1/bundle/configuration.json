@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source_commit": "246252e30e63f046a4a1fb5d684a35449aaef9e3",
+  "stage": "targeted",
+  "queue_sizes": [
+    1000
+  ],
+  "distributions": [
+    "balanced_multi_tenant",
+    "many_small_tenants",
+    "single_tenant",
+    "skew_20_to_1"
+  ],
+  "worker_concurrency": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "claim_batch_size": 1,
+  "sample_jobs_per_arm": 100,
+  "explain_repetitions": 4,
+  "worker_resource_scope": "single benchmark process running real EvaluationWorker objects",
+  "stale_evidence": {
+    "scope": "referenced_fault_after_bundle_not_induced_per_arm",
+    "source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "status": "FAILED",
+  "error_type": "ExperimentError",
+  "error_message": "arm failed release checks: fair-q1000-skew_20_to_1-w8-b1",
+  "recorded_at": "2026-08-09T14:52:36.846547+00:00",
+  "exception": {
+    "error_type": "ExperimentError",
+    "error_message": "arm failed release checks: fair-q1000-skew_20_to_1-w8-b1"
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/ai-evalops-platform/ai-evalops-platform/scripts/run_fair_capacity_test.py\", line 922, in main\n    assessment = asyncio.run(_run(args, queue_sizes=queue_sizes))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/uv-python-dir/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/uv-python-dir/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/uv-python-dir/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/base_events.py\", line 691, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/runner/work/ai-evalops-platform/ai-evalops-platform/scripts/run_fair_capacity_test.py\", line 890, in _run\n    raise ExperimentError(f\"arm failed release checks: {arm.arm_id}\")\nscripts.experiment_support.ExperimentError: arm failed release checks: fair-q1000-skew_20_to_1-w8-b1\n"
+}

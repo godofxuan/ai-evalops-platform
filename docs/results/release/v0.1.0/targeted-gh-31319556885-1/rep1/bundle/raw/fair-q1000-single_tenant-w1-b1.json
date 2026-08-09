@@ -1,0 +1,80 @@
+{
+  "arm_id": "fair-q1000-single_tenant-w1-b1",
+  "queue_size": 1000,
+  "distribution": "single_tenant",
+  "worker_concurrency": 1,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "empty_while_eligible": 0,
+  "contention_retries": 0,
+  "contention_retry_per_success": 0.0,
+  "max_retry_exits": 0,
+  "waiting_fallbacks": 0,
+  "tenant_turn_reserved": 100,
+  "tenant_turn_without_job": 0,
+  "reservation_miss_rate": 0.0,
+  "claim_latency_ms": {
+    "p50": 69.6581070000093,
+    "p95": 77.77898319999962,
+    "p99": 104.57824716004896
+  },
+  "reservation_latency_ms": {
+    "p50": 62.221305999969445,
+    "p95": 71.02466750003485,
+    "p99": 92.12931534998577
+  },
+  "job_claim_latency_ms": {
+    "p50": 6.777639500000987,
+    "p95": 10.867321899985427,
+    "p99": 12.619234419992187
+  },
+  "result_commit_latency_ms": {
+    "p50": 9.678215000008095,
+    "p95": 13.7358413500408,
+    "p99": 18.529318069928454
+  },
+  "end_to_end_seconds": 8.178090287000032,
+  "jobs_per_second": 12.227793591244758,
+  "worker_process_cpu_percent": 22.896519105157598,
+  "worker_process_rss_bytes_peak": 100884480,
+  "postgres_connections_peak": 2,
+  "postgres_lock_waiting_connections_peak": 0,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "fe559677-5741-4035-be2f-a8d872099989": 1
+  },
+  "tenant_claim_counts": {
+    "fe559677-5741-4035-be2f-a8d872099989": 100
+  },
+  "fair_first_secondary_tenant_position": null,
+  "legacy_fifo_first_secondary_tenant_position": null,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3604635.437,
+      "p95": 3608162.98105
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "arm_id": "fair-q1000-single_tenant-w8-b1",
+  "queue_size": 1000,
+  "distribution": "single_tenant",
+  "worker_concurrency": 8,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "empty_while_eligible": 0,
+  "contention_retries": 4,
+  "contention_retry_per_success": 0.04,
+  "max_retry_exits": 0,
+  "waiting_fallbacks": 4,
+  "tenant_turn_reserved": 100,
+  "tenant_turn_without_job": 0,
+  "reservation_miss_rate": 0.0,
+  "claim_latency_ms": {
+    "p50": 24.613131000023714,
+    "p95": 242.87621864999096,
+    "p99": 296.7064536799717
+  },
+  "reservation_latency_ms": {
+    "p50": 11.179960499987374,
+    "p95": 105.4699110499598,
+    "p99": 199.05819152005392
+  },
+  "job_claim_latency_ms": {
+    "p50": 13.10106849996373,
+    "p95": 56.17331254998702,
+    "p99": 72.32441974994255
+  },
+  "result_commit_latency_ms": {
+    "p50": 81.31619750002983,
+    "p95": 212.23982184994836,
+    "p99": 274.90612726994317
+  },
+  "end_to_end_seconds": 1.9121548460000213,
+  "jobs_per_second": 52.29701988266639,
+  "worker_process_cpu_percent": 85.03081883777428,
+  "worker_process_rss_bytes_peak": 103190528,
+  "postgres_connections_peak": 9,
+  "postgres_lock_waiting_connections_peak": 6,
+  "collector_missed_samples": 0,
+  "tenant_first_claim_positions": {
+    "3da94158-1b87-4f6d-a9ce-da02d5d33218": 1
+  },
+  "tenant_claim_counts": {
+    "3da94158-1b87-4f6d-a9ce-da02d5d33218": 100
+  },
+  "fair_first_secondary_tenant_position": null,
+  "legacy_fifo_first_secondary_tenant_position": null,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3601177.8370000003,
+      "p95": 3601889.1821
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}
