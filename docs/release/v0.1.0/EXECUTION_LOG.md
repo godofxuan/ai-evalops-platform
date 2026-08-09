@@ -1089,3 +1089,38 @@ success。由此可以提交文档，但 release decision 保持 `NOT_READY`。
 evidence、known limits、negative results 与禁止发布说明。credential 值没有输出；临时
 `.codex-tools/github-credential-request.txt` 已立即删除。PR 保持 Draft，不创建 tag/Release，不改变
 `NOT_READY` 决策。
+
+## 2026-08-09 — Final scheduler qualification pre-flight
+
+### 为什么先停止性能实验
+
+新资格合同要求先解决 current candidate 的 CI hang，只有普通 CI GREEN 才能开始 targeted
+benchmark。工作区从提示词观察的 `2879b4c` 到 current HEAD 没有变化且 clean，因此没有 reset；
+先读取实际源码、tests、release 文档与 Actions，而不是沿用“最新 CI 尚在运行”的旧观察。
+
+### GitHub 最新事实
+
+本机 `gh` 不存在；公开 PR 页面确认 PR #1 仍 open Draft。Actions 页面确认：
+
+- `31297535370`（push / `2879b4c`）cancelled，6h00m19s；
+- `31297538171`（PR / `2879b4c`）cancelled，6h00m18s；
+- 前一 blocking reservation iteration 的 `31297096663` / `31297099741` 也各运行满约 6 小时；
+- `31297535370` 的 compose-smoke 在 1m13s 内 success，quality-and-integration 达 6h 上限；
+- 公开 annotation 指向 `step:17`，按 workflow 顺序即
+  `Integration - same-tenant claim parallelism`。
+
+这证明 workflow 被执行但 tests 没有完成。不能把“被 6 小时 safety limit 取消”写成 fail-fast，也
+不能进入 performance。
+
+### 文档漂移与修正
+
+源码已经是 Phase A Tenant fair-turn + Phase B tenant-scoped Job-only explicit lock 两个事务；
+README 仍描述同时锁 Job/Tenant，release decision 仍只写历史 performance blocker。本次只校正当前
+架构事实和当前 blocker，不把状态改 READY。完整 pre-flight、环境限制、六状态判定和可证伪 H2/H3
+预测写入 `final_scheduler/00_PRE_FLIGHT.md`。
+
+### 本机限制
+
+Docker/Compose/psql 均不可用，TCP 5432 没有监听者；系统 Python 是 3.14.3，项目可继续使用仓库内
+uv 环境做 unit/compile/static checks。真实 PostgreSQL lock evidence 必须在 GitHub Actions 获取，
+本机 integration skip 不能计为通过。

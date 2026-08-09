@@ -56,9 +56,11 @@ Phase 2 已建立：
 Phase 3 已建立：
 
 - Run/Job 显式状态机和强制 reason/actor；
-- `FOR UPDATE OF evaluation_jobs SKIP LOCKED` 并发领取；
-- 同优先级下按租户候选轮次与最久未服务时间排序、同时锁定 Job/Tenant 的公平领取；
-- 短事务内状态、lease、version、Attempt 与审计写入；
+- 两阶段 tenant-fair claim candidate：Phase A 在独立短事务中预留 Tenant fair turn，Phase B 在
+  独立短事务中用 `FOR UPDATE OF evaluation_jobs SKIP LOCKED` 领取该 Tenant 的 Job；
+- 同优先级下按租户候选轮次与最久未服务时间排序；Phase B 不显式获取 Tenant scheduler row lock，
+  但 tenant-referencing durable writes 仍受 PostgreSQL foreign-key lock semantics 约束；
+- Phase B 在一个 durable transaction 内原子更新状态、lease、version、Attempt、审计与 Outbox；
 - owner/version/live-expiry 保护的心跳条件更新；
 - 10 Worker 真实 PostgreSQL 并发测试合同。
 
@@ -591,6 +593,12 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 相对 historical pre-fair formal baseline 的性能门：8 个 workload/worker 中位数组有 5 个回退
 超过 15%，最差为 -63.44%。完整判定见
 [v0.1.0 Release Decision](docs/release/v0.1.0/RELEASE_DECISION.md)。
+
+上述 capacity/formal/fault 数字属于历史 source-bound RC 证据。当前 scheduler candidate 已在
+`2879b4c` 拆分为 short fair-turn reservation 与 Job-only explicit durable claim，但它的 push/PR
+CI `31297535370` / `31297538171` 都在 same-tenant integration step 运行满 6 小时后被取消。因此
+当前 blocker 已先收敛为：取得 PostgreSQL lock evidence、校正会自锁等待的测试合同并让普通 CI
+bounded GREEN；在此之前不得把历史绿色证据外推为当前 candidate 已通过，也不得开始正式发布。
 
 最终 source-bound 证据：
 
