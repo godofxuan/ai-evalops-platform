@@ -27,13 +27,18 @@ from sqlalchemy.dialects import postgresql
 
 from app.core.config import Settings
 from app.domain.evaluation import EvaluationResult, TargetResult
-from app.jobs.claiming import ClaimedJob, SQLAlchemyJobClaimer, build_claim_candidates_statement
+from app.jobs.claiming import (
+    ClaimedJob,
+    SQLAlchemyJobClaimer,
+    build_scheduler_round_members_statement,
+)
 from app.jobs.failures import SQLAlchemyFailureCommitter
 from app.jobs.heartbeat import SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
 from app.jobs.results import ResultCommitReceipt, SQLAlchemyResultCommitter
 from app.jobs.retry_policy import RetryPolicy
 from app.persistence.database import create_database_engine, create_session_factory
+from app.persistence.orm_models import TenantSchedulerState
 from app.workers.lease_runner import LeaseHeartbeatRunner
 from app.workers.worker import EvaluationWorker
 from scripts.experiment_support import ExperimentError, percentile, write_report
@@ -136,6 +141,42 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
             limit=limit,
             eligible_at=eligible_at,
         )
+        if self.tenant_turn_reserved > reserved_before and not claims:
+            self.tenant_turn_without_job += 1
+        return claims
+
+    async def _ensure_active_scheduler_round(self, *, eligible_at: datetime) -> bool:
+        started_at = perf_counter()
+        try:
+            return await super()._ensure_active_scheduler_round(eligible_at=eligible_at)
+        finally:
+            self.reservation_latencies_ms.append((perf_counter() - started_at) * 1_000)
+
+    async def _after_scheduler_permit_locked(
+        self,
+        *,
+        worker_id: str,
+        state: TenantSchedulerState,
+    ) -> None:
+        self.tenant_turn_reserved += 1
+
+    async def _claim_active_scheduler_permit(
+        self,
+        *,
+        worker_id: str,
+        eligible_at: datetime,
+        skip_locked: bool,
+    ) -> tuple[ClaimedJob, ...]:
+        started_at = perf_counter()
+        reserved_before = self.tenant_turn_reserved
+        try:
+            claims = await super()._claim_active_scheduler_permit(
+                worker_id=worker_id,
+                eligible_at=eligible_at,
+                skip_locked=skip_locked,
+            )
+        finally:
+            self.job_claim_latencies_ms.append((perf_counter() - started_at) * 1_000)
         if self.tenant_turn_reserved > reserved_before and not claims:
             self.tenant_turn_without_job += 1
         return claims
@@ -429,7 +470,7 @@ async def _collect_explain_pairs(
 ) -> dict[str, list[dict[str, Any]]]:
     now = datetime.now(UTC)
     statements = {
-        "fair": _compile(build_claim_candidates_statement(now=now, limit=arm.claim_batch_size)),
+        "fair": _compile(build_scheduler_round_members_statement(now=now)),
         "legacy_fifo": _compile(build_legacy_fifo_statement(now=now, limit=arm.claim_batch_size)),
     }
     output: dict[str, list[dict[str, Any]]] = {"fair": [], "legacy_fifo": []}
@@ -656,6 +697,21 @@ async def _run_worker_sample(
     legacy_secondary_position = (
         fixture.tenant_counts[0] + 1 if arm.distribution == "skew_20_to_1" else None
     )
+    sequence_complete = all(claim.scheduler_claim_sequence is not None for claim in claims)
+    database_ordered_claims = (
+        sorted(
+            claims,
+            key=lambda claim: int(claim.scheduler_claim_sequence or 0),
+        )
+        if sequence_complete
+        else []
+    )
+    database_claim_tenants = [claim.tenant_id for claim in database_ordered_claims]
+    database_tenant_positions = {
+        str(tenant_id): database_claim_tenants.index(tenant_id) + 1
+        for tenant_id in fixture.tenant_ids
+        if tenant_id in database_claim_tenants
+    }
     postgres_samples = resources["postgres_samples"]
     tenant_turn_reserved = sum(claimer.tenant_turn_reserved for claimer in claimers)
     tenant_turn_without_job = sum(claimer.tenant_turn_without_job for claimer in claimers)
@@ -724,6 +780,8 @@ async def _run_worker_sample(
         ),
         "collector_missed_samples": resources["missed_samples"],
         "tenant_first_claim_positions": tenant_positions,
+        "database_claim_sequence_complete": sequence_complete,
+        "database_tenant_first_claim_positions": database_tenant_positions,
         "tenant_claim_counts": dict(Counter(str(value) for value in claim_tenants)),
         "fair_first_secondary_tenant_position": secondary_position,
         "legacy_fifo_first_secondary_tenant_position": legacy_secondary_position,

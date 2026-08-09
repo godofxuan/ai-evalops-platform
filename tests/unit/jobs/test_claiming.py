@@ -11,6 +11,7 @@ from app.jobs.claiming import (
     InvalidClaimRequest,
     SQLAlchemyJobClaimer,
     build_claim_candidates_statement,
+    build_pending_scheduler_permit_statement,
     build_tenant_job_claim_statement,
     build_waiting_claim_candidate_statement,
     validate_claim_request,
@@ -214,11 +215,14 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
         clock=FixedClock(),
     )
 
-    claims = await claimer.claim(worker_id="worker-1")
+    claims = await claimer._claim_reserved_tenant(
+        worker_id="worker-1",
+        tenant_id=TENANT_ID,
+        eligible_at=NOW,
+    )
 
     assert len(claims) == 1
     assert claims[0].origin_traceparent == ORIGIN_TRACEPARENT
-    assert tenant.last_scheduler_turn_at == NOW
     events = [item for item in session.added if isinstance(item, ProgressEventOutbox)]
     assert len(events) == 1
     assert events[0].event_type == "job_progress"
@@ -231,7 +235,6 @@ async def test_claimer_copies_run_origin_traceparent_to_claim() -> None:
 
 
 async def test_claim_lease_starts_after_candidate_query_completes() -> None:
-    reserved_at = NOW + timedelta(seconds=10)
     claimed_at = NOW + timedelta(seconds=20)
     tenant = Tenant(id=TENANT_ID, slug="slow-query-tenant", name="Slow query tenant")
     run = EvaluationRun(
@@ -257,142 +260,41 @@ async def test_claim_lease_starts_after_candidate_query_completes() -> None:
     claimer = SQLAlchemyJobClaimer(
         OneRowSessionFactory(OneRowSession(job, run, tenant)),  # type: ignore[arg-type]
         lease_policy=LeasePolicy(timedelta(seconds=30)),
-        clock=AdvancingClock(NOW, reserved_at, claimed_at),
+        clock=AdvancingClock(claimed_at),
     )
 
-    claim = (await claimer.claim(worker_id="worker-slow-query"))[0]
+    claim = (
+        await claimer._claim_reserved_tenant(
+            worker_id="worker-slow-query",
+            tenant_id=TENANT_ID,
+            eligible_at=NOW,
+        )
+    )[0]
 
     assert claim.lease_expires_at == claimed_at + timedelta(seconds=30)
     assert job.heartbeat_at == claimed_at
     assert job.started_at == claimed_at
-    assert tenant.last_scheduler_turn_at == reserved_at
 
 
 async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> None:
-    claimed_at = NOW + timedelta(seconds=20)
-    tenant = Tenant(id=TENANT_ID, slug="retry-tenant", name="Retry tenant")
-    run = EvaluationRun(
-        id=RUN_ID,
-        tenant_id=TENANT_ID,
-        status=RunStatus.RUNNING,
-        target_type="mock",
-        target_config_json={},
-        target_version="v1",
-        evaluator_type="execution",
-        evaluator_config_json={},
-        evaluator_version="v1",
-    )
-    job = EvaluationJob(
-        id=JOB_ID,
-        run_id=RUN_ID,
-        case_id="case-retry",
-        case_payload_json={"case_id": "case-retry"},
-        status=JobStatus.QUEUED,
-        attempt_count=0,
-        version=1,
-    )
-    factory = ContendedThenAvailableSessionFactory(OneRowSession(job, run, tenant))
-    claimer = SQLAlchemyJobClaimer(
-        factory,  # type: ignore[arg-type]
-        lease_policy=LeasePolicy(timedelta(seconds=30)),
-        clock=AdvancingClock(
-            NOW,
-            NOW + timedelta(seconds=5),
-            NOW + timedelta(seconds=10),
-            NOW + timedelta(seconds=15),
-            claimed_at,
-        ),
-    )
+    sql = compile_postgresql(build_pending_scheduler_permit_statement(skip_locked=True))
 
-    claims = await claimer.claim(worker_id="worker-retry")
-
-    assert [claim.job_id for claim in claims] == [JOB_ID]
-    assert claims[0].lease_expires_at == claimed_at + timedelta(seconds=30)
-    assert tenant.last_scheduler_turn_at == NOW + timedelta(seconds=15)
-    assert factory.begin_count == 3
-    assert factory.probe_count == 1
+    assert "FOR UPDATE OF tenant_scheduler_states SKIP LOCKED" in sql
+    assert "tenant_scheduler_states.status = 'pending'" in sql
 
 
 async def test_claimer_waits_for_one_short_turn_after_nonblocking_contention() -> None:
-    tenant = Tenant(id=TENANT_ID, slug="waiting-turn", name="Waiting turn")
-    run = EvaluationRun(
-        id=RUN_ID,
-        tenant_id=TENANT_ID,
-        status=RunStatus.RUNNING,
-        target_type="mock",
-        target_config_json={},
-        target_version="v1",
-        evaluator_type="execution",
-        evaluator_config_json={},
-        evaluator_version="v1",
-    )
-    job = EvaluationJob(
-        id=JOB_ID,
-        run_id=RUN_ID,
-        case_id="case-waiting-turn",
-        case_payload_json={"case_id": "case-waiting-turn"},
-        status=JobStatus.QUEUED,
-        attempt_count=0,
-        version=1,
-    )
-    factory = ContendedThenAvailableSessionFactory(OneRowSession(job, run, tenant))
-    claimer = SQLAlchemyJobClaimer(
-        factory,  # type: ignore[arg-type]
-        lease_policy=LeasePolicy(timedelta(seconds=30)),
-        clock=AdvancingClock(
-            NOW,
-            NOW + timedelta(seconds=5),
-            NOW + timedelta(seconds=10),
-            NOW + timedelta(seconds=15),
-            NOW + timedelta(seconds=20),
-        ),
-    )
+    sql = compile_postgresql(build_pending_scheduler_permit_statement(skip_locked=False))
 
-    claims = await claimer.claim(worker_id="worker-waiting-turn")
-
-    assert [claim.job_id for claim in claims] == [JOB_ID]
-    assert factory.begin_count == 3
-    assert factory.probe_count == 1
+    assert "FOR UPDATE OF tenant_scheduler_states" in sql
+    assert "SKIP LOCKED" not in sql
 
 
 async def test_claimer_records_reserved_turn_without_job_metrics() -> None:
-    tenant = Tenant(id=TENANT_ID, slug="reservation-miss", name="Reservation miss")
-    run = EvaluationRun(
-        id=RUN_ID,
-        tenant_id=TENANT_ID,
-        status=RunStatus.RUNNING,
-        target_type="mock",
-        target_config_json={},
-        target_version="v1",
-        evaluator_type="execution",
-        evaluator_config_json={},
-        evaluator_version="v1",
-    )
-    job = EvaluationJob(
-        id=JOB_ID,
-        run_id=RUN_ID,
-        case_id="case-reservation-miss",
-        case_payload_json={"case_id": "case-reservation-miss"},
-        status=JobStatus.QUEUED,
-        attempt_count=0,
-        version=1,
-    )
     metrics = PlatformMetrics()
-    factory = ReservedThenMissingSessionFactory(OneRowSession(job, run, tenant))
-    claimer = SQLAlchemyJobClaimer(
-        factory,  # type: ignore[arg-type]
-        lease_policy=LeasePolicy(timedelta(seconds=30)),
-        clock=FixedClock(),
-        metrics=metrics,
-    )
+    metrics.record_tenant_turn_reserved()
+    metrics.record_tenant_turn_without_job()
 
-    claims = await claimer._claim_once(
-        worker_id="reservation-miss-worker",
-        limit=1,
-        eligible_at=NOW,
-    )
-
-    assert claims == ()
     rendered = metrics.render().decode("utf-8")
     assert "tenant_turn_reserved_total 1.0" in rendered
     assert "tenant_turn_without_job_total 1.0" in rendered

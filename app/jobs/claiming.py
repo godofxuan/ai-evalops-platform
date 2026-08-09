@@ -1,9 +1,11 @@
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, and_, func, or_, select, update
+from sqlalchemy import Select, and_, exists, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock, SystemClock
@@ -20,8 +22,15 @@ from app.persistence.orm_models import (
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
+    SchedulerCoordination,
     Tenant,
+    TenantSchedulerState,
 )
+
+SCHEDULER_COORDINATION_ID = 1
+SCHEDULER_PERMIT_PENDING = "pending"
+SCHEDULER_PERMIT_CONSUMED = "consumed"
+SCHEDULER_PERMIT_EMPTY = "empty"
 
 
 class InvalidClaimRequest(ValueError):
@@ -48,6 +57,7 @@ class ClaimedJob:
     evaluator_version: str
     run_started: bool = False
     origin_traceparent: str | None = None
+    scheduler_claim_sequence: int | None = None
 
 
 def validate_claim_request(*, worker_id: str, limit: int) -> None:
@@ -126,8 +136,9 @@ def build_tenant_job_claim_statement(
     *,
     now: datetime,
     tenant_id: UUID,
+    priority: int | None = None,
 ) -> Select[tuple[EvaluationJob, EvaluationRun]]:
-    return (
+    statement = (
         select(EvaluationJob, EvaluationRun)
         .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
         .where(
@@ -142,6 +153,64 @@ def build_tenant_job_claim_statement(
         )
         .limit(1)
         .with_for_update(of=EvaluationJob, skip_locked=True)
+    )
+    if priority is not None:
+        statement = statement.where(EvaluationJob.priority == priority)
+    return statement
+
+
+def build_scheduler_round_members_statement(*, now: datetime) -> Select[Any]:
+    """Select one ordered fair-round membership record per highest-priority Tenant."""
+
+    highest_priority = (
+        select(func.max(EvaluationJob.priority))
+        .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+        .where(_eligible_job(now), _eligible_run())
+        .scalar_subquery()
+    )
+    return (
+        select(
+            EvaluationRun.tenant_id.label("tenant_id"),
+            highest_priority.label("round_priority"),
+            func.row_number()
+            .over(
+                order_by=(
+                    func.min(EvaluationJob.created_at).asc(),
+                    EvaluationRun.tenant_id.asc(),
+                )
+            )
+            .label("permit_order"),
+        )
+        .select_from(EvaluationJob)
+        .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+        .where(
+            _eligible_job(now),
+            _eligible_run(),
+            EvaluationJob.priority == highest_priority,
+        )
+        .group_by(EvaluationRun.tenant_id)
+    )
+
+
+def build_pending_scheduler_permit_statement(
+    *,
+    skip_locked: bool,
+) -> Select[tuple[TenantSchedulerState]]:
+    """Lock one current-round Tenant permit, optionally using the nonblocking fast path."""
+
+    return (
+        select(TenantSchedulerState)
+        .join(
+            SchedulerCoordination,
+            SchedulerCoordination.id == SCHEDULER_COORDINATION_ID,
+        )
+        .where(
+            TenantSchedulerState.generation == SchedulerCoordination.active_generation,
+            TenantSchedulerState.status == SCHEDULER_PERMIT_PENDING,
+        )
+        .order_by(TenantSchedulerState.permit_order.asc())
+        .limit(1)
+        .with_for_update(of=TenantSchedulerState, skip_locked=skip_locked)
     )
 
 
@@ -161,7 +230,7 @@ def _eligible_run() -> Any:
 
 
 class SQLAlchemyJobClaimer:
-    """Reserve a fair tenant turn, then commit each durable Job claim atomically."""
+    """Claim Jobs through bounded durable fair rounds."""
 
     def __init__(
         self,
@@ -180,13 +249,16 @@ class SQLAlchemyJobClaimer:
         validate_claim_request(worker_id=worker_id, limit=limit)
         claimed_batch: list[ClaimedJob] = []
         for _batch_slot in range(limit):
-            eligible_at = self._clock.now()
-            claims = await self._claim_once(
-                worker_id=worker_id,
-                limit=1,
-                eligible_at=eligible_at,
-            )
-            if not claims:
+            while True:
+                eligible_at = self._clock.now()
+                claims = await self._claim_once(
+                    worker_id=worker_id,
+                    limit=1,
+                    eligible_at=eligible_at,
+                )
+                if claims:
+                    claimed_batch.extend(claims)
+                    break
                 if not await self._has_eligible_jobs(self._clock.now()):
                     return tuple(claimed_batch)
                 claims = await self._claim_once_waiting_for_turn(
@@ -194,9 +266,11 @@ class SQLAlchemyJobClaimer:
                     limit=1,
                     eligible_at=self._clock.now(),
                 )
-            if not claims:
-                return tuple(claimed_batch)
-            claimed_batch.extend(claims)
+                if claims:
+                    claimed_batch.extend(claims)
+                    break
+                if not await self._has_eligible_jobs(self._clock.now()):
+                    return tuple(claimed_batch)
         return tuple(claimed_batch)
 
     async def _has_eligible_jobs(self, now: datetime) -> bool:
@@ -216,13 +290,12 @@ class SQLAlchemyJobClaimer:
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
-        tenant_id = await self._reserve_tenant_turn(eligible_at=eligible_at)
-        if tenant_id is None:
+        if not await self._ensure_active_scheduler_round(eligible_at=eligible_at):
             return ()
-        return await self._claim_after_reserved_turn(
+        return await self._claim_active_scheduler_permit(
             worker_id=worker_id,
-            tenant_id=tenant_id,
             eligible_at=eligible_at,
+            skip_locked=True,
         )
 
     async def _claim_once_waiting_for_turn(
@@ -232,14 +305,144 @@ class SQLAlchemyJobClaimer:
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
-        tenant_id = await self._wait_for_tenant_turn(eligible_at=eligible_at)
-        if tenant_id is None:
+        if not await self._ensure_active_scheduler_round(eligible_at=eligible_at):
             return ()
-        return await self._claim_after_reserved_turn(
+        return await self._claim_active_scheduler_permit(
             worker_id=worker_id,
-            tenant_id=tenant_id,
             eligible_at=eligible_at,
+            skip_locked=False,
         )
+
+    async def _ensure_active_scheduler_round(self, *, eligible_at: datetime) -> bool:
+        """Create one fair round iff no current-generation permit remains pending."""
+
+        async with self._session_factory.begin() as session:
+            coordination = (
+                await session.execute(
+                    select(SchedulerCoordination)
+                    .where(SchedulerCoordination.id == SCHEDULER_COORDINATION_ID)
+                    .with_for_update(of=SchedulerCoordination)
+                )
+            ).scalar_one()
+            has_pending = bool(
+                await session.scalar(
+                    select(
+                        exists().where(
+                            TenantSchedulerState.generation == coordination.active_generation,
+                            TenantSchedulerState.status == SCHEDULER_PERMIT_PENDING,
+                        )
+                    )
+                )
+            )
+            if has_pending:
+                return True
+
+            members = (
+                await session.execute(build_scheduler_round_members_statement(now=eligible_at))
+            ).all()
+            if not members:
+                return False
+
+            generation = coordination.active_generation + 1
+            round_priority = int(members[0].round_priority)
+            values = [
+                {
+                    "tenant_id": member.tenant_id,
+                    "generation": generation,
+                    "round_priority": round_priority,
+                    "permit_order": int(member.permit_order),
+                    "status": SCHEDULER_PERMIT_PENDING,
+                    "version": 1,
+                }
+                for member in members
+            ]
+            insert_statement = postgresql_insert(TenantSchedulerState).values(values)
+            await session.execute(
+                insert_statement.on_conflict_do_update(
+                    index_elements=[TenantSchedulerState.tenant_id],
+                    set_={
+                        "generation": generation,
+                        "round_priority": round_priority,
+                        "permit_order": insert_statement.excluded.permit_order,
+                        "status": SCHEDULER_PERMIT_PENDING,
+                        "version": TenantSchedulerState.version + 1,
+                        "updated_at": func.now(),
+                    },
+                )
+            )
+            coordination.active_generation = generation
+            coordination.active_priority = round_priority
+            coordination.version += 1
+            return True
+
+    async def _before_scheduler_permit_select(self, *, worker_id: str) -> None:
+        """Deterministic concurrency-test seam; production intentionally does nothing."""
+
+    async def _after_scheduler_permit_locked(
+        self,
+        *,
+        worker_id: str,
+        state: TenantSchedulerState,
+    ) -> None:
+        """Deterministic concurrency-test seam while the per-Tenant state is locked."""
+
+    async def _claim_active_scheduler_permit(
+        self,
+        *,
+        worker_id: str,
+        eligible_at: datetime,
+        skip_locked: bool,
+    ) -> tuple[ClaimedJob, ...]:
+        await self._before_scheduler_permit_select(worker_id=worker_id)
+        async with self._session_factory.begin() as session:
+            state = await session.scalar(
+                build_pending_scheduler_permit_statement(skip_locked=skip_locked)
+            )
+            if state is None:
+                return ()
+            await self._after_scheduler_permit_locked(worker_id=worker_id, state=state)
+            rows = (
+                await session.execute(
+                    build_tenant_job_claim_statement(
+                        now=eligible_at,
+                        tenant_id=state.tenant_id,
+                        priority=state.round_priority,
+                    )
+                )
+            ).all()
+            if not rows:
+                state.status = SCHEDULER_PERMIT_EMPTY
+                state.version += 1
+                if self._metrics is not None:
+                    self._metrics.record_tenant_turn_without_job()
+                return ()
+
+            if self._metrics is not None:
+                self._metrics.record_tenant_turn_reserved()
+            claims, attempts = await self._persist_claim_rows(
+                session=session,
+                rows=rows,
+                worker_id=worker_id,
+            )
+            state.status = SCHEDULER_PERMIT_CONSUMED
+            state.version += 1
+
+            # This lock is intentionally acquired only after the Job/Attempt/
+            # Audit/Outbox writes have been constructed. It linearizes durable
+            # diagnostic order at the transaction tail, not the whole claim.
+            coordination = (
+                await session.execute(
+                    select(SchedulerCoordination)
+                    .where(SchedulerCoordination.id == SCHEDULER_COORDINATION_ID)
+                    .with_for_update(of=SchedulerCoordination)
+                )
+            ).scalar_one()
+            coordination.durable_claim_sequence += 1
+            coordination.version += 1
+            sequence = coordination.durable_claim_sequence
+            for attempt in attempts:
+                attempt.scheduler_claim_sequence = sequence
+            return tuple(replace(claim, scheduler_claim_sequence=sequence) for claim in claims)
 
     async def _claim_after_reserved_turn(
         self,
@@ -290,7 +493,6 @@ class SQLAlchemyJobClaimer:
         tenant_id: UUID,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
-        claims: list[ClaimedJob] = []
         async with self._session_factory.begin() as session:
             rows = (
                 await session.execute(
@@ -302,144 +504,160 @@ class SQLAlchemyJobClaimer:
             ).all()
             if not rows:
                 return ()
-            claimed_at = self._clock.now()
-            lease_expires_at = claimed_at + self._lease_policy.duration
-            for job, run in rows:
-                run_started_now = False
-                if job.status is JobStatus.RETRY_WAIT:
-                    retry_due = transition_job(
-                        JobStatus.RETRY_WAIT,
-                        JobStatus.QUEUED,
-                        reason="retry_delay_elapsed",
-                        actor=worker_id,
-                    )
-                    _add_job_transition_audit(
-                        session=session,
-                        tenant_id=run.tenant_id,
-                        job_id=job.id,
-                        transition=retry_due,
-                    )
-                    job.status = JobStatus.QUEUED
+            claims, _attempts = await self._persist_claim_rows(
+                session=session,
+                rows=rows,
+                worker_id=worker_id,
+            )
+            return claims
 
-                claimed = transition_job(
-                    job.status,
-                    JobStatus.RUNNING,
-                    reason="worker_claimed",
+    async def _persist_claim_rows(
+        self,
+        *,
+        session: AsyncSession,
+        rows: Sequence[Any],
+        worker_id: str,
+    ) -> tuple[tuple[ClaimedJob, ...], tuple[JobAttempt, ...]]:
+        claims: list[ClaimedJob] = []
+        attempts: list[JobAttempt] = []
+        claimed_at = self._clock.now()
+        lease_expires_at = claimed_at + self._lease_policy.duration
+        for job, run in rows:
+            run_started_now = False
+            if job.status is JobStatus.RETRY_WAIT:
+                retry_due = transition_job(
+                    JobStatus.RETRY_WAIT,
+                    JobStatus.QUEUED,
+                    reason="retry_delay_elapsed",
                     actor=worker_id,
                 )
                 _add_job_transition_audit(
                     session=session,
                     tenant_id=run.tenant_id,
                     job_id=job.id,
-                    transition=claimed,
+                    transition=retry_due,
                 )
-                attempt_id = uuid4()
-                next_attempt_number = job.attempt_count + 1
-                next_version = job.version + 1
-                job.status = claimed.current
-                job.attempt_count = next_attempt_number
-                job.lease_owner = worker_id
-                job.lease_expires_at = lease_expires_at
-                job.heartbeat_at = claimed_at
-                job.next_attempt_at = None
-                job.started_at = job.started_at or claimed_at
-                job.version = next_version
-                session.add(
-                    JobAttempt(
-                        id=attempt_id,
-                        job_id=job.id,
-                        attempt_number=next_attempt_number,
-                        worker_id=worker_id,
-                        started_at=claimed_at,
-                    )
+                job.status = JobStatus.QUEUED
+
+            claimed = transition_job(
+                job.status,
+                JobStatus.RUNNING,
+                reason="worker_claimed",
+                actor=worker_id,
+            )
+            _add_job_transition_audit(
+                session=session,
+                tenant_id=run.tenant_id,
+                job_id=job.id,
+                transition=claimed,
+            )
+            attempt_id = uuid4()
+            next_attempt_number = job.attempt_count + 1
+            next_version = job.version + 1
+            job.status = claimed.current
+            job.attempt_count = next_attempt_number
+            job.lease_owner = worker_id
+            job.lease_expires_at = lease_expires_at
+            job.heartbeat_at = claimed_at
+            job.next_attempt_at = None
+            job.started_at = job.started_at or claimed_at
+            job.version = next_version
+            attempt = JobAttempt(
+                id=attempt_id,
+                job_id=job.id,
+                attempt_number=next_attempt_number,
+                worker_id=worker_id,
+                started_at=claimed_at,
+            )
+            attempts.append(attempt)
+            session.add(attempt)
+
+            if run.status is RunStatus.QUEUED:
+                run_started = transition_run(
+                    RunStatus.QUEUED,
+                    RunStatus.RUNNING,
+                    reason="first_job_claimed",
+                    actor=worker_id,
                 )
-
-                if run.status is RunStatus.QUEUED:
-                    run_started = transition_run(
-                        RunStatus.QUEUED,
-                        RunStatus.RUNNING,
-                        reason="first_job_claimed",
-                        actor=worker_id,
-                    )
-                    updated_run_id = (
-                        await session.execute(
-                            update(EvaluationRun)
-                            .where(
-                                EvaluationRun.id == run.id,
-                                EvaluationRun.status == RunStatus.QUEUED,
-                            )
-                            .values(
-                                status=run_started.current,
-                                started_at=claimed_at,
-                                version=EvaluationRun.version + 1,
-                            )
-                            .returning(EvaluationRun.id)
-                            .execution_options(synchronize_session=False)
+                updated_run_id = (
+                    await session.execute(
+                        update(EvaluationRun)
+                        .where(
+                            EvaluationRun.id == run.id,
+                            EvaluationRun.status == RunStatus.QUEUED,
                         )
-                    ).scalar_one_or_none()
-                    if updated_run_id is not None:
-                        run_started_now = True
-                        session.add(
-                            AuditEvent(
-                                tenant_id=run.tenant_id,
-                                actor_id=worker_id,
-                                action="run.status_changed",
-                                resource_type="evaluation_run",
-                                resource_id=run.id,
-                                metadata_json={
-                                    "previous": run_started.previous.value,
-                                    "current": run_started.current.value,
-                                    "reason": run_started.reason,
-                                },
-                            )
+                        .values(
+                            status=run_started.current,
+                            started_at=claimed_at,
+                            version=EvaluationRun.version + 1,
                         )
-
-                if run_started_now:
-                    enqueue_progress_event(
-                        session,
-                        event_type=EventType.RUN_STARTED,
-                        tenant_id=run.tenant_id,
-                        run_id=run.id,
-                        timestamp=claimed_at,
-                        payload={"status": "running"},
+                        .returning(EvaluationRun.id)
+                        .execution_options(synchronize_session=False)
                     )
+                ).scalar_one_or_none()
+                if updated_run_id is not None:
+                    run_started_now = True
+                    session.add(
+                        AuditEvent(
+                            tenant_id=run.tenant_id,
+                            actor_id=worker_id,
+                            action="run.status_changed",
+                            resource_type="evaluation_run",
+                            resource_id=run.id,
+                            metadata_json={
+                                "previous": run_started.previous.value,
+                                "current": run_started.current.value,
+                                "reason": run_started.reason,
+                            },
+                        )
+                    )
+
+            if run_started_now:
                 enqueue_progress_event(
                     session,
-                    event_type=EventType.JOB_PROGRESS,
+                    event_type=EventType.RUN_STARTED,
                     tenant_id=run.tenant_id,
                     run_id=run.id,
                     timestamp=claimed_at,
-                    payload={
-                        "job_id": str(job.id),
-                        "case_id": job.case_id,
-                        "attempt_number": next_attempt_number,
-                        "status": "running",
-                    },
+                    payload={"status": "running"},
                 )
+            enqueue_progress_event(
+                session,
+                event_type=EventType.JOB_PROGRESS,
+                tenant_id=run.tenant_id,
+                run_id=run.id,
+                timestamp=claimed_at,
+                payload={
+                    "job_id": str(job.id),
+                    "case_id": job.case_id,
+                    "attempt_number": next_attempt_number,
+                    "status": "running",
+                },
+            )
 
-                claims.append(
-                    ClaimedJob(
-                        job_id=job.id,
-                        run_id=run.id,
-                        tenant_id=run.tenant_id,
-                        case_id=job.case_id,
-                        case_payload=dict(job.case_payload_json),
-                        attempt_id=attempt_id,
-                        attempt_number=next_attempt_number,
-                        worker_id=worker_id,
-                        lease_expires_at=lease_expires_at,
-                        version=next_version,
-                        target_type=run.target_type,
-                        target_config=dict(run.target_config_json),
-                        target_version=run.target_version,
-                        evaluator_type=run.evaluator_type,
-                        evaluator_config=dict(run.evaluator_config_json),
-                        evaluator_version=run.evaluator_version,
-                        run_started=run_started_now,
-                        origin_traceparent=run.origin_traceparent,
-                    )
+            claims.append(
+                ClaimedJob(
+                    job_id=job.id,
+                    run_id=run.id,
+                    tenant_id=run.tenant_id,
+                    case_id=job.case_id,
+                    case_payload=dict(job.case_payload_json),
+                    attempt_id=attempt_id,
+                    attempt_number=next_attempt_number,
+                    worker_id=worker_id,
+                    lease_expires_at=lease_expires_at,
+                    version=next_version,
+                    target_type=run.target_type,
+                    target_config=dict(run.target_config_json),
+                    target_version=run.target_version,
+                    evaluator_type=run.evaluator_type,
+                    evaluator_config=dict(run.evaluator_config_json),
+                    evaluator_version=run.evaluator_version,
+                    run_started=run_started_now,
+                    origin_traceparent=run.origin_traceparent,
                 )
-        return tuple(claims)
+            )
+        return tuple(claims), tuple(attempts)
 
 
 def _add_job_transition_audit(

@@ -33,6 +33,7 @@ from app.persistence.orm_models import (
     JobAttempt,
     ProgressEventOutbox,
     Tenant,
+    TenantSchedulerState,
 )
 from tests.postgres_test_support import install_postgres_test_timeouts, wait_for_lock_sensitive
 
@@ -67,8 +68,8 @@ class TraceEvent:
     job_id: UUID | None = None
 
 
-class CoordinatedCandidate2Claimer(SQLAlchemyJobClaimer):
-    """Expose Candidate 2's reservation-to-Phase-B gap without timing sleeps."""
+class CoordinatedFairRoundClaimer(SQLAlchemyJobClaimer):
+    """Pause B's fair-round permit while all later A Workers reach selection."""
 
     def __init__(
         self,
@@ -80,10 +81,12 @@ class CoordinatedCandidate2Claimer(SQLAlchemyJobClaimer):
     ) -> None:
         super().__init__(session_factory, lease_policy=lease_policy, clock=clock)
         self.paused_tenant_id = paused_tenant_id
-        self.paused_tenant_reserved = asyncio.Event()
-        self.release_paused_phase_b = asyncio.Event()
+        self.paused_tenant_locked = asyncio.Event()
+        self.release_paused_permit = asyncio.Event()
+        self.all_primary_contenders_selecting = asyncio.Event()
         self.trace: list[TraceEvent] = []
         self.receipts: list[ClaimedJob] = []
+        self._primary_contenders: set[str] = set()
         self._worker_id: ContextVar[str] = ContextVar("durable_fairness_worker", default="unknown")
         self._paused_once = False
 
@@ -120,53 +123,40 @@ class CoordinatedCandidate2Claimer(SQLAlchemyJobClaimer):
         finally:
             self._worker_id.reset(token)
 
-    async def _reserve_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
-        self._record("tenant_reservation_attempt")
-        tenant_id = await super()._reserve_tenant_turn(eligible_at=eligible_at)
-        if tenant_id is None:
-            self._record("tenant_reservation_miss")
-        else:
-            # The parent context manager has exited, so this event is after the
-            # reservation transaction committed and released its Tenant lock.
-            self._record("tenant_reservation_commit", tenant_id=tenant_id)
-        return tenant_id
+    async def _before_scheduler_permit_select(self, *, worker_id: str) -> None:
+        self._record("scheduler_permit_select")
+        if worker_id.startswith("primary-") and worker_id != "primary-1":
+            self._primary_contenders.add(worker_id)
+            if len(self._primary_contenders) == 6:
+                self.all_primary_contenders_selecting.set()
 
-    async def _wait_for_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
-        self._record("waiting_fallback_attempt")
-        tenant_id = await super()._wait_for_tenant_turn(eligible_at=eligible_at)
-        if tenant_id is None:
-            self._record("waiting_fallback_miss")
-        else:
-            self._record("waiting_fallback_commit", tenant_id=tenant_id)
-        return tenant_id
-
-    async def _claim_after_reserved_turn(
+    async def _after_scheduler_permit_locked(
         self,
         *,
         worker_id: str,
-        tenant_id: UUID,
-        eligible_at: datetime,
-    ) -> tuple[ClaimedJob, ...]:
-        self._record("phase_b_start", tenant_id=tenant_id)
-        if tenant_id == self.paused_tenant_id and not self._paused_once:
+        state: TenantSchedulerState,
+    ) -> None:
+        self._record("scheduler_permit_locked", tenant_id=state.tenant_id)
+        if state.tenant_id == self.paused_tenant_id and not self._paused_once:
             self._paused_once = True
-            self._record("phase_b_paused", tenant_id=tenant_id)
-            self.paused_tenant_reserved.set()
-            await self.release_paused_phase_b.wait()
-            self._record("phase_b_released", tenant_id=tenant_id)
-        claims = await super()._claim_after_reserved_turn(
-            worker_id=worker_id,
-            tenant_id=tenant_id,
-            eligible_at=eligible_at,
-        )
-        for claim in claims:
-            # _claim_reserved_tenant has exited its transaction before returning.
-            self._record(
-                "job_transaction_commit",
-                tenant_id=claim.tenant_id,
-                job_id=claim.job_id,
-            )
-        return claims
+            self._record("scheduler_permit_paused", tenant_id=state.tenant_id)
+            self.paused_tenant_locked.set()
+            await self.release_paused_permit.wait()
+            self._record("scheduler_permit_released", tenant_id=state.tenant_id)
+
+
+class SimulatedPermitCrash(RuntimeError):
+    pass
+
+
+class CrashAfterPermitLockClaimer(SQLAlchemyJobClaimer):
+    async def _after_scheduler_permit_locked(
+        self,
+        *,
+        worker_id: str,
+        state: TenantSchedulerState,
+    ) -> None:
+        raise SimulatedPermitCrash(f"simulated crash for {worker_id} tenant={state.tenant_id}")
 
 
 async def _create_fairness_fixture(
@@ -316,7 +306,7 @@ def _trace_payload(events: list[TraceEvent]) -> list[dict[str, Any]]:
 
 @pytest.mark.integration
 async def test_fair_reservation_does_not_allow_secondary_durable_receipt_overtaking() -> None:
-    """Candidate 2 RED: r(B) can be early while c(B) is deterministically eighth."""
+    """Candidate 3 GREEN: a pending B round member prevents any A2 admission."""
 
     if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
         pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
@@ -339,60 +329,63 @@ async def test_fair_reservation_does_not_allow_secondary_durable_receipt_overtak
         created_at=now - timedelta(minutes=1),
         job_count=1,
     )
-    claimer = CoordinatedCandidate2Claimer(
+    claimer = CoordinatedFairRoundClaimer(
         session_factory,
         lease_policy=LeasePolicy(timedelta(seconds=30)),
         clock=FixedClock(now),
         paused_tenant_id=secondary.tenant_id,
     )
-    primary_gate = [asyncio.Event() for _ in range(6)]
-    primary_done = [asyncio.Event() for _ in range(6)]
     ready = asyncio.Barrier(7)
 
     async def gated_primary_worker(index: int) -> tuple[ClaimedJob, ...]:
         await ready.wait()
-        await primary_gate[index].wait()
-        try:
-            return await claimer.claim(worker_id=f"primary-{index + 2}", limit=1)
-        finally:
-            primary_done[index].set()
+        return await claimer.claim(worker_id=f"primary-{index + 2}", limit=1)
 
     primary_tasks: list[asyncio.Task[tuple[ClaimedJob, ...]]] = []
     secondary_task: asyncio.Task[tuple[ClaimedJob, ...]] | None = None
     try:
         first_primary = await wait_for_lock_sensitive(
             claimer.claim(worker_id="primary-1", limit=1),
-            operation="Candidate 2 deterministic first primary receipt",
+            operation="Candidate 3 deterministic first primary receipt",
         )
         assert len(first_primary) == 1
         assert first_primary[0].tenant_id == primary.tenant_id
+        first_sequence = first_primary[0].scheduler_claim_sequence
+        assert first_sequence is not None
 
         secondary_task = asyncio.create_task(claimer.claim(worker_id="secondary-1", limit=1))
         await wait_for_lock_sensitive(
-            claimer.paused_tenant_reserved.wait(),
-            operation="Candidate 2 secondary reservation before paused Phase B",
+            claimer.paused_tenant_locked.wait(),
+            operation="Candidate 3 secondary round permit lock",
         )
 
         primary_tasks = [asyncio.create_task(gated_primary_worker(index)) for index in range(6)]
         await ready.wait()
-        for index in range(6):
-            primary_gate[index].set()
-            await wait_for_lock_sensitive(
-                primary_done[index].wait(),
-                operation=f"Candidate 2 primary overtake {index + 1}",
-            )
-            assert primary_tasks[index].done()
-            claims = primary_tasks[index].result()
-            assert len(claims) == 1
-            assert claims[0].tenant_id == primary.tenant_id
+        await wait_for_lock_sensitive(
+            claimer.all_primary_contenders_selecting.wait(),
+            operation="Candidate 3 all later primary Workers reach permit selection",
+        )
 
-        claimer.release_paused_phase_b.set()
+        # Every contender crossed the explicit selector hook while B still
+        # holds its PENDING state row. The invariant, not a timing sleep,
+        # prevents a later primary receipt before B.
+        assert [claim.tenant_id for claim in claimer.receipts] == [primary.tenant_id]
+
+        claimer.release_paused_permit.set()
         secondary_claims = await wait_for_lock_sensitive(
             secondary_task,
-            operation="Candidate 2 delayed secondary durable claim",
+            operation="Candidate 3 delayed secondary durable claim",
         )
         assert len(secondary_claims) == 1
         assert secondary_claims[0].tenant_id == secondary.tenant_id
+        assert secondary_claims[0].scheduler_claim_sequence == first_sequence + 1
+
+        primary_batches = await wait_for_lock_sensitive(
+            asyncio.gather(*primary_tasks),
+            operation="Candidate 3 later primary claims after B round completion",
+        )
+        assert all(len(batch) == 1 for batch in primary_batches)
+        assert all(batch[0].tenant_id == primary.tenant_id for batch in primary_batches)
 
         receipt_tenants = [claim.tenant_id for claim in claimer.receipts]
         secondary_position = receipt_tenants.index(secondary.tenant_id) + 1
@@ -402,9 +395,7 @@ async def test_fair_reservation_does_not_allow_secondary_durable_receipt_overtak
             f"trace={_trace_payload(claimer.trace)}"
         )
     finally:
-        claimer.release_paused_phase_b.set()
-        for gate in primary_gate:
-            gate.set()
+        claimer.release_paused_permit.set()
         for task in primary_tasks:
             if not task.done():
                 task.cancel()
@@ -416,4 +407,127 @@ async def test_fair_reservation_does_not_allow_secondary_durable_receipt_overtak
                 await secondary_task
         await _delete_fairness_fixture(session_factory, secondary)
         await _delete_fairness_fixture(session_factory, primary)
+        await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_crash_after_permit_lock_rolls_back_permit_and_job_for_recovery() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
+    session_factory = create_session_factory(engine)
+    now = datetime(2026, 8, 10, 9, 30, tzinfo=UTC)
+    fixture = await _create_fairness_fixture(
+        session_factory,
+        created_at=now - timedelta(minutes=1),
+        job_count=1,
+    )
+    crashing = CrashAfterPermitLockClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    recovery = SQLAlchemyJobClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    try:
+        with pytest.raises(SimulatedPermitCrash):
+            await wait_for_lock_sensitive(
+                crashing.claim(worker_id="permit-crash", limit=1),
+                operation="Candidate 3 crash after per-Tenant permit lock",
+            )
+
+        async with session_factory() as session:
+            state = await session.get(TenantSchedulerState, fixture.tenant_id)
+            job = await session.get(EvaluationJob, fixture.job_ids[0])
+            assert state is not None and state.status == "pending"
+            assert job is not None
+            assert job.status is JobStatus.QUEUED
+            assert job.attempt_count == 0
+            assert job.lease_owner is None
+            assert job.lease_expires_at is None
+
+        claims = await wait_for_lock_sensitive(
+            recovery.claim(worker_id="permit-crash-recovery", limit=1),
+            operation="Candidate 3 recovery consumes rolled-back permit",
+        )
+        assert [claim.job_id for claim in claims] == [fixture.job_ids[0]]
+        assert claims[0].scheduler_claim_sequence is not None
+    finally:
+        await _delete_fairness_fixture(session_factory, fixture)
+        await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_locked_tenant_permit_does_not_block_other_tenant_progress() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
+    session_factory = create_session_factory(engine)
+    now = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
+    first = await _create_fairness_fixture(
+        session_factory,
+        created_at=now - timedelta(minutes=2),
+        job_count=1,
+    )
+    second = await _create_fairness_fixture(
+        session_factory,
+        created_at=now - timedelta(minutes=1),
+        job_count=1,
+    )
+    pausing = CoordinatedFairRoundClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+        paused_tenant_id=first.tenant_id,
+    )
+    progressing = SQLAlchemyJobClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    paused_task: asyncio.Task[tuple[ClaimedJob, ...]] | None = None
+    try:
+        paused_task = asyncio.create_task(pausing.claim(worker_id="locked-first", limit=1))
+        await wait_for_lock_sensitive(
+            pausing.paused_tenant_locked.wait(),
+            operation="Candidate 3 first Tenant permit lock",
+        )
+
+        other_claims = await wait_for_lock_sensitive(
+            progressing.claim(worker_id="other-tenant", limit=1),
+            operation="Candidate 3 other-Tenant SKIP LOCKED progress",
+        )
+        assert len(other_claims) == 1
+        assert other_claims[0].tenant_id == second.tenant_id
+
+        pausing.release_paused_permit.set()
+        first_claims = await wait_for_lock_sensitive(
+            paused_task,
+            operation="Candidate 3 release first Tenant permit",
+        )
+        assert len(first_claims) == 1
+        assert first_claims[0].tenant_id == first.tenant_id
+    finally:
+        pausing.release_paused_permit.set()
+        if paused_task is not None and not paused_task.done():
+            paused_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await paused_task
+        await _delete_fairness_fixture(session_factory, second)
+        await _delete_fairness_fixture(session_factory, first)
         await engine.dispose()
