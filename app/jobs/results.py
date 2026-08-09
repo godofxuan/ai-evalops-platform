@@ -45,10 +45,12 @@ def build_run_lock_for_completion_statement(
     *,
     run_id: UUID,
 ) -> Select[tuple[UUID]]:
-    """Lock the parent Run before Job/result writes to prevent FK lock upgrades."""
+    """Serialize Run writers before Job locks while allowing FK KEY SHARE readers."""
 
     return (
-        select(EvaluationRun.id).where(EvaluationRun.id == run_id).with_for_update(of=EvaluationRun)
+        select(EvaluationRun.id)
+        .where(EvaluationRun.id == run_id)
+        .with_for_update(of=EvaluationRun, key_share=True)
     )
 
 

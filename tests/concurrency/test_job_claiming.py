@@ -11,12 +11,14 @@ from app.auth.principals import Principal
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, AttemptOutcome, JobStatus, RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult, TokenUsage
+from app.events.models import EventType
+from app.events.outbox import enqueue_progress_event
 from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
 from app.jobs.reaper import SQLAlchemyJobReaper
-from app.jobs.results import SQLAlchemyResultCommitter
+from app.jobs.results import SQLAlchemyResultCommitter, build_run_lock_for_completion_statement
 from app.jobs.retry_policy import RetryPolicy
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.orm_models import (
@@ -163,6 +165,39 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                     )
                     for index, job_id in enumerate(job_ids)
                 ]
+            )
+
+        # A result transaction serializes same-Run aggregation before it locks its Job.
+        # A concurrent claim already owns another Job when its transactional Outbox row
+        # asks PostgreSQL for the Run FK's implicit KEY SHARE lock. The Run guard must
+        # allow that FK lock or the two paths can form Run -> Job / Job -> Run deadlock.
+        async with (
+            session_factory() as result_session,
+            session_factory() as claim_session,
+            result_session.begin(),
+            claim_session.begin(),
+        ):
+            locked_run_id = await result_session.scalar(
+                build_run_lock_for_completion_statement(run_id=run_id)
+            )
+            assert locked_run_id == run_id
+            locked_job_id = await claim_session.scalar(
+                select(EvaluationJob.id)
+                .where(EvaluationJob.id == job_ids[0])
+                .with_for_update(of=EvaluationJob)
+            )
+            assert locked_job_id == job_ids[0]
+            enqueue_progress_event(
+                claim_session,
+                event_type=EventType.JOB_PROGRESS,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                timestamp=now,
+                payload={"job_id": str(job_ids[0]), "status": "running"},
+            )
+            await wait_for_lock_sensitive(
+                claim_session.flush(),
+                operation="claim Outbox FK under result Run guard",
             )
 
         claimer = SQLAlchemyJobClaimer(
