@@ -1,7 +1,8 @@
 # Fair scheduler performance blocker sprint：pre-flight
 
-记录时间：2026-08-09（Asia/Shanghai）  
-执行分支：`codex/evidence-gate-1`  
+记录时间：2026-08-09（Asia/Shanghai）
+
+执行分支：`codex/evidence-gate-1`
 起始 HEAD：`9b2e4a520387bf4a39db1ea5dcd265877a203b2e`
 
 ## 1. 本阶段目标与判断
