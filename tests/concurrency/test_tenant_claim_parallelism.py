@@ -786,53 +786,81 @@ async def test_ten_workers_drain_one_hundred_same_tenant_jobs_with_limit_one() -
     install_postgres_test_timeouts(engine)
     session_factory = create_session_factory(engine)
     now = datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
-    fixture = await _create_claim_fixture(session_factory, created_at=now, job_count=100)
     claimer = SQLAlchemyJobClaimer(
         session_factory,
         lease_policy=LeasePolicy(timedelta(seconds=30)),
         clock=FixedClock(now),
     )
-    first_wave_barrier = asyncio.Barrier(11)
 
-    async def first_claim(worker_number: int) -> tuple[ClaimedJob, ...]:
-        await first_wave_barrier.wait()
-        return await claimer.claim(worker_id=f"limit-one-first-{worker_number}", limit=1)
+    async def first_claim(
+        worker_number: int,
+        *,
+        barrier: asyncio.Barrier,
+        repetition: int,
+    ) -> tuple[ClaimedJob, ...]:
+        await barrier.wait()
+        return await claimer.claim(
+            worker_id=f"limit-one-first-{repetition}-{worker_number}",
+            limit=1,
+        )
 
-    async def drain(worker_number: int) -> tuple[ClaimedJob, ...]:
+    async def drain(worker_number: int, *, repetition: int) -> tuple[ClaimedJob, ...]:
         drained: list[ClaimedJob] = []
         while True:
-            claims = await claimer.claim(worker_id=f"limit-one-drain-{worker_number}", limit=1)
+            claims = await claimer.claim(
+                worker_id=f"limit-one-drain-{repetition}-{worker_number}",
+                limit=1,
+            )
             if not claims:
                 return tuple(drained)
             drained.extend(claims)
 
     try:
-        first_tasks = [asyncio.create_task(first_claim(index)) for index in range(10)]
-        await first_wave_barrier.wait()
-        first_wave = await wait_for_lock_sensitive(
-            asyncio.gather(*first_tasks),
-            operation="ten-worker limit-one first wave",
-        )
-        first_claims = tuple(claim for batch in first_wave for claim in batch)
-        assert len(first_claims) == 10
-        assert len({claim.job_id for claim in first_claims}) == 10
-
-        drained_batches = await wait_for_lock_sensitive(
-            asyncio.gather(*(drain(index) for index in range(10))),
-            operation="ten-worker limit-one queue drain",
-        )
-        claims = first_claims + tuple(claim for batch in drained_batches for claim in batch)
-        assert len(claims) == 100
-        assert len({claim.job_id for claim in claims}) == 100
-        async with session_factory() as session:
-            attempt_count = await session.scalar(
-                select(func.count(JobAttempt.id))
-                .join(EvaluationJob)
-                .where(EvaluationJob.run_id == fixture.run_id)
+        for repetition in range(20):
+            fixture = await _create_claim_fixture(
+                session_factory,
+                created_at=now,
+                job_count=100,
             )
-        assert attempt_count == 100
+            first_wave_barrier = asyncio.Barrier(11)
+
+            try:
+                first_tasks = [
+                    asyncio.create_task(
+                        first_claim(
+                            index,
+                            barrier=first_wave_barrier,
+                            repetition=repetition,
+                        )
+                    )
+                    for index in range(10)
+                ]
+                await first_wave_barrier.wait()
+                first_wave = await wait_for_lock_sensitive(
+                    asyncio.gather(*first_tasks),
+                    operation=f"ten-worker limit-one first wave repetition {repetition + 1}",
+                )
+                first_claims = tuple(claim for batch in first_wave for claim in batch)
+                assert len(first_claims) == 10
+                assert len({claim.job_id for claim in first_claims}) == 10
+
+                drained_batches = await wait_for_lock_sensitive(
+                    asyncio.gather(*(drain(index, repetition=repetition) for index in range(10))),
+                    operation=f"ten-worker limit-one queue drain repetition {repetition + 1}",
+                )
+                claims = first_claims + tuple(claim for batch in drained_batches for claim in batch)
+                assert len(claims) == 100
+                assert len({claim.job_id for claim in claims}) == 100
+                async with session_factory() as session:
+                    attempt_count = await session.scalar(
+                        select(func.count(JobAttempt.id))
+                        .join(EvaluationJob)
+                        .where(EvaluationJob.run_id == fixture.run_id)
+                    )
+                assert attempt_count == 100
+            finally:
+                await _delete_claim_fixture(session_factory, fixture)
     finally:
-        await _delete_claim_fixture(session_factory, fixture)
         await engine.dispose()
 
 
