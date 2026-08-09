@@ -84,6 +84,7 @@ async def run_worker_process(
         claimer=SQLAlchemyJobClaimer(
             session_factory,
             lease_policy=LeasePolicy(timedelta(seconds=settings.worker_lease_seconds)),
+            metrics=metrics,
         ),
         result_committer=SQLAlchemyResultCommitter(session_factory),
         failure_committer=SQLAlchemyFailureCommitter(

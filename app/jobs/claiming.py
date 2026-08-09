@@ -14,6 +14,7 @@ from app.domain.run_state_machine import transition_run
 from app.events.models import EventType
 from app.events.outbox import enqueue_progress_event
 from app.jobs.lease import LeasePolicy
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     AuditEvent,
@@ -154,10 +155,12 @@ class SQLAlchemyJobClaimer:
         *,
         lease_policy: LeasePolicy,
         clock: Clock | None = None,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._lease_policy = lease_policy
         self._clock = clock or SystemClock()
+        self._metrics = metrics
 
     async def claim(self, *, worker_id: str, limit: int = 1) -> tuple[ClaimedJob, ...]:
         validate_claim_request(worker_id=worker_id, limit=limit)
@@ -202,11 +205,16 @@ class SQLAlchemyJobClaimer:
         tenant_id = await self._reserve_tenant_turn(eligible_at=eligible_at)
         if tenant_id is None:
             return ()
-        return await self._claim_reserved_tenant(
+        if self._metrics is not None:
+            self._metrics.record_tenant_turn_reserved()
+        claims = await self._claim_reserved_tenant(
             worker_id=worker_id,
             tenant_id=tenant_id,
             eligible_at=eligible_at,
         )
+        if not claims and self._metrics is not None:
+            self._metrics.record_tenant_turn_without_job()
+        return claims
 
     async def _reserve_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
         async with self._session_factory.begin() as session:

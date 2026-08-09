@@ -76,6 +76,23 @@ class PlatformMetrics:
             "Expired leases recovered by this process.",
             registry=self.registry,
         )
+        self._tenant_turn_reserved = Counter(
+            "tenant_turn_reserved",
+            "Fair Tenant turns durably reserved by this scheduler process.",
+            registry=self.registry,
+        )
+        self._tenant_turn_without_job = Counter(
+            "tenant_turn_without_job",
+            "Reserved Tenant turns whose Phase B found no claimable Job.",
+            registry=self.registry,
+        )
+        self._reservation_miss_rate = Gauge(
+            "reservation_miss_rate",
+            "Tenant turns without a Job divided by all reserved Tenant turns in this process.",
+            registry=self.registry,
+        )
+        self._tenant_turn_reserved_count = 0
+        self._tenant_turn_without_job_count = 0
         self._worker_heartbeat_age = Gauge(
             "worker_heartbeat_age",
             "Age in seconds of the stalest running Job heartbeat.",
@@ -178,6 +195,21 @@ class PlatformMetrics:
     def record_job_lease_expired(self, count: int = 1) -> None:
         if count > 0:
             self._job_lease_expired_total.inc(count)
+
+    def record_tenant_turn_reserved(self) -> None:
+        self._tenant_turn_reserved.inc()
+        self._tenant_turn_reserved_count += 1
+        self._update_reservation_miss_rate()
+
+    def record_tenant_turn_without_job(self) -> None:
+        self._tenant_turn_without_job.inc()
+        self._tenant_turn_without_job_count += 1
+        self._update_reservation_miss_rate()
+
+    def _update_reservation_miss_rate(self) -> None:
+        denominator = self._tenant_turn_reserved_count
+        rate = self._tenant_turn_without_job_count / denominator if denominator else 0.0
+        self._reservation_miss_rate.set(rate)
 
     def set_worker_heartbeat_age(self, seconds: float) -> None:
         self._worker_heartbeat_age.set(max(seconds, 0.0))

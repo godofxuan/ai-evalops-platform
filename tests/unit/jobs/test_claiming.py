@@ -15,6 +15,7 @@ from app.jobs.claiming import (
     validate_claim_request,
 )
 from app.jobs.lease import LeasePolicy
+from app.observability.metrics import PlatformMetrics
 from app.persistence.orm_models import EvaluationJob, EvaluationRun, ProgressEventOutbox, Tenant
 
 NOW = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
@@ -106,6 +107,20 @@ class ContendedThenAvailableSessionFactory:
     async def __call__(self) -> AsyncIterator[EligibleProbeSession]:
         self.probe_count += 1
         yield EligibleProbeSession()
+
+
+class ReservedThenMissingSessionFactory:
+    def __init__(self, reserved_session: OneRowSession) -> None:
+        self._reserved_session = reserved_session
+        self.begin_count = 0
+
+    @asynccontextmanager
+    async def begin(self) -> AsyncIterator[OneRowSession | EmptyRowSession]:
+        self.begin_count += 1
+        if self.begin_count == 1:
+            yield self._reserved_session
+        else:
+            yield EmptyRowSession()
 
 
 def compile_postgresql(statement: object) -> str:
@@ -286,6 +301,50 @@ async def test_claimer_retries_when_eligible_jobs_are_temporarily_locked() -> No
     assert tenant.last_scheduler_turn_at == NOW + timedelta(seconds=15)
     assert factory.begin_count == 3
     assert factory.probe_count == 1
+
+
+async def test_claimer_records_reserved_turn_without_job_metrics() -> None:
+    tenant = Tenant(id=TENANT_ID, slug="reservation-miss", name="Reservation miss")
+    run = EvaluationRun(
+        id=RUN_ID,
+        tenant_id=TENANT_ID,
+        status=RunStatus.RUNNING,
+        target_type="mock",
+        target_config_json={},
+        target_version="v1",
+        evaluator_type="execution",
+        evaluator_config_json={},
+        evaluator_version="v1",
+    )
+    job = EvaluationJob(
+        id=JOB_ID,
+        run_id=RUN_ID,
+        case_id="case-reservation-miss",
+        case_payload_json={"case_id": "case-reservation-miss"},
+        status=JobStatus.QUEUED,
+        attempt_count=0,
+        version=1,
+    )
+    metrics = PlatformMetrics()
+    factory = ReservedThenMissingSessionFactory(OneRowSession(job, run, tenant))
+    claimer = SQLAlchemyJobClaimer(
+        factory,  # type: ignore[arg-type]
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(),
+        metrics=metrics,
+    )
+
+    claims = await claimer._claim_once(
+        worker_id="reservation-miss-worker",
+        limit=1,
+        eligible_at=NOW,
+    )
+
+    assert claims == ()
+    rendered = metrics.render().decode("utf-8")
+    assert "tenant_turn_reserved_total 1.0" in rendered
+    assert "tenant_turn_without_job_total 1.0" in rendered
+    assert "reservation_miss_rate 1.0" in rendered
 
 
 @pytest.mark.parametrize(("worker_id", "limit"), [("", 1), ("worker-1", 0), ("worker-1", 101)])

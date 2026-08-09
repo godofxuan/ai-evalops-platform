@@ -69,12 +69,16 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.call_latencies_ms: list[float] = []
+        self.reservation_latencies_ms: list[float] = []
+        self.job_claim_latencies_ms: list[float] = []
         self.claimed_events: list[tuple[float, ClaimedJob]] = []
         self.claim_calls = 0
         self.successful_claim_calls = 0
         self.empty_claims = 0
         self.contention_retries = 0
         self.max_retry_exits = 0
+        self.tenant_turn_reserved = 0
+        self.tenant_turn_without_job = 0
         self._attempts: contextvars.ContextVar[int] = contextvars.ContextVar(
             "fair_capacity_claim_attempts",
             default=0,
@@ -109,11 +113,42 @@ class InstrumentedClaimer(SQLAlchemyJobClaimer):
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
         self._attempts.set(self._attempts.get() + 1)
-        return await super()._claim_once(
+        reserved_before = self.tenant_turn_reserved
+        claims = await super()._claim_once(
             worker_id=worker_id,
             limit=limit,
             eligible_at=eligible_at,
         )
+        if self.tenant_turn_reserved > reserved_before and not claims:
+            self.tenant_turn_without_job += 1
+        return claims
+
+    async def _reserve_tenant_turn(self, *, eligible_at: datetime) -> UUID | None:
+        started_at = perf_counter()
+        try:
+            tenant_id = await super()._reserve_tenant_turn(eligible_at=eligible_at)
+        finally:
+            self.reservation_latencies_ms.append((perf_counter() - started_at) * 1_000)
+        if tenant_id is not None:
+            self.tenant_turn_reserved += 1
+        return tenant_id
+
+    async def _claim_reserved_tenant(
+        self,
+        *,
+        worker_id: str,
+        tenant_id: UUID,
+        eligible_at: datetime,
+    ) -> tuple[ClaimedJob, ...]:
+        started_at = perf_counter()
+        try:
+            return await super()._claim_reserved_tenant(
+                worker_id=worker_id,
+                tenant_id=tenant_id,
+                eligible_at=eligible_at,
+            )
+        finally:
+            self.job_claim_latencies_ms.append((perf_counter() - started_at) * 1_000)
 
 
 class TimedResultCommitter:
@@ -573,6 +608,12 @@ async def _run_worker_sample(
     claims: list[ClaimedJob] = list(order_timed_values(claim_events))
     reconciliation = await _reconcile_sample(database_url=database_url, claims=claims)
     claim_latencies = [value for claimer in claimers for value in claimer.call_latencies_ms]
+    reservation_latencies = [
+        value for claimer in claimers for value in claimer.reservation_latencies_ms
+    ]
+    job_claim_latencies = [
+        value for claimer in claimers for value in claimer.job_claim_latencies_ms
+    ]
     result_latencies = [value for committer in committers for value in committer.latencies_ms]
     claim_tenants = [claim.tenant_id for claim in claims]
     tenant_positions = {
@@ -589,6 +630,8 @@ async def _run_worker_sample(
         fixture.tenant_counts[0] + 1 if arm.distribution == "skew_20_to_1" else None
     )
     postgres_samples = resources["postgres_samples"]
+    tenant_turn_reserved = sum(claimer.tenant_turn_reserved for claimer in claimers)
+    tenant_turn_without_job = sum(claimer.tenant_turn_without_job for claimer in claimers)
     return {
         "arm_id": arm.arm_id,
         "queue_size": arm.queue_size,
@@ -603,10 +646,25 @@ async def _run_worker_sample(
         "empty_claims": sum(claimer.empty_claims for claimer in claimers),
         "contention_retries": sum(claimer.contention_retries for claimer in claimers),
         "max_retry_exits": sum(claimer.max_retry_exits for claimer in claimers),
+        "tenant_turn_reserved": tenant_turn_reserved,
+        "tenant_turn_without_job": tenant_turn_without_job,
+        "reservation_miss_rate": (
+            tenant_turn_without_job / tenant_turn_reserved if tenant_turn_reserved else 0.0
+        ),
         "claim_latency_ms": {
             "p50": percentile(claim_latencies, 0.50),
             "p95": percentile(claim_latencies, 0.95),
             "p99": percentile(claim_latencies, 0.99),
+        },
+        "reservation_latency_ms": {
+            "p50": percentile(reservation_latencies, 0.50),
+            "p95": percentile(reservation_latencies, 0.95),
+            "p99": percentile(reservation_latencies, 0.99),
+        },
+        "job_claim_latency_ms": {
+            "p50": percentile(job_claim_latencies, 0.50),
+            "p95": percentile(job_claim_latencies, 0.95),
+            "p99": percentile(job_claim_latencies, 0.99),
         },
         "result_commit_latency_ms": {
             "p50": percentile(result_latencies, 0.50),
@@ -667,9 +725,18 @@ def _arm_csv_row(
         "empty_claims": runtime["empty_claims"],
         "contention_retries": runtime["contention_retries"],
         "max_retry_exits": runtime["max_retry_exits"],
+        "tenant_turn_reserved": runtime["tenant_turn_reserved"],
+        "tenant_turn_without_job": runtime["tenant_turn_without_job"],
+        "reservation_miss_rate": runtime["reservation_miss_rate"],
         "claim_latency_p50_ms": runtime["claim_latency_ms"]["p50"],
         "claim_latency_p95_ms": runtime["claim_latency_ms"]["p95"],
         "claim_latency_p99_ms": runtime["claim_latency_ms"]["p99"],
+        "reservation_latency_p50_ms": runtime["reservation_latency_ms"]["p50"],
+        "reservation_latency_p95_ms": runtime["reservation_latency_ms"]["p95"],
+        "reservation_latency_p99_ms": runtime["reservation_latency_ms"]["p99"],
+        "job_claim_latency_p50_ms": runtime["job_claim_latency_ms"]["p50"],
+        "job_claim_latency_p95_ms": runtime["job_claim_latency_ms"]["p95"],
+        "job_claim_latency_p99_ms": runtime["job_claim_latency_ms"]["p99"],
         "queue_wait_p50_ms": correctness["queue_wait_ms"]["p50"],
         "queue_wait_p95_ms": correctness["queue_wait_ms"]["p95"],
         "result_commit_latency_p50_ms": runtime["result_commit_latency_ms"]["p50"],
