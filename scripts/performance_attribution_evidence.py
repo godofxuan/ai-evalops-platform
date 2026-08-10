@@ -1,6 +1,7 @@
 import argparse
 import csv
 import math
+import re
 import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -18,6 +19,12 @@ FORMAL_REPETITIONS: Final = 4
 OVERHEAD_ARM_ID: Final = "fair-q1000-skew_20_to_1-w8-b1"
 THROUGHPUT_OVERHEAD_LIMIT: Final = 0.05
 CLAIM_P95_OVERHEAD_LIMIT: Final = 0.10
+ATTRIBUTION_SAMPLE_JOBS: Final = 100
+_ATTRIBUTION_ARM_PATTERN: Final = re.compile(
+    r"fair-q(?P<queue>[1-9][0-9]*)-"
+    r"(?P<distribution>single_tenant|balanced_multi_tenant|skew_20_to_1|many_small_tenants)-"
+    r"w(?P<workers>[1-9][0-9]*)-b(?P<batch>[1-9][0-9]*)"
+)
 _ZERO_FIELDS: Final = (
     "lost_count",
     "duplicate_durable_result_count",
@@ -72,6 +79,18 @@ def _boolean(row: Mapping[str, object], field: str) -> bool | None:
     return None
 
 
+def _arm_workload_contract(arm_id: str) -> tuple[int, str, int, int] | None:
+    match = _ATTRIBUTION_ARM_PATTERN.fullmatch(arm_id)
+    if match is None:
+        return None
+    return (
+        int(match.group("queue")),
+        match.group("distribution"),
+        int(match.group("workers")),
+        int(match.group("batch")),
+    )
+
+
 def _read_csv(path: Path) -> list[dict[str, object]]:
     with path.open(encoding="utf-8", newline="") as stream:
         return [dict(row) for row in csv.DictReader(stream)]
@@ -98,6 +117,21 @@ def _validated_repetition(
         failures.append("arm_set_mismatch")
     by_arm = {str(row.get("arm_id")): row for row in rows}
     for arm_id, row in by_arm.items():
+        workload = _arm_workload_contract(arm_id)
+        if workload is None:
+            failures.append(f"{arm_id}:arm_id_malformed")
+        else:
+            queue_size, distribution, workers, batch = workload
+            if _integer(row, "queue_size") != queue_size:
+                failures.append(f"{arm_id}:queue_size_mismatch")
+            if row.get("distribution") != distribution:
+                failures.append(f"{arm_id}:distribution_mismatch")
+            if _integer(row, "worker_concurrency") != workers:
+                failures.append(f"{arm_id}:worker_concurrency_mismatch")
+            if _integer(row, "claim_batch_size") != batch:
+                failures.append(f"{arm_id}:claim_batch_size_mismatch")
+        if _integer(row, "sample_jobs") != ATTRIBUTION_SAMPLE_JOBS:
+            failures.append(f"{arm_id}:sample_jobs_mismatch")
         if row.get("source_commit") != source_commit:
             failures.append(f"{arm_id}:source_commit_mismatch")
         if _boolean(row, "performance_attribution_enabled") is not instrumentation_enabled:

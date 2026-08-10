@@ -209,15 +209,16 @@ def test_performance_attribution_rejects_claim_batch_spoof() -> None:
 
 
 def test_performance_attribution_rejects_unknown_arm() -> None:
-    assert _assess_spoofed_overhead("arm_id", "fair-q1000-skew_20_to_1-w16-b1")[
-        "status"
-    ] == "FAILED"
+    assert (
+        _assess_spoofed_overhead("arm_id", "fair-q1000-skew_20_to_1-w16-b1")["status"] == "FAILED"
+    )
 
 
 def test_performance_attribution_rejects_malformed_arm() -> None:
-    assert _assess_spoofed_overhead("arm_id", "fair-q1000-skew_20_to_1-w8-b1-extra")[
-        "status"
-    ] == "FAILED"
+    assert (
+        _assess_spoofed_overhead("arm_id", "fair-q1000-skew_20_to_1-w8-b1-extra")["status"]
+        == "FAILED"
+    )
 
 
 def test_performance_attribution_rejects_sample_jobs_drift() -> None:
