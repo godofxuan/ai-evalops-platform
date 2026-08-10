@@ -35,6 +35,11 @@ def _row(
     row: dict[str, object] = {
         "arm_id": f"fair-q1000-{distribution}-w{workers}-b1",
         "source_commit": SOURCE,
+        "queue_size": 1_000,
+        "distribution": distribution,
+        "worker_concurrency": workers,
+        "claim_batch_size": 1,
+        "sample_jobs": 100,
         "performance_attribution_enabled": instrumentation,
         "submitted_count": 100,
         "jobs_per_second": throughput,
@@ -173,6 +178,50 @@ def test_overhead_arm_only_contract_rejects_full_matrix() -> None:
 
     assert assessment["status"] == "FAILED"
     assert any("arm_set_mismatch" in value for value in assessment["failures"])
+
+
+def _assess_spoofed_overhead(field: str, value: object) -> dict[str, object]:
+    off = [_overhead_repetition(instrumentation=False) for _ in range(3)]
+    on = [_overhead_repetition(instrumentation=True) for _ in range(3)]
+    off[0][0][field] = value
+    return assess_instrumentation_overhead(
+        off_repetitions=off,
+        on_repetitions=on,
+        source_commit=SOURCE,
+        overhead_arm_only=True,
+    )
+
+
+def test_performance_attribution_rejects_queue_size_spoof() -> None:
+    assert _assess_spoofed_overhead("queue_size", 20)["status"] == "FAILED"
+
+
+def test_performance_attribution_rejects_distribution_spoof() -> None:
+    assert _assess_spoofed_overhead("distribution", "single_tenant")["status"] == "FAILED"
+
+
+def test_performance_attribution_rejects_worker_concurrency_spoof() -> None:
+    assert _assess_spoofed_overhead("worker_concurrency", 4)["status"] == "FAILED"
+
+
+def test_performance_attribution_rejects_claim_batch_spoof() -> None:
+    assert _assess_spoofed_overhead("claim_batch_size", 8)["status"] == "FAILED"
+
+
+def test_performance_attribution_rejects_unknown_arm() -> None:
+    assert _assess_spoofed_overhead("arm_id", "fair-q1000-skew_20_to_1-w16-b1")[
+        "status"
+    ] == "FAILED"
+
+
+def test_performance_attribution_rejects_malformed_arm() -> None:
+    assert _assess_spoofed_overhead("arm_id", "fair-q1000-skew_20_to_1-w8-b1-extra")[
+        "status"
+    ] == "FAILED"
+
+
+def test_performance_attribution_rejects_sample_jobs_drift() -> None:
+    assert _assess_spoofed_overhead("sample_jobs", 20)["status"] == "FAILED"
 
 
 def test_attribution_assessor_rejects_nonfinite_or_source_drift() -> None:
