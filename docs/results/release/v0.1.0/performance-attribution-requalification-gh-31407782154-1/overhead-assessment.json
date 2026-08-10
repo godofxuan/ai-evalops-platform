@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "status": "INSTRUMENTATION_TOO_INTRUSIVE",
+  "source_commit": "f2f20b797b65d1d49d62cbadbc5b858d6420595f",
+  "failures": [
+    "instrumentation_overhead_exceeded"
+  ],
+  "overhead": {
+    "status": "INSTRUMENTATION_TOO_INTRUSIVE",
+    "arm_id": "fair-q1000-skew_20_to_1-w8-b1",
+    "off_observations": [
+      {
+        "jobs_per_second": 27.70568757869794,
+        "claim_latency_p95_ms": 627.5870339000079,
+        "worker_process_cpu_percent": 94.05131719488094,
+        "worker_process_rss_bytes_peak": 101490688.0
+      },
+      {
+        "jobs_per_second": 26.606418624061348,
+        "claim_latency_p95_ms": 556.8975726999879,
+        "worker_process_cpu_percent": 94.77574623883024,
+        "worker_process_rss_bytes_peak": 96194560.0
+      },
+      {
+        "jobs_per_second": 27.153354854829008,
+        "claim_latency_p95_ms": 863.9066194499788,
+        "worker_process_cpu_percent": 93.15548943979162,
+        "worker_process_rss_bytes_peak": 96219136.0
+      }
+    ],
+    "on_observations": [
+      {
+        "jobs_per_second": 28.883210775068097,
+        "claim_latency_p95_ms": 542.9220635999754,
+        "worker_process_cpu_percent": 95.71686858426887,
+        "worker_process_rss_bytes_peak": 96321536.0
+      },
+      {
+        "jobs_per_second": 27.169103366508654,
+        "claim_latency_p95_ms": 375.76774519999657,
+        "worker_process_cpu_percent": 95.81216497586766,
+        "worker_process_rss_bytes_peak": 96284672.0
+      },
+      {
+        "jobs_per_second": 27.301232631187684,
+        "claim_latency_p95_ms": 586.17714384999,
+        "worker_process_cpu_percent": 94.2516843538477,
+        "worker_process_rss_bytes_peak": 96223232.0
+      }
+    ],
+    "off_median": {
+      "jobs_per_second": 27.153354854829008,
+      "claim_latency_p95_ms": 627.5870339000079,
+      "worker_process_cpu_percent": 94.05131719488094,
+      "worker_process_rss_bytes_peak": 96219136.0
+    },
+    "on_median": {
+      "jobs_per_second": 27.301232631187684,
+      "claim_latency_p95_ms": 542.9220635999754,
+      "worker_process_cpu_percent": 95.71686858426887,
+      "worker_process_rss_bytes_peak": 96284672.0
+    },
+    "throughput_relative_change": 0.005446022311028642,
+    "claim_p95_relative_change": -0.13490554413449196,
+    "cpu_relative_change": 0.017708963989699233,
+    "rss_relative_change": 0.0006811119152014822
+  }
+}
