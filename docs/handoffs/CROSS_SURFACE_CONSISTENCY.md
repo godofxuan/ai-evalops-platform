@@ -16,6 +16,8 @@ Updated: 2026-08-10
 - locked eligible-Job regression: real PostgreSQL push/PR `31398322919`/`31398332668` PASS;
 - attribution diagnostic: `31400658653`, `INSTRUMENTATION_TOO_INTRUSIVE`; formal H1/H2/H3
   `NOT_RUN_STOPPED`/`INCONCLUSIVE`;
+- low-overhead requalification: `31407782154`, counterbalanced exact-arm execution still
+  `INSTRUMENTATION_TOO_INTRUSIVE` (claim-p95 absolute change 13.4906%); no third automatic attempt;
 - release: `NOT_READY_TARGETED_NEGATIVE_SCALING`;
 - PR #1: Draft; merge/tag/release: none;
 - scheduler development: STOP; no Candidate 4.
@@ -56,6 +58,9 @@ the immutable source/evidence identities above remain fixed.
 11. Diagnostic run `31400658653` is a preserved overhead failure, not an infrastructure failure and not
     H1/H2/H3 evidence.
 12. Its OFF/ON claim-p95 median absolute change is 11.3194%, so instrumentation is not qualified.
+13. Requalification `31407782154` also failed the unchanged budget at 13.4906%; it does not replace
+    or reinterpret the first failure.
+14. Formal H1/H2/H3 attribution remains absent and all three hypotheses remain `INCONCLUSIVE`.
 
 ## Verification checklist
 

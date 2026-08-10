@@ -612,6 +612,12 @@ domain，`empty_while_eligible` 也成为自动 release blocker。真实 Postgre
 `INSTRUMENTATION_TOO_INTRUSIVE`。正式 H1/H2/H3 repetitions 未运行，三个假设均为 `INCONCLUSIVE`；
 这份诊断不能改变 `31352270523` 的 `NEGATIVE_SCALING` 或授权 Candidate 4。
 
+随后授权的低开销 requalification 先冻结新合同，再减少无效 clock reads、增加 exact-arm runner，并将
+3 OFF/3 ON 顺序改为 `off1/on1/on2/off2/off3/on3`。workflow `31407782154` 的 throughput 中位数只变化
+`+0.5446%`，但 claim-p95 仍变化 `-13.4906%`，再次超过同一个 10% 绝对预算。因此第二次 verdict 仍为
+`INSTRUMENTATION_TOO_INTRUSIVE`；formal attribution 继续 skipped，H1/H2/H3 继续 `INCONCLUSIVE`。按第二次
+预注册，不再自动设计第三种 observer。
+
 最终 source-bound 证据：
 
 - fair capacity source `9987a28` / run `31272789199`：1k/10k 为 32/32、100k 为 16/16，全部

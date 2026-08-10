@@ -25,6 +25,9 @@
 - Performance diagnostic `31400658653` is `INSTRUMENTATION_TOO_INTRUSIVE`: OFF/ON claim-p95 medians changed by
   11.3194% in absolute terms against a preregistered 10% budget.
 - Formal H1/H2/H3 attribution is `NOT_RUN_STOPPED`; all three hypotheses are `INCONCLUSIVE`.
+- Counterbalanced exact-arm requalification `31407782154` also returned
+  `INSTRUMENTATION_TOO_INTRUSIVE`: throughput changed +0.5446%, while absolute claim-p95 change was
+  13.4906% against the unchanged 10% budget.
 
 ## HISTORICAL_ONLY
 
@@ -43,6 +46,8 @@
 - calling the new workflow failure an infrastructure failure.
 - calling the stopped overhead diagnostic root-cause attribution, or treating its favourable latency direction as
   permission to ignore the absolute-change gate.
+- claiming the locally 31%-cheaper recorder qualified remote measurement; local observer cost and
+  remote perturbation are separate claims.
 
 ## NOT_RUN_STOPPED
 

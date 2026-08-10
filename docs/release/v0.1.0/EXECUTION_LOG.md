@@ -1655,3 +1655,64 @@ performance-assessor 和 durable-fairness matrix 为 `102 passed, 4 skipped`（6
 repetitions、三个精确 blocker：single、balanced、20:1；临时 manifest 正常创建后删除。旧 evidence
 目录从未写入。创建临时目录时 PowerShell 5.1 的 `New-Item` 不支持所用 `-LiteralPath` 组合，又改用
 `.NET Directory.CreateDirectory`；这是命令兼容问题，不是产品或证据失败。
+
+## 2026-08-11 — 低开销 instrumentation requalification 与第二次停止
+
+### 授权边界和重新诊断
+
+用户在第一次 `INSTRUMENTATION_TOO_INTRUSIVE` 后要求继续。本阶段把这理解为只允许降低测量开销并
+重新资格化 overhead，不允许 scheduler Candidate 4。使用 diagnose 流程重新建立反馈环，先读取旧证据
+而不是改代码。旧 OFF throughput 自身 range 为 12.96%，claim-p95 range 为 69.12%；workflow 又把三次
+OFF 全放在三次 ON 前，因此 order confounding 排名第一。recorder 140 万 event microbenchmark 的增量约
+4.93 microseconds/claim；每次 ON 只有 1,100–1,152 timing samples、raw JSON 约 24–25 KiB，因此字符串
+分派和列表增长真实存在，但数量级不足以单独解释远程 11.3194% shift。
+
+在实现前提交 `785272d` 预注册，冻结 q1000/skew20:1/w8/b1、100 measured Jobs、3 OFF/3 ON、原 5%/10%
+阈值和顺序 `off1/on1/on2/off2/off3/on3`。候选预算仍为 0，并写明第二次失败后不自动做第三套设计。
+
+### Recorder RED/GREEN
+
+第一个 RED 用 injected counting clock 驱动九个 counter-only/ignored markers。结果 `1 failed, 2 passed`：
+clock 被调用 9 次，预期 0。RED commit 为 `457a094`。最小实现把 counter event 放入统一 map，仅 timing
+start/end event 才读取 monotonic clock。首次 GREEN 因旧 `tenant_permit_acquired` 增量未删除，使
+`permit_pending_count` 从 2 变 3；既有语义测试拦截。删除重复后 `3 passed`，microbenchmark 降到约
+3.38 microseconds/claim，较旧测量约少 31%。
+
+第二个 RED 证明 CLI 没有 exact-arm 能力：`--arm-id` 被 argparse 拒绝，selector 不存在，`2 failed`，
+commit `29128da`。实现只从 frozen plan 精确查找已有 arm；未知 arm fail closed，不合成 workload；无参数
+时保持完整 plan。实现 commit `63c8fa9`。
+
+推送前复核又发现 assessor 仍要求 overhead CSV 包含完整 16 arms。若直接运行会得到假
+`arm_set_mismatch`。第三组 RED 为 `3 failed`，commit `db18346`。修复增加显式
+`overhead_arm_only`：历史 full-matrix 调用保留；requalification 必须恰好一个注册 arm；formal 永远要求
+完整 16 arms。五个 attribution tests GREEN，commit `0fd5376`。扩大 MyPy 到 unit test 文件时出现两个
+既有 unused-ignore 和一个 SQLAlchemy untyped dialect；正式项目范围不含 tests/unit，因此没有借机扩张
+任务，脚本自身 MyPy 和项目既定 137-source 范围均通过。
+
+### Counterbalanced remote evidence
+
+workflow trigger `f2f20b7` 通过 source lock 检查后启动 run `31407782154`。六次 exact-arm bundle 均成功，
+顺序文件精确为 `off1/on1/on2/off2/off3/on3`。OFF Jobs/s 为
+27.705688/26.606419/27.153355，claim p95 为 627.587034/556.897573/863.906619 ms；ON Jobs/s 为
+28.883211/27.169103/27.301233，claim p95 为 542.922064/375.767745/586.177144 ms。
+
+中位数 throughput 变化 `+0.5446%`，claim-p95 变化 `-13.4906%`，CPU `+1.7709%`，RSS `+0.0681%`。
+三组 order-paired claim-p95 变化分别为 `-13.4906%`、`-32.5248%`、`-32.1481%`。因此简单 early/late
+order drift 不足以解释第二轮；同步 observer 很可能改变高竞争时序分布。方向变好仍是扰动，不能忽略
+绝对 10% 合同。step 11 返回 `INSTRUMENTATION_TOO_INTRUSIVE`，formal 和 hypothesis steps skipped；
+环境、seal、artifact、bot evidence commit、teardown 全部成功。
+
+bot commit `b9aee04d10aeafa088876a68b9895d5a8d0ab180` 保存 84 个顶层 manifest entries；独立审计得到
+listed=actual=84、missing/extra/hash-size mismatch 全为 0。历史 targeted trees 仍为
+`234347cce8872b75595b2cf312baaf25b74091ce` 和 `e321f63661645f728481ef11587f94fec9a0547a`。
+
+### 最终回归和停止判断
+
+实现前后 focused recorder/evidence tests 依次完成 RED→GREEN；最终 compileall、Ruff format、Ruff lint、
+项目既定 MyPy 范围通过，重点 evidence suite `105 passed`。最终全仓 pytest 为
+`716 passed, 29 skipped`（491.97s；进程 493.274s），exit 0。
+
+本阶段结论不是“优化成功”，而是“局部 recorder 成本降低成功，远程 measurement validity 仍失败”。
+按预注册不做第三次自动 instrumentation 改写，不运行 formal attribution，不实现 Candidate 4，不改变
+threshold/workload/repetitions，不 merge/tag/release。H1/H2/H3 继续 `INCONCLUSIVE`，v0.1.0 继续
+`NOT_READY_TARGETED_NEGATIVE_SCALING`，PR #1 继续 Draft。

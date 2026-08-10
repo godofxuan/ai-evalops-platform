@@ -23,6 +23,7 @@ eight-Worker throughput divided by four-Worker throughput was below the required
 | locked-Job false-empty regression | PASS | true PostgreSQL push/PR runs `31398322919`/`31398332668` |
 | attribution instrumentation overhead | **INSTRUMENTATION_TOO_INTRUSIVE** | run `31400658653`; absolute claim-p95 change 11.3194% > 10% |
 | formal H1/H2/H3 attribution | NOT_RUN_STOPPED | overhead prerequisite failed; all hypotheses INCONCLUSIVE |
+| low-overhead requalification | **INSTRUMENTATION_TOO_INTRUSIVE** | run `31407782154`; counterbalanced exact-arm claim-p95 change 13.4906% > 10% |
 | current 1k/10k/100k capacity | NOT_RUN_STOPPED | targeted performance prerequisite failed |
 | current same-runner A/B/C | NOT_RUN_STOPPED | targeted performance prerequisite failed |
 | current A-I x3 fault | NOT_RUN_STOPPED | targeted performance prerequisite failed |
@@ -80,3 +81,20 @@ H1 singleton coordination, H2 Tenant-permit contention and H3 SKIP LOCKED/retry 
 `INCONCLUSIVE`; none is a proven root cause or a sufficient basis for Candidate 4. See
 `performance_attribution/00_PREREGISTRATION.md` and
 `evidence_contract_v2/04_HARDENING_AND_ATTRIBUTION_STOP.md`.
+
+## Low-overhead requalification
+
+A separately authorized and preregistered second stage reduced unnecessary recorder clock reads,
+added fail-closed exact-arm execution and counterbalanced the six measurements as
+`off1/on1/on2/off2/off3/on3`. It retained q1000, skew20:1, w8, b1, 100 measured Jobs, three
+observations per mode and the original 5%/10% gates.
+
+Workflow `31407782154` produced OFF medians of 27.153355 Jobs/s and 627.587034 ms claim p95, and ON
+medians of 27.301233 Jobs/s and 542.922064 ms. Throughput changed +0.5446%; claim p95 changed
+-13.4906%. The latter again exceeds the absolute 10% budget, so requalification is
+`INSTRUMENTATION_TOO_INTRUSIVE`. Evidence commit `b9aee04` preserves 84 manifest-bound files with an
+independent zero-mismatch audit.
+
+Formal attribution and H1/H2/H3 assessment were again skipped. The second preregistration forbids an
+automatic third observer redesign. This strengthens the stop decision; it does not alter the formal
+targeted `NEGATIVE_SCALING` input or authorize Candidate 4.

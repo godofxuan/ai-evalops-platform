@@ -100,3 +100,11 @@ Safe resume wording:
 Interview explanation: the most important result is not a speedup. It is that the system rejected
 its own measurement apparatus when the apparatus exceeded the declared perturbation budget. That
 preserved the distinction between observation, derivation, hypothesis and release claim.
+
+## 2026-08-11 requalification addendum
+
+A separately preregistered low-overhead revision reduced the recorder microbenchmark by about 31%,
+ran only the exact overhead arm and counterbalanced OFF/ON order. Remote workflow `31407782154` still
+failed: throughput changed only +0.5446%, but claim-p95 changed -13.4906% against the unchanged 10%
+absolute budget. Formal attribution remained skipped. See `10_LOW_OVERHEAD_REQUALIFICATION.md` for
+the complete RED/GREEN and evidence ledger.

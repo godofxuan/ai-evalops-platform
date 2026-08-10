@@ -61,3 +61,17 @@ intrusive after seeing the sign would be outcome-dependent threshold drift.
 Rejected by the frozen stop rule. Workflow `31400658653` skipped formal repetitions and H1/H2/H3
 assessment after the overhead failure, while still sealing and committing the negative evidence.
 Running the formal matrix anyway would produce inadmissible measurements rather than more evidence.
+
+## Assuming counterbalancing alone would qualify the observer
+
+The first workflow executed all OFF runs before all ON runs, so temporal drift was a strong
+hypothesis. The second workflow froze `off1/on1/on2/off2/off3/on3`, ran only the representative arm
+and reduced recorder clock work. Claim-p95 still changed by 13.4906% in absolute terms. The order
+hypothesis was useful but insufficient; it was not rewritten as success.
+
+## Automatically attempting a third observer design
+
+Rejected by the second preregistration. Repeatedly changing the measurement seam until the same
+10% gate happens to pass would create researcher degrees of freedom. A future design requires a new
+explicit user authorization and should consider a materially different measurement mechanism, not
+another small synchronous callback tweak.
