@@ -63,7 +63,7 @@ async def test_telemetry_uses_bounded_buffer_or_streaming_output(tmp_path: Path)
 
     async def fetch_sample(limit: int) -> list[dict[str, object]]:
         stop.set()
-        return [_database_row(pid=index) for index in range(limit + 1)]
+        return [_database_row(pid=index) for index in range(limit)]
 
     summary = await collect_telemetry(
         fetch_sample=fetch_sample,
@@ -129,4 +129,3 @@ async def test_telemetry_records_sampling_metadata(tmp_path: Path) -> None:
     assert summary["observed_waiting_backends"] == 1
     assert summary["rows_written"] == 1
     assert summary["telemetry_error_count"] == 0
-

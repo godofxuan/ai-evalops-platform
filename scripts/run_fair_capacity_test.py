@@ -56,6 +56,11 @@ from scripts.fair_capacity_evidence import (
     write_release_manifest,
 )
 from scripts.gate1_database import collect_postgres_sample, psycopg_dsn
+from scripts.postgres_wait_telemetry import (
+    begin_passive_telemetry_process,
+    start_passive_telemetry_process,
+    stop_passive_telemetry_process,
+)
 from scripts.release_evidence import (
     EXPLAIN_CANDIDATE_UNITS,
     RELEASE_BUNDLE_SCHEMA_VERSION,
@@ -408,6 +413,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prior-assessment", type=Path)
     parser.add_argument("--sample-jobs", type=int, default=100)
     parser.add_argument("--performance-attribution", action="store_true")
+    parser.add_argument("--measurement-mode", choices=("OFF", "ON"))
+    parser.add_argument("--measurement-block", choices=("A", "B"))
+    parser.add_argument("--measurement-order-position", type=int)
+    parser.add_argument("--measurement-mode-repetition", type=int)
+    parser.add_argument("--measurement-code-sha")
+    parser.add_argument("--workflow-run-id")
+    parser.add_argument("--postgres-telemetry-sampling-hz", type=int, default=5)
     parser.add_argument(
         "--arm-id",
         help="run one exact arm already present in the frozen queue-size plan",
@@ -415,6 +427,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--database-url-env", default="EVALOPS_EXPERIMENT_DATABASE_URL")
     parser.add_argument("--output-root", type=Path, default=Path("docs/results/release/v0.1.0"))
     return parser
+
+
+def _measurement_contract(args: argparse.Namespace) -> dict[str, object] | None:
+    fields = {
+        "measurement_mode": args.measurement_mode,
+        "measurement_block": args.measurement_block,
+        "measurement_order_position": args.measurement_order_position,
+        "measurement_mode_repetition": args.measurement_mode_repetition,
+        "measurement_code_sha": args.measurement_code_sha,
+        "workflow_run_id": args.workflow_run_id,
+    }
+    if not any(value is not None for value in fields.values()):
+        return None
+    if any(value is None for value in fields.values()):
+        raise ExperimentError("measurement qualification identity must be complete")
+    if args.performance_attribution:
+        raise ExperimentError("synchronous attribution observer is retired for qualification")
+    if args.arm_id != "fair-q1000-skew_20_to_1-w8-b1":
+        raise ExperimentError("measurement qualification requires the frozen representative arm")
+    if args.sample_jobs != 100:
+        raise ExperimentError("measurement qualification requires sample_jobs=100")
+    if args.postgres_telemetry_sampling_hz <= 0:
+        raise ExperimentError("PostgreSQL telemetry frequency must be positive")
+    return {**fields, "telemetry_sampling_hz": args.postgres_telemetry_sampling_hz}
 
 
 def select_requested_arms(
@@ -621,6 +657,23 @@ async def _create_fixture(
     )
 
 
+async def _collect_fixture_state(*, database_url: str) -> dict[str, int]:
+    connection = await AsyncConnection.connect(psycopg_dsn(database_url), row_factory=dict_row)
+    async with connection, connection.transaction(), connection.cursor() as cursor:
+        await cursor.execute("SET TRANSACTION READ ONLY")
+        await cursor.execute(
+            "SELECT pg_database_size(current_database()) AS database_size_bytes, "
+            "(SELECT count(*) FROM tenants) AS tenant_count, "
+            "(SELECT count(*) FROM evaluation_runs) AS run_count, "
+            "(SELECT count(*) FROM evaluation_jobs) AS job_count, "
+            "(SELECT count(*) FROM job_attempts) AS attempt_count"
+        )
+        row = await cursor.fetchone()
+    if row is None:
+        raise ExperimentError("could not collect pre-repetition fixture state")
+    return {field: int(value) for field, value in row.items()}
+
+
 async def _delete_fixture(*, database_url: str, fixture: QueueFixture) -> None:
     connection = await AsyncConnection.connect(psycopg_dsn(database_url))
     async with connection, connection.transaction(), connection.cursor() as cursor:
@@ -787,6 +840,9 @@ async def _run_worker_sample(
     fixture: QueueFixture,
     sample_jobs: int,
     attribution_instrumentation: bool = False,
+    telemetry_directory: Path | None = None,
+    telemetry_database_url_env: str = "EVALOPS_EXPERIMENT_DATABASE_URL",
+    telemetry_sampling_hz: int = 5,
 ) -> dict[str, Any]:
     measured_jobs = min(sample_jobs, arm.queue_size)
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
@@ -833,6 +889,37 @@ async def _run_worker_sample(
     resource_task = asyncio.create_task(
         _sample_resources(database_url=database_url, stop_requested=stop_requested)
     )
+    telemetry_process = None
+    telemetry_summary: dict[str, object] = {
+        "schema_version": 1,
+        "collector": "disabled",
+        "sampling_hz": telemetry_sampling_hz,
+        "sample_interval_seconds": 1.0 / telemetry_sampling_hz,
+        "successful_sample_count": 0,
+        "observed_wait_sample_count": 0,
+        "observed_waiting_backends": 0,
+        "rows_written": 0,
+        "telemetry_error_count": 0,
+        "dropped_sample_count": 0,
+        "buffer_overflow_count": 0,
+        "raw_query_text_persisted": "NO",
+    }
+    if telemetry_directory is not None:
+        try:
+            telemetry_process = await start_passive_telemetry_process(
+                directory=telemetry_directory,
+                database_url_env=telemetry_database_url_env,
+                sampling_hz=telemetry_sampling_hz,
+            )
+            await begin_passive_telemetry_process(telemetry_process)
+        except Exception as error:
+            telemetry_summary.update(
+                {
+                    "collector": "external_passive_postgres_core_views",
+                    "telemetry_error_count": 1,
+                    "failure_type": type(error).__name__,
+                }
+            )
     process_cpu_started = time.process_time()
     started_at = perf_counter()
     try:
@@ -846,6 +933,8 @@ async def _run_worker_sample(
         process_cpu_seconds = time.process_time() - process_cpu_started
         stop_requested.set()
         resources = await resource_task
+        if telemetry_process is not None:
+            telemetry_summary.update(await stop_passive_telemetry_process(telemetry_process))
         await engine.dispose()
     claim_events = [event for claimer in claimers for event in claimer.claimed_events]
     claims: list[ClaimedJob] = list(order_timed_values(claim_events))
@@ -960,6 +1049,7 @@ async def _run_worker_sample(
             default=None,
         ),
         "collector_missed_samples": resources["missed_samples"],
+        "passive_postgres_telemetry": telemetry_summary,
         "tenant_first_claim_positions": tenant_positions,
         "database_claim_sequence_complete": sequence_complete,
         "database_tenant_first_claim_positions": database_tenant_positions,
@@ -977,15 +1067,19 @@ async def _run_worker_sample(
 
 def _arm_csv_row(
     *,
+    run_id: str,
     source_commit: str,
     tenant_count: int,
     runtime: dict[str, Any],
     explains: dict[str, list[dict[str, Any]]],
+    measurement_contract: dict[str, object] | None,
 ) -> dict[str, object]:
     correctness = runtime["correctness"]
+    telemetry = runtime["passive_postgres_telemetry"]
     fair_times = [float(record["execution_time_ms"]) for record in explains["fair"]]
     legacy_times = [float(record["execution_time_ms"]) for record in explains["legacy_fifo"]]
     row: dict[str, object] = {
+        "run_id": run_id,
         "arm_id": runtime["arm_id"],
         "source_commit": source_commit,
         "queue_size": runtime["queue_size"],
@@ -1047,6 +1141,42 @@ def _arm_csv_row(
         ],
         "stale_evidence_scope": runtime["stale_evidence_scope"],
         "stale_evidence_source_commit": runtime["stale_evidence_source_commit"],
+        "workflow_run_id": (
+            measurement_contract["workflow_run_id"] if measurement_contract is not None else ""
+        ),
+        "measurement_code_sha": (
+            measurement_contract["measurement_code_sha"]
+            if measurement_contract is not None
+            else ""
+        ),
+        "measurement_mode": (
+            measurement_contract["measurement_mode"]
+            if measurement_contract is not None
+            else ""
+        ),
+        "measurement_block": (
+            measurement_contract["measurement_block"]
+            if measurement_contract is not None
+            else ""
+        ),
+        "measurement_order_position": (
+            measurement_contract["measurement_order_position"]
+            if measurement_contract is not None
+            else ""
+        ),
+        "measurement_mode_repetition": (
+            measurement_contract["measurement_mode_repetition"]
+            if measurement_contract is not None
+            else ""
+        ),
+        "telemetry_sampling_hz": telemetry["sampling_hz"],
+        "telemetry_successful_sample_count": telemetry["successful_sample_count"],
+        "telemetry_observed_wait_sample_count": telemetry["observed_wait_sample_count"],
+        "telemetry_observed_waiting_backends": telemetry["observed_waiting_backends"],
+        "telemetry_rows_written": telemetry["rows_written"],
+        "telemetry_error_count": telemetry["telemetry_error_count"],
+        "telemetry_dropped_sample_count": telemetry["dropped_sample_count"],
+        "telemetry_buffer_overflow_count": telemetry["buffer_overflow_count"],
     }
     for metric, summary in runtime["claim_phase_timing_ms"].items():
         for aggregate_name in ("count", "sum", "p50", "p95", "p99"):
@@ -1062,6 +1192,7 @@ async def _run(
     queue_sizes: tuple[int, ...],
 ) -> dict[str, Any]:
     source_commit = str(args.source_commit)
+    measurement_contract = _measurement_contract(args)
     process = await asyncio.create_subprocess_exec(
         "git",
         "rev-parse",
@@ -1103,6 +1234,9 @@ async def _run(
             "sample_jobs_per_arm": args.sample_jobs,
             "explain_repetitions": EXPLAIN_REPETITIONS,
             "performance_attribution_enabled": bool(args.performance_attribution),
+            "measurement_qualification": measurement_contract,
+            "warm_up_policy": "no_workload_warm_up",
+            "measured_period": "exactly_the_100_job_worker_sample",
             "selected_arm_id": args.arm_id,
             "worker_resource_scope": (
                 "single benchmark process running real EvaluationWorker objects"
@@ -1114,6 +1248,11 @@ async def _run(
         },
     )
     rows: list[dict[str, object]] = []
+    if measurement_contract is not None:
+        write_report(
+            bundle_directory / "fixture-state-before.json",
+            await _collect_fixture_state(database_url=database_url),
+        )
     for arm in arms:
         fixture = await _create_fixture(
             database_url=database_url,
@@ -1132,7 +1271,23 @@ async def _run(
                 fixture=fixture,
                 sample_jobs=args.sample_jobs,
                 attribution_instrumentation=bool(args.performance_attribution),
+                telemetry_directory=(
+                    bundle_directory / "telemetry"
+                    if measurement_contract is not None
+                    and measurement_contract["measurement_mode"] == "ON"
+                    else None
+                ),
+                telemetry_database_url_env=str(args.database_url_env),
+                telemetry_sampling_hz=int(args.postgres_telemetry_sampling_hz),
             )
+            if (
+                measurement_contract is not None
+                and measurement_contract["measurement_mode"] == "OFF"
+            ):
+                write_report(
+                    bundle_directory / "telemetry" / "summary.json",
+                    runtime["passive_postgres_telemetry"],
+                )
             arm_assessment = assess_arm_runtime(
                 runtime,
                 expected_tenant_ids=tuple(str(value) for value in fixture.tenant_ids),
@@ -1143,14 +1298,21 @@ async def _run(
                 raise ExperimentError(f"arm failed release checks: {arm.arm_id}")
             rows.append(
                 _arm_csv_row(
+                    run_id=str(args.run_id),
                     source_commit=source_commit,
                     tenant_count=len(fixture.tenant_ids),
                     runtime=runtime,
                     explains=explains,
+                    measurement_contract=measurement_contract,
                 )
             )
         finally:
             await _delete_fixture(database_url=database_url, fixture=fixture)
+    if measurement_contract is not None:
+        write_report(
+            bundle_directory / "fixture-state-after.json",
+            await _collect_fixture_state(database_url=database_url),
+        )
     arms_path = bundle_directory / "arms.csv"
     with arms_path.open("x", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")

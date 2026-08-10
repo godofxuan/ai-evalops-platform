@@ -1,7 +1,9 @@
 import copy
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -53,6 +55,7 @@ def _row(position: int, block: str, mode: str, mode_repetition: int) -> dict[str
         "illegal_state_transition_count": 0,
         "empty_while_eligible": 0,
         "telemetry_successful_sample_count": 10 if telemetry_on else 0,
+        "telemetry_sampling_hz": 5,
         "telemetry_observed_wait_sample_count": 3 if telemetry_on else 0,
         "telemetry_observed_waiting_backends": 2 if telemetry_on else 0,
         "telemetry_error_count": 0,
@@ -68,13 +71,17 @@ def _valid_rows() -> list[dict[str, object]]:
     ]
 
 
-def _assess(rows: list[dict[str, object]], **kwargs: object) -> dict[str, object]:
+def _assess(
+    rows: list[dict[str, object]],
+    *,
+    manifest_failures: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, Any]:
     return assess_measurement_system(
         rows,
         expected_source_commit=SOURCE,
         expected_measurement_code_sha=MEASUREMENT_CODE,
         expected_workflow_run_id=WORKFLOW_RUN_ID,
-        manifest_failures=kwargs.get("manifest_failures", {}),
+        manifest_failures=manifest_failures or {},
     )
 
 
@@ -133,7 +140,9 @@ def test_measurement_assessor_rejects_worker_spoof() -> None:
 
 
 def test_measurement_assessor_rejects_batch_spoof() -> None:
-    test_measurement_assessor_rejects_workload_spoof("claim_batch_size", 2, "claim_batch_size_drift")
+    test_measurement_assessor_rejects_workload_spoof(
+        "claim_batch_size", 2, "claim_batch_size_drift"
+    )
 
 
 def test_measurement_assessor_rejects_sample_jobs_drift() -> None:
@@ -213,6 +222,12 @@ def test_measurement_assessor_rejects_dropped_samples() -> None:
     _assert_invalid(rows, "telemetry_integrity_invalid")
 
 
+def test_measurement_assessor_rejects_sampling_frequency_drift() -> None:
+    rows = _valid_rows()
+    rows[1]["telemetry_sampling_hz"] = 10
+    _assert_invalid(rows, "sampling_frequency_drift")
+
+
 def test_measurement_assessor_rejects_manifest_drift(tmp_path: Path) -> None:
     payload = tmp_path / "payload.json"
     payload.write_text("{}\n", encoding="utf-8")
@@ -244,5 +259,13 @@ def test_measurement_assessor_reports_frozen_statistics_without_changing_gate() 
     result = _assess(rows)
     throughput = result["statistics"]["jobs_per_second"]
 
-    assert set(throughput["OFF"]) == {"min", "max", "mean", "median", "range", "range_over_mean", "mad"}
+    assert set(throughput["OFF"]) == {
+        "min",
+        "max",
+        "mean",
+        "median",
+        "range",
+        "range_over_mean",
+        "mad",
+    }
     assert len(result["paired_block_observations"]) == 4
