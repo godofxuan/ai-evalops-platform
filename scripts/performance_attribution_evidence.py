@@ -88,9 +88,9 @@ def _validated_repetition(
     *,
     source_commit: str,
     instrumentation_enabled: bool,
+    expected_arm_ids: set[str],
 ) -> tuple[dict[str, Mapping[str, object]], list[str]]:
     failures: list[str] = []
-    expected_arm_ids = {arm.arm_id for arm in build_fair_capacity_plan(queue_sizes=(1_000,))}
     arm_ids = [str(row.get("arm_id")) for row in rows]
     if len(arm_ids) != len(set(arm_ids)):
         failures.append("duplicate_arm_id")
@@ -203,6 +203,7 @@ def assess_instrumentation_overhead(
     off_repetitions: Sequence[Sequence[Mapping[str, object]]],
     on_repetitions: Sequence[Sequence[Mapping[str, object]]],
     source_commit: str,
+    overhead_arm_only: bool = False,
 ) -> dict[str, Any]:
     failures: list[str] = []
     if len(off_repetitions) != OVERHEAD_REPETITIONS:
@@ -211,6 +212,11 @@ def assess_instrumentation_overhead(
         failures.append("overhead_on_repetition_count_mismatch")
     validated_off: list[dict[str, Mapping[str, object]]] = []
     validated_on: list[dict[str, Mapping[str, object]]] = []
+    expected_overhead_arm_ids = (
+        {OVERHEAD_ARM_ID}
+        if overhead_arm_only
+        else {arm.arm_id for arm in build_fair_capacity_plan(queue_sizes=(1_000,))}
+    )
     for label, repetitions, enabled, target in (
         ("off", off_repetitions, False, validated_off),
         ("on", on_repetitions, True, validated_on),
@@ -220,6 +226,7 @@ def assess_instrumentation_overhead(
                 rows,
                 source_commit=source_commit,
                 instrumentation_enabled=enabled,
+                expected_arm_ids=expected_overhead_arm_ids,
             )
             target.append(by_arm)
             failures.extend(f"{label}{index}:{failure}" for failure in repetition_failures)
@@ -280,6 +287,7 @@ def assess_performance_attribution(
     on_repetitions: Sequence[Sequence[Mapping[str, object]]],
     formal_repetitions: Sequence[Sequence[Mapping[str, object]]],
     source_commit: str,
+    overhead_arm_only: bool = False,
 ) -> dict[str, Any]:
     failures: list[str] = []
     if len(off_repetitions) != OVERHEAD_REPETITIONS:
@@ -292,6 +300,8 @@ def assess_performance_attribution(
     validated_off: list[dict[str, Mapping[str, object]]] = []
     validated_on: list[dict[str, Mapping[str, object]]] = []
     validated_formal: list[dict[str, Mapping[str, object]]] = []
+    full_arm_ids = {arm.arm_id for arm in build_fair_capacity_plan(queue_sizes=(1_000,))}
+    expected_overhead_arm_ids = {OVERHEAD_ARM_ID} if overhead_arm_only else full_arm_ids
     for label, repetitions, enabled, target in (
         ("off", off_repetitions, False, validated_off),
         ("on", on_repetitions, True, validated_on),
@@ -302,6 +312,7 @@ def assess_performance_attribution(
                 rows,
                 source_commit=source_commit,
                 instrumentation_enabled=enabled,
+                expected_arm_ids=(full_arm_ids if label == "formal" else expected_overhead_arm_ids),
             )
             target.append(by_arm)
             failures.extend(f"{label}{index}:{failure}" for failure in repetition_failures)
@@ -502,6 +513,11 @@ def main() -> int:
     parser.add_argument("--on-csv", action="append", type=Path, required=True)
     parser.add_argument("--formal-csv", action="append", type=Path, default=[])
     parser.add_argument("--overhead-only", action="store_true")
+    parser.add_argument(
+        "--overhead-arm-only",
+        action="store_true",
+        help="require each OFF/ON repetition to contain only the registered overhead arm",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     off_repetitions = [_read_csv(path) for path in args.off_csv]
@@ -511,6 +527,7 @@ def main() -> int:
             off_repetitions=off_repetitions,
             on_repetitions=on_repetitions,
             source_commit=str(args.source_commit),
+            overhead_arm_only=bool(args.overhead_arm_only),
         )
         if args.overhead_only
         else assess_performance_attribution(
@@ -518,6 +535,7 @@ def main() -> int:
             on_repetitions=on_repetitions,
             formal_repetitions=[_read_csv(path) for path in args.formal_csv],
             source_commit=str(args.source_commit),
+            overhead_arm_only=bool(args.overhead_arm_only),
         )
     )
     write_report(args.output, assessment)
