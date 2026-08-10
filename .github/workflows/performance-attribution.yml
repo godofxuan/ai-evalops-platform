@@ -1,4 +1,4 @@
-name: Scheduler Performance Attribution Diagnostic
+name: Scheduler Performance Attribution Requalification
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: scheduler-performance-attribution-v1
+  group: scheduler-performance-attribution-v2
   cancel-in-progress: false
 
 jobs:
@@ -43,25 +43,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          execution_id="performance-attribution-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          execution_id="performance-attribution-requalification-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           execution_root="$ATTRIBUTION_OUTPUT_ROOT/$execution_id"
           echo "ATTRIBUTION_EXECUTION_ID=$execution_id" >> "$GITHUB_ENV"
           echo "ATTRIBUTION_EXECUTION_ROOT=$execution_root" >> "$GITHUB_ENV"
           mkdir -p "$execution_root/environment"
           {
             echo "source_commit=$GITHUB_SHA"
-            echo "instrumentation_commit=f1ecbf20d8e266eddadd85391d2c782c581ecad2"
+            echo "instrumentation_commit=0fd5376300155ee4fdfa3cfd248d636bdeca3100"
             echo "workflow_run_id=$GITHUB_RUN_ID"
             echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
-            echo "protocol=q1000;b1;workers=1,2,4,8;distributions=4;overhead=3off+3on;formal=4on"
+            echo "protocol=q1000;b1;overhead_arm=skew_20_to_1-w8;order=off1,on1,on2,off2,off3,on3;formal=4on"
             git status --short
           } > "$execution_root/environment/source.txt"
+          printf '%s\n' off1 on1 on2 off2 off3 on3 \
+            > "$execution_root/environment/execution-order.txt"
 
       - name: Verify production source lock
         shell: bash
         run: |
           set -euo pipefail
-          locked="f1ecbf20d8e266eddadd85391d2c782c581ecad2"
+          locked="0fd5376300155ee4fdfa3cfd248d636bdeca3100"
           test "$(git diff --name-only "$locked"..HEAD -- app scripts)" = ""
 
       - name: Start isolated PostgreSQL and Redis
@@ -72,34 +74,35 @@ jobs:
       - name: Apply migrations
         run: uv run --no-sync alembic upgrade head
 
-      - name: Execute three instrumentation-OFF repetitions
+      - name: Execute counterbalanced instrumentation OFF and ON repetitions
         shell: bash
         run: |
           set -euo pipefail
-          for repetition in 1 2 3; do
-            uv run --no-sync python -m scripts.run_fair_capacity_test \
-              --run-id "overhead-off-rep${repetition}" \
+          arm_id="fair-q1000-skew_20_to_1-w8-b1"
+          run_repetition() {
+            local mode="$1"
+            local repetition="$2"
+            args=(
+              uv run --no-sync python -m scripts.run_fair_capacity_test
+              --run-id "overhead-${mode}-rep${repetition}"
               --source-commit "$GITHUB_SHA" \
               --stage targeted \
               --queue-sizes "1000" \
               --sample-jobs 100 \
+              --arm-id "$arm_id" \
               --output-root "$ATTRIBUTION_EXECUTION_ROOT"
-          done
-
-      - name: Execute three instrumentation-ON repetitions
-        shell: bash
-        run: |
-          set -euo pipefail
-          for repetition in 1 2 3; do
-            uv run --no-sync python -m scripts.run_fair_capacity_test \
-              --run-id "overhead-on-rep${repetition}" \
-              --source-commit "$GITHUB_SHA" \
-              --stage targeted \
-              --queue-sizes "1000" \
-              --sample-jobs 100 \
-              --performance-attribution \
-              --output-root "$ATTRIBUTION_EXECUTION_ROOT"
-          done
+            )
+            if [[ "$mode" == "on" ]]; then
+              args+=(--performance-attribution)
+            fi
+            "${args[@]}"
+          }
+          run_repetition off 1
+          run_repetition on 1
+          run_repetition on 2
+          run_repetition off 2
+          run_repetition off 3
+          run_repetition on 3
 
       - name: Gate instrumentation overhead before formal attribution
         run: >-
@@ -112,6 +115,7 @@ jobs:
           --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep2/bundle/arms.csv"
           --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep3/bundle/arms.csv"
           --overhead-only
+          --overhead-arm-only
           --output "$ATTRIBUTION_EXECUTION_ROOT/overhead-assessment.json"
 
       - name: Execute four formal attribution repetitions
@@ -143,6 +147,7 @@ jobs:
           --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep2/bundle/arms.csv"
           --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep3/bundle/arms.csv"
           --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep4/bundle/arms.csv"
+          --overhead-arm-only
           --output "$ATTRIBUTION_EXECUTION_ROOT/assessment.json"
 
       - name: Preserve diagnostic environment
@@ -174,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run --no-sync python -c \
-            "from pathlib import Path; from scripts.fair_capacity_evidence import write_release_manifest; write_release_manifest(Path('$ATTRIBUTION_EXECUTION_ROOT'), source_commit='$GITHUB_SHA', claim_scope='performance_attribution_diagnostic', schema_version=2)"
+            "from pathlib import Path; from scripts.fair_capacity_evidence import write_release_manifest; write_release_manifest(Path('$ATTRIBUTION_EXECUTION_ROOT'), source_commit='$GITHUB_SHA', claim_scope='performance_attribution_requalification', schema_version=2)"
 
       - name: Upload immutable diagnostic evidence
         if: always() && env.ATTRIBUTION_EXECUTION_ROOT != ''
@@ -194,7 +199,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "$ATTRIBUTION_EXECUTION_ROOT"
           git diff --cached --quiet && exit 1
-          git commit -m "evidence(perf): preserve contention attribution $ATTRIBUTION_EXECUTION_ID"
+          git commit -m "evidence(perf): preserve attribution requalification $ATTRIBUTION_EXECUTION_ID"
           git push origin "HEAD:codex/evidence-gate-1"
 
       - name: Stop isolated topology
