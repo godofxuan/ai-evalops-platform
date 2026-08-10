@@ -20,8 +20,9 @@ jobs:
     env:
       EVALOPS_EXPERIMENT_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
       MEASUREMENT_OUTPUT_ROOT: docs/results/release/v0.1.0
-      MEASUREMENT_CODE_SHA: 7dca9715fbb5f2a46f648161f8a67d086de9d485
+      MEASUREMENT_CODE_SHA: 0915c10d9176191f4f306590f029ed66809cf161
       PREREGISTRATION_SHA: 1c87fb218e334790812080701bd74b81488bf19c
+      INTEGRATION_FIX_PREREGISTRATION_SHA: 2180646802d41abfb5b9fdb6abd7b203cbced1fb
     outputs:
       artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
       artifact-name: ${{ steps.identity.outputs.artifact-name }}
@@ -63,6 +64,7 @@ jobs:
             echo "source_commit=$GITHUB_SHA"
             echo "measurement_code_sha=$MEASUREMENT_CODE_SHA"
             echo "preregistration_sha=$PREREGISTRATION_SHA"
+            echo "integration_fix_preregistration_sha=$INTEGRATION_FIX_PREREGISTRATION_SHA"
             echo "workflow_run_id=$GITHUB_RUN_ID"
             echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
             echo "arm=fair-q1000-skew_20_to_1-w8-b1"
@@ -76,6 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$PREREGISTRATION_SHA" "$GITHUB_SHA"
+          git merge-base --is-ancestor "$INTEGRATION_FIX_PREREGISTRATION_SHA" "$GITHUB_SHA"
           uv run --no-sync python -m scripts.behavioral_source_lock \
             --locked-sha "$MEASUREMENT_CODE_SHA"
 

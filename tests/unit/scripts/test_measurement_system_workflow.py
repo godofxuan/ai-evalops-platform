@@ -57,8 +57,9 @@ def test_measurement_workflow_is_race_safe_and_never_force_pushes() -> None:
 def test_measurement_workflow_locks_behavior_and_historical_evidence() -> None:
     text = _workflow_text()
 
-    assert "7dca9715fbb5f2a46f648161f8a67d086de9d485" in text
+    assert "0915c10d9176191f4f306590f029ed66809cf161" in text
     assert "1c87fb218e334790812080701bd74b81488bf19c" in text
+    assert "2180646802d41abfb5b9fdb6abd7b203cbced1fb" in text
     assert "python -m scripts.behavioral_source_lock" in text
     assert "234347cce8872b75595b2cf312baaf25b74091ce" in text
     assert "e321f63661645f728481ef11587f94fec9a0547a" in text
