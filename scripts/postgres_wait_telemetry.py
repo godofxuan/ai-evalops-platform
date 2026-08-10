@@ -29,13 +29,13 @@ SELECT
     activity.backend_type,
     md5(COALESCE(activity.query, '')) AS query_fingerprint,
     CASE
-        WHEN activity.query ILIKE '%scheduler_claim_sequence%'
+        WHEN activity.query ILIKE '%%scheduler_claim_sequence%%'
             THEN 'durable_sequence_update'
-        WHEN activity.query ILIKE '%scheduler_coordination%'
+        WHEN activity.query ILIKE '%%scheduler_coordination%%'
             THEN 'scheduler_coordination_lock'
-        WHEN activity.query ILIKE '%tenant_scheduler_states%'
+        WHEN activity.query ILIKE '%%tenant_scheduler_states%%'
             THEN 'tenant_permit_selection'
-        WHEN activity.query ILIKE '%evaluation_jobs%'
+        WHEN activity.query ILIKE '%%evaluation_jobs%%'
             THEN 'job_selection'
         ELSE 'other'
     END AS query_category,

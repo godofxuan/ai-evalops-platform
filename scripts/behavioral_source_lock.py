@@ -9,9 +9,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import PurePosixPath
 
 BEHAVIORAL_DIRECTORY_PREFIXES = ("app/", "scripts/", "alembic/", "deploy/")
-BEHAVIORAL_ROOT_FILES = frozenset(
-    {".python-version", "alembic.ini", "pyproject.toml", "uv.lock"}
-)
+BEHAVIORAL_ROOT_FILES = frozenset({".python-version", "alembic.ini", "pyproject.toml", "uv.lock"})
 
 
 def _is_repository_relative_posix_path(path: str) -> bool:
@@ -19,9 +17,7 @@ def _is_repository_relative_posix_path(path: str) -> bool:
         return False
     candidate = PurePosixPath(path)
     return (
-        not candidate.is_absolute()
-        and ".." not in candidate.parts
-        and "." not in candidate.parts
+        not candidate.is_absolute() and ".." not in candidate.parts and "." not in candidate.parts
     )
 
 
