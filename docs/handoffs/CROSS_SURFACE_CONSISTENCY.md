@@ -12,6 +12,10 @@ Updated: 2026-08-10
 - targeted: `31352270523`, four repetitions complete, overall `NEGATIVE_SCALING`;
 - exact-workload correctness/fairness: PASS, 64 arms/6,400 Jobs, all four 20:1 vectors `2/2/2/2`;
 - performance: single/balanced/20:1 fail 0.95; many-small passes;
+- evidence hardening: independent raw-plan/arm/domain/no-false-empty gates PASS;
+- locked eligible-Job regression: real PostgreSQL push/PR `31398322919`/`31398332668` PASS;
+- attribution diagnostic: `31400658653`, `INSTRUMENTATION_TOO_INTRUSIVE`; formal H1/H2/H3
+  `NOT_RUN_STOPPED`/`INCONCLUSIVE`;
 - release: `NOT_READY_TARGETED_NEGATIVE_SCALING`;
 - PR #1: Draft; merge/tag/release: none;
 - scheduler development: STOP; no Candidate 4.
@@ -28,6 +32,7 @@ the immutable source/evidence identities above remain fixed.
 | `RELEASE_DECISION.md` | NOT_READY | bounded claim only | exact medians/ratios | NOT_RUN_STOPPED |
 | Resume-safe metrics | no release claim | exact workload is safe with scope | negative result retained | no capacity claim |
 | Teaching handoff | honest evidence repair + fair PASS | teaches bounded invariant | teaches orthogonal performance rejection | STOP |
+| Attribution diagnostic | no release-state change | correctness counters stayed admissible | overhead gate failed before formal attribution | NOT_RUN_STOPPED |
 
 ## Shared wording
 
@@ -48,6 +53,9 @@ the immutable source/evidence identities above remain fixed.
 9. PR remains Draft; no merge, tag or release exists.
 10. No resume or teaching surface may claim production capacity, linear scaling, production readiness or
     exactly-once processing.
+11. Diagnostic run `31400658653` is a preserved overhead failure, not an infrastructure failure and not
+    H1/H2/H3 evidence.
+12. Its OFF/ON claim-p95 median absolute change is 11.3194%, so instrumentation is not qualified.
 
 ## Verification checklist
 

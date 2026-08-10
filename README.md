@@ -602,6 +602,16 @@ correctness counters 为 0；每次 20:1 的 w1/w2/w4/w8 secondary position 都�
 `0.796214` 均低于冻结下限 `0.95`，只有 many-small `1.014063` 通过。按 `targeted fail -> STOP`，不做
 Candidate 4，也不运行当前 capacity、A/B/C same-runner、A–I fault 或 formal 32-arm。
 
+本轮进一步加固了证据边界：schema-v2 assessor 现在从保存的 raw PostgreSQL plan 独立重算
+selector-specific candidate cardinality，targeted assessor 从 arm ID 独立绑定 workload metadata 和数值
+domain，`empty_while_eligible` 也成为自动 release blocker。真实 PostgreSQL 并发测试还复现并修复了
+“eligible Job 暂时被 `SKIP LOCKED` 跳过时误把 Tenant permit 标成 `EMPTY`”的边界。
+
+预注册性能归因 workflow `31400658653` 在正式归因前停止：三次 OFF/ON 的吞吐中位数变化
+`+3.5404%`，但 claim-p95 中位数绝对变化 `11.3194%`，超过冻结的 `10%` 扰动预算，因此结论是
+`INSTRUMENTATION_TOO_INTRUSIVE`。正式 H1/H2/H3 repetitions 未运行，三个假设均为 `INCONCLUSIVE`；
+这份诊断不能改变 `31352270523` 的 `NEGATIVE_SCALING` 或授权 Candidate 4。
+
 最终 source-bound 证据：
 
 - fair capacity source `9987a28` / run `31272789199`：1k/10k 为 32/32、100k 为 16/16，全部

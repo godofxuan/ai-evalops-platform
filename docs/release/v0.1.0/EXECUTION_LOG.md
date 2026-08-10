@@ -1560,3 +1560,98 @@ API 未调用；随后回到已验证的 protocol/host 请求文件方式。该�
 release/tag 各 1；读取详情全为空暴露假阳性。加入 `Where-Object { $_ -ne $null }` 后重新确认 release 0、
 tag 0。最终 PR 为 Open Draft，title 为 `[Draft] v0.1.0 RC - NOT_READY targeted negative scaling`；当时本地
 HEAD、tracking HEAD 与 GitHub branch head 都为 `d84d094`。没有 merge、tag、Release 或下游 workflow。
+
+## 2026-08-10 — Evidence gate hardening、SKIP LOCKED 修复与性能归因停止
+
+### 阶段判断和 baseline
+
+本阶段先判断不应继续堆 scheduler candidate。授权范围只包含 P1 evidence gate、确定性并发边界以及
+instrumentation-only 诊断；scheduler behavior candidate budget 冻结为 0。实际起始 branch 是
+`codex/evidence-gate-1`，本地与远端完整 SHA 都是
+`01626d93799b93187fc0c6f340ca3a277e0da7f8`，working tree clean。Windows 11、PowerShell 5.1、系统
+Python 3.13.5；项目锁定环境为 `.venv` Python 3.12.13/pytest 9.1.1。本机没有可用 `psql`、Docker 或 uv
+CLI，真实 PostgreSQL 并发验证必须交给现有 GitHub Actions topology。
+
+系统 Python 的 `python -m pip check` exit 0（1.164s），`python -m compileall app scripts tests` exit 0
+（2.166s）。第一次用系统 Python 跑 pytest 在 collection 阶段出现 51 个依赖错误，exit 4（11.755s）；
+这证明 pip check 绿色不等于选中了项目环境。改用锁定 `.venv` 后 baseline 为
+`676 passed, 28 skipped, 7 warnings`，exit 0（405.15s）。warning 仅为 Windows 临时/cache 权限。
+
+### P1-01/02/03 的 RED、根因和最小 GREEN
+
+先只提交 RED tests：`24 failed, 47 passed`。P1-01 证明 assessor 相信 producer 的顶层
+`candidate_cardinality`，存在 common-mode failure。修复没有复用 producer summarizer，而是按真实 plan
+shape 独立解析：fair 的候选单位是唯一 WindowAgg 输出的 Tenant round members；legacy 是唯一可见的
+`evaluation_jobs` scan，排除 Bitmap Index 辅助节点。raw、summary、arm-derived expected 三者必须相等；
+missing/ambiguous/invalid 均 fail closed。真实 shaped fair/legacy 正例和 tampered manifest 反例都加入测试。
+
+P1-02 的根因是最终 assessor 用 CSV 自报 distribution/Worker 分组，且普通 float 转换会放过 NaN/inf、
+bool 或 domain-invalid 值。最小修复是本地 full-match arm grammar，独立派生 q/distribution/Worker/batch 并
+逐字段交叉校验，同时统一 finite、positive、nonnegative、ratio、integer 合同和每组恰好四次 observation。
+测试过程中发现“修改 metadata 就会改变 observation count”的最初假设错误：改为复制一个完整 arm，
+直接构造第五个 observation，而不是放松正确的 arm-derived grouping。
+
+P1-03 把 `empty_while_eligible` 对 schema v2 和 targeted final 都设为 required、非 bool、非负整数且等于
+0；nonzero 产生 blocker。schema v1 分支没有套用新 required-field 语义。三个 GREEN 后 focused suite 为
+`71 passed`。对应提交依次为 `03bc78a`、`7eea650`、`5c5ed31`、`0bcd162`。
+
+### 真实 SKIP LOCKED interleaving
+
+新 PostgreSQL test 让 Tx1 用 `SELECT ... FOR UPDATE` 锁住 Tenant A 唯一 eligible Job；Tx2 先取得 A 的
+PENDING permit，再由 `FOR UPDATE SKIP LOCKED` 暂时得到 no row。远端 RED run `31397416017` 的 durable
+fairness step 失败，证明旧代码会永久提交 `EMPTY`。状态机分析后没有增加 deferred 状态或 migration：
+no-row 时用完全相同的 Tenant/priority/eligibility predicate 做非锁定 exists probe；若 Job 仍 eligible，
+permit 保持 PENDING，waiting fallback 改用非 SKIP LOCKED selector 等待；真正无 eligible Job 才标 EMPTY。
+这样避免 permit 泄漏，也避免 PENDING hot loop。
+
+第一次放置 helper 时误把旧 builder 的 priority/return 尾部隔断，Ruff/MyPy 和三个 unit tests 立即暴露
+返回 None；修正函数边界后未扩大算法修改。提交 `c5e8368` 的 push `31398322919` 和 PR `31398332668`
+均通过真实 PostgreSQL durable-fairness step。Phase 1–4 focused 为 `96 passed, 4 skipped`；当时全量为
+`706 passed, 29 skipped`（438.41s）。
+
+### 历史证据不可变回放
+
+`31327388006` tree 仍为 `234347cce8872b75595b2cf312baaf25b74091ce`，root manifest SHA-256 仍为
+`1B74E3E1B6E6B3F8D1D7BF24380BF9F019B2CB48051E55C40EC3457648462AED`，assessment 仍为 schema-v1
+`FAILED`，未出现 schema-v2 新 required-field blocker。`31352270523` tree 仍为
+`e321f63661645f728481ef11587f94fec9a0547a`，root manifest SHA-256 为
+`82B049830783C878788149EC0C7C3E7DDB8BC453409029BFA04F4B8A2B611A53`；四个 schema-v2 reps 用新 parser
+重验均为 `VERIFIED`，top-level 仍是原 `NEGATIVE_SCALING`。没有修改任何历史 JSON。
+
+### 预注册 instrumentation 和 overhead stop
+
+在 instrumentation 代码前提交 `cec2a35`，冻结 q1000/b1、Workers 1/2/4/8、四分布、formal 四次、
+overhead 代表 arm skew20:1/w8、3 OFF/3 ON、吞吐绝对回退最多 5%、claim-p95 绝对变化最多 10%，以及
+H1/H2/H3 和停止规则。`f1ecbf2` 只增加可选 observer、monotonic nanosecond phase recorder、聚合/原始
+artifact 和 fail-closed assessor，不改变 scheduler policy；`f0cfd8e` 增加独立 diagnostic workflow 和
+source-lock 检查。工作流保证 overhead 未通过时不运行 formal matrix。
+
+run `31400658653` 在 source `f0cfd8e` 上完成三次 OFF 和三次 ON。OFF Jobs/s 为
+26.819294/30.125681/30.601347，claim p95 为 733.686325/519.208889/361.703180 ms；ON Jobs/s 为
+30.349410/31.192255/31.748073，claim p95 为 337.029211/473.924356/460.437420 ms。中位数吞吐变化
+`+3.5404%`，claim-p95 变化 `-11.3194%`，CPU `+1.5580%`，RSS `-0.0851%`。虽然 latency 方向变好，
+绝对变化仍超过冻结 10%；选择性忽略会构成看结果后改规则。因此 step 12 正确返回
+`INSTRUMENTATION_TOO_INTRUSIVE`，formal repetitions 和 H1/H2/H3 assessment 自动 skipped，三个假设
+全部 `INCONCLUSIVE`。
+
+失败证据仍由 bot commit `4f1fd8bf37d5b440c40684208332116f9d90de0d` 保存。独立 manifest audit 得到
+listed=893、actual=893、missing=0、extra=0、hash/size mismatch=0。本阶段不自动降低 instrumentation
+开销后续跑同一正式实验，因为 stop rule 要求先记录失败并停止；也没有 Candidate 4、threshold/workload/
+repetition 修改、merge/tag/release 或下游 qualification。正式 release input 仍是 `31352270523` 的
+`NEGATIVE_SCALING`，v0.1.0 仍 `NOT_READY`，PR #1 仍 Draft。
+
+### 最终本地验证和重放中的工具问题
+
+最终文档 diff check exit 0（0.119s）；系统 `python -m pip check` exit 0（1.924s）；锁定 Python
+compileall exit 0（1.496s）；Ruff format check、Ruff check、MyPy 全部 exit 0。专项 evidence、targeted、
+performance-assessor 和 durable-fairness matrix 为 `102 passed, 4 skipped`（6.58s）；四项 skip 都明确要求
+真实迁移 PostgreSQL。最终全仓为 `712 passed, 29 skipped`（pytest 420.09s，进程 421.264s），exit 0。
+
+历史 targeted assessor 重放时先尝试直接执行脚本路径，因 package import context 不成立得到
+`ModuleNotFoundError: scripts`；改用 `python -m scripts.targeted_scheduler_evidence`。第一次又误把不可变历史
+目录作为新 `--manifest-root`：assessor 已计算出 NEGATIVE_SCALING，但随后按设计拒绝覆盖既有
+`manifest.json`，抛出 `FileExistsError`。由于这个 exit 1 与性能判定的预期 exit 1 同值，不能混用。
+最终在经过路径边界校验的独立临时目录中重跑，明确得到 exit 1、status `NEGATIVE_SCALING`、四次
+repetitions、三个精确 blocker：single、balanced、20:1；临时 manifest 正常创建后删除。旧 evidence
+目录从未写入。创建临时目录时 PowerShell 5.1 的 `New-Item` 不支持所用 `-LiteralPath` 组合，又改用
+`.NET Directory.CreateDirectory`；这是命令兼容问题，不是产品或证据失败。

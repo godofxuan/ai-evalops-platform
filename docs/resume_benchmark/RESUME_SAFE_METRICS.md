@@ -12,6 +12,9 @@
 - Every targeted 20:1 w1/w2/w4/w8 vector was `2/2/2/2` in every repetition. This is an exact-workload result, not a
   universal fairness or production SLO claim.
 - Schema v2 manifest/unit/arm-identity checks verified all 512 EXPLAIN records and rejected tested spoofing cases.
+- The hardened schema-v2 assessor independently recomputes selector-specific candidate cardinality from each
+  preserved raw PostgreSQL plan and cross-checks it with the summary and arm contract.
+- True PostgreSQL push/PR runs `31398322919`/`31398332668` passed the locked-eligible-Job no-false-empty regression.
 
 ## FAILED_CURRENT
 
@@ -19,6 +22,9 @@
 - Median w8/w4 ratios: single `0.782511`, balanced `0.772797`, 20:1 `0.796214`, many-small `1.014063`; required
   minimum is 0.95 for every distribution.
 - PR #1 remains Draft and v0.1.0 remains `NOT_READY_TARGETED_NEGATIVE_SCALING`.
+- Performance diagnostic `31400658653` is `INSTRUMENTATION_TOO_INTRUSIVE`: OFF/ON claim-p95 medians changed by
+  11.3194% in absolute terms against a preregistered 10% budget.
+- Formal H1/H2/H3 attribution is `NOT_RUN_STOPPED`; all three hypotheses are `INCONCLUSIVE`.
 
 ## HISTORICAL_ONLY
 
@@ -35,6 +41,8 @@
 - hiding current negative scaling while quoting bounded fairness success;
 - using historical `-63.44%`, `41s`, `504`, `0.628 Jobs/s` as current numbers;
 - calling the new workflow failure an infrastructure failure.
+- calling the stopped overhead diagnostic root-cause attribution, or treating its favourable latency direction as
+  permission to ignore the absolute-change gate.
 
 ## NOT_RUN_STOPPED
 

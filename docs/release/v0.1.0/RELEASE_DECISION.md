@@ -19,6 +19,10 @@ eight-Worker throughput divided by four-Worker throughput was below the required
 | targeted correctness | PASS | 64/64 arms; 6,400/6,400 terminal; all protected counters zero |
 | targeted self-scaling | **NEGATIVE_SCALING** | three required distributions below 0.95 |
 | targeted workflow | FAILED BY DESIGN | run `31352270523`; assessment returned nonzero for negative scaling |
+| evidence-gate hardening | PASS | independent raw-plan parser, arm-derived metadata/domain checks, no-false-empty blocker |
+| locked-Job false-empty regression | PASS | true PostgreSQL push/PR runs `31398322919`/`31398332668` |
+| attribution instrumentation overhead | **INSTRUMENTATION_TOO_INTRUSIVE** | run `31400658653`; absolute claim-p95 change 11.3194% > 10% |
+| formal H1/H2/H3 attribution | NOT_RUN_STOPPED | overhead prerequisite failed; all hypotheses INCONCLUSIVE |
 | current 1k/10k/100k capacity | NOT_RUN_STOPPED | targeted performance prerequisite failed |
 | current same-runner A/B/C | NOT_RUN_STOPPED | targeted performance prerequisite failed |
 | current A-I x3 fault | NOT_RUN_STOPPED | targeted performance prerequisite failed |
@@ -33,6 +37,14 @@ eight-Worker throughput divided by four-Worker throughput was below the required
 - evidence commit: `15bab58150385c9a39778d64a3e4163c10892ecc`;
 - artifact: `targeted-gh-31352270523-1`, 1,395,629 bytes;
 - artifact digest: `sha256:6b5f68821b90ee6bdbb36d66aba0087864ca2048ac356ec3cb701e378d0c120f`.
+
+The bounded diagnostic evidence is separate from that formal release input:
+
+- instrumentation code lock: `f1ecbf20d8e266eddadd85391d2c782c581ecad2`;
+- diagnostic execution source: `f0cfd8e341bca94586a75cecce74430330ffd12b`;
+- workflow: `31400658653`;
+- evidence commit: `4f1fd8bf37d5b440c40684208332116f9d90de0d`;
+- manifest audit: 893 listed/actual files, zero missing, extra, size or SHA-256 mismatches.
 
 Source `91acdba` changes only evidence generation/assessment and documentation on top of Candidate 3. No scheduler,
 Worker, migration, threshold, workload, repetition, seed, batch, retry, pool, sleep or lease parameter changed.
@@ -54,3 +66,17 @@ The frozen protocol requires `targeted fail -> STOP`. No Candidate 4, threshold 
 tuning or immediate retry is authorized. Historical capacity/fault/formal bundles remain
 `VERIFIED_HISTORICAL` only. See `evidence_contract_v2/03_REMOTE_TARGETED_DECISION.md` for the full observation and
 diagnostic ledger.
+
+## Attribution stop result
+
+The preregistered representative arm was `fair-q1000-skew_20_to_1-w8-b1`, with exactly three
+instrumentation-OFF and three instrumentation-ON repetitions. OFF medians were 30.125681 Jobs/s and
+519.208889 ms claim p95; ON medians were 31.192255 Jobs/s and 460.437420 ms. Throughput changed
++3.5404%, while claim p95 changed -11.3194%. The contract gates on absolute change, so claim p95
+exceeded the 10% budget even though its sampled direction improved.
+
+The workflow correctly skipped the formal four-repetition attribution and hypothesis assessment.
+H1 singleton coordination, H2 Tenant-permit contention and H3 SKIP LOCKED/retry feedback are all
+`INCONCLUSIVE`; none is a proven root cause or a sufficient basis for Candidate 4. See
+`performance_attribution/00_PREREGISTRATION.md` and
+`evidence_contract_v2/04_HARDENING_AND_ATTRIBUTION_STOP.md`.
