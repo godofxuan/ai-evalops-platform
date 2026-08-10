@@ -1,5 +1,7 @@
 from collections.abc import Sequence
 
+import pytest
+
 from scripts.fair_capacity_evidence import FAIR_CAPACITY_DISTRIBUTIONS
 from scripts.targeted_scheduler_evidence import assess_targeted_repetitions
 
@@ -59,6 +61,22 @@ def _repetitions(*, worker_8_ratio: float = 1.05) -> Sequence[Sequence[dict[str,
                 rows.append(_row(distribution=distribution, workers=workers, throughput=throughput))
         repetitions.append(rows)
     return repetitions
+
+
+def _with_first_row(field: str, value: object) -> list[list[dict[str, object]]]:
+    repetitions = [[dict(row) for row in rows] for rows in _repetitions()]
+    repetitions[0][0][field] = value
+    return repetitions
+
+
+def _assert_failed_for_first_row(field: str, value: object, failure_suffix: str) -> None:
+    assessment = assess_targeted_repetitions(
+        _with_first_row(field, value),
+        source_commit=SOURCE_COMMIT,
+    )
+
+    assert assessment["status"] == "FAILED"
+    assert any(failure.endswith(failure_suffix) for failure in assessment["failures"])
 
 
 def test_targeted_gate_verifies_four_complete_repetitions_and_all_metrics() -> None:
@@ -123,3 +141,89 @@ def test_targeted_gate_fails_closed_for_missing_repetition_or_correctness_failur
     invalid = assess_targeted_repetitions(repetitions, source_commit=SOURCE_COMMIT)
     assert invalid["status"] == "FAILED"
     assert invalid["failures"] == ["rep3:fair-q1000-single_tenant-w1-b1:lost_count_nonzero"]
+
+
+def test_targeted_gate_rejects_nan_throughput() -> None:
+    _assert_failed_for_first_row("jobs_per_second", float("nan"), ":jobs_per_second_invalid")
+
+
+def test_targeted_gate_rejects_positive_infinity_throughput() -> None:
+    _assert_failed_for_first_row("jobs_per_second", float("inf"), ":jobs_per_second_invalid")
+
+
+def test_targeted_gate_rejects_negative_infinity_throughput() -> None:
+    _assert_failed_for_first_row("jobs_per_second", float("-inf"), ":jobs_per_second_invalid")
+
+
+def test_targeted_gate_rejects_zero_throughput() -> None:
+    _assert_failed_for_first_row("jobs_per_second", 0, ":jobs_per_second_invalid")
+
+
+def test_targeted_gate_rejects_negative_throughput() -> None:
+    _assert_failed_for_first_row("jobs_per_second", -1, ":jobs_per_second_invalid")
+
+
+def test_targeted_gate_rejects_boolean_numeric_value() -> None:
+    _assert_failed_for_first_row("claim_latency_p95_ms", True, ":claim_latency_p95_ms_invalid")
+
+
+def test_targeted_gate_rejects_arm_metadata_spoof_with_complete_arm_set() -> None:
+    _assert_failed_for_first_row(
+        "distribution",
+        "balanced_multi_tenant",
+        ":arm_metadata_mismatch",
+    )
+
+
+def test_targeted_gate_rejects_worker_metadata_spoof() -> None:
+    _assert_failed_for_first_row("worker_concurrency", 8, ":arm_metadata_mismatch")
+
+
+def test_targeted_gate_rejects_distribution_metadata_spoof() -> None:
+    _assert_failed_for_first_row(
+        "distribution",
+        "many_small_tenants",
+        ":arm_metadata_mismatch",
+    )
+
+
+def test_targeted_gate_rejects_queue_size_metadata_spoof() -> None:
+    _assert_failed_for_first_row("queue_size", 999, ":arm_metadata_mismatch")
+
+
+def test_targeted_gate_rejects_claim_batch_metadata_spoof() -> None:
+    _assert_failed_for_first_row("claim_batch_size", 2, ":arm_metadata_mismatch")
+
+
+def test_targeted_gate_requires_exact_four_observations_per_group() -> None:
+    assessment = assess_targeted_repetitions(
+        _with_first_row("worker_concurrency", 8),
+        source_commit=SOURCE_COMMIT,
+    )
+
+    assert assessment["status"] == "FAILED"
+    assert any(
+        failure.endswith(":observation_count_must_equal_4")
+        for failure in assessment["failures"]
+    )
+
+
+def test_targeted_gate_rejects_nonzero_empty_while_eligible() -> None:
+    _assert_failed_for_first_row(
+        "empty_while_eligible",
+        1,
+        ":empty_while_eligible_nonzero",
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("claim_latency_p95_ms", -1),
+        ("contention_retries", 1.5),
+        ("reservation_miss_rate", 1.01),
+        ("reservation_miss_rate", -0.01),
+    ],
+)
+def test_targeted_gate_rejects_domain_invalid_metrics(field: str, value: object) -> None:
+    _assert_failed_for_first_row(field, value, f":{field}_invalid")

@@ -33,7 +33,77 @@ def _row(*, source_commit: str = CURRENT_SOURCE) -> dict[str, object]:
         "illegal_state_transition_count": 0,
         "orphan_nonterminal_count": 0,
         "attempt_sequence_mismatch_count": 0,
+        "empty_while_eligible": 0,
     }
+
+
+def _fair_plan(candidate_cardinality: int) -> list[dict[str, object]]:
+    """Representative current fair selector shape from the preserved PostgreSQL evidence."""
+
+    return [
+        {
+            "Plan": {
+                "Node Type": "WindowAgg",
+                "Actual Rows": candidate_cardinality,
+                "Actual Loops": 1,
+                "Plans": [
+                    {
+                        "Node Type": "Aggregate",
+                        "Actual Rows": candidate_cardinality,
+                        "Actual Loops": 1,
+                        "Plans": [
+                            {
+                                "Node Type": "Bitmap Heap Scan",
+                                "Relation Name": "evaluation_jobs",
+                                "Actual Rows": 1_000,
+                                "Actual Loops": 1,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "Planning Time": 1.0,
+            "Execution Time": 2.0,
+        }
+    ]
+
+
+def _legacy_plan(candidate_cardinality: int) -> list[dict[str, object]]:
+    """Representative current legacy selector shape where Limit hides the candidate set."""
+
+    return [
+        {
+            "Plan": {
+                "Node Type": "Limit",
+                "Actual Rows": 20,
+                "Actual Loops": 1,
+                "Plans": [
+                    {
+                        "Node Type": "LockRows",
+                        "Actual Rows": 20,
+                        "Actual Loops": 1,
+                        "Plans": [
+                            {
+                                "Node Type": "Sort",
+                                "Actual Rows": 20,
+                                "Actual Loops": 1,
+                                "Plans": [
+                                    {
+                                        "Node Type": "Bitmap Heap Scan",
+                                        "Relation Name": "evaluation_jobs",
+                                        "Actual Rows": candidate_cardinality,
+                                        "Actual Loops": 1,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+            "Planning Time": 1.0,
+            "Execution Time": 2.0,
+        }
+    ]
 
 
 def _write_bundle(
@@ -50,6 +120,7 @@ def _write_bundle(
     schema_version: int = 1,
     tenant_count: int | None = None,
     candidate_units: dict[str, str] | None = None,
+    raw_plans: dict[str, object] | None = None,
     empty_csv: bool = False,
 ) -> Path:
     root.mkdir()
@@ -87,7 +158,13 @@ def _write_bundle(
                     "planning_time_ms": 1.0,
                     "execution_time_ms": 2.0,
                     "candidate_cardinality": selector_cardinality,
-                    "plan": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20}}],
+                    "plan": (
+                        raw_plans[selector]
+                        if raw_plans is not None and selector in raw_plans
+                        else _fair_plan(selector_cardinality)
+                        if selector == "fair"
+                        else _legacy_plan(selector_cardinality)
+                    ),
                 }
                 if candidate_units is not None and selector in candidate_units:
                     explain_record["candidate_unit"] = candidate_units[selector]
@@ -194,6 +271,137 @@ def test_schema_v2_accepts_selector_specific_candidate_units(tmp_path: Path) -> 
     assert result["schema_version"] == 2
     assert result["status"] == "VERIFIED"
     assert result["blockers"] == []
+
+
+def test_schema_v2_rejects_top_level_cardinality_when_raw_plan_disagrees(
+    tmp_path: Path,
+) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+        raw_plans={
+            "fair": _fair_plan(20),
+            "legacy_fifo": _legacy_plan(1_000),
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_raw_plan_cardinality_mismatch" in result["blockers"]
+
+
+def test_schema_v2_rejects_tampered_raw_plan_with_recomputed_manifest(tmp_path: Path) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+        raw_plans={
+            "fair": _fair_plan(20),
+            "legacy_fifo": _legacy_plan(1_000),
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert "manifest_hash_mismatch" not in result["blockers"]
+    assert "postgres_explain_raw_plan_cardinality_mismatch" in result["blockers"]
+
+
+def test_schema_v2_accepts_real_shaped_fair_explain(tmp_path: Path) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+        raw_plans={"fair": _fair_plan(1), "legacy_fifo": _legacy_plan(1_000)},
+    )
+
+    assert _assess(bundle)["status"] == "VERIFIED"
+
+
+def test_schema_v2_accepts_real_shaped_legacy_explain(tmp_path: Path) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+        raw_plans={"fair": _fair_plan(1), "legacy_fifo": _legacy_plan(1_000)},
+    )
+
+    assert _assess(bundle)["status"] == "VERIFIED"
+
+
+def test_schema_v2_rejects_missing_raw_plan_candidate_node(tmp_path: Path) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+        raw_plans={
+            "fair": [{"Plan": {"Node Type": "Limit", "Actual Rows": 1, "Actual Loops": 1}}],
+            "legacy_fifo": _legacy_plan(1_000),
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_raw_plan_candidate_missing" in result["blockers"]
+
+
+def test_schema_v2_rejects_ambiguous_raw_plan_cardinality(tmp_path: Path) -> None:
+    ambiguous_fair_plan = _fair_plan(1)
+    root = ambiguous_fair_plan[0]["Plan"]
+    assert isinstance(root, dict)
+    root["Plans"].append(
+        {"Node Type": "WindowAgg", "Actual Rows": 1, "Actual Loops": 1}
+    )
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+        raw_plans={"fair": ambiguous_fair_plan, "legacy_fifo": _legacy_plan(1_000)},
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_raw_plan_candidate_ambiguous" in result["blockers"]
 
 
 @pytest.mark.parametrize(
@@ -352,6 +560,107 @@ def test_schema_v2_rejects_arm_metadata_spoofing(
 
     assert result["status"] == "FAILED"
     assert "arm_metadata_mismatch" in result["blockers"]
+
+
+def test_schema_v2_rejects_nonzero_empty_while_eligible(tmp_path: Path) -> None:
+    row = _row()
+    row["empty_while_eligible"] = 1
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        rows=[row],
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "empty_while_eligible_nonzero" in result["blockers"]
+
+
+def test_schema_v2_rejects_missing_empty_while_eligible(tmp_path: Path) -> None:
+    row = _row()
+    del row["empty_while_eligible"]
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        rows=[row],
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "empty_while_eligible_invalid" in result["blockers"]
+
+
+def test_schema_v2_rejects_boolean_empty_while_eligible(tmp_path: Path) -> None:
+    row = _row()
+    row["empty_while_eligible"] = True
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        rows=[row],
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "empty_while_eligible_invalid" in result["blockers"]
+
+
+def test_schema_v1_retains_historical_empty_semantics(tmp_path: Path) -> None:
+    row = _row()
+    del row["empty_while_eligible"]
+    bundle = _write_bundle(tmp_path / "bundle", rows=[row], schema_version=1)
+
+    result = _assess(bundle)
+
+    assert result["status"] == "VERIFIED"
+    assert "empty_while_eligible_invalid" not in result["blockers"]
+    assert "empty_while_eligible_nonzero" not in result["blockers"]
+
+
+def test_schema_v1_historical_failed_bundle_remains_failed() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    bundle = (
+        repository_root
+        / "docs/results/release/v0.1.0/targeted-gh-31327388006-1/rep1/bundle"
+    )
+    with (bundle / "arms.csv").open(encoding="utf-8", newline="") as stream:
+        arm_ids = tuple(str(row["arm_id"]) for row in csv.DictReader(stream))
+
+    result = assess_release_bundle(
+        bundle,
+        expected_source_commit="02f5e680e71d05c76c145da6895122a2cf04ba14",
+        expected_arm_ids=arm_ids,
+        expected_explain_repetitions=4,
+    )
+
+    assert result["schema_version"] == 1
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_candidate_cardinality_mismatch" in result["blockers"]
+    assert "empty_while_eligible_invalid" not in result["blockers"]
+    assert "empty_while_eligible_nonzero" not in result["blockers"]
 
 
 def test_release_bundle_requires_every_fair_and_legacy_explain_repetition(
