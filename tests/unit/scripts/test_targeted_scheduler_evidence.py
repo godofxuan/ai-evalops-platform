@@ -196,15 +196,16 @@ def test_targeted_gate_rejects_claim_batch_metadata_spoof() -> None:
 
 
 def test_targeted_gate_requires_exact_four_observations_per_group() -> None:
+    repetitions = [[dict(row) for row in rows] for rows in _repetitions()]
+    repetitions[0].append(dict(repetitions[0][0]))
     assessment = assess_targeted_repetitions(
-        _with_first_row("worker_concurrency", 8),
+        repetitions,
         source_commit=SOURCE_COMMIT,
     )
 
     assert assessment["status"] == "FAILED"
     assert any(
-        failure.endswith(":observation_count_must_equal_4")
-        for failure in assessment["failures"]
+        failure.endswith(":observation_count_must_equal_4") for failure in assessment["failures"]
     )
 
 

@@ -1,6 +1,8 @@
 import argparse
 import csv
 import json
+import math
+import re
 import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -47,27 +49,84 @@ _ZERO_CORRECTNESS_FIELDS: Final = (
     "stale_failure_accepted_count",
     "illegal_state_transition_count",
 )
+_TARGETED_ARM_PATTERN: Final = re.compile(
+    r"fair-q(?P<queue_size>[1-9][0-9]*)-"
+    r"(?P<distribution>[a-z0-9_]+)-"
+    r"w(?P<worker_concurrency>[1-9][0-9]*)-"
+    r"b(?P<claim_batch_size>[1-9][0-9]*)"
+)
+_NONNEGATIVE_FLOAT_METRICS: Final = {
+    "claim_latency_p50_ms",
+    "claim_latency_p95_ms",
+    "claim_latency_p99_ms",
+    "reservation_latency_p50_ms",
+    "reservation_latency_p95_ms",
+    "reservation_latency_p99_ms",
+    "job_claim_latency_p50_ms",
+    "job_claim_latency_p95_ms",
+    "job_claim_latency_p99_ms",
+    "contention_retry_per_success",
+    "worker_process_cpu_percent",
+}
+_NONNEGATIVE_INTEGER_METRICS: Final = {
+    "tenant_turn_reserved",
+    "tenant_turn_without_job",
+    "contention_retries",
+    "waiting_fallbacks",
+    "empty_while_eligible",
+    "postgres_lock_waiting_connections_peak",
+    "worker_process_rss_bytes_peak",
+}
 
 
 def _number(row: Mapping[str, object], field: str) -> float | None:
     value = row.get(field)
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
+    if isinstance(value, int | float):
+        numeric = float(value)
+    elif isinstance(value, str):
         try:
-            return float(value)
+            numeric = float(value)
         except ValueError:
             return None
-    return None
+    else:
+        return None
+    return numeric if math.isfinite(numeric) else None
 
 
 def _integer(row: Mapping[str, object], field: str) -> int | None:
     value = _number(row, field)
-    if value is None or not value.is_integer():
+    if value is None or value < 0 or not value.is_integer():
         return None
     return int(value)
+
+
+def _metric_value(row: Mapping[str, object], metric: str) -> float | None:
+    value = _number(row, metric)
+    if value is None:
+        return None
+    if metric == "jobs_per_second":
+        return value if value > 0 else None
+    if metric == "reservation_miss_rate":
+        return value if 0 <= value <= 1 else None
+    if metric in _NONNEGATIVE_INTEGER_METRICS:
+        return value if value >= 0 and value.is_integer() else None
+    if metric in _NONNEGATIVE_FLOAT_METRICS:
+        return value if value >= 0 else None
+    return None
+
+
+def _targeted_arm_contract(arm_id: str) -> tuple[int, str, int, int] | None:
+    match = _TARGETED_ARM_PATTERN.fullmatch(arm_id)
+    if match is None or match.group("distribution") not in FAIR_CAPACITY_DISTRIBUTIONS:
+        return None
+    return (
+        int(match.group("queue_size")),
+        match.group("distribution"),
+        int(match.group("worker_concurrency")),
+        int(match.group("claim_batch_size")),
+    )
 
 
 def _failed(*, source_commit: str, failures: list[str]) -> dict[str, Any]:
@@ -121,10 +180,22 @@ def assess_targeted_repetitions(
             prefix = f"rep{repetition_number}:{arm_id}"
             if row.get("source_commit") != source_commit:
                 failures.append(f"{prefix}:source_commit_mismatch")
-            if _integer(row, "queue_size") != TARGETED_QUEUE_SIZE:
-                failures.append(f"{prefix}:queue_size_mismatch")
-            if _integer(row, "claim_batch_size") != 1:
-                failures.append(f"{prefix}:claim_batch_size_mismatch")
+            arm_contract = _targeted_arm_contract(arm_id)
+            if arm_contract is None:
+                failures.append(f"{prefix}:arm_id_invalid")
+                group = None
+            else:
+                expected_queue, expected_distribution, expected_workers, expected_batch = (
+                    arm_contract
+                )
+                if (
+                    _integer(row, "queue_size") != expected_queue
+                    or row.get("distribution") != expected_distribution
+                    or _integer(row, "worker_concurrency") != expected_workers
+                    or _integer(row, "claim_batch_size") != expected_batch
+                ):
+                    failures.append(f"{prefix}:arm_metadata_mismatch")
+                group = values.get((expected_distribution, expected_workers))
             submitted = _integer(row, "submitted_count")
             if submitted is None or submitted <= 0:
                 failures.append(f"{prefix}:submitted_count_invalid")
@@ -135,15 +206,18 @@ def assess_targeted_repetitions(
                 if _integer(row, field) != 0:
                     failures.append(f"{prefix}:{field}_nonzero")
 
-            distribution = str(row.get("distribution"))
-            workers = _integer(row, "worker_concurrency")
-            group = values.get((distribution, workers)) if workers is not None else None
             for metric in TARGETED_METRICS:
-                metric_value = _number(row, metric)
+                metric_value = _metric_value(row, metric)
                 if metric_value is None:
-                    failures.append(f"{prefix}:{metric}_missing_or_invalid")
+                    failures.append(f"{prefix}:{metric}_invalid")
                 elif group is not None:
                     group[metric].append(metric_value)
+
+    for (distribution, workers), metric_values in values.items():
+        if any(
+            len(observations) != TARGETED_REPETITIONS for observations in metric_values.values()
+        ):
+            failures.append(f"group:{distribution}:w{workers}:observation_count_must_equal_4")
 
     if failures:
         failed = _failed(source_commit=source_commit, failures=failures)
