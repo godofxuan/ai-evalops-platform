@@ -38,6 +38,15 @@ class ManualNanosecondClock:
         self.value += int(value * 1_000_000)
 
 
+class CountingNanosecondClock:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self) -> int:
+        self.calls += 1
+        return 0
+
+
 def test_claim_phase_recorder_derives_registered_stage_timings() -> None:
     clock = ManualNanosecondClock()
     recorder = ClaimPhaseRecorder(clock_ns=clock)
@@ -106,6 +115,34 @@ def test_claim_phase_recorder_counts_scheduler_events_without_entity_ids() -> No
         "round_created_count": 1,
     }
     assert all("tenant" not in key and "job_id" not in key for key in recorder.counters())
+
+
+def test_claim_phase_recorder_does_not_read_clock_for_counter_only_or_ignored_events() -> None:
+    clock = CountingNanosecondClock()
+    recorder = ClaimPhaseRecorder(clock_ns=clock)
+
+    for phase in (
+        "transaction_start",
+        "tenant_permit_missing",
+        "job_attempt_mutation_complete",
+        "round_created",
+        "generation_advanced",
+        "permit_retained",
+        "job_skip_locked_miss",
+        "tenant_permit_consumed",
+        "tenant_permit_empty",
+    ):
+        recorder.observe(phase)
+
+    assert clock.calls == 0
+    assert recorder.counters() == {
+        "generation_advance_count": 1,
+        "job_skip_locked_miss_count": 1,
+        "permit_consumed_count": 1,
+        "permit_empty_count": 1,
+        "permit_pending_count": 1,
+        "round_created_count": 1,
+    }
 
 
 def test_failure_report_preserves_task_group_leaf_exception_and_cause() -> None:
