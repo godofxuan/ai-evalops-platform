@@ -1539,3 +1539,24 @@ teaching、handoff 与 PR 必须同时保留“bounded fairness PASS + performan
 rep 子 manifest，得到 declared 598 / actual 594 的假 file-set mismatch；bad hash 仍为 0。修正为只排除
 root 自身的 manifest 后，declared/actual 均为 598、file set exact match、size/SHA-256 mismatch 为 0。这个
 问题不来自 evidence，而来自核验脚本把“同名文件”误当成“同一路径”；最终结果与修正原因均保留。
+
+### 文档、PR 与最终外部状态闭环
+
+跨表面同步 commit `d84d094` 更新 README、release/fairness、resume、teaching、interview、handoff 共 24 个
+文件并推送。exact-head push CI `31353435653` 与 PR CI `31353439745` 均 SUCCESS；两条都通过 Compose smoke、
+无外部服务 tests 与真实 PostgreSQL same-Tenant integration。没有用较早 `91acdba` 的双绿替代最终文档 HEAD。
+
+PR #1 原标题/正文仍停留在旧 `31327388006`。第一次 REST PATCH 同时发送 title/body，GitHub 返回空 500；
+复查发现 title 已部分成功更新，但 body 未更新。第二条 .NET HttpClient 路径先因 Windows PowerShell 未加载
+`System.Net.Http` 在发送前失败；显式加载程序集后 body 请求仍返回空 500。最终改用 Python 标准库
+`json.dumps(...).encode('utf-8')` 的独立序列化路径，只 PATCH body，成功得到 body length 3,455；PR 保持
+Open Draft，head `d84d094`，新正文包含 current status、run `31352270523` 与 ratio `0.782511`。临时 body 与
+credential request 文件均删除，token 未打印或写入文件。
+
+凭据助手的另一个尝试是用 `cmd echo` 代替两行请求文件，但伪空行含空格，helper 报 invalid credential line，
+API 未调用；随后回到已验证的 protocol/host 请求文件方式。该请求文件从不含 token，并在每阶段后删除。
+
+最后只读审计首次用 `@($null)` 包装空 releases/tags API 响应，PowerShell 把 null 包成长度 1，错误报告
+release/tag 各 1；读取详情全为空暴露假阳性。加入 `Where-Object { $_ -ne $null }` 后重新确认 release 0、
+tag 0。最终 PR 为 Open Draft，title 为 `[Draft] v0.1.0 RC - NOT_READY targeted negative scaling`；当时本地
+HEAD、tracking HEAD 与 GitHub branch head 都为 `d84d094`。没有 merge、tag、Release 或下游 workflow。
