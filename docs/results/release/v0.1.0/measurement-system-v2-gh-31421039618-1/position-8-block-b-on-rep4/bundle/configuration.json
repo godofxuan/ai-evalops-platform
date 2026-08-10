@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "source_commit": "aa8b29c0a90305b2898daecc34ad23d103956ba0",
+  "stage": "targeted",
+  "queue_sizes": [
+    1000
+  ],
+  "distributions": [
+    "skew_20_to_1"
+  ],
+  "worker_concurrency": [
+    8
+  ],
+  "claim_batch_size": 1,
+  "sample_jobs_per_arm": 100,
+  "explain_repetitions": 4,
+  "performance_attribution_enabled": false,
+  "measurement_qualification": {
+    "measurement_mode": "ON",
+    "measurement_block": "B",
+    "measurement_order_position": 8,
+    "measurement_mode_repetition": 4,
+    "measurement_code_sha": "0915c10d9176191f4f306590f029ed66809cf161",
+    "workflow_run_id": "31421039618",
+    "telemetry_sampling_hz": 5
+  },
+  "warm_up_policy": "no_workload_warm_up",
+  "measured_period": "exactly_the_100_job_worker_sample",
+  "selected_arm_id": "fair-q1000-skew_20_to_1-w8-b1",
+  "worker_resource_scope": "single benchmark process running real EvaluationWorker objects",
+  "stale_evidence": {
+    "scope": "referenced_fault_after_bundle_not_induced_per_arm",
+    "source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223"
+  }
+}

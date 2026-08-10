@@ -1,0 +1,160 @@
+{
+  "arm_id": "fair-q1000-skew_20_to_1-w8-b1",
+  "queue_size": 1000,
+  "distribution": "skew_20_to_1",
+  "worker_concurrency": 8,
+  "claim_batch_size": 1,
+  "sample_jobs": 100,
+  "background_queue_jobs": 900,
+  "claim_calls": 100,
+  "successful_claim_calls": 100,
+  "claimed_jobs": 100,
+  "empty_claims": 0,
+  "empty_while_eligible": 0,
+  "contention_retries": 250,
+  "contention_retry_per_success": 2.5,
+  "max_retry_exits": 0,
+  "waiting_fallbacks": 147,
+  "tenant_turn_reserved": 100,
+  "tenant_turn_without_job": 0,
+  "performance_attribution_enabled": false,
+  "claim_phase_timing_ms": {
+    "scheduler_coordination_wait_ms": {
+      "observations": [],
+      "count": 0,
+      "sum": 0,
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "tenant_permit_wait_ms": {
+      "observations": [],
+      "count": 0,
+      "sum": 0,
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "job_row_wait_ms": {
+      "observations": [],
+      "count": 0,
+      "sum": 0,
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "durable_sequence_wait_ms": {
+      "observations": [],
+      "count": 0,
+      "sum": 0,
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "transaction_commit_ms": {
+      "observations": [],
+      "count": 0,
+      "sum": 0,
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "claim_total_ms": {
+      "observations": [],
+      "count": 0,
+      "sum": 0,
+      "p50": null,
+      "p95": null,
+      "p99": null
+    }
+  },
+  "claim_phase_counters": {
+    "generation_advance_count": 0,
+    "job_skip_locked_miss_count": 0,
+    "permit_consumed_count": 0,
+    "permit_empty_count": 0,
+    "permit_pending_count": 0,
+    "round_created_count": 0
+  },
+  "reservation_miss_rate": 0.0,
+  "claim_latency_ms": {
+    "p50": 80.47028749999185,
+    "p95": 863.9448448000136,
+    "p99": 1140.899581019974
+  },
+  "reservation_latency_ms": {
+    "p50": 22.467516500000784,
+    "p95": 38.54290249998655,
+    "p99": 136.9401826200139
+  },
+  "job_claim_latency_ms": {
+    "p50": 22.79442500000073,
+    "p95": 44.62000344997535,
+    "p99": 55.745640610018654
+  },
+  "result_commit_latency_ms": {
+    "p50": 28.90721799997209,
+    "p95": 40.86474734996557,
+    "p99": 78.38369751999439
+  },
+  "end_to_end_seconds": 3.283963024000002,
+  "jobs_per_second": 30.451012776080496,
+  "worker_process_cpu_percent": 93.49678445100538,
+  "worker_process_rss_bytes_peak": 96174080,
+  "postgres_connections_peak": 9,
+  "postgres_lock_waiting_connections_peak": 5,
+  "collector_missed_samples": 0,
+  "passive_postgres_telemetry": {
+    "schema_version": 1,
+    "collector": "disabled",
+    "sampling_hz": 5,
+    "sample_interval_seconds": 0.2,
+    "successful_sample_count": 0,
+    "observed_wait_sample_count": 0,
+    "observed_waiting_backends": 0,
+    "rows_written": 0,
+    "telemetry_error_count": 0,
+    "dropped_sample_count": 0,
+    "buffer_overflow_count": 0,
+    "raw_query_text_persisted": "NO"
+  },
+  "tenant_first_claim_positions": {
+    "bb3cd576-05ce-49ba-bbea-ab7aaa5227c9": 1,
+    "733a2a6c-afdf-429c-b597-8cfa35921ab9": 2
+  },
+  "database_claim_sequence_complete": true,
+  "database_tenant_first_claim_positions": {
+    "bb3cd576-05ce-49ba-bbea-ab7aaa5227c9": 1,
+    "733a2a6c-afdf-429c-b597-8cfa35921ab9": 2
+  },
+  "tenant_claim_counts": {
+    "bb3cd576-05ce-49ba-bbea-ab7aaa5227c9": 52,
+    "733a2a6c-afdf-429c-b597-8cfa35921ab9": 48
+  },
+  "fair_first_secondary_tenant_position": 2,
+  "legacy_fifo_first_secondary_tenant_position": 953,
+  "correctness": {
+    "submitted_count": 100,
+    "unique_job_count": 100,
+    "terminal_count": 100,
+    "succeeded_count": 100,
+    "failed_count": 0,
+    "lost_count": 0,
+    "duplicate_durable_result_count": 0,
+    "orphan_nonterminal_count": 0,
+    "attempt_sequence_mismatch_count": 0,
+    "queue_wait_ms": {
+      "p50": 3600508.4175,
+      "p95": 3603240.98575
+    }
+  },
+  "stale_success_accepted_count": 0,
+  "stale_failure_accepted_count": 0,
+  "illegal_state_transition_count": 0,
+  "stale_evidence_scope": "referenced_fault_after_bundle_not_induced_per_arm",
+  "stale_evidence_source_commit": "03d6987c75f2169c8207f2355f1f9d7528f9d223",
+  "assessment": {
+    "status": "VERIFIED",
+    "failures": []
+  }
+}

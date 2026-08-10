@@ -1,0 +1,151 @@
+{
+  "arm_id": "fair-q1000-skew_20_to_1-w8-b1",
+  "failures": [
+    "claim_p95_perturbation_exceeded"
+  ],
+  "final_decision": "PERFORMANCE_ATTRIBUTION_STOPPED_BY_MEASUREMENT_VALIDITY",
+  "formal_attribution": "NOT_RUN",
+  "measurement_code_sha": "0915c10d9176191f4f306590f029ed66809cf161",
+  "order": [
+    {
+      "block": "A",
+      "mode": "OFF",
+      "mode_repetition": 1,
+      "position": 1
+    },
+    {
+      "block": "A",
+      "mode": "ON",
+      "mode_repetition": 1,
+      "position": 2
+    },
+    {
+      "block": "A",
+      "mode": "ON",
+      "mode_repetition": 2,
+      "position": 3
+    },
+    {
+      "block": "A",
+      "mode": "OFF",
+      "mode_repetition": 2,
+      "position": 4
+    },
+    {
+      "block": "B",
+      "mode": "ON",
+      "mode_repetition": 3,
+      "position": 5
+    },
+    {
+      "block": "B",
+      "mode": "OFF",
+      "mode_repetition": 3,
+      "position": 6
+    },
+    {
+      "block": "B",
+      "mode": "OFF",
+      "mode_repetition": 4,
+      "position": 7
+    },
+    {
+      "block": "B",
+      "mode": "ON",
+      "mode_repetition": 4,
+      "position": 8
+    }
+  ],
+  "overhead": {
+    "claim_latency_p95_ms_relative_change": -0.2803962320833705,
+    "jobs_per_second_relative_change": -0.004291558572682054
+  },
+  "paired_block_observations": [
+    {
+      "block": "A",
+      "claim_p95_relative_change": -0.19766551635248278,
+      "positions": [
+        1,
+        2
+      ],
+      "throughput_relative_change": 0.041537969110354137
+    },
+    {
+      "block": "A",
+      "claim_p95_relative_change": -0.5120054996873878,
+      "positions": [
+        3,
+        4
+      ],
+      "throughput_relative_change": -0.006970386813675951
+    },
+    {
+      "block": "B",
+      "claim_p95_relative_change": -0.08451347706201809,
+      "positions": [
+        5,
+        6
+      ],
+      "throughput_relative_change": 0.02575719906452854
+    },
+    {
+      "block": "B",
+      "claim_p95_relative_change": -0.35992437882071177,
+      "positions": [
+        7,
+        8
+      ],
+      "throughput_relative_change": -0.04592577889689893
+    }
+  ],
+  "schema_version": 1,
+  "source_commit": "aa8b29c0a90305b2898daecc34ad23d103956ba0",
+  "statistics": {
+    "claim_latency_p95_ms": {
+      "OFF": {
+        "mad": 88.02379052501192,
+        "max": 863.9448448000136,
+        "mean": 715.8318492249886,
+        "median": 708.6895931999818,
+        "min": 582.0033656999768,
+        "range": 281.94147910003676,
+        "range_over_mean": 0.39386551381485335
+      },
+      "ON": {
+        "mad": 113.51202777499768,
+        "max": 693.9854254500034,
+        "mean": 508.9213458500005,
+        "median": 509.9757015500103,
+        "min": 321.74855484997795,
+        "range": 372.23687060002544,
+        "range_over_mean": 0.731423182846291
+      }
+    },
+    "jobs_per_second": {
+      "OFF": {
+        "mad": 0.2753732582558239,
+        "max": 30.451012776080496,
+        "mean": 29.856807857231367,
+        "median": 29.918848048580266,
+        "min": 29.13852255568445,
+        "range": 1.3124902203960467,
+        "range_over_mean": 0.04395949582661629
+      },
+      "ON": {
+        "mad": 0.418261492728945,
+        "max": 31.180969873428957,
+        "mean": 29.95359882226844,
+        "median": 29.79044955975261,
+        "min": 29.05252629613958,
+        "range": 2.128443577289378,
+        "range_over_mean": 0.07105802511139418
+      }
+    }
+  },
+  "status": "MEASUREMENT_SYSTEM_INVALID",
+  "thresholds": {
+    "absolute_claim_p95_relative_change_max": 0.1,
+    "absolute_throughput_relative_change_max": 0.05
+  },
+  "workflow_run_id": "31421039618"
+}
