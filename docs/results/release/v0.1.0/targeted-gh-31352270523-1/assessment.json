@@ -1,0 +1,2456 @@
+{
+  "claim_batch_size": 1,
+  "failures": [
+    "negative_scaling:single_tenant",
+    "negative_scaling:balanced_multi_tenant",
+    "negative_scaling:skew_20_to_1"
+  ],
+  "groups": [
+    {
+      "distribution": "single_tenant",
+      "median": {
+        "claim_latency_p50_ms": 22.882422999998653,
+        "claim_latency_p95_ms": 29.114214250011013,
+        "claim_latency_p99_ms": 36.90197259501444,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 12.324611249994177,
+        "job_claim_latency_p95_ms": 17.11928750000382,
+        "job_claim_latency_p99_ms": 21.95621937999485,
+        "jobs_per_second": 26.114453046275223,
+        "postgres_lock_waiting_connections_peak": 0.0,
+        "reservation_latency_p50_ms": 10.397937249997824,
+        "reservation_latency_p95_ms": 15.391131525001711,
+        "reservation_latency_p99_ms": 18.44051060999868,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 65.87912353869991,
+        "worker_process_rss_bytes_peak": 95363072.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          24.26011800000083,
+          20.462724499992646,
+          29.55535799999609,
+          21.504727999996476
+        ],
+        "claim_latency_p95_ms": [
+          30.30656490001106,
+          26.351219900004704,
+          36.3790971999947,
+          27.921863600010965
+        ],
+        "claim_latency_p99_ms": [
+          76.29511801999432,
+          30.48986974000258,
+          38.669561510008045,
+          35.134383680020846
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          11.708120000001543,
+          11.732518499982802,
+          13.821772999989435,
+          12.916704000005552
+        ],
+        "job_claim_latency_p95_ms": [
+          16.323763599997676,
+          16.343349100013427,
+          18.670535400001135,
+          17.895225899994216
+        ],
+        "job_claim_latency_p99_ms": [
+          38.90303535999946,
+          18.342851129991782,
+          21.13050399999858,
+          22.78193475999112
+        ],
+        "jobs_per_second": [
+          25.281575148597533,
+          28.01863475688601,
+          22.507980562385228,
+          26.947330943952913
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reservation_latency_p50_ms": [
+          12.198822499996709,
+          8.59705199999894,
+          15.239373,
+          8.478983499998094
+        ],
+        "reservation_latency_p95_ms": [
+          17.7944948500091,
+          12.390214899994588,
+          18.620509249979023,
+          12.98776819999432
+        ],
+        "reservation_latency_p99_ms": [
+          21.745692589992686,
+          15.13532863000467,
+          23.169050309992514,
+          14.86329343997955
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          63.74663982395089,
+          69.54325924084601,
+          60.27649420941806,
+          68.01160725344893
+        ],
+        "worker_process_rss_bytes_peak": [
+          101183488.0,
+          95285248.0,
+          95358976.0,
+          95367168.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 1
+    },
+    {
+      "distribution": "single_tenant",
+      "median": {
+        "claim_latency_p50_ms": 47.27649824999958,
+        "claim_latency_p95_ms": 59.917531899995424,
+        "claim_latency_p99_ms": 90.94245237499308,
+        "contention_retries": 106.5,
+        "contention_retry_per_success": 1.065,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 9.487950250004928,
+        "job_claim_latency_p95_ms": 21.557636024998313,
+        "job_claim_latency_p99_ms": 23.899003999997475,
+        "jobs_per_second": 28.180206983010436,
+        "postgres_lock_waiting_connections_peak": 0.0,
+        "reservation_latency_p50_ms": 11.119029749998788,
+        "reservation_latency_p95_ms": 18.118118399998195,
+        "reservation_latency_p99_ms": 25.664727210002084,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 97.5,
+        "worker_process_cpu_percent": 86.38451212548009,
+        "worker_process_rss_bytes_peak": 96544768.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          48.95803899999862,
+          45.59495750000053,
+          70.4657479999895,
+          43.809938999999076
+        ],
+        "claim_latency_p95_ms": [
+          65.02952149999999,
+          54.80554229999086,
+          80.21304305000712,
+          52.92247414999593
+        ],
+        "claim_latency_p99_ms": [
+          81.36405909000165,
+          93.14326143997845,
+          107.1504488500054,
+          88.7416433100077
+        ],
+        "contention_retries": [
+          113.0,
+          100.0,
+          167.0,
+          96.0
+        ],
+        "contention_retry_per_success": [
+          1.13,
+          1.0,
+          1.67,
+          0.96
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          6.667776000000458,
+          12.308124500009399,
+          4.259329000007028,
+          15.077303999987635
+        ],
+        "job_claim_latency_p95_ms": [
+          22.29074659999809,
+          21.522622649999327,
+          21.5926493999973,
+          20.984554499996477
+        ],
+        "job_claim_latency_p99_ms": [
+          26.62431619998983,
+          24.449393899973554,
+          23.185513599987637,
+          23.348614100021393
+        ],
+        "jobs_per_second": [
+          27.557372982430383,
+          28.80304098359049,
+          22.563144735698252,
+          30.017796155513025
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "reservation_latency_p50_ms": [
+          8.326888000013355,
+          12.095338000008837,
+          10.835662000005186,
+          11.40239749999239
+        ],
+        "reservation_latency_p95_ms": [
+          18.511355200001844,
+          17.724881599994543,
+          23.103889700001897,
+          17.529428750002296
+        ],
+        "reservation_latency_p99_ms": [
+          28.127758040000096,
+          23.201696380004073,
+          31.852407200007455,
+          23.08116709999018
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          96.0,
+          99.0,
+          99.0,
+          94.0
+        ],
+        "worker_process_cpu_percent": [
+          85.35477034458206,
+          87.72873139313056,
+          78.99583817312501,
+          87.41425390637812
+        ],
+        "worker_process_rss_bytes_peak": [
+          102019072.0,
+          96464896.0,
+          96415744.0,
+          96624640.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 2
+    },
+    {
+      "distribution": "single_tenant",
+      "median": {
+        "claim_latency_p50_ms": 103.49388924999658,
+        "claim_latency_p95_ms": 308.07644214999493,
+        "claim_latency_p99_ms": 443.24072231999764,
+        "contention_retries": 251.0,
+        "contention_retry_per_success": 2.51,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 15.333609749987431,
+        "job_claim_latency_p95_ms": 28.600953399993756,
+        "job_claim_latency_p99_ms": 33.87771717999115,
+        "jobs_per_second": 24.1900861045302,
+        "postgres_lock_waiting_connections_peak": 2.0,
+        "reservation_latency_p50_ms": 16.17910274998735,
+        "reservation_latency_p95_ms": 24.704049950002727,
+        "reservation_latency_p99_ms": 48.62523382999849,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 157.5,
+        "worker_process_cpu_percent": 94.28611673417858,
+        "worker_process_rss_bytes_peak": 97667072.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          129.95944749999921,
+          77.02833099999395,
+          150.42150099999674,
+          75.08346000000188
+        ],
+        "claim_latency_p95_ms": [
+          256.886436600007,
+          313.42169354999487,
+          302.73119074999494,
+          316.28678609998525
+        ],
+        "claim_latency_p99_ms": [
+          431.9901037499959,
+          454.4913408899994,
+          380.608007019989,
+          564.1306960200179
+        ],
+        "contention_retries": [
+          260.0,
+          242.0,
+          275.0,
+          240.0
+        ],
+        "contention_retry_per_success": [
+          2.6,
+          2.42,
+          2.75,
+          2.4
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          14.47764050000444,
+          17.244990999998322,
+          12.3795750000113,
+          16.189578999970422
+        ],
+        "job_claim_latency_p95_ms": [
+          27.441023649995344,
+          28.31762404999125,
+          29.444119600012186,
+          28.88428274999626
+        ],
+        "job_claim_latency_p99_ms": [
+          32.48837488999386,
+          33.16122506000084,
+          44.04392952001044,
+          34.59420929998147
+        ],
+        "jobs_per_second": [
+          24.26024357070574,
+          24.119928638354658,
+          21.401953236891885,
+          25.325890629143785
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          2.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        "reservation_latency_p50_ms": [
+          14.123526999995306,
+          16.860243499991157,
+          19.814535999984173,
+          15.497961999983545
+        ],
+        "reservation_latency_p95_ms": [
+          25.136404949990524,
+          24.271694950014933,
+          30.86454590001325,
+          23.86792115000134
+        ],
+        "reservation_latency_p99_ms": [
+          46.696574249999514,
+          51.63220029999261,
+          47.04749273998319,
+          50.20297492001379
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          165.0,
+          150.0,
+          184.0,
+          149.0
+        ],
+        "worker_process_cpu_percent": [
+          93.64120900887943,
+          95.11695226135114,
+          88.57588511115802,
+          94.93102445947773
+        ],
+        "worker_process_rss_bytes_peak": [
+          102748160.0,
+          97505280.0,
+          97665024.0,
+          97669120.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 4
+    },
+    {
+      "distribution": "single_tenant",
+      "median": {
+        "claim_latency_p50_ms": 71.91133999999977,
+        "claim_latency_p95_ms": 1336.7056794250057,
+        "claim_latency_p99_ms": 2190.188574315017,
+        "contention_retries": 460.5,
+        "contention_retry_per_success": 4.605,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 18.92041950000589,
+        "job_claim_latency_p95_ms": 40.796150650005806,
+        "job_claim_latency_p99_ms": 53.713629825005334,
+        "jobs_per_second": 18.929003760924335,
+        "postgres_lock_waiting_connections_peak": 5.5,
+        "reservation_latency_p50_ms": 22.678732250000166,
+        "reservation_latency_p95_ms": 37.6175005500059,
+        "reservation_latency_p99_ms": 113.70886892499377,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 246.0,
+        "worker_process_cpu_percent": 96.17882639045683,
+        "worker_process_rss_bytes_peak": 97972224.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          241.14671950000144,
+          72.02051950000055,
+          71.80216049999899,
+          68.94258500003048
+        ],
+        "claim_latency_p95_ms": [
+          1338.1882303500008,
+          1335.2231285000107,
+          1117.3412637999843,
+          1386.797090100006
+        ],
+        "claim_latency_p99_ms": [
+          1546.2523604900084,
+          2813.0374831500108,
+          2342.3370602999967,
+          2038.0400883300374
+        ],
+        "contention_retries": [
+          570.0,
+          467.0,
+          427.0,
+          454.0
+        ],
+        "contention_retry_per_success": [
+          5.7,
+          4.67,
+          4.27,
+          4.54
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          17.09897600000687,
+          19.30755699999054,
+          18.533282000021245,
+          19.765917999961857
+        ],
+        "job_claim_latency_p95_ms": [
+          42.44866365000064,
+          40.19169960000396,
+          41.400601700007655,
+          39.68809784998939
+        ],
+        "job_claim_latency_p99_ms": [
+          55.58936557000502,
+          51.83789408000565,
+          69.42550789998624,
+          45.14044224000885
+        ],
+        "jobs_per_second": [
+          16.95725701331471,
+          19.056488343832694,
+          18.813628333037364,
+          19.044379188811305
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          6.0,
+          4.0,
+          6.0,
+          5.0
+        ],
+        "reservation_latency_p50_ms": [
+          24.22505550000409,
+          22.80322900000442,
+          21.836772999989762,
+          22.55423549999591
+        ],
+        "reservation_latency_p95_ms": [
+          40.44602885000187,
+          34.4099081999957,
+          56.78708579999351,
+          34.78897225000992
+        ],
+        "reservation_latency_p99_ms": [
+          104.97137176000115,
+          97.98785116000232,
+          162.36373427998913,
+          122.44636608998638
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          320.0,
+          250.0,
+          234.0,
+          242.0
+        ],
+        "worker_process_cpu_percent": [
+          95.82610545373362,
+          96.53154732718005,
+          93.39112538552584,
+          96.77360964034845
+        ],
+        "worker_process_rss_bytes_peak": [
+          103284736.0,
+          97656832.0,
+          97841152.0,
+          98103296.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 8
+    },
+    {
+      "distribution": "balanced_multi_tenant",
+      "median": {
+        "claim_latency_p50_ms": 13.856068000002608,
+        "claim_latency_p95_ms": 26.122894050006096,
+        "claim_latency_p99_ms": 32.09851213998532,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 10.653549999993572,
+        "job_claim_latency_p95_ms": 15.905382374998567,
+        "job_claim_latency_p99_ms": 18.893946294997036,
+        "jobs_per_second": 33.53721278818077,
+        "postgres_lock_waiting_connections_peak": 0.0,
+        "reservation_latency_p50_ms": 2.8634837500050025,
+        "reservation_latency_p95_ms": 13.290242325004442,
+        "reservation_latency_p99_ms": 17.210073245006946,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 70.46932227950394,
+        "worker_process_rss_bytes_peak": 97953792.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          16.8245714999955,
+          13.945987500008528,
+          13.259769000001143,
+          13.766148499996689
+        ],
+        "claim_latency_p95_ms": [
+          27.49328439999416,
+          27.185955200017986,
+          25.059832899994202,
+          24.694755650020284
+        ],
+        "claim_latency_p99_ms": [
+          37.6538840200049,
+          32.87292753997769,
+          31.32409673999294,
+          26.75475814998403
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          13.162829000002318,
+          10.676252999999747,
+          10.28356500000882,
+          10.630846999987398
+        ],
+        "job_claim_latency_p95_ms": [
+          18.03848835000963,
+          15.825100499992573,
+          15.985664250004561,
+          15.518277449982065
+        ],
+        "job_claim_latency_p99_ms": [
+          19.28819940000344,
+          18.49969318999063,
+          20.877264480011828,
+          16.543799070008784
+        ],
+        "jobs_per_second": [
+          30.370006447033067,
+          33.07964556457843,
+          34.529793581432685,
+          33.99478001178311
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reservation_latency_p50_ms": [
+          3.0785015000063254,
+          2.844389500012312,
+          2.7466149999924028,
+          2.882577999997693
+        ],
+        "reservation_latency_p95_ms": [
+          13.539290149998351,
+          14.394218249985611,
+          12.12167030000728,
+          13.041194500010533
+        ],
+        "reservation_latency_p99_ms": [
+          19.110409349995923,
+          18.887641159999912,
+          15.532505330013983,
+          14.621247769973875
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          66.2998437484732,
+          72.04774061593135,
+          69.7402623485597,
+          71.19838221044819
+        ],
+        "worker_process_rss_bytes_peak": [
+          103264256.0,
+          97816576.0,
+          97808384.0,
+          98091008.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 1
+    },
+    {
+      "distribution": "balanced_multi_tenant",
+      "median": {
+        "claim_latency_p50_ms": 25.533875000000705,
+        "claim_latency_p95_ms": 36.789582324986725,
+        "claim_latency_p99_ms": 90.23609619498552,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 15.777660750003974,
+        "job_claim_latency_p95_ms": 23.549457825019005,
+        "job_claim_latency_p99_ms": 35.51341174499366,
+        "jobs_per_second": 44.71355994128818,
+        "postgres_lock_waiting_connections_peak": 1.0,
+        "reservation_latency_p50_ms": 8.201067249991922,
+        "reservation_latency_p95_ms": 17.16694657500568,
+        "reservation_latency_p99_ms": 52.84874876999727,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 89.42984871126652,
+        "worker_process_rss_bytes_peak": 98375680.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          28.040883999999267,
+          24.825656499999127,
+          24.01005300001202,
+          26.242093500002284
+        ],
+        "claim_latency_p95_ms": [
+          38.131192350001434,
+          35.71891249999908,
+          33.596105300011914,
+          37.86025214997437
+        ],
+        "claim_latency_p99_ms": [
+          98.78130210999332,
+          82.53275010000472,
+          82.41293744999274,
+          97.93944228996631
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          17.574651499998595,
+          15.053890999993769,
+          15.835812500000657,
+          15.719509000007292
+        ],
+        "job_claim_latency_p95_ms": [
+          25.433904400009762,
+          23.9158270500198,
+          19.792402350006448,
+          23.18308860001821
+        ],
+        "job_claim_latency_p99_ms": [
+          40.70662862000449,
+          30.20278811001081,
+          30.320194869982828,
+          44.52895564997054
+        ],
+        "jobs_per_second": [
+          42.508534772218205,
+          45.56444090048664,
+          45.43121968277272,
+          43.995900199803636
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          1.0,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "reservation_latency_p50_ms": [
+          9.78784600000182,
+          7.15048300000376,
+          7.276118999996584,
+          9.126015499987261
+        ],
+        "reservation_latency_p95_ms": [
+          16.132359699995646,
+          17.55110680000911,
+          16.782786350002254,
+          18.24315770001021
+        ],
+        "reservation_latency_p99_ms": [
+          54.45296524999595,
+          52.309733890000736,
+          52.06740964999316,
+          53.3877636499938
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          86.47817468698561,
+          89.47594276551958,
+          90.62559083443074,
+          89.38375465701344
+        ],
+        "worker_process_rss_bytes_peak": [
+          103292928.0,
+          98463744.0,
+          98127872.0,
+          98287616.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 2
+    },
+    {
+      "distribution": "balanced_multi_tenant",
+      "median": {
+        "claim_latency_p50_ms": 47.888028499997404,
+        "claim_latency_p95_ms": 120.26153090000412,
+        "claim_latency_p99_ms": 164.0292373400074,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 30.077490499998305,
+        "job_claim_latency_p95_ms": 80.99233845000668,
+        "job_claim_latency_p99_ms": 104.10929437999982,
+        "jobs_per_second": 44.75282480395374,
+        "postgres_lock_waiting_connections_peak": 3.0,
+        "reservation_latency_p50_ms": 17.183598499990183,
+        "reservation_latency_p95_ms": 29.24664109999495,
+        "reservation_latency_p99_ms": 82.68377854000582,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 95.69168621130126,
+        "worker_process_rss_bytes_peak": 99117056.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          49.91946650000756,
+          46.70258850001119,
+          49.07346849998362,
+          46.400889999972605
+        ],
+        "claim_latency_p95_ms": [
+          120.4049449000017,
+          120.11811690000656,
+          123.73750690001229,
+          61.70115100000823
+        ],
+        "claim_latency_p99_ms": [
+          176.4843046099981,
+          165.5800436400154,
+          162.47843103999944,
+          145.58805755001575
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          31.588611999993077,
+          29.446552999985443,
+          30.708428000011168,
+          28.638616499989666
+        ],
+        "job_claim_latency_p95_ms": [
+          94.1709777499966,
+          85.99187179999888,
+          75.9928051000145,
+          43.67863144998694
+        ],
+        "job_claim_latency_p99_ms": [
+          104.44723203000338,
+          103.77135672999628,
+          112.0998477500149,
+          60.18137629002298
+        ],
+        "jobs_per_second": [
+          43.985511890226796,
+          45.52013771768068,
+          43.619528477904794,
+          47.62337744581317
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          3.0,
+          3.0,
+          3.0,
+          1.0
+        ],
+        "reservation_latency_p50_ms": [
+          17.981330999994327,
+          16.902262499996823,
+          17.464934499983542,
+          16.58581999998887
+        ],
+        "reservation_latency_p95_ms": [
+          34.651637499997854,
+          26.42089444998703,
+          32.07238775000287,
+          25.932269700007215
+        ],
+        "reservation_latency_p99_ms": [
+          82.58360777000382,
+          82.29511011999908,
+          85.33077942000122,
+          82.78394931000781
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          92.21180720760226,
+          95.81995412463216,
+          95.80483946158417,
+          95.57853296101835
+        ],
+        "worker_process_rss_bytes_peak": [
+          103804928.0,
+          99123200.0,
+          98828288.0,
+          99110912.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 4
+    },
+    {
+      "distribution": "balanced_multi_tenant",
+      "median": {
+        "claim_latency_p50_ms": 138.95578950000242,
+        "claim_latency_p95_ms": 326.42197570001326,
+        "claim_latency_p99_ms": 505.389294385007,
+        "contention_retries": 94.0,
+        "contention_retry_per_success": 0.94,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 44.32192975002636,
+        "job_claim_latency_p95_ms": 82.42921532500347,
+        "job_claim_latency_p99_ms": 162.22494168499856,
+        "jobs_per_second": 34.584871021476424,
+        "postgres_lock_waiting_connections_peak": 3.0,
+        "reservation_latency_p50_ms": 26.715412750000667,
+        "reservation_latency_p95_ms": 74.77563329999518,
+        "reservation_latency_p99_ms": 176.10886979501132,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 59.0,
+        "worker_process_cpu_percent": 94.51040342255962,
+        "worker_process_rss_bytes_peak": 99223552.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          139.14373549999937,
+          138.76784350000548,
+          132.4895620000035,
+          140.45400500000937
+        ],
+        "claim_latency_p95_ms": [
+          289.6610996500072,
+          343.4304848999915,
+          320.91253079999524,
+          331.9314206000313
+        ],
+        "claim_latency_p99_ms": [
+          537.6316445900019,
+          429.0691087900051,
+          473.1469441800121,
+          597.3991248799916
+        ],
+        "contention_retries": [
+          94.0,
+          96.0,
+          91.0,
+          94.0
+        ],
+        "contention_retry_per_success": [
+          0.94,
+          0.96,
+          0.91,
+          0.94
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          46.13250949999781,
+          43.32666050001421,
+          43.30217500000799,
+          45.3171990000385
+        ],
+        "job_claim_latency_p95_ms": [
+          82.21875539999955,
+          82.63967525000737,
+          81.92400549999945,
+          86.84408705000519
+        ],
+        "job_claim_latency_p99_ms": [
+          174.63985057000073,
+          175.1064294999751,
+          149.8100327999964,
+          140.58471727001006
+        ],
+        "jobs_per_second": [
+          34.55380348068558,
+          34.61593856226727,
+          35.86347464355715,
+          33.41705920708645
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          3.0,
+          3.0,
+          3.0,
+          5.0
+        ],
+        "reservation_latency_p50_ms": [
+          26.188883499997928,
+          27.241942000003405,
+          25.576241999999638,
+          28.3183754999925
+        ],
+        "reservation_latency_p95_ms": [
+          78.12485735000291,
+          71.42640924998744,
+          70.2339280000075,
+          93.15982749998561
+        ],
+        "reservation_latency_p99_ms": [
+          176.84599634000583,
+          175.3717432500168,
+          146.7805125999998,
+          224.0951752299971
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          59.0,
+          60.0,
+          57.0,
+          59.0
+        ],
+        "worker_process_cpu_percent": [
+          94.43111895057966,
+          94.42485946757215,
+          94.58968789453957,
+          95.52708465330453
+        ],
+        "worker_process_rss_bytes_peak": [
+          103817216.0,
+          99188736.0,
+          99000320.0,
+          99258368.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 8
+    },
+    {
+      "distribution": "skew_20_to_1",
+      "median": {
+        "claim_latency_p50_ms": 19.803098500005945,
+        "claim_latency_p95_ms": 28.294764299996444,
+        "claim_latency_p99_ms": 33.8685336350006,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 11.61777774999706,
+        "job_claim_latency_p95_ms": 15.991481274990349,
+        "job_claim_latency_p99_ms": 20.380988159998928,
+        "jobs_per_second": 31.35383896510198,
+        "postgres_lock_waiting_connections_peak": 0.0,
+        "reservation_latency_p50_ms": 8.647355500009724,
+        "reservation_latency_p95_ms": 13.676942125010779,
+        "reservation_latency_p99_ms": 17.170826400014022,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 68.6568719212872,
+        "worker_process_rss_bytes_peak": 99233792.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          24.929474000003893,
+          19.862161500000752,
+          19.744035500011137,
+          18.936449999984006
+        ],
+        "claim_latency_p95_ms": [
+          32.40044364999122,
+          28.32841775000219,
+          28.261110849990697,
+          25.521014799994642
+        ],
+        "claim_latency_p99_ms": [
+          36.03132918000691,
+          34.09040877001098,
+          33.646658499990224,
+          30.003841769970677
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          14.10178349999569,
+          11.319575499996404,
+          11.915979999997717,
+          10.923788500036835
+        ],
+        "job_claim_latency_p95_ms": [
+          18.84251319999848,
+          14.692820299998742,
+          16.79914634998738,
+          15.183816199993316
+        ],
+        "job_claim_latency_p99_ms": [
+          21.20545058000351,
+          16.229660939978388,
+          21.472502649994336,
+          19.556525739994346
+        ],
+        "jobs_per_second": [
+          27.37646834129396,
+          32.22575860893963,
+          30.48191932126433,
+          32.61098552468416
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reservation_latency_p50_ms": [
+          11.166076000002079,
+          8.992878500009738,
+          8.30183250000971,
+          8.040127499981509
+        ],
+        "reservation_latency_p95_ms": [
+          15.37707984999983,
+          14.543801200014167,
+          12.810083050007393,
+          12.185682649985095
+        ],
+        "reservation_latency_p99_ms": [
+          16.45862954999475,
+          21.484800330017745,
+          15.089012820003106,
+          17.88302325003329
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          63.9930762513387,
+          68.69100876295366,
+          68.62273507962077,
+          69.28945484402072
+        ],
+        "worker_process_rss_bytes_peak": [
+          103788544.0,
+          99209216.0,
+          99065856.0,
+          99258368.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 1
+    },
+    {
+      "distribution": "skew_20_to_1",
+      "median": {
+        "claim_latency_p50_ms": 29.477581999998392,
+        "claim_latency_p95_ms": 41.739066899997816,
+        "claim_latency_p99_ms": 92.17226400999635,
+        "contention_retries": 3.0,
+        "contention_retry_per_success": 0.03,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 17.52342800000406,
+        "job_claim_latency_p95_ms": 24.71249790000626,
+        "job_claim_latency_p99_ms": 37.39186676500171,
+        "jobs_per_second": 39.24230263600295,
+        "postgres_lock_waiting_connections_peak": 1.0,
+        "reservation_latency_p50_ms": 12.102692500008061,
+        "reservation_latency_p95_ms": 17.150142449990817,
+        "reservation_latency_p99_ms": 53.208899479991175,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 3.0,
+        "worker_process_cpu_percent": 86.27948607907197,
+        "worker_process_rss_bytes_peak": 99696640.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          34.50981649999818,
+          30.98888899998542,
+          27.966275000011365,
+          27.385001499993677
+        ],
+        "claim_latency_p95_ms": [
+          52.36337209999319,
+          39.53301429999811,
+          43.945119499997524,
+          37.36293069999306
+        ],
+        "claim_latency_p99_ms": [
+          95.41667950998792,
+          88.92784851000478,
+          105.02663977997773,
+          82.16462751001987
+        ],
+        "contention_retries": [
+          6.0,
+          3.0,
+          3.0,
+          3.0
+        ],
+        "contention_retry_per_success": [
+          0.06,
+          0.03,
+          0.03,
+          0.03
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          19.879079500000785,
+          17.89918599999396,
+          17.14767000001416,
+          16.561375999970096
+        ],
+        "job_claim_latency_p95_ms": [
+          26.559045500000877,
+          23.727258800016667,
+          25.69773699999585,
+          22.77027569996903
+        ],
+        "job_claim_latency_p99_ms": [
+          39.98619894999537,
+          34.79753458000805,
+          45.64713154000408,
+          33.30465603999645
+        ],
+        "jobs_per_second": [
+          35.70157595324627,
+          38.73326050736662,
+          39.75134476463927,
+          41.2948708947023
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "reservation_latency_p50_ms": [
+          13.857823499996869,
+          12.789363000024423,
+          11.416021999991699,
+          11.159503999977005
+        ],
+        "reservation_latency_p95_ms": [
+          20.306385499996082,
+          17.848299099983926,
+          16.451985799997708,
+          15.347655200014287
+        ],
+        "reservation_latency_p99_ms": [
+          53.36440889999361,
+          53.053390059988736,
+          54.570535840016554,
+          47.9048140199633
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          3.0,
+          3.0,
+          3.0,
+          3.0
+        ],
+        "worker_process_cpu_percent": [
+          79.2734179846259,
+          85.53391488008391,
+          87.02505727806003,
+          88.52301939775991
+        ],
+        "worker_process_rss_bytes_peak": [
+          104136704.0,
+          99692544.0,
+          99700736.0,
+          99422208.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 2
+    },
+    {
+      "distribution": "skew_20_to_1",
+      "median": {
+        "claim_latency_p50_ms": 77.01442775000089,
+        "claim_latency_p95_ms": 156.35954865000483,
+        "claim_latency_p99_ms": 208.41361626999188,
+        "contention_retries": 100.5,
+        "contention_retry_per_success": 1.005,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 23.27028525000685,
+        "job_claim_latency_p95_ms": 39.10030762500334,
+        "job_claim_latency_p99_ms": 51.84658599498462,
+        "jobs_per_second": 32.70025509361718,
+        "postgres_lock_waiting_connections_peak": 2.0,
+        "reservation_latency_p50_ms": 13.012794250009563,
+        "reservation_latency_p95_ms": 29.35611580001094,
+        "reservation_latency_p99_ms": 82.43231020998621,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 74.0,
+        "worker_process_cpu_percent": 96.14491355560418,
+        "worker_process_rss_bytes_peak": 100265984.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          81.90762350000114,
+          74.55641199999263,
+          75.38048899999694,
+          78.64836650000484
+        ],
+        "claim_latency_p95_ms": [
+          192.68779880000437,
+          152.05668790000001,
+          147.64373450001074,
+          160.66240940000964
+        ],
+        "claim_latency_p99_ms": [
+          207.88677840000008,
+          203.02827573000965,
+          265.1380588899977,
+          208.94045413998367
+        ],
+        "contention_retries": [
+          104.0,
+          100.0,
+          100.0,
+          101.0
+        ],
+        "contention_retry_per_success": [
+          1.04,
+          1.0,
+          1.0,
+          1.01
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          25.04888649999515,
+          22.744758500010676,
+          23.362790499987796,
+          23.177780000025905
+        ],
+        "job_claim_latency_p95_ms": [
+          39.924994200004704,
+          36.91774209999323,
+          38.275621050001966,
+          42.28671499998882
+        ],
+        "job_claim_latency_p99_ms": [
+          46.85791299000158,
+          42.23350194000312,
+          85.79407263999143,
+          56.835258999967664
+        ],
+        "jobs_per_second": [
+          31.31723082310775,
+          33.917811666640034,
+          33.12525077678136,
+          32.275259410453
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          2.0,
+          1.0,
+          2.0,
+          2.0
+        ],
+        "reservation_latency_p50_ms": [
+          13.136189500002615,
+          12.885834499982707,
+          13.909299000005149,
+          12.88939900001651
+        ],
+        "reservation_latency_p95_ms": [
+          33.65094104999357,
+          30.513057600013834,
+          27.802073700000555,
+          28.199174000008043
+        ],
+        "reservation_latency_p99_ms": [
+          92.59264041999016,
+          95.43347110000578,
+          66.38080554000274,
+          72.27197999998225
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          73.0,
+          75.0,
+          73.0,
+          76.0
+        ],
+        "worker_process_cpu_percent": [
+          92.60956135043695,
+          95.85565694029584,
+          96.43417017091251,
+          96.51290089837623
+        ],
+        "worker_process_rss_bytes_peak": [
+          104566784.0,
+          100388864.0,
+          100052992.0,
+          100143104.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 4
+    },
+    {
+      "distribution": "skew_20_to_1",
+      "median": {
+        "claim_latency_p50_ms": 169.8519042499882,
+        "claim_latency_p95_ms": 599.301290525011,
+        "claim_latency_p99_ms": 768.1167000900034,
+        "contention_retries": 266.0,
+        "contention_retry_per_success": 2.66,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 26.851295249993967,
+        "job_claim_latency_p95_ms": 52.18345495000705,
+        "job_claim_latency_p99_ms": 75.53365841500182,
+        "jobs_per_second": 26.03639590453747,
+        "postgres_lock_waiting_connections_peak": 5.0,
+        "reservation_latency_p50_ms": 26.726355999983298,
+        "reservation_latency_p95_ms": 43.91691534999321,
+        "reservation_latency_p99_ms": 122.71718522000054,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 156.0,
+        "worker_process_cpu_percent": 95.77506551757587,
+        "worker_process_rss_bytes_peak": 100403200.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          139.92789399999594,
+          169.88528849999796,
+          233.25940600001616,
+          169.81851999997843
+        ],
+        "claim_latency_p95_ms": [
+          748.3798800999924,
+          638.5731116499995,
+          560.0294694000225,
+          512.6388780499751
+        ],
+        "claim_latency_p99_ms": [
+          1104.0557607299945,
+          743.5343988999786,
+          785.4112124200013,
+          750.8221877600056
+        ],
+        "contention_retries": [
+          278.0,
+          259.0,
+          273.0,
+          249.0
+        ],
+        "contention_retry_per_success": [
+          2.78,
+          2.59,
+          2.73,
+          2.49
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          26.80687450000363,
+          26.895715999984304,
+          28.862427000007074,
+          26.576973000032922
+        ],
+        "job_claim_latency_p95_ms": [
+          55.86225489999562,
+          52.71545510001089,
+          51.651454800003194,
+          51.048892199980834
+        ],
+        "job_claim_latency_p99_ms": [
+          77.87707939000201,
+          73.19023744000164,
+          78.99616039999611,
+          58.879884759976406
+        ],
+        "jobs_per_second": [
+          24.723075374073527,
+          25.95869694544359,
+          26.11409486363135,
+          27.241024453261378
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          5.0,
+          5.0,
+          5.0,
+          5.0
+        ],
+        "reservation_latency_p50_ms": [
+          28.362565999998424,
+          28.387655000017276,
+          25.003311999995503,
+          25.090145999968172
+        ],
+        "reservation_latency_p95_ms": [
+          45.87907044999966,
+          44.90719169998551,
+          42.92663900000091,
+          38.30490760000201
+        ],
+        "reservation_latency_p99_ms": [
+          122.6668511199919,
+          116.27337806001852,
+          123.67912175999314,
+          122.76751932000919
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          157.0,
+          155.0,
+          162.0,
+          149.0
+        ],
+        "worker_process_cpu_percent": [
+          93.09774308691645,
+          95.90439958293668,
+          96.6210849397413,
+          95.64573145221506
+        ],
+        "worker_process_rss_bytes_peak": [
+          104607744.0,
+          100478976.0,
+          100327424.0,
+          100323328.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 8
+    },
+    {
+      "distribution": "many_small_tenants",
+      "median": {
+        "claim_latency_p50_ms": 16.385661249984196,
+        "claim_latency_p95_ms": 22.499627124999222,
+        "claim_latency_p99_ms": 26.945450395019304,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 13.423604750002482,
+        "job_claim_latency_p95_ms": 18.907488399997163,
+        "job_claim_latency_p99_ms": 22.156196069998,
+        "jobs_per_second": 31.747695022683523,
+        "postgres_lock_waiting_connections_peak": 0.0,
+        "reservation_latency_p50_ms": 2.8302532500035227,
+        "reservation_latency_p95_ms": 3.774149475019325,
+        "reservation_latency_p99_ms": 7.6756729599966995,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 70.85501779183352,
+        "worker_process_rss_bytes_peak": 101081088.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          18.119052999999496,
+          15.22647800000243,
+          16.681093499983035,
+          16.090228999985356
+        ],
+        "claim_latency_p95_ms": [
+          23.684523649998113,
+          21.14358170001509,
+          23.496143299999517,
+          21.503110949998927
+        ],
+        "claim_latency_p99_ms": [
+          28.702325229995818,
+          27.11496471001669,
+          26.775936080021918,
+          25.012213790026387
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          15.218988000000877,
+          12.598915000012312,
+          13.77383499999496,
+          13.073374500010004
+        ],
+        "job_claim_latency_p95_ms": [
+          20.176917000005542,
+          17.95629124999465,
+          19.858685549999677,
+          17.77130404999241
+        ],
+        "job_claim_latency_p99_ms": [
+          23.899938590007856,
+          23.208171709991966,
+          21.104220430004034,
+          19.195895669994417
+        ],
+        "jobs_per_second": [
+          30.187000948273887,
+          33.35215077244259,
+          31.45122644070084,
+          32.04416360466621
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reservation_latency_p50_ms": [
+          2.789134499991519,
+          2.615054499997882,
+          2.8713720000155263,
+          2.910715999973945
+        ],
+        "reservation_latency_p95_ms": [
+          3.408926800003797,
+          3.6714445000143305,
+          5.358237199978078,
+          3.87685445002432
+        ],
+        "reservation_latency_p99_ms": [
+          6.176439759992203,
+          9.494224560006984,
+          7.066877449977386,
+          8.284468470016012
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          66.68392577252648,
+          71.17819470294987,
+          70.53184088071718,
+          71.89948408422336
+        ],
+        "worker_process_rss_bytes_peak": [
+          104738816.0,
+          101093376.0,
+          101056512.0,
+          101068800.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 1
+    },
+    {
+      "distribution": "many_small_tenants",
+      "median": {
+        "claim_latency_p50_ms": 23.87328474999606,
+        "claim_latency_p95_ms": 31.04536922501211,
+        "claim_latency_p99_ms": 175.85376666001116,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 19.169464000000858,
+        "job_claim_latency_p95_ms": 25.46809215000394,
+        "job_claim_latency_p99_ms": 39.471278089998535,
+        "jobs_per_second": 43.461122642805506,
+        "postgres_lock_waiting_connections_peak": 0.0,
+        "reservation_latency_p50_ms": 4.677512000000661,
+        "reservation_latency_p95_ms": 8.657473200013753,
+        "reservation_latency_p99_ms": 137.92536362000834,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 91.0903147053956,
+        "worker_process_rss_bytes_peak": 101816320.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          24.73674599999498,
+          23.672937499995328,
+          24.073631999996792,
+          22.920500000026323
+        ],
+        "claim_latency_p95_ms": [
+          60.835401549999084,
+          30.246079450006388,
+          31.844659000017828,
+          30.195422500008817
+        ],
+        "claim_latency_p99_ms": [
+          247.7795200200091,
+          181.55029254001678,
+          170.15724078000554,
+          169.51483630999243
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          19.326120000002334,
+          19.048959000002696,
+          19.28996899999902,
+          18.13388650001002
+        ],
+        "job_claim_latency_p95_ms": [
+          27.367779099997577,
+          24.91901900000215,
+          26.01716530000573,
+          24.203458449963478
+        ],
+        "job_claim_latency_p99_ms": [
+          88.26854454000342,
+          38.03123858999073,
+          40.91131759000634,
+          37.14937682003046
+        ],
+        "jobs_per_second": [
+          40.15038980543964,
+          44.09129060803652,
+          42.830954677574496,
+          44.447729506991315
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reservation_latency_p50_ms": [
+          4.675337500003707,
+          4.596458499989353,
+          4.70057400001167,
+          4.679686499997615
+        ],
+        "reservation_latency_p95_ms": [
+          12.417693350003816,
+          6.7954715000055845,
+          9.149447400010045,
+          8.16549900001746
+        ],
+        "reservation_latency_p99_ms": [
+          212.4683469799925,
+          143.50018824999242,
+          129.22100798999685,
+          132.35053899002426
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          86.4773268717159,
+          91.68501441951801,
+          90.49561499127317,
+          92.39644278846977
+        ],
+        "worker_process_rss_bytes_peak": [
+          105234432.0,
+          101773312.0,
+          101789696.0,
+          101842944.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 2
+    },
+    {
+      "distribution": "many_small_tenants",
+      "median": {
+        "claim_latency_p50_ms": 48.26518399998747,
+        "claim_latency_p95_ms": 61.02695892500343,
+        "claim_latency_p99_ms": 279.9495066249956,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 35.56246375000427,
+        "job_claim_latency_p95_ms": 47.5508543249937,
+        "job_claim_latency_p99_ms": 101.77010152999475,
+        "jobs_per_second": 42.245795739203096,
+        "postgres_lock_waiting_connections_peak": 2.0,
+        "reservation_latency_p50_ms": 12.026028249984222,
+        "reservation_latency_p95_ms": 18.769871699991818,
+        "reservation_latency_p99_ms": 175.3074741050134,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 95.04243255463889,
+        "worker_process_rss_bytes_peak": 102475776.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          44.16744550000118,
+          49.94731449998824,
+          49.15353199999117,
+          47.37683599998377
+        ],
+        "claim_latency_p95_ms": [
+          61.17356049999856,
+          135.6871511499918,
+          60.880357350008296,
+          60.530070499956416
+        ],
+        "claim_latency_p99_ms": [
+          190.14615940001082,
+          254.07369061999822,
+          305.8253226299929,
+          327.0795661499921
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          32.59956949999321,
+          38.10144799999193,
+          36.05243450000728,
+          35.07249300000126
+        ],
+        "job_claim_latency_p95_ms": [
+          47.57007159999204,
+          73.13340960000117,
+          47.53163704999536,
+          46.573014049999976
+        ],
+        "job_claim_latency_p99_ms": [
+          83.53845307999426,
+          120.00174997999525,
+          82.39938305001773,
+          158.87672278001108
+        ],
+        "jobs_per_second": [
+          46.817701373440876,
+          40.82571259522734,
+          41.953876947301374,
+          42.53771453110482
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          0.0,
+          3.0,
+          2.0,
+          2.0
+        ],
+        "reservation_latency_p50_ms": [
+          11.638909000005526,
+          12.052395499992485,
+          12.19823800001052,
+          11.999660999975958
+        ],
+        "reservation_latency_p95_ms": [
+          17.85530680000846,
+          20.78362759999663,
+          18.546200199995145,
+          18.99354319998849
+        ],
+        "reservation_latency_p99_ms": [
+          99.72342434999113,
+          182.3155761200235,
+          230.86168928999717,
+          168.2993720900033
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          97.51640558854378,
+          94.04566498272135,
+          95.31887493290078,
+          94.765990176377
+        ],
+        "worker_process_rss_bytes_peak": [
+          105320448.0,
+          102559744.0,
+          102215680.0,
+          102391808.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 4
+    },
+    {
+      "distribution": "many_small_tenants",
+      "median": {
+        "claim_latency_p50_ms": 98.97979349999986,
+        "claim_latency_p95_ms": 341.6737182249988,
+        "claim_latency_p99_ms": 393.7475005899862,
+        "contention_retries": 0.0,
+        "contention_retry_per_success": 0.0,
+        "empty_while_eligible": 0.0,
+        "job_claim_latency_p50_ms": 67.78337750000674,
+        "job_claim_latency_p95_ms": 155.35403990002123,
+        "job_claim_latency_p99_ms": 188.84743193998995,
+        "jobs_per_second": 42.83990494314398,
+        "postgres_lock_waiting_connections_peak": 3.5,
+        "reservation_latency_p50_ms": 31.15815475000616,
+        "reservation_latency_p95_ms": 155.77922069998135,
+        "reservation_latency_p99_ms": 235.80337291499444,
+        "reservation_miss_rate": 0.0,
+        "tenant_turn_reserved": 100.0,
+        "tenant_turn_without_job": 0.0,
+        "waiting_fallbacks": 0.0,
+        "worker_process_cpu_percent": 92.93934171178165,
+        "worker_process_rss_bytes_peak": 102526976.0
+      },
+      "observations": {
+        "claim_latency_p50_ms": [
+          97.9372230000024,
+          97.88378000000364,
+          100.02236399999731,
+          100.1661795000075
+        ],
+        "claim_latency_p95_ms": [
+          289.47917970000105,
+          314.98690764997826,
+          368.3605288000194,
+          380.6478788499959
+        ],
+        "claim_latency_p99_ms": [
+          345.50394436999915,
+          363.78150224999735,
+          441.3082179000046,
+          423.713498929975
+        ],
+        "contention_retries": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "contention_retry_per_success": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "empty_while_eligible": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "job_claim_latency_p50_ms": [
+          68.97959199999804,
+          68.65403800000536,
+          66.57487400001116,
+          66.91271700000812
+        ],
+        "job_claim_latency_p95_ms": [
+          138.7198901499949,
+          154.08028305000698,
+          165.37313574999217,
+          156.6277967500355
+        ],
+        "job_claim_latency_p99_ms": [
+          185.75618423999728,
+          191.9386796399826,
+          178.3068520600074,
+          192.17163037004468
+        ],
+        "jobs_per_second": [
+          43.625714780234055,
+          43.422944003608286,
+          41.951968193158805,
+          42.256865882679676
+        ],
+        "postgres_lock_waiting_connections_peak": [
+          1.0,
+          1.0,
+          6.0,
+          6.0
+        ],
+        "reservation_latency_p50_ms": [
+          30.847505499998817,
+          29.69240600000944,
+          31.468804000013506,
+          31.499439499981463
+        ],
+        "reservation_latency_p95_ms": [
+          111.07980180000537,
+          123.12974835000286,
+          197.94084454998995,
+          188.42869304995983
+        ],
+        "reservation_latency_p99_ms": [
+          208.5206781599961,
+          207.84825751002197,
+          263.0860676699928,
+          265.4696874900026
+        ],
+        "reservation_miss_rate": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "tenant_turn_reserved": [
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "tenant_turn_without_job": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waiting_fallbacks": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "worker_process_cpu_percent": [
+          95.0235333966862,
+          93.82588782041095,
+          91.53834385350973,
+          92.05279560315233
+        ],
+        "worker_process_rss_bytes_peak": [
+          105402368.0,
+          102621184.0,
+          102354944.0,
+          102432768.0
+        ]
+      },
+      "repetitions": 4,
+      "worker_concurrency": 8
+    }
+  ],
+  "metric_contract": [
+    "jobs_per_second",
+    "claim_latency_p50_ms",
+    "claim_latency_p95_ms",
+    "claim_latency_p99_ms",
+    "reservation_latency_p50_ms",
+    "reservation_latency_p95_ms",
+    "reservation_latency_p99_ms",
+    "job_claim_latency_p50_ms",
+    "job_claim_latency_p95_ms",
+    "job_claim_latency_p99_ms",
+    "tenant_turn_reserved",
+    "tenant_turn_without_job",
+    "reservation_miss_rate",
+    "contention_retries",
+    "contention_retry_per_success",
+    "waiting_fallbacks",
+    "empty_while_eligible",
+    "postgres_lock_waiting_connections_peak",
+    "worker_process_cpu_percent",
+    "worker_process_rss_bytes_peak"
+  ],
+  "queue_size": 1000,
+  "repetition_count": 4,
+  "schema_version": 1,
+  "self_scaling": [
+    {
+      "distribution": "single_tenant",
+      "required_minimum_ratio": 0.95,
+      "status": "NEGATIVE_SCALING",
+      "throughput_4_jobs_per_second": 24.1900861045302,
+      "throughput_8_jobs_per_second": 18.929003760924335,
+      "throughput_8_to_4_ratio": 0.7825108054236899
+    },
+    {
+      "distribution": "balanced_multi_tenant",
+      "required_minimum_ratio": 0.95,
+      "status": "NEGATIVE_SCALING",
+      "throughput_4_jobs_per_second": 44.75282480395374,
+      "throughput_8_jobs_per_second": 34.584871021476424,
+      "throughput_8_to_4_ratio": 0.7727974976547398
+    },
+    {
+      "distribution": "skew_20_to_1",
+      "required_minimum_ratio": 0.95,
+      "status": "NEGATIVE_SCALING",
+      "throughput_4_jobs_per_second": 32.70025509361718,
+      "throughput_8_jobs_per_second": 26.03639590453747,
+      "throughput_8_to_4_ratio": 0.7962138469561836
+    },
+    {
+      "distribution": "many_small_tenants",
+      "required_minimum_ratio": 0.95,
+      "status": "VERIFIED",
+      "throughput_4_jobs_per_second": 42.245795739203096,
+      "throughput_8_jobs_per_second": 42.83990494314398,
+      "throughput_8_to_4_ratio": 1.0140631557187019
+    }
+  ],
+  "self_scaling_floor": 0.95,
+  "source_commit": "91acdba9f5b5f1a84fb03640382c9e4871364afe",
+  "status": "NEGATIVE_SCALING"
+}
