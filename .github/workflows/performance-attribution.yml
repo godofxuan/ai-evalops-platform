@@ -60,11 +60,9 @@ jobs:
             > "$execution_root/environment/execution-order.txt"
 
       - name: Verify production source lock
-        shell: bash
-        run: |
-          set -euo pipefail
-          locked="0fd5376300155ee4fdfa3cfd248d636bdeca3100"
-          test "$(git diff --name-only "$locked"..HEAD -- app scripts)" = ""
+        run: >-
+          uv run --no-sync python -m scripts.behavioral_source_lock
+          --locked-sha 0fd5376300155ee4fdfa3cfd248d636bdeca3100
 
       - name: Start isolated PostgreSQL and Redis
         run: >-
