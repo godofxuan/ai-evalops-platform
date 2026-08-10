@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy.dialects import postgresql
 
+from scripts import run_fair_capacity_test
+from scripts.experiment_support import ExperimentError
 from scripts.fair_capacity_evidence import (
     FAULT_EVIDENCE_SOURCE_COMMIT,
     assess_arm_runtime,
@@ -143,6 +145,39 @@ def test_claim_phase_recorder_does_not_read_clock_for_counter_only_or_ignored_ev
         "permit_pending_count": 1,
         "round_created_count": 1,
     }
+
+
+def test_benchmark_cli_selects_one_exact_existing_arm() -> None:
+    arm_id = "fair-q1000-skew_20_to_1-w8-b1"
+    args = run_fair_capacity_test.build_parser().parse_args(
+        [
+            "--run-id",
+            "overhead-off-rep1",
+            "--source-commit",
+            "a" * 40,
+            "--stage",
+            "targeted",
+            "--queue-sizes",
+            "1000",
+            "--arm-id",
+            arm_id,
+        ]
+    )
+
+    selected = run_fair_capacity_test.select_requested_arms(
+        build_fair_capacity_plan(queue_sizes=(1000,)),
+        arm_id=args.arm_id,
+    )
+
+    assert [arm.arm_id for arm in selected] == [arm_id]
+
+
+def test_benchmark_arm_selector_rejects_unknown_arm() -> None:
+    with pytest.raises(ExperimentError, match="requested benchmark arm is not in frozen plan"):
+        run_fair_capacity_test.select_requested_arms(
+            build_fair_capacity_plan(queue_sizes=(1000,)),
+            arm_id="fair-q1000-skew_20_to_1-w16-b1",
+        )
 
 
 def test_failure_report_preserves_task_group_leaf_exception_and_cause() -> None:
