@@ -20,10 +20,92 @@ from scripts.fair_capacity_evidence import (
     write_release_manifest,
 )
 from scripts.release_evidence import assess_release_bundle
+from scripts.run_fair_capacity_test import ClaimPhaseRecorder
 
 
 def test_fault_evidence_reference_is_the_audited_after_bundle_source() -> None:
     assert FAULT_EVIDENCE_SOURCE_COMMIT == "03d6987c75f2169c8207f2355f1f9d7528f9d223"
+
+
+class ManualNanosecondClock:
+    def __init__(self) -> None:
+        self.value = 0
+
+    def __call__(self) -> int:
+        return self.value
+
+    def advance_ms(self, value: float) -> None:
+        self.value += int(value * 1_000_000)
+
+
+def test_claim_phase_recorder_derives_registered_stage_timings() -> None:
+    clock = ManualNanosecondClock()
+    recorder = ClaimPhaseRecorder(clock_ns=clock)
+
+    recorder.observe("claim_entry")
+    clock.advance_ms(1)
+    recorder.observe("scheduler_coordination_start")
+    clock.advance_ms(3)
+    recorder.observe("scheduler_coordination_acquired")
+    clock.advance_ms(1)
+    recorder.observe("tenant_permit_select_start")
+    clock.advance_ms(4)
+    recorder.observe("tenant_permit_acquired")
+    clock.advance_ms(1)
+    recorder.observe("job_row_select_start")
+    clock.advance_ms(6)
+    recorder.observe("job_row_acquired")
+    clock.advance_ms(4)
+    recorder.observe("job_attempt_mutation_complete")
+    clock.advance_ms(1)
+    recorder.observe("durable_sequence_start")
+    clock.advance_ms(5)
+    recorder.observe("durable_sequence_updated")
+    clock.advance_ms(1)
+    recorder.observe("transaction_work_complete")
+    clock.advance_ms(3)
+    recorder.observe("transaction_complete")
+    clock.advance_ms(5)
+    recorder.observe("claim_return")
+
+    summary = recorder.summary()
+
+    assert summary["scheduler_coordination_wait_ms"]["observations"] == [3.0]
+    assert summary["tenant_permit_wait_ms"]["observations"] == [4.0]
+    assert summary["job_row_wait_ms"]["observations"] == [6.0]
+    assert summary["job_row_wait_ms"]["count"] == 1
+    assert summary["job_row_wait_ms"]["sum"] == 6.0
+    assert summary["durable_sequence_wait_ms"]["observations"] == [5.0]
+    assert summary["transaction_commit_ms"]["observations"] == [3.0]
+    assert summary["claim_total_ms"]["observations"] == [35.0]
+    assert summary["job_row_wait_ms"]["p50"] == 6.0
+    assert summary["job_row_wait_ms"]["p95"] == 6.0
+    assert summary["job_row_wait_ms"]["p99"] == 6.0
+
+
+def test_claim_phase_recorder_counts_scheduler_events_without_entity_ids() -> None:
+    recorder = ClaimPhaseRecorder(clock_ns=lambda: 0)
+
+    for phase in (
+        "round_created",
+        "generation_advanced",
+        "tenant_permit_acquired",
+        "permit_retained",
+        "job_skip_locked_miss",
+        "tenant_permit_consumed",
+        "tenant_permit_empty",
+    ):
+        recorder.observe(phase)
+
+    assert recorder.counters() == {
+        "generation_advance_count": 1,
+        "job_skip_locked_miss_count": 1,
+        "permit_consumed_count": 1,
+        "permit_empty_count": 1,
+        "permit_pending_count": 2,
+        "round_created_count": 1,
+    }
+    assert all("tenant" not in key and "job_id" not in key for key in recorder.counters())
 
 
 def test_failure_report_preserves_task_group_leaf_exception_and_cause() -> None:

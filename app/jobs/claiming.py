@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
@@ -259,39 +259,49 @@ class SQLAlchemyJobClaimer:
         lease_policy: LeasePolicy,
         clock: Clock | None = None,
         metrics: PlatformMetrics | None = None,
+        phase_observer: Callable[[str], None] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._lease_policy = lease_policy
         self._clock = clock or SystemClock()
         self._metrics = metrics
+        self._phase_observer = phase_observer
+
+    def _observe_claim_phase(self, phase: str) -> None:
+        if self._phase_observer is not None:
+            self._phase_observer(phase)
 
     async def claim(self, *, worker_id: str, limit: int = 1) -> tuple[ClaimedJob, ...]:
         validate_claim_request(worker_id=worker_id, limit=limit)
-        claimed_batch: list[ClaimedJob] = []
-        for _batch_slot in range(limit):
-            while True:
-                eligible_at = self._clock.now()
-                claims = await self._claim_once(
-                    worker_id=worker_id,
-                    limit=1,
-                    eligible_at=eligible_at,
-                )
-                if claims:
-                    claimed_batch.extend(claims)
-                    break
-                if not await self._has_eligible_jobs(self._clock.now()):
-                    return tuple(claimed_batch)
-                claims = await self._claim_once_waiting_for_turn(
-                    worker_id=worker_id,
-                    limit=1,
-                    eligible_at=self._clock.now(),
-                )
-                if claims:
-                    claimed_batch.extend(claims)
-                    break
-                if not await self._has_eligible_jobs(self._clock.now()):
-                    return tuple(claimed_batch)
-        return tuple(claimed_batch)
+        self._observe_claim_phase("claim_entry")
+        try:
+            claimed_batch: list[ClaimedJob] = []
+            for _batch_slot in range(limit):
+                while True:
+                    eligible_at = self._clock.now()
+                    claims = await self._claim_once(
+                        worker_id=worker_id,
+                        limit=1,
+                        eligible_at=eligible_at,
+                    )
+                    if claims:
+                        claimed_batch.extend(claims)
+                        break
+                    if not await self._has_eligible_jobs(self._clock.now()):
+                        return tuple(claimed_batch)
+                    claims = await self._claim_once_waiting_for_turn(
+                        worker_id=worker_id,
+                        limit=1,
+                        eligible_at=self._clock.now(),
+                    )
+                    if claims:
+                        claimed_batch.extend(claims)
+                        break
+                    if not await self._has_eligible_jobs(self._clock.now()):
+                        return tuple(claimed_batch)
+            return tuple(claimed_batch)
+        finally:
+            self._observe_claim_phase("claim_return")
 
     async def _has_eligible_jobs(self, now: datetime) -> bool:
         async with self._session_factory() as session:
@@ -336,6 +346,7 @@ class SQLAlchemyJobClaimer:
     async def _ensure_active_scheduler_round(self, *, eligible_at: datetime) -> bool:
         """Create one fair round iff no current-generation permit remains pending."""
 
+        self._observe_claim_phase("scheduler_coordination_start")
         async with self._session_factory.begin() as session:
             coordination = (
                 await session.execute(
@@ -344,6 +355,7 @@ class SQLAlchemyJobClaimer:
                     .with_for_update(of=SchedulerCoordination)
                 )
             ).scalar_one()
+            self._observe_claim_phase("scheduler_coordination_acquired")
             has_pending = bool(
                 await session.scalar(
                     select(
@@ -393,6 +405,8 @@ class SQLAlchemyJobClaimer:
             coordination.active_generation = generation
             coordination.active_priority = round_priority
             coordination.version += 1
+            self._observe_claim_phase("round_created")
+            self._observe_claim_phase("generation_advanced")
             return True
 
     async def _before_scheduler_permit_select(self, *, worker_id: str) -> None:
@@ -414,66 +428,88 @@ class SQLAlchemyJobClaimer:
         skip_locked: bool,
     ) -> tuple[ClaimedJob, ...]:
         await self._before_scheduler_permit_select(worker_id=worker_id)
-        async with self._session_factory.begin() as session:
-            state = await session.scalar(
-                build_pending_scheduler_permit_statement(skip_locked=skip_locked)
-            )
-            if state is None:
-                return ()
-            await self._after_scheduler_permit_locked(worker_id=worker_id, state=state)
-            rows = (
-                await session.execute(
-                    build_tenant_job_claim_statement(
-                        now=eligible_at,
-                        tenant_id=state.tenant_id,
-                        priority=state.round_priority,
-                        skip_locked=skip_locked,
-                    )
+        self._observe_claim_phase("transaction_start")
+        try:
+            async with self._session_factory.begin() as session:
+                self._observe_claim_phase("tenant_permit_select_start")
+                state = await session.scalar(
+                    build_pending_scheduler_permit_statement(skip_locked=skip_locked)
                 )
-            ).all()
-            if not rows:
-                has_locked_or_visible_job = bool(
-                    await session.scalar(
-                        build_tenant_eligible_job_exists_statement(
+                if state is None:
+                    self._observe_claim_phase("tenant_permit_missing")
+                    self._observe_claim_phase("transaction_work_complete")
+                    return ()
+                self._observe_claim_phase("tenant_permit_acquired")
+                await self._after_scheduler_permit_locked(worker_id=worker_id, state=state)
+                self._observe_claim_phase("job_row_select_start")
+                rows = (
+                    await session.execute(
+                        build_tenant_job_claim_statement(
                             now=eligible_at,
                             tenant_id=state.tenant_id,
                             priority=state.round_priority,
+                            skip_locked=skip_locked,
                         )
                     )
-                )
-                if not has_locked_or_visible_job:
-                    state.status = SCHEDULER_PERMIT_EMPTY
-                    state.version += 1
+                ).all()
+                if not rows:
+                    self._observe_claim_phase("job_row_skipped")
+                    has_locked_or_visible_job = bool(
+                        await session.scalar(
+                            build_tenant_eligible_job_exists_statement(
+                                now=eligible_at,
+                                tenant_id=state.tenant_id,
+                                priority=state.round_priority,
+                            )
+                        )
+                    )
+                    if has_locked_or_visible_job:
+                        self._observe_claim_phase("permit_retained")
+                        if skip_locked:
+                            self._observe_claim_phase("job_skip_locked_miss")
+                    else:
+                        state.status = SCHEDULER_PERMIT_EMPTY
+                        state.version += 1
+                        self._observe_claim_phase("tenant_permit_empty")
+                    if self._metrics is not None:
+                        self._metrics.record_tenant_turn_without_job()
+                    self._observe_claim_phase("transaction_work_complete")
+                    return ()
+
+                self._observe_claim_phase("job_row_acquired")
                 if self._metrics is not None:
-                    self._metrics.record_tenant_turn_without_job()
-                return ()
-
-            if self._metrics is not None:
-                self._metrics.record_tenant_turn_reserved()
-            claims, attempts = await self._persist_claim_rows(
-                session=session,
-                rows=rows,
-                worker_id=worker_id,
-            )
-            state.status = SCHEDULER_PERMIT_CONSUMED
-            state.version += 1
-
-            # This lock is intentionally acquired only after the Job/Attempt/
-            # Audit/Outbox writes have been constructed. It linearizes durable
-            # diagnostic order at the transaction tail, not the whole claim.
-            coordination = (
-                await session.execute(
-                    select(SchedulerCoordination)
-                    .where(SchedulerCoordination.id == SCHEDULER_COORDINATION_ID)
-                    .with_for_update(of=SchedulerCoordination)
+                    self._metrics.record_tenant_turn_reserved()
+                claims, attempts = await self._persist_claim_rows(
+                    session=session,
+                    rows=rows,
+                    worker_id=worker_id,
                 )
-            ).scalar_one()
-            coordination.durable_claim_sequence += 1
-            coordination.version += 1
-            sequence = coordination.durable_claim_sequence
-            for attempt in attempts:
-                attempt.scheduler_claim_sequence = sequence
-            return tuple(replace(claim, scheduler_claim_sequence=sequence) for claim in claims)
+                self._observe_claim_phase("job_attempt_mutation_complete")
+                state.status = SCHEDULER_PERMIT_CONSUMED
+                state.version += 1
+                self._observe_claim_phase("tenant_permit_consumed")
+
+                # This lock is intentionally acquired only after the Job/Attempt/
+                # Audit/Outbox writes have been constructed. It linearizes durable
+                # diagnostic order at the transaction tail, not the whole claim.
+                self._observe_claim_phase("durable_sequence_start")
+                coordination = (
+                    await session.execute(
+                        select(SchedulerCoordination)
+                        .where(SchedulerCoordination.id == SCHEDULER_COORDINATION_ID)
+                        .with_for_update(of=SchedulerCoordination)
+                    )
+                ).scalar_one()
+                coordination.durable_claim_sequence += 1
+                coordination.version += 1
+                sequence = coordination.durable_claim_sequence
+                for attempt in attempts:
+                    attempt.scheduler_claim_sequence = sequence
+                self._observe_claim_phase("durable_sequence_updated")
+                self._observe_claim_phase("transaction_work_complete")
+                return tuple(replace(claim, scheduler_claim_sequence=sequence) for claim in claims)
+        finally:
+            self._observe_claim_phase("transaction_complete")
 
     async def _claim_after_reserved_turn(
         self,

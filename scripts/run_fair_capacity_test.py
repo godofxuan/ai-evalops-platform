@@ -10,11 +10,11 @@ import statistics
 import subprocess
 import time
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, perf_counter_ns
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -73,9 +73,138 @@ class QueueFixture:
     blob_sha256: str
 
 
+_CLAIM_PHASE_METRICS = (
+    "scheduler_coordination_wait_ms",
+    "tenant_permit_wait_ms",
+    "job_row_wait_ms",
+    "durable_sequence_wait_ms",
+    "transaction_commit_ms",
+    "claim_total_ms",
+)
+_CLAIM_PHASE_COUNTERS = (
+    "generation_advance_count",
+    "job_skip_locked_miss_count",
+    "permit_consumed_count",
+    "permit_empty_count",
+    "permit_pending_count",
+    "round_created_count",
+)
+
+
+class ClaimPhaseRecorder:
+    """Low-cardinality per-claimer monotonic timing recorder for experiments."""
+
+    def __init__(self, *, clock_ns: Callable[[], int] = perf_counter_ns) -> None:
+        self._clock_ns = clock_ns
+        self._starts: dict[str, int] = {}
+        self._durations_ms: dict[str, list[float]] = {metric: [] for metric in _CLAIM_PHASE_METRICS}
+        self._counts: Counter[str] = Counter()
+        self._claim_started_ns: int | None = None
+        self._transaction_work_completed_ns: int | None = None
+
+    def _finish(self, metric: str, start: str, now_ns: int) -> None:
+        started_ns = self._starts.pop(start, None)
+        if started_ns is not None and now_ns >= started_ns:
+            self._durations_ms[metric].append((now_ns - started_ns) / 1_000_000)
+
+    def observe(self, phase: str) -> None:
+        now_ns = self._clock_ns()
+        if phase == "claim_entry":
+            self._claim_started_ns = now_ns
+        elif phase == "claim_return":
+            if self._claim_started_ns is not None and now_ns >= self._claim_started_ns:
+                self._durations_ms["claim_total_ms"].append(
+                    (now_ns - self._claim_started_ns) / 1_000_000
+                )
+            self._claim_started_ns = None
+        elif phase == "scheduler_coordination_start":
+            self._starts[phase] = now_ns
+        elif phase == "scheduler_coordination_acquired":
+            self._finish("scheduler_coordination_wait_ms", "scheduler_coordination_start", now_ns)
+        elif phase == "tenant_permit_select_start":
+            self._starts[phase] = now_ns
+        elif phase == "tenant_permit_acquired":
+            self._finish("tenant_permit_wait_ms", "tenant_permit_select_start", now_ns)
+            self._counts["permit_pending_count"] += 1
+        elif phase == "job_row_select_start":
+            self._starts[phase] = now_ns
+        elif phase in {"job_row_acquired", "job_row_skipped"}:
+            self._finish("job_row_wait_ms", "job_row_select_start", now_ns)
+        elif phase == "durable_sequence_start":
+            self._starts[phase] = now_ns
+        elif phase == "durable_sequence_updated":
+            self._finish("durable_sequence_wait_ms", "durable_sequence_start", now_ns)
+        elif phase == "transaction_work_complete":
+            self._transaction_work_completed_ns = now_ns
+        elif phase == "transaction_complete":
+            if (
+                self._transaction_work_completed_ns is not None
+                and now_ns >= self._transaction_work_completed_ns
+            ):
+                self._durations_ms["transaction_commit_ms"].append(
+                    (now_ns - self._transaction_work_completed_ns) / 1_000_000
+                )
+            self._transaction_work_completed_ns = None
+
+        counter = {
+            "generation_advanced": "generation_advance_count",
+            "job_skip_locked_miss": "job_skip_locked_miss_count",
+            "permit_retained": "permit_pending_count",
+            "round_created": "round_created_count",
+            "tenant_permit_consumed": "permit_consumed_count",
+            "tenant_permit_empty": "permit_empty_count",
+        }.get(phase)
+        if counter is not None:
+            self._counts[counter] += 1
+
+    def duration_values(self) -> dict[str, list[float]]:
+        return {metric: list(values) for metric, values in self._durations_ms.items()}
+
+    def summary(self) -> dict[str, dict[str, float | int | list[float] | None]]:
+        return {
+            metric: {
+                "observations": list(values),
+                "count": len(values),
+                "sum": sum(values),
+                "p50": percentile(values, 0.50),
+                "p95": percentile(values, 0.95),
+                "p99": percentile(values, 0.99),
+            }
+            for metric, values in self._durations_ms.items()
+        }
+
+    def counters(self) -> dict[str, int]:
+        return {field: self._counts[field] for field in _CLAIM_PHASE_COUNTERS}
+
+
+def summarize_claim_phase_recorders(
+    recorders: Sequence[ClaimPhaseRecorder],
+) -> tuple[dict[str, dict[str, float | int | list[float] | None]], dict[str, int]]:
+    combined = ClaimPhaseRecorder()
+    combined._durations_ms = {metric: [] for metric in _CLAIM_PHASE_METRICS}
+    combined._counts = Counter()
+    for recorder in recorders:
+        for metric, values in recorder.duration_values().items():
+            combined._durations_ms[metric].extend(values)
+        combined._counts.update(recorder.counters())
+    return combined.summary(), combined.counters()
+
+
 class InstrumentedClaimer(SQLAlchemyJobClaimer):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        *args: Any,
+        attribution_instrumentation: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        self.phase_recorder = ClaimPhaseRecorder() if attribution_instrumentation else None
+        super().__init__(
+            *args,
+            phase_observer=(
+                self.phase_recorder.observe if self.phase_recorder is not None else None
+            ),
+            **kwargs,
+        )
         self.call_latencies_ms: list[float] = []
         self.reservation_latencies_ms: list[float] = []
         self.job_claim_latencies_ms: list[float] = []
@@ -258,6 +387,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--queue-sizes", required=True)
     parser.add_argument("--prior-assessment", type=Path)
     parser.add_argument("--sample-jobs", type=int, default=100)
+    parser.add_argument("--performance-attribution", action="store_true")
     parser.add_argument("--database-url-env", default="EVALOPS_EXPERIMENT_DATABASE_URL")
     parser.add_argument("--output-root", type=Path, default=Path("docs/results/release/v0.1.0"))
     return parser
@@ -618,6 +748,7 @@ async def _run_worker_sample(
     arm: FairCapacityArm,
     fixture: QueueFixture,
     sample_jobs: int,
+    attribution_instrumentation: bool = False,
 ) -> dict[str, Any]:
     measured_jobs = min(sample_jobs, arm.queue_size)
     settings = Settings(_env_file=None, database_url=SecretStr(database_url))
@@ -630,6 +761,7 @@ async def _run_worker_sample(
         claimer = InstrumentedClaimer(
             session_factory,
             lease_policy=LeasePolicy(timedelta(seconds=30)),
+            attribution_instrumentation=attribution_instrumentation,
         )
         committer = TimedResultCommitter(SQLAlchemyResultCommitter(session_factory))
         worker = EvaluationWorker(
@@ -720,6 +852,9 @@ async def _run_worker_sample(
     postgres_samples = resources["postgres_samples"]
     tenant_turn_reserved = sum(claimer.tenant_turn_reserved for claimer in claimers)
     tenant_turn_without_job = sum(claimer.tenant_turn_without_job for claimer in claimers)
+    phase_timing_ms, phase_counters = summarize_claim_phase_recorders(
+        [claimer.phase_recorder for claimer in claimers if claimer.phase_recorder is not None]
+    )
     return {
         "arm_id": arm.arm_id,
         "queue_size": arm.queue_size,
@@ -743,6 +878,9 @@ async def _run_worker_sample(
         "waiting_fallbacks": sum(claimer.waiting_fallbacks for claimer in claimers),
         "tenant_turn_reserved": tenant_turn_reserved,
         "tenant_turn_without_job": tenant_turn_without_job,
+        "performance_attribution_enabled": attribution_instrumentation,
+        "claim_phase_timing_ms": phase_timing_ms,
+        "claim_phase_counters": phase_counters,
         "reservation_miss_rate": (
             tenant_turn_without_job / tenant_turn_reserved if tenant_turn_reserved else 0.0
         ),
@@ -809,7 +947,7 @@ def _arm_csv_row(
     correctness = runtime["correctness"]
     fair_times = [float(record["execution_time_ms"]) for record in explains["fair"]]
     legacy_times = [float(record["execution_time_ms"]) for record in explains["legacy_fifo"]]
-    return {
+    row: dict[str, object] = {
         "arm_id": runtime["arm_id"],
         "source_commit": source_commit,
         "queue_size": runtime["queue_size"],
@@ -872,6 +1010,12 @@ def _arm_csv_row(
         "stale_evidence_scope": runtime["stale_evidence_scope"],
         "stale_evidence_source_commit": runtime["stale_evidence_source_commit"],
     }
+    for metric, summary in runtime["claim_phase_timing_ms"].items():
+        for aggregate_name in ("count", "sum", "p50", "p95", "p99"):
+            row[f"{metric}_{aggregate_name}"] = summary[aggregate_name]
+    row.update(runtime["claim_phase_counters"])
+    row["performance_attribution_enabled"] = runtime["performance_attribution_enabled"]
+    return row
 
 
 async def _run(
@@ -917,6 +1061,7 @@ async def _run(
             "claim_batch_size": 1,
             "sample_jobs_per_arm": args.sample_jobs,
             "explain_repetitions": EXPLAIN_REPETITIONS,
+            "performance_attribution_enabled": bool(args.performance_attribution),
             "worker_resource_scope": (
                 "single benchmark process running real EvaluationWorker objects"
             ),
@@ -944,6 +1089,7 @@ async def _run(
                 arm=arm,
                 fixture=fixture,
                 sample_jobs=args.sample_jobs,
+                attribution_instrumentation=bool(args.performance_attribution),
             )
             arm_assessment = assess_arm_runtime(
                 runtime,
