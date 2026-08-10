@@ -10,7 +10,7 @@ from scripts.release_evidence import assess_release_bundle
 
 CURRENT_SOURCE = "a" * 40
 HISTORICAL_SOURCE = "b" * 40
-ARM_ID = "fair-q1000-single-w1-b20"
+ARM_ID = "fair-q1000-single_tenant-w1-b20"
 
 
 def _row(*, source_commit: str = CURRENT_SOURCE) -> dict[str, object]:
@@ -19,6 +19,8 @@ def _row(*, source_commit: str = CURRENT_SOURCE) -> dict[str, object]:
         "source_commit": source_commit,
         "queue_size": 1_000,
         "distribution": "single_tenant",
+        "worker_concurrency": 1,
+        "claim_batch_size": 20,
         "fair_first_secondary_tenant_position": "",
         "legacy_fifo_first_secondary_tenant_position": "",
         "submitted_count": 1_000,
@@ -43,11 +45,21 @@ def _write_bundle(
     include_explain: bool = True,
     explain_repetitions: int = 1,
     candidate_cardinality: int = 1_000,
+    fair_candidate_cardinality: int | None = None,
+    legacy_candidate_cardinality: int | None = None,
+    schema_version: int = 1,
+    tenant_count: int | None = None,
+    candidate_units: dict[str, str] | None = None,
     empty_csv: bool = False,
 ) -> Path:
     root.mkdir()
     csv_path = root / "arms.csv"
-    selected_rows = rows if rows is not None else [_row(source_commit=source_commit)]
+    selected_rows = [
+        dict(row) for row in (rows if rows is not None else [_row(source_commit=source_commit)])
+    ]
+    if tenant_count is not None:
+        for row in selected_rows:
+            row["tenant_count"] = tenant_count
     if empty_csv:
         csv_path.write_bytes(b"")
     else:
@@ -60,21 +72,27 @@ def _write_bundle(
             for repetition in range(1, explain_repetitions + 1):
                 explain_path = root / "explain" / f"{selector}-r{repetition}.json"
                 explain_path.parent.mkdir(exist_ok=True)
+                selector_cardinality = (
+                    fair_candidate_cardinality
+                    if selector == "fair" and fair_candidate_cardinality is not None
+                    else legacy_candidate_cardinality
+                    if selector == "legacy_fifo" and legacy_candidate_cardinality is not None
+                    else candidate_cardinality
+                )
+                explain_record: dict[str, object] = {
+                    "format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+                    "arm_id": str(selected_rows[0].get("arm_id", ARM_ID)),
+                    "selector": selector,
+                    "repetition": repetition,
+                    "planning_time_ms": 1.0,
+                    "execution_time_ms": 2.0,
+                    "candidate_cardinality": selector_cardinality,
+                    "plan": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20}}],
+                }
+                if candidate_units is not None and selector in candidate_units:
+                    explain_record["candidate_unit"] = candidate_units[selector]
                 explain_path.write_text(
-                    json.dumps(
-                        {
-                            "format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
-                            "arm_id": ARM_ID,
-                            "selector": selector,
-                            "repetition": repetition,
-                            "planning_time_ms": 1.0,
-                            "execution_time_ms": 2.0,
-                            "candidate_cardinality": candidate_cardinality,
-                            "plan": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20}}],
-                        },
-                        sort_keys=True,
-                    )
-                    + "\n",
+                    json.dumps(explain_record, sort_keys=True) + "\n",
                     encoding="utf-8",
                     newline="\n",
                 )
@@ -89,7 +107,7 @@ def _write_bundle(
     (root / "manifest.json").write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": schema_version,
                 "status": "complete",
                 "source_commit": source_commit,
                 "claim_scope": claim_scope,
@@ -156,6 +174,184 @@ def test_release_bundle_rejects_explain_candidate_cardinality_drift(tmp_path: Pa
 
     assert result["status"] == "FAILED"
     assert "postgres_explain_candidate_cardinality_mismatch" in result["blockers"]
+
+
+def test_schema_v2_accepts_selector_specific_candidate_units(tmp_path: Path) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["schema_version"] == 2
+    assert result["status"] == "VERIFIED"
+    assert result["blockers"] == []
+
+
+@pytest.mark.parametrize(
+    ("distribution", "tenant_count"),
+    [
+        ("single_tenant", 1),
+        ("balanced_multi_tenant", 4),
+        ("skew_20_to_1", 2),
+        ("many_small_tenants", 100),
+    ],
+)
+def test_schema_v2_accepts_frozen_tenant_count_for_every_distribution(
+    tmp_path: Path,
+    distribution: str,
+    tenant_count: int,
+) -> None:
+    row = _row()
+    arm_id = f"fair-q1000-{distribution}-w1-b20"
+    row["arm_id"] = arm_id
+    row["distribution"] = distribution
+    if distribution == "skew_20_to_1":
+        row["fair_first_secondary_tenant_position"] = 2
+        row["legacy_fifo_first_secondary_tenant_position"] = 3
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        rows=[row],
+        schema_version=2,
+        tenant_count=tenant_count,
+        fair_candidate_cardinality=tenant_count,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle, expected_arm_ids=(arm_id,))
+
+    assert result["status"] == "VERIFIED"
+    assert result["blockers"] == []
+
+
+@pytest.mark.parametrize(
+    ("fair_cardinality", "legacy_cardinality"),
+    [(2, 1_000), (1, 999)],
+)
+def test_schema_v2_rejects_selector_specific_cardinality_drift(
+    tmp_path: Path,
+    fair_cardinality: int,
+    legacy_cardinality: int,
+) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=fair_cardinality,
+        legacy_candidate_cardinality=legacy_cardinality,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_candidate_cardinality_mismatch" in result["blockers"]
+
+
+@pytest.mark.parametrize(
+    "candidate_units",
+    [
+        {"legacy_fifo": "eligible_jobs"},
+        {"fair": "eligible_jobs", "legacy_fifo": "eligible_jobs"},
+        {
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_tenant_round_members",
+        },
+    ],
+)
+def test_schema_v2_rejects_missing_or_wrong_candidate_unit(
+    tmp_path: Path,
+    candidate_units: dict[str, str],
+) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=1,
+        fair_candidate_cardinality=1,
+        legacy_candidate_cardinality=1_000,
+        candidate_units=candidate_units,
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "postgres_explain_candidate_unit_mismatch" in result["blockers"]
+
+
+@pytest.mark.parametrize("tenant_count", [0, 2, 1_001])
+def test_schema_v2_rejects_invalid_single_tenant_count(
+    tmp_path: Path,
+    tenant_count: int,
+) -> None:
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        schema_version=2,
+        tenant_count=tenant_count,
+        fair_candidate_cardinality=tenant_count,
+        legacy_candidate_cardinality=1_000,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "arms_tenant_count_invalid" in result["blockers"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "tenant_count", "fair_cardinality", "legacy_cardinality"),
+    [
+        ("queue_size", 999, 1, 1, 999),
+        ("distribution", "balanced_multi_tenant", 4, 4, 1_000),
+        ("worker_concurrency", 8, 1, 1, 1_000),
+        ("claim_batch_size", 1, 1, 1, 1_000),
+    ],
+)
+def test_schema_v2_rejects_arm_metadata_spoofing(
+    tmp_path: Path,
+    field: str,
+    value: object,
+    tenant_count: int,
+    fair_cardinality: int,
+    legacy_cardinality: int,
+) -> None:
+    row = _row()
+    row[field] = value
+    bundle = _write_bundle(
+        tmp_path / "bundle",
+        rows=[row],
+        schema_version=2,
+        tenant_count=tenant_count,
+        fair_candidate_cardinality=fair_cardinality,
+        legacy_candidate_cardinality=legacy_cardinality,
+        candidate_units={
+            "fair": "eligible_tenant_round_members",
+            "legacy_fifo": "eligible_jobs",
+        },
+    )
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "arm_metadata_mismatch" in result["blockers"]
 
 
 def test_release_bundle_requires_every_fair_and_legacy_explain_repetition(
@@ -320,6 +516,15 @@ def test_release_bundle_rejects_non_sha256_manifest_digest(tmp_path: Path) -> No
     manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
     manifest["files"]["arms.csv"]["sha256"] = "0" * 40
     (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = _assess(bundle)
+
+    assert result["status"] == "FAILED"
+    assert "manifest_invalid" in result["blockers"]
+
+
+def test_release_bundle_rejects_boolean_schema_version(tmp_path: Path) -> None:
+    bundle = _write_bundle(tmp_path / "bundle", schema_version=True)
 
     result = _assess(bundle)
 

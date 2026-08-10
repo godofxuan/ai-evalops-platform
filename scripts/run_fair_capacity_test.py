@@ -56,7 +56,11 @@ from scripts.fair_capacity_evidence import (
     write_release_manifest,
 )
 from scripts.gate1_database import collect_postgres_sample, psycopg_dsn
-from scripts.release_evidence import assess_release_bundle
+from scripts.release_evidence import (
+    EXPLAIN_CANDIDATE_UNITS,
+    RELEASE_BUNDLE_SCHEMA_VERSION,
+    assess_release_bundle,
+)
 
 EXPLAIN_REPETITIONS = 4
 
@@ -494,6 +498,7 @@ async def _collect_explain_pairs(
                     record = {
                         "format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
                         "selector": selector,
+                        "candidate_unit": EXPLAIN_CANDIDATE_UNITS[selector],
                         "arm_id": arm.arm_id,
                         "repetition": repetition,
                         "execution_order": list(order),
@@ -797,6 +802,7 @@ async def _run_worker_sample(
 def _arm_csv_row(
     *,
     source_commit: str,
+    tenant_count: int,
     runtime: dict[str, Any],
     explains: dict[str, list[dict[str, Any]]],
 ) -> dict[str, object]:
@@ -807,6 +813,7 @@ def _arm_csv_row(
         "arm_id": runtime["arm_id"],
         "source_commit": source_commit,
         "queue_size": runtime["queue_size"],
+        "tenant_count": tenant_count,
         "distribution": runtime["distribution"],
         "worker_concurrency": runtime["worker_concurrency"],
         "claim_batch_size": runtime["claim_batch_size"],
@@ -901,7 +908,7 @@ async def _run(
     write_report(
         bundle_directory / "configuration.json",
         {
-            "schema_version": 1,
+            "schema_version": RELEASE_BUNDLE_SCHEMA_VERSION,
             "source_commit": source_commit,
             "stage": str(args.stage),
             "queue_sizes": list(queue_sizes),
@@ -949,6 +956,7 @@ async def _run(
             rows.append(
                 _arm_csv_row(
                     source_commit=source_commit,
+                    tenant_count=len(fixture.tenant_ids),
                     runtime=runtime,
                     explains=explains,
                 )
@@ -960,7 +968,11 @@ async def _run(
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
-    write_release_manifest(bundle_directory, source_commit=source_commit)
+    write_release_manifest(
+        bundle_directory,
+        source_commit=source_commit,
+        schema_version=RELEASE_BUNDLE_SCHEMA_VERSION,
+    )
     assessment = assess_release_bundle(
         bundle_directory,
         expected_source_commit=source_commit,

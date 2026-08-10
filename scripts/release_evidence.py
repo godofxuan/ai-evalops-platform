@@ -7,10 +7,25 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-RELEASE_BUNDLE_SCHEMA_VERSION = 1
+LEGACY_RELEASE_BUNDLE_SCHEMA_VERSION = 1
+RELEASE_BUNDLE_SCHEMA_VERSION = 2
+SUPPORTED_RELEASE_BUNDLE_SCHEMA_VERSIONS = {
+    LEGACY_RELEASE_BUNDLE_SCHEMA_VERSION,
+    RELEASE_BUNDLE_SCHEMA_VERSION,
+}
 CURRENT_RELEASE_SCOPE = "current_release_capacity"
 HISTORICAL_SCOPE = "historical_baseline"
+EXPLAIN_CANDIDATE_UNITS = {
+    "fair": "eligible_tenant_round_members",
+    "legacy_fifo": "eligible_jobs",
+}
 _SOURCE_PATTERN = re.compile(r"[0-9a-f]{40}")
+_ARM_ID_PATTERN = re.compile(
+    r"fair-q(?P<queue_size>[1-9][0-9]*)-"
+    r"(?P<distribution>[a-z0-9_]+)-"
+    r"w(?P<worker_concurrency>[1-9][0-9]*)-"
+    r"b(?P<claim_batch_size>[1-9][0-9]*)"
+)
 _REQUIRED_COUNT_FIELDS = (
     "submitted_count",
     "unique_job_count",
@@ -53,8 +68,10 @@ def _manifest_blockers(
     payload_files = _payload_files(bundle_directory)
     if manifest is None:
         return ["manifest_invalid"], payload_files
+    schema_version = manifest.get("schema_version")
     if (
-        manifest.get("schema_version") != RELEASE_BUNDLE_SCHEMA_VERSION
+        type(schema_version) is not int
+        or schema_version not in SUPPORTED_RELEASE_BUNDLE_SCHEMA_VERSIONS
         or manifest.get("status") != "complete"
     ):
         blockers.append("manifest_invalid")
@@ -93,7 +110,11 @@ def _manifest_blockers(
     return blockers, payload_files
 
 
-def _read_arm_rows(path: Path) -> tuple[list[dict[str, str]], str | None]:
+def _read_arm_rows(
+    path: Path,
+    *,
+    schema_version: int | None,
+) -> tuple[list[dict[str, str]], str | None]:
     try:
         if path.stat().st_size == 0:
             return [], "arms_csv_empty"
@@ -115,6 +136,8 @@ def _read_arm_rows(path: Path) -> tuple[list[dict[str, str]], str | None]:
         "legacy_fifo_first_secondary_tenant_position",
         *_REQUIRED_COUNT_FIELDS,
     }
+    if schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
+        required_fields.update({"tenant_count", "worker_concurrency", "claim_batch_size"})
     if not required_fields.issubset(reader.fieldnames):
         return rows, "arms_csv_invalid"
     return rows, None
@@ -193,7 +216,9 @@ def _explain_coverage_blocker(
 def _explain_candidate_cardinality_blocker(
     payload_files: Mapping[str, Path],
     *,
+    schema_version: int | None,
     queue_sizes_by_arm: Mapping[str, int],
+    tenant_counts_by_arm: Mapping[str, int],
 ) -> str | None:
     for relative_path, path in payload_files.items():
         if not relative_path.startswith("explain/") or not relative_path.endswith(".json"):
@@ -205,8 +230,24 @@ def _explain_candidate_cardinality_blocker(
         if not isinstance(value, Mapping):
             continue
         arm_id = value.get("arm_id")
+        selector = value.get("selector")
         candidate_cardinality = value.get("candidate_cardinality")
-        expected = queue_sizes_by_arm.get(arm_id) if isinstance(arm_id, str) else None
+        expected: int | None = None
+        if isinstance(arm_id, str):
+            if schema_version == LEGACY_RELEASE_BUNDLE_SCHEMA_VERSION:
+                expected = queue_sizes_by_arm.get(arm_id)
+            elif schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
+                if not isinstance(selector, str) or value.get(
+                    "candidate_unit"
+                ) != EXPLAIN_CANDIDATE_UNITS.get(selector):
+                    return "postgres_explain_candidate_unit_mismatch"
+                expected = (
+                    tenant_counts_by_arm.get(arm_id)
+                    if selector == "fair"
+                    else queue_sizes_by_arm.get(arm_id)
+                    if selector == "legacy_fifo"
+                    else None
+                )
         if (
             expected is None
             or isinstance(candidate_cardinality, bool)
@@ -215,6 +256,34 @@ def _explain_candidate_cardinality_blocker(
         ):
             return "postgres_explain_candidate_cardinality_mismatch"
     return None
+
+
+def _expected_tenant_count(*, distribution: str | None, queue_size: int) -> int | None:
+    if distribution == "single_tenant":
+        return 1
+    if distribution == "balanced_multi_tenant":
+        return 4 if queue_size >= 4 else None
+    if distribution == "skew_20_to_1":
+        return 2 if queue_size >= 21 else None
+    if distribution == "many_small_tenants":
+        return min(queue_size, 100)
+    return None
+
+
+def _arm_contract(arm_id: str) -> tuple[int, str, int, int] | None:
+    match = _ARM_ID_PATTERN.fullmatch(arm_id)
+    if match is None:
+        return None
+    queue_size = int(match.group("queue_size"))
+    distribution = match.group("distribution")
+    if _expected_tenant_count(distribution=distribution, queue_size=queue_size) is None:
+        return None
+    return (
+        queue_size,
+        distribution,
+        int(match.group("worker_concurrency")),
+        int(match.group("claim_batch_size")),
+    )
 
 
 def assess_release_bundle(
@@ -232,8 +301,13 @@ def assess_release_bundle(
     duplicate_arm_ids: list[str] = []
     unexpected_arm_ids: list[str] = []
     queue_sizes_by_arm: dict[str, int] = {}
+    tenant_counts_by_arm: dict[str, int] = {}
     claim_scope = manifest.get("claim_scope") if manifest is not None else None
     source_commit = manifest.get("source_commit") if manifest is not None else None
+    manifest_schema_version_value = manifest.get("schema_version") if manifest is not None else None
+    manifest_schema_version = (
+        manifest_schema_version_value if type(manifest_schema_version_value) is int else None
+    )
 
     if not isinstance(source_commit, str) or _SOURCE_PATTERN.fullmatch(source_commit) is None:
         blockers.append("invalid_source_commit")
@@ -245,8 +319,19 @@ def assess_release_bundle(
     expected_counts = Counter(expected_arm_ids)
     if not expected_counts or any(count != 1 for count in expected_counts.values()):
         blockers.append("expected_arm_contract_invalid")
+    expected_arm_contracts: dict[str, tuple[int, str, int, int]] = {}
+    if manifest_schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
+        for expected_arm_id in expected_counts:
+            contract = _arm_contract(expected_arm_id)
+            if contract is None:
+                blockers.append("expected_arm_contract_invalid")
+            else:
+                expected_arm_contracts[expected_arm_id] = contract
 
-    rows, csv_blocker = _read_arm_rows(bundle_directory / "arms.csv")
+    rows, csv_blocker = _read_arm_rows(
+        bundle_directory / "arms.csv",
+        schema_version=manifest_schema_version,
+    )
     if csv_blocker is not None:
         blockers.append(csv_blocker)
     else:
@@ -271,7 +356,45 @@ def assess_release_bundle(
             if not arm_id or queue_size is None or queue_size == 0:
                 blockers.append("arms_csv_invalid")
             else:
-                queue_sizes_by_arm[arm_id] = queue_size
+                if manifest_schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
+                    contract = expected_arm_contracts.get(arm_id)
+                    worker_concurrency = _integer(row, "worker_concurrency")
+                    claim_batch_size = _integer(row, "claim_batch_size")
+                    if contract is None:
+                        blockers.append("arm_metadata_mismatch")
+                        expected_queue_size = queue_size
+                        expected_distribution = None
+                    else:
+                        (
+                            expected_queue_size,
+                            expected_distribution,
+                            expected_worker_concurrency,
+                            expected_claim_batch_size,
+                        ) = contract
+                        if (
+                            queue_size != expected_queue_size
+                            or row.get("distribution") != expected_distribution
+                            or worker_concurrency != expected_worker_concurrency
+                            or claim_batch_size != expected_claim_batch_size
+                        ):
+                            blockers.append("arm_metadata_mismatch")
+                    queue_sizes_by_arm[arm_id] = expected_queue_size
+                    tenant_count = _integer(row, "tenant_count")
+                    expected_tenant_count = _expected_tenant_count(
+                        distribution=expected_distribution,
+                        queue_size=expected_queue_size,
+                    )
+                    if (
+                        tenant_count is None
+                        or tenant_count == 0
+                        or tenant_count > expected_queue_size
+                        or tenant_count != expected_tenant_count
+                    ):
+                        blockers.append("arms_tenant_count_invalid")
+                    else:
+                        tenant_counts_by_arm[arm_id] = tenant_count
+                else:
+                    queue_sizes_by_arm[arm_id] = queue_size
             counts = {field: _integer(row, field) for field in _REQUIRED_COUNT_FIELDS}
             if any(value is None for value in counts.values()):
                 blockers.append("arms_csv_invalid")
@@ -313,7 +436,9 @@ def assess_release_bundle(
         blockers.append(explain_blocker)
     candidate_cardinality_blocker = _explain_candidate_cardinality_blocker(
         payload_files,
+        schema_version=manifest_schema_version,
         queue_sizes_by_arm=queue_sizes_by_arm,
+        tenant_counts_by_arm=tenant_counts_by_arm,
     )
     if candidate_cardinality_blocker is not None:
         blockers.append(candidate_cardinality_blocker)
@@ -333,7 +458,7 @@ def assess_release_bundle(
     else:
         status = "FAILED"
     return {
-        "schema_version": RELEASE_BUNDLE_SCHEMA_VERSION,
+        "schema_version": manifest_schema_version,
         "status": status,
         "source_commit": source_commit,
         "expected_source_commit": expected_source_commit,

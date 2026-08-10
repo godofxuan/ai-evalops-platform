@@ -12,6 +12,7 @@ from sqlalchemy import Select, and_, or_, select
 
 from app.domain.enums import JobStatus, RunStatus
 from app.persistence.orm_models import EvaluationJob, EvaluationRun
+from scripts.release_evidence import SUPPORTED_RELEASE_BUNDLE_SCHEMA_VERSIONS
 
 FAIR_CAPACITY_DISTRIBUTIONS: Final = (
     "single_tenant",
@@ -347,9 +348,15 @@ def write_release_manifest(
     *,
     source_commit: str,
     claim_scope: str = "current_release_capacity",
+    schema_version: int = 1,
 ) -> None:
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ValueError("release manifest requires an exact source SHA")
+    if (
+        type(schema_version) is not int
+        or schema_version not in SUPPORTED_RELEASE_BUNDLE_SCHEMA_VERSIONS
+    ):
+        raise ValueError("release manifest requires a supported schema version")
     manifest_path = bundle_directory / "manifest.json"
     if manifest_path.exists() or manifest_path.is_symlink():
         raise FileExistsError(f"refusing to overwrite release manifest: {manifest_path}")
@@ -362,7 +369,7 @@ def write_release_manifest(
     if not payloads:
         raise ValueError("release bundle requires payload files")
     manifest = {
-        "schema_version": 1,
+        "schema_version": schema_version,
         "status": "complete",
         "source_commit": source_commit,
         "claim_scope": claim_scope,

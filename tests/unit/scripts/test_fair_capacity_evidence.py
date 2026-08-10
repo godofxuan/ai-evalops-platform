@@ -479,3 +479,26 @@ def test_release_manifest_binds_payload_set_and_source(tmp_path: Path) -> None:
         "arms.csv",
         "explain/fair.json",
     }
+
+
+def test_release_manifest_can_emit_current_schema_version(tmp_path: Path) -> None:
+    (tmp_path / "payload.json").write_text("{}\n", encoding="utf-8")
+
+    write_release_manifest(tmp_path, source_commit="a" * 40, schema_version=2)
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 2
+
+
+def test_release_manifest_rejects_unsupported_schema_version(tmp_path: Path) -> None:
+    (tmp_path / "payload.json").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="supported schema version"):
+        write_release_manifest(tmp_path, source_commit="a" * 40, schema_version=3)
+
+
+def test_release_manifest_rejects_boolean_schema_version(tmp_path: Path) -> None:
+    (tmp_path / "payload.json").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="supported schema version"):
+        write_release_manifest(tmp_path, source_commit="a" * 40, schema_version=True)
