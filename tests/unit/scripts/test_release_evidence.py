@@ -382,9 +382,7 @@ def test_schema_v2_rejects_ambiguous_raw_plan_cardinality(tmp_path: Path) -> Non
     ambiguous_fair_plan = _fair_plan(1)
     root = ambiguous_fair_plan[0]["Plan"]
     assert isinstance(root, dict)
-    root["Plans"].append(
-        {"Node Type": "WindowAgg", "Actual Rows": 1, "Actual Loops": 1}
-    )
+    root["Plans"].append({"Node Type": "WindowAgg", "Actual Rows": 1, "Actual Loops": 1})
     bundle = _write_bundle(
         tmp_path / "bundle",
         schema_version=2,
@@ -642,10 +640,7 @@ def test_schema_v1_retains_historical_empty_semantics(tmp_path: Path) -> None:
 
 def test_schema_v1_historical_failed_bundle_remains_failed() -> None:
     repository_root = Path(__file__).resolve().parents[3]
-    bundle = (
-        repository_root
-        / "docs/results/release/v0.1.0/targeted-gh-31327388006-1/rep1/bundle"
-    )
+    bundle = repository_root / "docs/results/release/v0.1.0/targeted-gh-31327388006-1/rep1/bundle"
     with (bundle / "arms.csv").open(encoding="utf-8", newline="") as stream:
         arm_ids = tuple(str(row["arm_id"]) for row in csv.DictReader(stream))
 

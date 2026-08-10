@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import json
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -255,7 +256,118 @@ def _explain_candidate_cardinality_blocker(
             or candidate_cardinality != expected
         ):
             return "postgres_explain_candidate_cardinality_mismatch"
+        if schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
+            assert isinstance(selector, str)
+            raw_cardinality, raw_blocker = _raw_plan_candidate_cardinality(
+                value.get("plan"),
+                selector=selector,
+            )
+            if raw_blocker is not None:
+                return raw_blocker
+            if raw_cardinality != candidate_cardinality or raw_cardinality != expected:
+                return "postgres_explain_raw_plan_cardinality_mismatch"
     return None
+
+
+def _postgres_count(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric < 0 or not numeric.is_integer():
+        return None
+    return int(numeric)
+
+
+def _independent_plan_nodes(root: Mapping[str, Any]) -> list[Mapping[str, Any]] | None:
+    """Parse a PostgreSQL plan without sharing producer cardinality code."""
+
+    output: list[Mapping[str, Any]] = []
+    pending: list[Mapping[str, Any]] = [root]
+    while pending:
+        node = pending.pop()
+        output.append(node)
+        children = node.get("Plans", [])
+        if not isinstance(children, list) or not all(
+            isinstance(child, Mapping) for child in children
+        ):
+            return None
+        pending.extend(reversed(children))
+    return output
+
+
+def _fair_raw_candidate_cardinality(
+    nodes: Sequence[Mapping[str, Any]],
+) -> tuple[int | None, str | None]:
+    candidates = [node for node in nodes if node.get("Node Type") == "WindowAgg"]
+    if not candidates:
+        return None, "postgres_explain_raw_plan_candidate_missing"
+    if len(candidates) != 1:
+        return None, "postgres_explain_raw_plan_candidate_ambiguous"
+    candidate = candidates[0]
+    loops = _postgres_count(candidate.get("Actual Loops"))
+    if loops is None or loops != 1:
+        return None, "postgres_explain_raw_plan_candidate_ambiguous"
+    if candidate.get("Run Condition") is None:
+        rows = _postgres_count(candidate.get("Actual Rows"))
+    else:
+        children = candidate.get("Plans")
+        rows = (
+            _postgres_count(children[0].get("Actual Rows"))
+            if isinstance(children, list)
+            and len(children) == 1
+            and isinstance(children[0], Mapping)
+            else None
+        )
+    if rows is None:
+        return None, "postgres_explain_raw_plan_invalid"
+    return rows, None
+
+
+def _legacy_raw_candidate_cardinality(
+    nodes: Sequence[Mapping[str, Any]],
+) -> tuple[int | None, str | None]:
+    visible_job_nodes = [
+        node
+        for node in nodes
+        if node.get("Relation Name") == "evaluation_jobs"
+        and node.get("Node Type") != "Bitmap Index Scan"
+    ]
+    if not visible_job_nodes:
+        return None, "postgres_explain_raw_plan_candidate_missing"
+    if len(visible_job_nodes) != 1:
+        return None, "postgres_explain_raw_plan_candidate_ambiguous"
+    candidate = visible_job_nodes[0]
+    rows = _postgres_count(candidate.get("Actual Rows"))
+    loops = _postgres_count(candidate.get("Actual Loops"))
+    if rows is None or loops is None or loops == 0:
+        return None, "postgres_explain_raw_plan_invalid"
+    # A repeated Seq Scan sees the same full relation on each loop. Other
+    # relation scans partition work by loop in the current PostgreSQL shapes.
+    return rows if candidate.get("Node Type") == "Seq Scan" else rows * loops, None
+
+
+def _raw_plan_candidate_cardinality(
+    raw_plan: object,
+    *,
+    selector: str,
+) -> tuple[int | None, str | None]:
+    if (
+        not isinstance(raw_plan, list)
+        or len(raw_plan) != 1
+        or not isinstance(raw_plan[0], Mapping)
+        or not isinstance(raw_plan[0].get("Plan"), Mapping)
+    ):
+        return None, "postgres_explain_raw_plan_invalid"
+    root = raw_plan[0]["Plan"]
+    assert isinstance(root, Mapping)
+    nodes = _independent_plan_nodes(root)
+    if nodes is None:
+        return None, "postgres_explain_raw_plan_invalid"
+    if selector == "fair":
+        return _fair_raw_candidate_cardinality(nodes)
+    if selector == "legacy_fifo":
+        return _legacy_raw_candidate_cardinality(nodes)
+    return None, "postgres_explain_raw_plan_invalid"
 
 
 def _expected_tenant_count(*, distribution: str | None, queue_size: int) -> int | None:
