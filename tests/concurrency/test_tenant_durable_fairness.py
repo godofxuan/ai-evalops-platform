@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.core.config import Settings
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
@@ -32,6 +32,7 @@ from app.persistence.orm_models import (
     EvaluationRun,
     JobAttempt,
     ProgressEventOutbox,
+    SchedulerCoordination,
     Tenant,
     TenantSchedulerState,
 )
@@ -530,4 +531,100 @@ async def test_locked_tenant_permit_does_not_block_other_tenant_progress() -> No
                 await paused_task
         await _delete_fairness_fixture(session_factory, second)
         await _delete_fairness_fixture(session_factory, first)
+        await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_locked_eligible_job_does_not_mark_scheduler_permit_empty() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
+    session_factory = create_session_factory(engine)
+    now = datetime(2026, 8, 10, 10, 30, tzinfo=UTC)
+    fixture = await _create_fairness_fixture(
+        session_factory,
+        created_at=now - timedelta(minutes=1),
+        job_count=1,
+    )
+    claimer = SQLAlchemyJobClaimer(
+        session_factory,
+        lease_policy=LeasePolicy(timedelta(seconds=30)),
+        clock=FixedClock(now),
+    )
+    try:
+        assert await claimer._ensure_active_scheduler_round(eligible_at=now)
+
+        async with session_factory() as locking_session, locking_session.begin():
+            locked_job = await locking_session.scalar(
+                select(EvaluationJob)
+                .where(EvaluationJob.id == fixture.job_ids[0])
+                .with_for_update(of=EvaluationJob)
+            )
+            assert locked_job is not None
+
+            async with session_factory() as inspection_session:
+                state_before = await inspection_session.get(
+                    TenantSchedulerState,
+                    fixture.tenant_id,
+                )
+                coordination_before = await inspection_session.get(
+                    SchedulerCoordination,
+                    1,
+                )
+                assert state_before is not None
+                assert coordination_before is not None
+                permit_before = state_before.status
+                generation_before = coordination_before.active_generation
+
+            skipped_claims = await wait_for_lock_sensitive(
+                claimer._claim_active_scheduler_permit(
+                    worker_id="locked-job-fast-path",
+                    eligible_at=now,
+                    skip_locked=True,
+                ),
+                operation="Candidate 3 locked eligible Job fast-path miss",
+            )
+
+            async with session_factory() as inspection_session:
+                state_after = await inspection_session.get(
+                    TenantSchedulerState,
+                    fixture.tenant_id,
+                )
+                coordination_after = await inspection_session.get(
+                    SchedulerCoordination,
+                    1,
+                )
+                job_after = await inspection_session.get(
+                    EvaluationJob,
+                    fixture.job_ids[0],
+                )
+                assert state_after is not None
+                assert coordination_after is not None
+                assert job_after is not None
+                permit_after = state_after.status
+                generation_after = coordination_after.active_generation
+                job_status_after = job_after.status
+
+        final_claims = await wait_for_lock_sensitive(
+            claimer.claim(worker_id="locked-job-recovery", limit=1),
+            operation="Candidate 3 locked eligible Job recovery",
+        )
+
+        assert skipped_claims == ()
+        assert permit_before == "pending"
+        assert permit_after != "empty", (
+            "LOCKED_ELIGIBLE_JOB_FALSE_EMPTY_RED: a SKIP LOCKED miss permanently marked "
+            f"the current-generation permit {permit_after!r}"
+        )
+        assert generation_after == generation_before
+        assert job_status_after is JobStatus.QUEUED
+        assert [claim.job_id for claim in final_claims] == [fixture.job_ids[0]]
+    finally:
+        await _delete_fairness_fixture(session_factory, fixture)
         await engine.dispose()
