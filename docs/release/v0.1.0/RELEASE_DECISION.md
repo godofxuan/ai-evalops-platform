@@ -24,6 +24,7 @@ eight-Worker throughput divided by four-Worker throughput was below the required
 | attribution instrumentation overhead | **INSTRUMENTATION_TOO_INTRUSIVE** | run `31400658653`; absolute claim-p95 change 11.3194% > 10% |
 | formal H1/H2/H3 attribution | NOT_RUN_STOPPED | overhead prerequisite failed; all hypotheses INCONCLUSIVE |
 | low-overhead requalification | **INSTRUMENTATION_TOO_INTRUSIVE** | run `31407782154`; counterbalanced exact-arm claim-p95 change 13.4906% > 10% |
+| passive PostgreSQL measurement qualification | **MEASUREMENT_SYSTEM_INVALID** | run `31421039618`; throughput 0.4292% PASS, absolute claim-p95 28.0396% FAIL |
 | current 1k/10k/100k capacity | NOT_RUN_STOPPED | targeted performance prerequisite failed |
 | current same-runner A/B/C | NOT_RUN_STOPPED | targeted performance prerequisite failed |
 | current A-I x3 fault | NOT_RUN_STOPPED | targeted performance prerequisite failed |
@@ -98,3 +99,22 @@ independent zero-mismatch audit.
 Formal attribution and H1/H2/H3 assessment were again skipped. The second preregistration forbids an
 automatic third observer redesign. This strengthens the stop decision; it does not alter the formal
 targeted `NEGATIVE_SCALING` input or authorize Candidate 4.
+
+## Passive PostgreSQL measurement-system qualification
+
+The separately preregistered final measurement candidate moved collection out of the claim
+transaction into a separate process and read-only PostgreSQL connection. Workflow `31421039618`
+executed exactly four OFF and four ON observations in the frozen counterbalanced order. All eight
+exact-arm bundles were `VERIFIED`; all correctness, false-empty, telemetry-error, dropped-sample and
+overflow counters were zero; the 151-file root manifest independently had zero file-set, size or
+SHA-256 mismatches.
+
+OFF/ON throughput medians were 29.918848 and 29.790450 Jobs/s, an absolute change of 0.4292%, which
+passed the 5% gate. OFF/ON claim-p95 medians were 708.689593 and 509.975702 ms, a -28.0396% relative
+change whose absolute magnitude exceeded the unchanged 10% gate. The faster ON direction is still
+measurement perturbation under the preregistered direction-independent rule.
+
+The final measurement verdict is `MEASUREMENT_SYSTEM_INVALID`, and the terminal decision is
+`PERFORMANCE_ATTRIBUTION_STOPPED_BY_MEASUREMENT_VALIDITY`. H1/H2/H3 were not run. No fourth observer,
+additional repetition, threshold adjustment, scheduler candidate or formal attribution run is
+authorized. See `measurement_system_v2/04_RESULTS.md` for the strict 18-section report.
