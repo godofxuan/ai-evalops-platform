@@ -1,54 +1,46 @@
 # Candidate 3 targeted qualification
 
-Status: `FAILED`; stop condition reached
+Status: `NEGATIVE_SCALING`; complete evidence preserved; stop condition reached
 
-## Source and artifact identity
+## Identity
 
 | Field | Value |
 |---|---|
-| Candidate 3 source | `02f5e680e71d05c76c145da6895122a2cf04ba14` |
-| workflow run | `31327388006` |
-| workflow result | Failure, 1m31s |
-| evidence bot commit | `90a4e03ae75d0ae391f16f32934c144430de196d` |
-| artifact | `targeted-gh-31327388006-1`, 404 KB |
-| artifact digest | `sha256:b9db8fc934b3e736c5a30868833218cc470ab011fcfa24f12dc4892cdfe47a1a` |
-| queue/distributions | 1000; single, balanced, 20:1, many-small |
-| Workers/batch/repetitions | 1/2/4/8; batch 1; 4 planned |
+| scheduler source | `02f5e680e71d05c76c145da6895122a2cf04ba14` |
+| schema-v2 qualification source | `91acdba9f5b5f1a84fb03640382c9e4871364afe` |
+| ordinary CI | push `31351821014`, PR `31351825433`, both SUCCESS |
+| targeted workflow | `31352270523` |
+| evidence commit | `15bab58150385c9a39778d64a3e4163c10892ecc` |
+| artifact | `targeted-gh-31352270523-1`, 1,395,629 bytes |
+| digest | `sha256:6b5f68821b90ee6bdbb36d66aba0087864ca2048ac356ec3cb701e378d0c120f` |
+| protocol | queue 1000; four distributions; Workers 1/2/4/8; batch 1; four repetitions |
 
-## What actually completed
+## Completed evidence
 
-Repetition 1 completed 16/16 expected arms. Every raw arm assessment was `VERIFIED`; aggregate correctness was
-1,600 submitted, 1,600 unique terminal, zero lost, duplicate durable result, orphan, attempt mismatch,
-empty-while-eligible, stale success/failure accepted and illegal transition.
+All four repetition commands succeeded. Every rep bundle is schema 2 and independently `VERIFIED`; each contains
+16/16 arms and 1,600/1,600 unique terminal Jobs. Across four reps, all 64 arms completed and every correctness/fencing
+counter remained zero. The frozen 20:1 application receipt positions were `2/2/2/2` in every repetition.
 
-For 20:1, frozen application receipt positions at w1/w2/w4/w8 were `2/2/2/2`. The new database-linearized sequence
-was complete and reported the same positions. This is useful diagnostic evidence that Candidate 3 addressed the
-Candidate 2 overtaking schedule in the one executed repetition.
+The selector-unit contract is complete: 256 fair EXPLAIN records count eligible Tenant round members with expected
+cardinalities 1/4/2/100, and 256 legacy records count 1000 eligible Jobs. The old cardinality mismatch is absent.
 
-## Why the gate failed
+## Performance decision
 
-The repetition assessor returned only:
+| Distribution | w4 median Jobs/s | w8 median Jobs/s | Ratio | Status |
+|---|---:|---:|---:|---|
+| single Tenant | 24.190086 | 18.929004 | 0.782511 | NEGATIVE_SCALING |
+| balanced | 44.752825 | 34.584871 | 0.772797 | NEGATIVE_SCALING |
+| 20:1 | 32.700255 | 26.036396 | 0.796214 | NEGATIVE_SCALING |
+| many-small | 42.245796 | 42.839905 | 1.014063 | VERIFIED |
 
-`postgres_explain_candidate_cardinality_mismatch`
-
-All 64 Candidate 3 `fair` EXPLAIN summaries report scheduler-round membership cardinality: single `1`, balanced
-`4`, 20:1 `2`, many-small `100`. The frozen evidence checker still compares every selector's candidate cardinality
-with Job queue size `1000`. The 64 legacy FIFO summaries remain `1000`, so exactly 64/128 summaries mismatch.
-
-This is not evidence that the Job state machine failed, and it is not permission to alter the assessor after seeing
-RED and continue the same release attempt. The preregistered protocol says `targeted fail -> STOP`. Top-level
-assessment consequently records `status=FAILED`, `repetition_count=0`, `repetition_count_must_equal_4`.
-
-## Limited performance observations
-
-Rep1 4→8 ratios: single `0.678104`, balanced `0.785456`, 20:1 `0.749962`, many-small `0.954809`. Only many-small
-meets the configured 0.95 floor in this one observation. Because the repetition bundle failed and repetitions 2–4
-did not run, none is a formal targeted-performance result.
+The contract requires all four ratios to be at least 0.95. The assessment step therefore returned nonzero, while
+artifact upload, evidence commit and cleanup still succeeded.
 
 ## Decision
 
-- Frozen gate was not redefined.
-- No failed arm or EXPLAIN was deleted.
-- No threshold, workload, Worker, batch, seed, retry, pool, sleep or lease parameter changed.
-- No Candidate 4 or targeted retry was started.
-- Capacity, same-runner, fault and formal stages are `NOT_RUN` by stop rule.
+No failed arm or result was deleted. No threshold, workload, Worker, batch, seed, retry, pool, sleep or lease
+parameter changed. No Candidate 4 or immediate retry is authorized. Capacity, same-runner, fault and formal are
+`NOT_RUN_STOPPED`.
+
+Historical run `31327388006` remains the immutable schema-v1 evidence-contract failure and is not the current
+performance verdict.

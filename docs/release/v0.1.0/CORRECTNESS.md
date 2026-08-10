@@ -1,29 +1,24 @@
 # v0.1.0 RC correctness
 
-Candidate 3 scheduler/state/fencing correctness is `PASS`; complete release qualification is separately `FAILED`.
+Candidate 3 scheduler/state/fencing correctness and the frozen targeted fairness workload are `PASS`; complete
+release qualification is separately `FAILED` by targeted performance scaling.
 
-## Current Candidate 3 evidence
+## Current evidence
 
-- source `02f5e68`, push CI `31327012832` and PR CI `31327016117` both passed real PostgreSQL, Redis, migration and
-  Compose paths;
-- the unchanged 20-repetition 10W/100J `limit=1` contract completed 2,000 unique Job claims and Attempts with no
-  first-wave empty return;
-- deterministic Candidate 2 overtaking RED used Barrier/Event coordination and observed secondary receipt position
-  `8`; Candidate 3 passed the same application receipt oracle and database sequence oracle within position `2`;
-- priority preservation, first-wave uniqueness, complete drain, cross-Tenant progress, permit rollback/recovery,
-  false-empty, lock/deadlock and result/lease/version fencing regressions passed;
-- targeted rep1 ran 16 arms and reconciled 1,600/1,600 terminal Jobs with zero lost, duplicate durable result,
-  orphan, attempt mismatch, stale success/failure accepted, illegal transition and empty-while-eligible counts.
+- source `91acdba` passed push CI `31351821014` and PR CI `31351825433` on real PostgreSQL/Redis/Compose;
+- unchanged ordinary 20-repetition 10W/100J `limit=1` correctness remains green;
+- deterministic Candidate 2 RED position 8 remains green for Candidate 3 within position 2;
+- priority, uniqueness, full drain, cross-Tenant progress, permit rollback/recovery, false-empty, deadlock and
+  result/lease/version fencing regressions passed;
+- targeted run `31352270523` completed four verified schema-v2 repetitions;
+- 64/64 arms reconciled 6,400/6,400 unique terminal Jobs;
+- all lost, duplicate durable result, orphan, Attempt mismatch, stale-success accepted, stale-failure accepted,
+  illegal transition and empty-while-eligible counters were zero;
+- each repetition's 20:1 w1/w2/w4/w8 positions were `2/2/2/2`.
 
-`CORRECTNESS_PASS` means the completed correctness obligations are green. It does not override the targeted evidence
-failure, complete four-repetition fairness requirement, missing current capacity/fault/formal bundles or the release
-decision.
+These facts support a bounded exact-workload correctness/fairness claim. They do not override the negative 4-to-8
+Worker scaling verdict, establish universal fairness, prove exactly-once processing or certify production
+reliability.
 
-## Historical fault boundary
-
-Run `31275450353` remains `VERIFIED_HISTORICAL`: A–I ×3, 27/27 records, zero lost/duplicate/orphan/invariant
-failures, stale success attempted/accepted 3/0 and stale failure 3/0. Candidate 3 fault qualification is `NOT_RUN`, so
-these values cannot be promoted as current.
-
-No exactly-once, unlimited fault tolerance, universal deadlock freedom or production reliability certification is
-claimed.
+Historical A-I x3 fault run `31275450353` remains `VERIFIED_HISTORICAL`; Candidate 3 current fault qualification is
+`NOT_RUN_STOPPED` because the targeted performance prerequisite failed.

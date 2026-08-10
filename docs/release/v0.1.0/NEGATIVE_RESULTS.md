@@ -4,37 +4,32 @@ Failed evidence is retained and never rewritten as success.
 
 ## Current release blocker
 
-Targeted workflow `31327388006`, source `02f5e68`, failed the source-bound release-bundle check
-`postgres_explain_candidate_cardinality_mismatch`. Candidate 3 round-membership EXPLAIN returns active Tenant
-cardinality, but the unchanged assessor expects Job queue cardinality. Sixty-four fair summaries disagreed with the
-queue size; repetitions 2–4 were not run. The release is `NOT_READY` because targeted evidence is incomplete/failed,
-not because ordinary correctness failed.
+Targeted run `31352270523`, source `91acdba`, completed all four repetitions but returned
+`NEGATIVE_SCALING`. Median w8/w4 Jobs/s ratios were single `0.782511`, balanced `0.772797`, 20:1 `0.796214` and
+many-small `1.014063`; the frozen contract requires every distribution to be at least 0.95. The first three are
+formal current negative results, not limited diagnostics.
 
-Rep1 also showed diagnostic 4→8 ratios below the 0.95 self-scaling floor in single (`0.678104`), balanced
-(`0.785456`) and 20:1 (`0.749962`) distributions. Because no repetition verified and four repetitions did not run,
-these are `LIMITED` negative observations, not a formal performance verdict.
+Correctness and fairness were clean: 64/64 arms, 6,400/6,400 terminal, protected counters zero and every 20:1
+position vector `2/2/2/2`. This separation matters: correctness/fairness success does not cancel a performance gate.
 
-## Preserved Candidate 2/Candidate 3 negatives
+## Preserved evidence-contract negative
 
-- Candidate 2 deterministic RED: early committed secondary reservation was overtaken; its application receipt was
-  position `8` after six later primary claims.
-- Candidate 2 targeted `31319556885`: 20:1/w8 secondary receipt position `4 > 2`; only 12 arms of rep1 completed.
-- old runs `31297535370`/`31297538171`: six-hour cancellation from an incorrect long external Tenant-lock test
-  cycle, motivating fail-fast diagnostics.
-- run `31317179594`: one 10W/100J first wave returned 9/10 while eligible work remained, proving the fixed-budget
-  false-empty path.
-- targeted `31318923861`: real Run→Job / Job→Run deadlock, later removed with a key-preserving Run guard.
-- Candidate 3 targeted `31327388006`: all 16 rep1 arms were correctness-clean and 20:1 positions were observed at 2,
-  but the evidence contract failed and no formal PASS may be inferred.
+Historical run `31327388006`, source `02f5e68`, remains failed with
+`postgres_explain_candidate_cardinality_mismatch` after one repetition. Schema v2 was preregistered and implemented
+without rewriting that bundle. New run `31352270523` closed the mismatch and verified all four bundles, proving the
+current blocker is genuine scaling rather than the old evidence incompatibility.
 
-## Historical negatives
+## Other preserved negatives
 
-Historical `-63.44%`, 100k `41s` p95, `504` retries and `0.628 Jobs/s`, failed manifests, oversized logs and
-non-fast-forward evidence-bot commits remain in their immutable bundles. They explain the engineering path but are
-not current resume metrics.
+- Candidate 2 deterministic RED: secondary application receipt position 8;
+- Candidate 2 targeted `31319556885`: 20:1/w8 position `4 > 2`;
+- targeted `31318923861`: real Run-to-Job / Job-to-Run deadlock, later removed;
+- run `31317179594`: false empty under eligible same-Tenant work;
+- historical broken-fair formal: severe scaling regression;
+- historical 100k: approximately 41s claim p95, 504 retries and 0.628 Jobs/s.
 
 ## Stop rule
 
-Candidate 3 was the only authorized new production design. Because targeted qualification failed, no Candidate 4,
-assessor relaxation, threshold/workload/Worker/seed change or parameter gamble is allowed in this stage. Current
-capacity, same-runner, fault and formal runs are `NOT_RUN`.
+Targeted performance failure activates the frozen stop. No Candidate 4, threshold/workload/Worker/seed change,
+parameter gamble or immediate targeted retry is allowed in this stage. Current capacity, same-runner, fault and
+formal are `NOT_RUN_STOPPED`.

@@ -1,24 +1,24 @@
 # v0.1.0 RC environment and reproducibility
 
-The local Windows host has no Docker, PostgreSQL client/server or reachable port 5432. Local PostgreSQL tests were
-therefore collected and explicitly skipped; they were never reported as passed. Local Candidate 3 checks were Ruff
-format (369 files), Ruff lint, MyPy (136 source files) and a 100-test high-risk subset. Two full non-integration
-wrapper attempts timed out at approximately 124s and 304s without an assertion report and are recorded as
-environment-limited, not PASS.
+The local Windows environment was used for deterministic bundle replay, Ruff, format, MyPy and unit tests. The
+final local evidence-contract state passed 65 focused evidence tests and 633 complete unit tests. Pytest emitted one
+warning because `.pytest_cache` was not writable; assertions and exit status were successful. Real PostgreSQL
+qualification remained remote and was not substituted with local skips.
 
-Authoritative Candidate 3 execution used GitHub-hosted Linux with real PostgreSQL/Redis/Compose:
+Authoritative schema-v2 execution used GitHub-hosted Linux with PostgreSQL/Redis/Compose:
 
 | Protocol | Run | Source | Result |
 |---|---:|---|---|
-| ordinary push CI | `31327012832` | `02f5e68…` | PASS |
-| ordinary PR CI | `31327016117` | `02f5e68…` | PASS |
-| targeted qualification | `31327388006` | `02f5e68…` | FAILED evidence contract |
+| ordinary push CI | `31351821014` | `91acdba...` | PASS |
+| ordinary PR CI | `31351825433` | `91acdba...` | PASS |
+| targeted repetition execution | step in `31352270523` | `91acdba...` | SUCCESS, 4/4 repetitions |
+| targeted repeated assessment | `31352270523` | `91acdba...` | NEGATIVE_SCALING |
+| artifact upload/evidence commit | `31352270523` | `15bab58...` | SUCCESS |
 
-The targeted runner record contains Linux 6.17.0-1020-azure, Python 3.12.13, Docker 28.0.4 and Compose 2.38.2.
-Its directory preserves `runner.txt`, `source.txt`, `compose-ps.txt`, bounded `compose.log`, raw arms, 128 raw
-EXPLAIN summaries, manifests and assessment files. The GitHub artifact `targeted-gh-31327388006-1` has digest
-`sha256:b9db8fc934b3e736c5a30868833218cc470ab011fcfa24f12dc4892cdfe47a1a`; Git commit `90a4e03`
-preserves the same evidence in the branch.
+The preserved directory contains runner/source/Compose diagnostics, 64 raw arms, 512 raw EXPLAIN summaries, four
+schema-v2 bundle manifests, four verified rep assessments, top-level assessment and a sealed top-level manifest.
+Artifact `targeted-gh-31352270523-1` is 1,395,629 bytes with digest
+`sha256:6b5f68821b90ee6bdbb36d66aba0087864ca2048ac356ec3cb701e378d0c120f`.
 
-Historical capacity/formal/fault bundles remain source-bound to `9987a28`, `6acf72c` and `70a9b2b`. Their runner
-and protocol records are preserved but cannot substitute for Candidate 3 downstream qualification.
+Historical schema-v1 run `31327388006` remains unchanged and failed. Historical capacity/formal/fault bundles
+remain bound to their original sources and cannot substitute for current downstream qualification.

@@ -2,48 +2,45 @@
 
 Updated: 2026-08-10<br>
 Branch: `codex/evidence-gate-1`<br>
-Candidate 3 source: `02f5e680e71d05c76c145da6895122a2cf04ba14`<br>
-Evidence commit before docs closure: `90a4e03ae75d0ae391f16f32934c144430de196d`<br>
-Release: `NOT_READY_TARGETED_EVIDENCE`
+Scheduler source: `02f5e680e71d05c76c145da6895122a2cf04ba14`<br>
+Qualification source: `91acdba9f5b5f1a84fb03640382c9e4871364afe`<br>
+Evidence commit: `15bab58150385c9a39778d64a3e4163c10892ecc`<br>
+Release: `NOT_READY_TARGETED_NEGATIVE_SCALING`
 
 ## Required teaching narrative
 
 1. Candidate 2 fair reservation did not imply fair durable application receipt.
 2. Real PostgreSQL Barrier/Event RED forced an early B reservation to receipt position 8.
-3. F1–F8 froze priority, bounded 20:1 fairness, no starvation, uniqueness, liveness, fencing, crash safety and bounded
-   coordination before Candidate 3 code.
-4. Candidate 3 is the only authorized redesign: durable fair rounds, singleton generation/sequence and reusable
-   per-Tenant pending/consumed/empty state.
-5. Ordinary PostgreSQL CI passed deterministic fairness, 20×10W/100J, priority, crash, progress, deadlock and fencing.
-6. Targeted rep1 completed 16 correctness-clean arms and observed 20:1 positions `2/2/2/2` in both application and DB
-   order.
-7. The formal targeted bundle still failed because Candidate 3 fair EXPLAIN counts Tenant round members while the
-   assessor requires queue Jobs; 64/128 EXPLAIN summaries mismatched.
-8. The team followed `targeted fail -> STOP`: no Candidate 4, assessor relaxation/retry or downstream gates.
+3. Candidate 3 introduced durable fair rounds, singleton generation/sequence and reusable per-Tenant state.
+4. Ordinary correctness passed priority, concurrency, crash, progress, deadlock and fencing obligations.
+5. Historical targeted run `31327388006` completed one correctness-clean repetition but failed because schema v1
+   confused Tenant-member and Job cardinalities.
+6. The next stage preregistered schema v2 before implementation, wrote RED negatives and preserved the old bundle.
+7. Adversarial review added boolean-version and arm-metadata-spoofing protections instead of trusting producer data.
+8. New targeted run `31352270523` completed four verified rep bundles, 64 arms and 6,400 terminal Jobs; every 20:1
+   vector was `2/2/2/2`.
+9. Completing the evidence chain exposed the real performance result: three distributions failed the 0.95
+   four-to-eight Worker scaling floor.
+10. The team kept orthogonal gates separate and followed `targeted fail -> STOP` without Candidate 4 or tuning.
 
 ## Source map
 
-- invariant: `docs/release/v0.1.0/fairness_redesign/01_FAIRNESS_INVARIANT.md`
-- Candidate 2 trace: `02_CANDIDATE2_OVERTAKE_TRACE.md`
-- design/state machine: `03_SCHEDULER_REDESIGN_PROPOSAL.md`, `04_CANDIDATE3_STATE_MACHINE.md`
-- TDD/CI: `05_RED_GREEN.md`
-- targeted failure: `06_TARGETED.md`
-- code: `app/jobs/claiming.py`, `app/db/models.py`, migration `20260810_0018_fair_scheduler_rounds.py`
-- tests: `tests/concurrency/test_tenant_durable_fairness.py`, `tests/unit/jobs/test_fair_round_claiming.py`
-- immutable evidence: `docs/results/release/v0.1.0/targeted-gh-31327388006-1/`
-
-## How to teach PART 41–54
-
-The main teaching handoff now contains PART 41–54. Every part has the required concept, project problem, source,
-RED, experiment, failure history, final method, trade-off, interview prompt and exercises. Do not skip PART 48
-(metric preregistration), PART 52 (orthogonal gates), PART 53 (source binding) or PART 54 (historical boundary); those
-chapters explain why a technically promising rep1 still cannot become a release claim.
+- fairness invariant/state machine: `docs/release/v0.1.0/fairness_redesign/01_FAIRNESS_INVARIANT.md` through
+  `05_RED_GREEN.md`;
+- evidence schema reasoning: `docs/release/v0.1.0/evidence_contract_v2/`;
+- current targeted decision: `evidence_contract_v2/03_REMOTE_TARGETED_DECISION.md` and
+  `fairness_redesign/06_TARGETED.md`;
+- immutable current evidence: `docs/results/release/v0.1.0/targeted-gh-31352270523-1/`;
+- immutable old failure: `docs/results/release/v0.1.0/targeted-gh-31327388006-1/`;
+- code: `app/jobs/claiming.py`, `scripts/release_evidence.py`, `scripts/run_fair_capacity_test.py`;
+- tests: `tests/concurrency/test_tenant_durable_fairness.py`,
+  `tests/unit/scripts/test_release_evidence.py`.
 
 ## Teaching red lines
 
-- Never say Candidate 3 fully passed fairness or performance.
-- Never replace the frozen application receipt with DB sequence after seeing failure.
-- Never call the evidence-cardinality mismatch harmless and silently rerun.
-- Never promote historical capacity/fault/formal to Candidate 3.
-- Keep the positive teaching outcome: disciplined concurrency reasoning, deterministic RED, bounded design,
-  source-bound evidence and an honest stop decision.
+- Do not say the current blocker is still EXPLAIN cardinality; schema v2 closed it.
+- Do not call Candidate 3 universally fair; the pass is for the frozen workload.
+- Do not hide the negative scaling result behind correctness/fairness success.
+- Do not promote historical capacity/fault/formal values to current.
+- Do not describe the workflow FAILURE as infrastructure failure; all four repetitions and evidence preservation
+  succeeded, while the assessment intentionally returned nonzero.

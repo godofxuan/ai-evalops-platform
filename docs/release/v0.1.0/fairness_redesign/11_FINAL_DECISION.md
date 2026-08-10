@@ -1,15 +1,15 @@
 # Candidate 3 final release decision
 
-Status: `NOT_READY_TARGETED_EVIDENCE`; scheduler development stopped
+Status: `NOT_READY_TARGETED_NEGATIVE_SCALING`; scheduler development stopped
 
-Candidate 3 is the one authorized bounded redesign. Its deterministic fairness RED, priority and ordinary
-PostgreSQL correctness obligations passed at source `02f5e68`, but targeted workflow `31327388006` failed the frozen
-release-bundle evidence contract after one diagnostic repetition. Four repetitions, capacity, same-runner, current
-fault and formal scaling are incomplete or `NOT_RUN`.
+Candidate 3 is the one authorized bounded redesign. Its correctness and frozen targeted fairness workload passed.
+The preregistered schema-v2 repair closed the prior EXPLAIN unit mismatch, and targeted run `31352270523` completed
+four verified repetitions, 64 arms and 6,400 terminal Jobs.
 
-PR #1 remains Draft. There is no merge, tag or GitHub Release. No Candidate 4, parameter tuning, threshold/workload
-change or gate redefinition is allowed in this stage.
+Release is still rejected because single, balanced and 20:1 median 4-to-8 Worker throughput ratios are
+`0.782511`, `0.772797` and `0.796214`, below the required 0.95. Many-small passed at `1.014063`, but the gate requires
+every distribution.
 
-The current blocker is precise: Candidate 3's round-membership EXPLAIN cardinality no longer matches the frozen
-Job-queue-cardinality evidence contract, so targeted evidence cannot verify. The one executed repetition's 20:1
-positions `2/2/2/2` are retained as `LIMITED`, not promoted to a complete fairness claim.
+PR #1 remains Draft. There is no merge, tag or GitHub Release. Capacity, same-runner, current fault and formal
+scaling are `NOT_RUN_STOPPED`. No Candidate 4, parameter tuning, threshold/workload change or gate redefinition is
+authorized in this stage.

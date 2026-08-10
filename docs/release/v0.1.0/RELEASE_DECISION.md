@@ -1,50 +1,56 @@
 # v0.1.0 release decision
 
-## Decision: NOT_READY
+## Decision: NOT_READY_TARGETED_NEGATIVE_SCALING
 
-截至 2026-08-10，PR #1 必须保持 Draft；不得 merge，不得创建 `v0.1.0` tag 或 GitHub Release。
+As of 2026-08-10, PR #1 must remain Draft. Do not merge it and do not create a `v0.1.0` tag or GitHub Release.
 
-Candidate 3 的普通 CI 和预注册 scheduler correctness 已通过，但 source-bound targeted workflow
-`31327388006` 失败。第 1 次 repetition 的 16/16 workload/worker arms 均完成并各自通过 correctness，
-20:1 的 application receipt 与数据库 claim sequence 均观察到 secondary position `2/2/2/2`；然而
-release-bundle 校验发现 64/128 个 `fair` EXPLAIN 摘要的 `candidate_cardinality` 与冻结的 queue-size
-合同不一致，正式 blocker 为 `postgres_explain_candidate_cardinality_mismatch`。因此 4 次 repetitions
-没有完成，不能宣称 targeted fairness 或 performance 正式通过。
+Candidate 3 scheduler correctness and the repaired schema-v2 evidence contract both passed. Exact-source targeted
+run `31352270523` completed four repetitions, 64/64 arms and 6,400/6,400 unique terminal Jobs with all four 20:1
+position vectors equal to `2/2/2/2`. The overall targeted result is nevertheless `NEGATIVE_SCALING`: median
+eight-Worker throughput divided by four-Worker throughput was below the required 0.95 floor for single Tenant
+(`0.782511`), balanced (`0.772797`) and 20:1 (`0.796214`). Many-small passed at `1.014063`.
 
 | Gate | Current result | Evidence |
 |---|---|---|
-| ordinary CI | PASS | source `02f5e68`; push `31327012832`; PR `31327016117` |
-| scheduler correctness | PASS | priority、20×10W/100J、uniqueness、full drain、permit crash、cross-Tenant progress、fencing、deadlock regressions |
-| frozen 20:1 fairness | INCOMPLETE | rep1 observed `2/2/2/2`, but required four-repetition targeted bundle did not verify |
-| targeted qualification | **FAILED** | `31327388006`; blocker `postgres_explain_candidate_cardinality_mismatch` |
-| targeted performance | INCOMPLETE / NOT_ESTABLISHED | only rep1 exists; 4→8 ratios are diagnostic only |
-| current 1k/10k/100k capacity | NOT_RUN | stopped after targeted failure |
-| current same-runner A/B/C | NOT_RUN | stopped after targeted failure |
-| current A–I ×3 fault | NOT_RUN | stopped after targeted failure |
-| current formal 32-arm | NOT_RUN | stopped after targeted failure |
-| release manifest | INCOMPLETE FOR RELEASE | targeted failed; downstream bundles do not exist |
+| ordinary CI | PASS | source `91acdba`; push `31351821014`; PR `31351825433` |
+| scheduler correctness | PASS | priority, 20x10W/100J, uniqueness, drain, crash, progress, fencing, deadlock regressions |
+| schema-v2 evidence contract | PASS | 4/4 manifest-bound rep bundles VERIFIED; selector units and cardinalities correct |
+| frozen 20:1 targeted fairness | PASS FOR FROZEN WORKLOAD | four repetitions, every w1/w2/w4/w8 vector `2/2/2/2` |
+| targeted correctness | PASS | 64/64 arms; 6,400/6,400 terminal; all protected counters zero |
+| targeted self-scaling | **NEGATIVE_SCALING** | three required distributions below 0.95 |
+| targeted workflow | FAILED BY DESIGN | run `31352270523`; assessment returned nonzero for negative scaling |
+| current 1k/10k/100k capacity | NOT_RUN_STOPPED | targeted performance prerequisite failed |
+| current same-runner A/B/C | NOT_RUN_STOPPED | targeted performance prerequisite failed |
+| current A-I x3 fault | NOT_RUN_STOPPED | targeted performance prerequisite failed |
+| current formal 32-arm | NOT_RUN_STOPPED | targeted performance prerequisite failed |
+| release | **NOT_READY** | performance gate failed; downstream release evidence intentionally absent |
 
-## Candidate 3 achieved scope
+## Evidence identity
 
-- Replaced Candidate 2's separable reservation/Phase-B ordering with durable fair rounds backed by a singleton
-  coordination row and reusable per-Tenant scheduler state.
-- A round cannot advance while an equal-priority Tenant permit remains pending; Job/Attempt/Audit/Outbox writes and
-  permit consumption commit in one short PostgreSQL transaction.
-- `JobAttempt.scheduler_claim_sequence` adds a database-linearized diagnostic without redefining the frozen
-  application-visible receipt gate.
-- The deterministic Candidate 2 RED (secondary receipt position `8`) becomes GREEN for Candidate 3, and ordinary
-  PostgreSQL CI preserves priority, uniqueness, liveness, crash rollback/recovery and fencing.
-- No Worker execution, evaluator, result, reaper, API, lease duration, retry budget, workload, Worker count or
-  fairness threshold was changed to obtain the result.
+- Candidate 3 scheduler source: `02f5e680e71d05c76c145da6895122a2cf04ba14`;
+- schema-v2 qualification source: `91acdba9f5b5f1a84fb03640382c9e4871364afe`;
+- workflow: `31352270523`;
+- evidence commit: `15bab58150385c9a39778d64a3e4163c10892ecc`;
+- artifact: `targeted-gh-31352270523-1`, 1,395,629 bytes;
+- artifact digest: `sha256:6b5f68821b90ee6bdbb36d66aba0087864ca2048ac356ec3cb701e378d0c120f`.
 
-## Why qualification still stops
+Source `91acdba` changes only evidence generation/assessment and documentation on top of Candidate 3. No scheduler,
+Worker, migration, threshold, workload, repetition, seed, batch, retry, pool, sleep or lease parameter changed.
 
-The targeted assessor was preregistered to fail closed. Candidate 3 changed the fair EXPLAIN query from a Job-ranked
-candidate set to scheduler-round membership; the saved fair summaries therefore report active Tenant cardinality
-(`1`, `2`, `4` or `100`) while the old release contract still requires queue cardinality `1000`. All 64 fair
-summaries mismatch; all 64 legacy summaries retain `1000`. This is a real evidence-contract incompatibility, not a
-license to discard the gate or reinterpret an incomplete run as PASS.
+## Why the prior blocker is closed but release still fails
 
-Section 58/62 of the frozen execution protocol requires `targeted fail -> STOP`. No Candidate 4, threshold change,
-workload change, parameter tuning or immediate retry is permitted. Historical capacity/fault/formal bundles remain
-`VERIFIED_HISTORICAL` only.
+Historical run `31327388006` remains an immutable schema-v1 failure with
+`postgres_explain_candidate_cardinality_mismatch`. The preregistered schema-v2 contract made the dimensions explicit:
+fair counts eligible Tenant round members, legacy FIFO counts eligible Jobs. All four new rep bundles verify under
+that contract, so the old cardinality blocker is closed for the new run.
+
+Completing the evidence chain exposed the actual performance verdict. Three of four distributions regress when
+Worker count rises from four to eight, and the 0.95 floor requires all distributions to pass. A complete negative
+result cannot be reclassified as incomplete or ignored because correctness/fairness passed.
+
+## Stop decision
+
+The frozen protocol requires `targeted fail -> STOP`. No Candidate 4, threshold change, workload change, parameter
+tuning or immediate retry is authorized. Historical capacity/fault/formal bundles remain
+`VERIFIED_HISTORICAL` only. See `evidence_contract_v2/03_REMOTE_TARGETED_DECISION.md` for the full observation and
+diagnostic ledger.

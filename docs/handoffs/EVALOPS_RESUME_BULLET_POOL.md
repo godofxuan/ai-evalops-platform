@@ -1,8 +1,10 @@
 # AI EvalOps Platform — resume bullet pool
 
-Status binding: Candidate 3 source `02f5e68`; ordinary CI PASS; targeted `31327388006` FAILED; release `NOT_READY`.
+Status binding: qualification source `91acdba`; targeted `31352270523` completed four reps and returned
+`NEGATIVE_SCALING`; release `NOT_READY`.
 
-Select two or three bullets per role. Do not combine them with fairness/scaling/capacity claims.
+Select two or three bullets per role. Exact-workload fairness may be stated only with scope; do not claim linear
+scaling, capacity or production readiness.
 
 ## AI / RAG / Agent role
 
@@ -11,6 +13,8 @@ Select two or three bullets per role. Do not combine them with fairness/scaling/
   stale success/failure 与非法状态迁移。
 - 建立 Git SHA、协议、raw result、manifest、artifact digest 绑定的评测证据链；对失败实验 fail-closed，
   明确区分 current、historical、limited、failed 与 not-run，避免用历史容量替代当前候选方案。
+- 在 4 次 source-bound targeted、64 个 workload/Worker arms、6,400 个 Jobs 中保持零正确性失败，并验证
+  冻结 20:1 workload 的 secondary position 均为 2；同时因三类 4→8 scaling 低于 0.95 保持 release blocked。
 
 ## Python backend role
 
@@ -33,14 +37,14 @@ Select two or three bullets per role. Do not combine them with fairness/scaling/
 The following is strong interview material but must not be a positive resume metric:
 
 - Candidate 2 reservation order did not imply durable receipt order; deterministic RED reached secondary position 8.
-- Candidate 3 durable rounds made the same test GREEN and rep1 observed positions `2/2/2/2`.
-- The overall targeted bundle still failed because the EXPLAIN candidate unit changed from Jobs to Tenant round
-  members while the assessor contract remained queue-cardinality based.
-- The team stopped before Candidate 4 or downstream gates, preserving the failed evidence.
+- Candidate 3 durable rounds made the same test GREEN; four targeted repetitions all observed `2/2/2/2`.
+- Schema v2 repaired the Jobs/Tenant candidate-unit mismatch without rewriting the old failed bundle.
+- Complete evidence then rejected 4→8 scaling in single, balanced and 20:1; the team stopped before Candidate 4 or
+  downstream gates.
 
 ## Forbidden phrases
 
 - “实现强公平/线性扩展/生产级容量/Exactly Once”。
-- “20:1/8W 公平性已正式通过”。
+- “实现 universal/production 强公平”或不带 workload 范围的公平性结论。
 - “v0.1.0 ready/production ready”。
 - Any current capacity/fault/formal number for Candidate 3.

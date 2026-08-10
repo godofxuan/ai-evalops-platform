@@ -2,6 +2,10 @@
 
 Date: 2026-08-09
 
+Historical snapshot: this file records the Candidate 2 stop. The current Candidate 3 decision is
+`../evidence_contract_v2/03_REMOTE_TARGETED_DECISION.md`: four targeted repetitions completed and current
+performance is `NEGATIVE_SCALING`; current formal scaling remains `NOT_RUN_STOPPED`.
+
 Status: `NOT_RUN_TARGETED_FAIRNESS_FAILED`
 
 The frozen 32-arm formal experiment (2 workloads × 1/2/4/8 workers × 4 repetitions × 500 measured Jobs = 16,000

@@ -1458,3 +1458,84 @@ artifact `targeted-gh-31327388006-1`（404 KB）digest 为
 threshold/workload/Worker/batch/seed/retry/pool/sleep/lease，也没有启动 current capacity、same-runner、fault
 或 formal。最终状态 `NOT_READY_TARGETED_EVIDENCE`；PR 保持 Draft，无 merge/tag/release。Candidate 3
 正确性 GREEN 与 targeted evidence FAILED 同时成立，任何对外材料都必须保留这个边界。
+
+## 2026-08-10 — Evidence contract v2 与完整 targeted 性能否决
+
+### 新阶段边界与确定性复现
+
+用户授权继续思考并执行改进。本阶段先判断不应直接做 Candidate 4，也不应修改 threshold、workload、
+Worker、repetition、batch、seed、retry、pool、sleep 或 lease；首要问题是上一轮 assessor 的候选单位与
+Candidate 3 SQL 已不一致。因此阶段被限定为 evidence-only：修复证据语义、保留旧负证据、通过普通 CI
+后再运行一次 exact-source 四重复 targeted。
+
+预检时分支为 `codex/evidence-gate-1`、HEAD `a4d43db`、工作树 clean、PR #1 Draft、无 tag/release。
+使用旧 rep1 bundle 和 exact source `02f5e68` 连续重放两次 assessor，均稳定得到
+`FAILED/postgres_explain_candidate_cardinality_mismatch/16 arms`。按可证伪顺序检查：raw fair plan 的候选
+数始终等于 Tenant 数 1/4/2/100，legacy 始终为 queue 1000；因此 summarizer、round SQL 丢 Tenant 和 fixture
+缺 Job 三个假设被反证，最高概率根因是 schema-v1 assessor 仍把两个 selector 都当作 eligible Jobs。
+
+### 预注册、第一轮 RED/GREEN
+
+在生产代码前冻结 schema v2：fair 单位为 `eligible_tenant_round_members`，expected cardinality 来自独立
+Tenant contract；legacy 单位为 `eligible_jobs`，expected 为 queue size；新 `arms.csv` 必须包含
+`tenant_count`；schema 1 保留原语义，绝不重解释旧 bundle。
+
+第一批测试先 RED：`7 failed, 24 passed`。正例仍报告 schema 1；缺失/错误 unit 未触发专用 blocker；
+single-Tenant 的 0/2/1001 count 未被拒绝。GREEN 修改只涉及
+`release_evidence.py`、`fair_capacity_evidence.py`、`run_fair_capacity_test.py`：producer 写 schema 2、真实
+Tenant 数和 selector unit；assessor 按 selector 选择独立 expected，并 fail closed。专项首先达到 55 pass。
+
+扩展四分布正例时遇到两次测试夹具问题：20:1 行先缺 position，随后误把 fair 和 legacy 都设为 2。
+保留旧规则而不是放松它：fair 必须 `<=2`，legacy baseline 必须 `>2`；夹具修为 fair 2/legacy 3 后，
+1/4/2/100 四分布全部通过。
+
+### 对抗审查、第二轮 RED/GREEN
+
+提交前继续审查发现两个自证漏洞。第一，Python `bool` 是 `int` 子类，JSON `true` 可能冒充 schema 1；
+第二，assessor 初版从 CSV 自报 queue/distribution 推导 expected，没有绑定预注册 arm ID，损坏包可同时伪造
+CSV 与 EXPLAIN。新增 boolean writer/reader 和 queue/distribution/worker/batch 四类 spoof tests，六项全部按
+预期 RED：四个 spoof 包错误 VERIFIED，boolean 没有得到正确 `manifest_invalid` 或 writer rejection。
+
+最终 GREEN 要求 schema version 的 exact type 为 int，并从
+`fair-q{queue}-{distribution}-w{workers}-b{batch}` 解析预注册身份，逐字段交叉检查 CSV；Tenant expected 与
+EXPLAIN expected 均从该身份派生。更强检查暴露旧 unit-test arm 名 `single` 不符合生产 `single_tenant`，
+以及四分布正例复用 single arm ID；修正测试为生产命名，不放松 parser。专项最终 65/65，Ruff、format、
+MyPy 通过；完整 unit suite 最终 633/633（256.97s）。唯一 warning 是本地 `.pytest_cache` 无写权限。
+旧 schema-v1 bundle 再次重放仍为原 cardinality blocker，`docs/results/...31327388006...` 无任何修改。
+
+commit `91acdba9f5b5f1a84fb03640382c9e4871364afe` 推送后，普通 push CI `31351821014` 与 PR CI
+`31351825433` 均 SUCCESS。两条均通过 Compose smoke 和 quality/integration。只有双绿后才 dispatch
+targeted run `31352270523`。
+
+### 完整远端结果
+
+workflow 的 checkout、依赖、Compose、migration 与 `Execute four targeted repetitions` 全部 SUCCESS，四次
+执行约 3m54s；失败只发生在 `Assess repeated self-scaling gate and seal manifest`，随后 artifact upload、
+evidence commit 和 Compose teardown 都 SUCCESS。artifact `targeted-gh-31352270523-1` 为 1,395,629 bytes，
+digest `6b5f68821b90ee6bdbb36d66aba0087864ca2048ac356ec3cb701e378d0c120f`，bot commit
+`15bab58150385c9a39778d64a3e4163c10892ecc`。
+
+四个 rep bundle 均为 schema 2 `VERIFIED`、16/16 arms、1,600/1,600 terminal、无 blocker；合计 64 arms、
+6,400/6,400 terminal，lost/duplicate/orphan/Attempt mismatch/stale accepted/illegal transition/
+empty-while-eligible 全为 0。四次 20:1 的 w1/w2/w4/w8 position 全部 `2/2/2/2`。512 份 EXPLAIN 的单位
+与 cardinality 矩阵为 fair Tenant members 1/4/2/100 各 64 份，legacy eligible Jobs 1000 共 256 份。
+旧 evidence blocker 因此被正式关闭。
+
+top-level 正式结论为 `NEGATIVE_SCALING`：single w4/w8 median 24.190086/18.929004，ratio 0.782511；
+balanced 44.752825/34.584871，ratio 0.772797；20:1 32.700255/26.036396，ratio 0.796214；many-small
+42.245796/42.839905，ratio 1.014063。冻结下限要求四类都 `>=0.95`，所以前三类足以拒绝 release。三类中
+每个 w8 observation 都低于每个 w4 observation，不是单个 median outlier。w8 retry、retry/success 与 claim
+p95 同时上升，支持 concentrated-Tenant coordination contention 假设，但尚不足以授权或选择生产修复。
+
+### 最终停止与同步
+
+当前状态从 `NOT_READY_TARGETED_EVIDENCE` 推进为
+`NOT_READY_TARGETED_NEGATIVE_SCALING`：证据已完整，正确性与冻结 workload 公平通过，正式性能门失败。
+按 `targeted fail -> STOP`，没有运行 current capacity、same-runner、A-I fault 或 formal，也没有 Candidate 4、
+参数赌博或立即重跑。PR 继续 Draft，无 merge/tag/release。README、release、fairness-redesign、resume、
+teaching、handoff 与 PR 必须同时保留“bounded fairness PASS + performance FAIL”两个正交事实。
+
+文档同步前又独立核验 top-level sealed manifest。第一次脚本用 `p.name != 'manifest.json'`，错误排除了四个
+rep 子 manifest，得到 declared 598 / actual 594 的假 file-set mismatch；bad hash 仍为 0。修正为只排除
+root 自身的 manifest 后，declared/actual 均为 598、file set exact match、size/SHA-256 mismatch 为 0。这个
+问题不来自 evidence，而来自核验脚本把“同名文件”误当成“同一路径”；最终结果与修正原因均保留。

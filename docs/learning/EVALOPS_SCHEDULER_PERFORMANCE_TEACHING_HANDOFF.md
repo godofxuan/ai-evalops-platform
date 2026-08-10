@@ -2,13 +2,14 @@
 
 Updated: 2026-08-10
 Audience: 下一位负责带用户学习本项目的 ChatGPT/Codex
-Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED, v0.1.0 `NOT_READY`
+Release context: Candidate 3 targeted correctness/fairness PASS, targeted scaling FAILED, v0.1.0 `NOT_READY`
 
 ## 教学使用方式
 
 每章都从本仓库的一段真实源码、测试和 GitHub Actions 实验出发。讲解时先让学习者预测，再打开证据；
 不要把结论变成背诵题。路径默认相对仓库根目录。当前证据主入口是
-`docs/release/v0.1.0/fairness_redesign/`，真实失败 bundle 在
+`docs/release/v0.1.0/fairness_redesign/` 与 `evidence_contract_v2/`，当前完整负结果在
+`docs/results/release/v0.1.0/targeted-gh-31352270523-1/`；历史失败 bundle 在
 `docs/results/release/v0.1.0/targeted-gh-31318923861-1/` 与
 `targeted-gh-31319556885-1/`、`targeted-gh-31327388006-1/`。
 
@@ -425,9 +426,10 @@ Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED
 - **对应源码：** `docs/release/v0.1.0/fairness_redesign/01_FAIRNESS_INVARIANT.md`；
   `app/jobs/claiming.py` 的 round/permit/claim transaction。
 - **对应 RED：** `tests/concurrency/test_tenant_durable_fairness.py` 强制 Candidate 2 secondary receipt 到位置 8。
-- **对应实验：** RED run `31325521253`；Candidate 3 ordinary GREEN `31327012832`；targeted
-  `31327388006` 只有 rep1 diagnostic，不能变成正式 invariant PASS。
-- **失败历史：** Candidate 2 targeted w8 position 4；Candidate 3 targeted evidence contract 又在完成协议前失败。
+- **对应实验：** RED run `31325521253`；Candidate 3 ordinary GREEN `31327012832`；current targeted
+  `31352270523` 四次 position 均为 `2/2/2/2`，通过冻结 workload invariant。
+- **失败历史：** Candidate 2 targeted w8 position 4；旧 Candidate 3 run `31327388006` 在完成协议前因 evidence
+  contract 失败，后来以独立 schema-v2 阶段修复。
 - **最终方案：** 冻结 F1–F8 和 application committed receipt `<=2`，增加 DB sequence 只作第二观测点；gate
   失败即停止。
 - **trade-off：** invariant 越强，协调和证明成本越高；但定义不清会让任何结果都可被事后解释。
@@ -484,7 +486,8 @@ Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED
 - **项目实际问题：** primary Tenant 的多个 Worker 让 later A claims 越过 earlier B reservation。
 - **对应源码：** deterministic hook `_after_scheduler_permit_locked` 与测试 Event；Candidate 2 trace events 7–42。
 - **对应 RED：** B 锁到逻辑资格后暂停，测试断言 secondary receipt position >2。
-- **对应实验：** RED position 8；旧 targeted position 4；Candidate 3 rep1 observed 2，但整体 qualification failed。
+- **对应实验：** RED position 8；旧 targeted position 4；current Candidate 3 四次 targeted 均 observed 2；整体
+  qualification 仍因正交 performance gate failed。
 - **失败历史：** 随机 sleep 只能偶发复现，无法证明具体交错或排除 harness 假象。
 - **最终方案：** Barrier 冻结 first wave，Event 精确控制 B，数据库 state 让下一轮无法绕过 pending B。
 - **trade-off：** deterministic test 更可信但只覆盖注册交错；仍需真实 targeted repetitions。
@@ -511,7 +514,8 @@ Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED
 - **项目实际问题：** reservation position、DB claim sequence、application receipt 和 result completion 会给出不同序列。
 - **对应源码：** `01_FAIRNESS_INVARIANT.md` 的 A–E 分类；harness `order_timed_values()`；Attempt sequence 字段。
 - **对应 RED：** 同时输出旧 receipt 与 DB sequence，不能只选有利观测点。
-- **对应实验：** Candidate 2 两种诊断均 FAIL；Candidate 3 rep1 两种均观测 2，但协议不完整。
+- **对应实验：** Candidate 2 两种诊断均 FAIL；current Candidate 3 四次 targeted 的 application receipt 与 DB
+  sequence 都是 `2/2/2/2`，冻结 observation contract 已完整通过。
 - **失败历史：** 看到 position 4 后改用 reservation position 会把失败“定义掉”。
 - **最终方案：** frozen gate 固定为 `claim()` committed receipt；DB sequence 不替代它。
 - **trade-off：** application receipt 会受事务返回调度影响；保留 DB sequence 能解释差异但增加复杂度。
@@ -575,10 +579,12 @@ Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED
 ## PART 52 — 如何同时验证 correctness、fairness、liveness、performance
 
 - **概念：** 四类性质正交：结果不重复不代表公平，公平不代表不会空转，吞吐高也不代表正确。
-- **项目实际问题：** Candidate 3 rep1 16 arms correctness clean、20:1 observed 2，但 evidence contract 与性能链未完成。
+- **项目实际问题：** Candidate 3 current targeted 的 64 arms correctness clean、四次 20:1 observed 2，但三类
+  4→8 throughput scaling 低于 0.95。
 - **对应源码：** correctness counters、receipt/DB position、empty-while-eligible/fallback、Jobs/s/latency/retry/locks。
 - **对应 RED：** uniqueness/full drain/fencing；deterministic fairness；cross-Tenant/crash liveness；frozen targeted scaling。
-- **对应实验：** ordinary CI `31327012832` PASS；targeted `31327388006` FAILED；downstream NOT_RUN。
+- **对应实验：** ordinary CI `31351821014`/`31351825433` PASS；targeted `31352270523` correctness/fairness PASS、
+  performance `NEGATIVE_SCALING`；downstream NOT_RUN_STOPPED。
 - **失败历史：** Candidate 2 correctness PASS 但 fairness FAIL；historical SQL EXPLAIN 改善但 multi-worker scaling FAIL。
 - **最终方案：** gate matrix 逐级执行，任何先决 gate fail 都停止，不能用一个绿色列覆盖另一列。
 - **trade-off：** 完整证据昂贵且慢，但防止把局部优化误报为 release readiness。
@@ -591,7 +597,8 @@ Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED
 - **项目实际问题：** scheduler SQL/lock/state 每次候选方案都变化，旧吞吐不能证明新 Candidate 3。
 - **对应源码：** `scripts/experiment_support.py`、manifest assessor、workflow expected source commit checks。
 - **对应 RED：** source mismatch、missing/duplicate/unexpected arms、digest/cardinality mismatch tests。
-- **对应实验：** targeted `31327388006` source/expected source 都为 `02f5e68`；artifact digest 与 bot commit被保存。
+- **对应实验：** current targeted `31352270523` 绑定 source `91acdba`、artifact digest `6b5f...120f` 与 bot commit
+  `15bab58`；旧 run `31327388006` 仍绑定 `02f5e68` 并保留失败历史。
 - **失败历史：** historical pre-fair/fair runs使用不同 source/runner；并发 evidence bot 曾遇 non-fast-forward。
 - **最终方案：** 每个 workflow 单独 dispatch、artifact 先上传、manifest fail-closed、current/historical 严格分层。
 - **trade-off：** evidence 体积和 workflow 复杂度增加；换来可复核、可追责、不可偷换的结论。
@@ -615,6 +622,36 @@ Release context: Candidate 3 ordinary correctness PASS, targeted evidence FAILED
 
 学习者应能从 raw lock graph 推导 U/NKU/KS 的选择，从 Candidate 2 overtaking 画出 Candidate 3 durable
 round，从 manifest 区分 current/historical/limited/failed/not-run，并解释为什么 ordinary CI GREEN 与 rep1
-position 2 仍不能覆盖 targeted evidence FAILED。最终答案必须是：当前项目有很强的 correctness 与证据
-工程基础，但 v0.1.0 仍是 `NOT_READY`；本阶段已按停止规则结束 scheduler 开发，不调参、不换 gate、不做
-Candidate 4。
+position 2、schema-v2 unit binding 与 performance scaling 是三个不同问题。最终答案必须是：Candidate 3
+已用四次完整证据通过冻结 correctness/fairness workload，但 single/balanced/20:1 的 4→8 scaling 正式失败，
+所以 v0.1.0 仍 `NOT_READY`；本阶段按停止规则结束，不调参、不换 gate、不做 Candidate 4。
+
+## PART 55 — Evidence schema versioning 不是改口径作弊
+
+- **概念：** schema change 必须先注册 dimension、compatibility、negative cases 与旧 evidence disposition。
+- **项目实际问题：** schema v1 把 Tenant round members 与 eligible Jobs 都叫 candidate cardinality。
+- **RED/最终方法：** 先得到 7 个 RED，再实现 schema 2；schema 1 保留原语义，旧 run 不重写。
+- **真实实验：** 新四个 rep 均 schema 2 VERIFIED；旧 rep 仍是同一 cardinality blocker。
+- **练习：** 设计一个错误 unit、错误 cardinality、错误 schema 类型的 bundle，说明各自 blocker。
+
+## PART 56 — 为什么 arm ID 必须绑定 CSV metadata
+
+- **概念：** producer 自报的 expected metadata 不能同时做 oracle，否则 package 可以自证。
+- **项目实际问题：** 初版 v2 可同时伪造 CSV queue/distribution 与 EXPLAIN。
+- **RED/最终方法：** 四个 spoof package 先错误 VERIFIED；最终从预注册 arm ID 独立解析 q/distribution/w/b。
+- **真实实验：** boolean + 四类 spoof 共六个回归 GREEN；完整 unit 633/633。
+- **练习：** 写一个 `q1000-single` arm，却在 CSV 声称 balanced；解释为什么必须 fail closed。
+
+## PART 57 — 完整 fairness PASS 与 performance FAIL 可以同时成立
+
+- **概念：** safety/fairness/throughput 是正交 gates，不能相互抵消。
+- **项目实际问题：** 64 arms correctness clean、四次 position 都是 2，但三类 w8 throughput 显著低于 w4。
+- **真实实验：** ratios 0.782511/0.772797/0.796214/1.014063，门槛要求每类 >=0.95。
+- **练习：** 为四个 distribution 分别写 verdict，再写 top-level AND gate。
+
+## PART 58 — Workflow failure 不等于执行崩溃
+
+- **概念：** gate 返回非 0 是一种预期失败；要按 step 区分 infra、execution、assessment、preservation。
+- **项目实际问题：** run `31352270523` 的四次执行/上传/commit/cleanup 全成功，assessment 因负性能返回 1。
+- **最终方法：** 对外写 `NEGATIVE_SCALING`，不写 infra failure，也不把 workflow success 当成唯一目标。
+- **练习：** 根据 step matrix 写一段不会误导的事故摘要。

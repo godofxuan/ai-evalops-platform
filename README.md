@@ -590,18 +590,17 @@ durable Gauge 成功时间、刷新失败计数、失败降级与 stale alert �
 
 ## v0.1.0 Release Candidate 证据结论
 
-当前决定：**`NOT_READY`，不得发布 v0.1.0 tag/Release**。唯一授权的 Candidate 3 已完成 durable
-fair-round redesign，并在 source `02f5e68` 的普通 PostgreSQL CI 中通过 priority、20×10W/100J、
-deterministic overtaking、crash recovery、liveness、uniqueness 与 fencing；但 source-bound targeted run
-`31327388006` 在第 1 次 repetition 后因 `postgres_explain_candidate_cardinality_mismatch` 失败。完整判定见
+当前决定：**`NOT_READY_TARGETED_NEGATIVE_SCALING`，不得发布 v0.1.0 tag/Release**。唯一授权的 Candidate 3
+已完成 durable fair-round redesign；schema-v2 qualification source `91acdba` 的普通 PostgreSQL CI
+`31351821014`/`31351825433` 均通过。source-bound targeted run `31352270523` 完成了全部四次 repetitions，
+但正式 repeated assessment 返回 `NEGATIVE_SCALING`。完整判定见
 [v0.1.0 Release Decision](docs/release/v0.1.0/RELEASE_DECISION.md)。
 
-Candidate 3 targeted rep1 的 16/16 arms 各自 correctness VERIFIED，共 1,600/1,600 terminal Jobs；20:1
-secondary application receipt 和 DB claim sequence 在 w1/w2/w4/w8 均观察到位置 `2`。但 Candidate 3
-的 fair EXPLAIN 现在衡量 scheduler-round Tenant membership，而冻结 assessor 仍要求 Job queue
-cardinality `1000`；64/128 summaries 因语义不兼容而失败，四次 repetitions 没有完成。按
-`targeted fail -> STOP` 规则，不修门禁后重跑、不做 Candidate 4，也不运行当前 capacity、A/B/C
-same-runner、A–I fault 或 formal 32-arm。
+四个 schema-v2 rep bundles 均为 `VERIFIED`：64/64 arms、6,400/6,400 terminal Jobs、所有 protected
+correctness counters 为 0；每次 20:1 的 w1/w2/w4/w8 secondary position 都是 `2/2/2/2`。证据合同问题
+已经关闭，当前真实 blocker 是 4→8 Worker scaling：single `0.782511`、balanced `0.772797`、20:1
+`0.796214` 均低于冻结下限 `0.95`，只有 many-small `1.014063` 通过。按 `targeted fail -> STOP`，不做
+Candidate 4，也不运行当前 capacity、A/B/C same-runner、A–I fault 或 formal 32-arm。
 
 最终 source-bound 证据：
 

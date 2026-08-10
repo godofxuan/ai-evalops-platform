@@ -1,28 +1,26 @@
 # v0.1.0 RC fairness and capacity
 
-Current conclusion: targeted qualification `FAILED`; complete Candidate 3 fairness is `INCOMPLETE`; current
-1k/10k/100k capacity is `NOT_RUN`.
+Current conclusion: Candidate 3 passes the frozen four-repetition targeted correctness/fairness workload, but
+targeted self-scaling is `NEGATIVE_SCALING`; current 1k/10k/100k capacity remains `NOT_RUN_STOPPED`.
 
-Targeted run `31327388006` executed source `02f5e68` with the frozen 1k queue, four distributions, Workers
-1/2/4/8, batch 1 and four planned repetitions. Repetition 1 completed all 16 arms. In 20:1, secondary Tenant first
-application-visible durable receipts were `2/2/2/2`; database-linearized claim sequence also reported `2/2/2/2`.
-All 16 raw arm assessments were `VERIFIED` and reconciled 1,600/1,600 Jobs.
+Targeted run `31352270523` executed source `91acdba` with queue 1000, four distributions, Workers 1/2/4/8, batch 1
+and four repetitions. All 64 arms completed. Each rep bundle independently verified under schema v2; aggregate
+correctness is 6,400/6,400 unique terminal Jobs with every protected failure counter zero. In every repetition,
+20:1 secondary Tenant application receipt positions at w1/w2/w4/w8 were `2/2/2/2`.
 
-That observation is not a formal PASS. The repetition-level release bundle failed
-`postgres_explain_candidate_cardinality_mismatch`: the Candidate 3 round-membership EXPLAIN reports active Tenant
-cardinality (`1`, `2`, `4` or `100`), while the frozen evidence assessor still requires Job queue cardinality
-`1000`. Exactly 64/128 EXPLAIN records—all `fair` records and no legacy records—mismatched. The top level therefore
-records zero verified repetitions and fails the required count of four.
+The repeated performance result is:
 
-Observed rep1 metrics are diagnostic only:
+| Distribution | w4 median Jobs/s | w8 median Jobs/s | w8/w4 | Required | Result |
+|---|---:|---:|---:|---:|---|
+| single Tenant | 24.190086 | 18.929004 | 0.782511 | 0.95 | NEGATIVE_SCALING |
+| balanced | 44.752825 | 34.584871 | 0.772797 | 0.95 | NEGATIVE_SCALING |
+| 20:1 | 32.700255 | 26.036396 | 0.796214 | 0.95 | NEGATIVE_SCALING |
+| many-small | 42.245796 | 42.839905 | 1.014063 | 0.95 | VERIFIED |
 
-| Distribution | w4 Jobs/s | w8 Jobs/s | 4→8 | w8 claim p95 ms | w8 retries | w8 waiting fallbacks |
-|---|---:|---:|---:|---:|---:|---:|
-| single Tenant | 29.785233 | 20.197495 | 0.678104 | 835.514 | 559 | 318 |
-| balanced | 51.446398 | 40.408899 | 0.785456 | 304.065 | 98 | 60 |
-| 20:1 | 36.767757 | 27.574409 | 0.749962 | 671.042 | 272 | 155 |
-| many-small | 47.575351 | 45.425358 | 0.954809 | 422.767 | 0 | 0 |
+Every w8 observation is below every w4 observation in the three failing distributions, so the verdict is not caused
+by a single median outlier. At w8, contention retries and claim p95 also rise materially in those distributions.
+That supports a contention hypothesis but is not sufficient to authorize or select a production fix.
 
-Historical `31272789199` still contains complete 1k/10k/100k capacity evidence. Its 100k single-Tenant/w8
-approximately `0.628 Jobs/s`, `504` retries and `41s` claim p95 remain negative engineering history, not Candidate 3
-measurements. No current capacity or strong-fairness SLO is supported.
+Historical run `31272789199` still contains complete 1k/10k/100k capacity evidence. Its 100k single-Tenant/w8
+approximately `0.628 Jobs/s`, `504` retries and `41s` claim p95 remain historical engineering evidence, not current
+Candidate 3 measurements. No current capacity or production performance SLO is supported.

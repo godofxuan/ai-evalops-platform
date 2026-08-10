@@ -111,13 +111,14 @@ Gate classification at this point:
 - `WORKFLOW_EXECUTED = true`;
 - `TESTS_PASS = true` for ordinary CI;
 - `CORRECTNESS_PASS = true` for the preregistered scheduler correctness chain;
-- `EVIDENCE_COMPLETE = false` because targeted `31327388006` later failed and downstream gates were stopped;
-- `PERFORMANCE_PASS = false/not established`; rep1 diagnostics are not a complete protocol;
+- `EVIDENCE_COMPLETE = true` for current targeted run `31352270523`: four schema-v2 reps and 64 arms verified;
+- `PERFORMANCE_PASS = false`; the complete protocol returned `NEGATIVE_SCALING` in three distributions;
 - `RELEASE_READY = false`.
 
 ## Subsequent stop condition
 
-Candidate 3 ordinary correctness GREEN did not authorize release. Targeted run `31327388006` completed one
-diagnostic repetition, then the release-bundle assessor failed
-`postgres_explain_candidate_cardinality_mismatch`. The frozen execution rule therefore stopped capacity,
-same-runner, fault and formal stages. See `06_TARGETED.md`; no production Candidate 4 or gate relaxation followed.
+Candidate 3 ordinary correctness GREEN did not authorize release. Historical targeted run `31327388006` completed
+one diagnostic repetition and failed its schema-v1 candidate-unit contract. A separately authorized evidence-only
+stage preregistered schema v2, preserved that failure and produced current run `31352270523`. All four repetitions
+verified, but the repeated assessor returned `NEGATIVE_SCALING`. The frozen rule therefore still stops capacity,
+same-runner, fault and formal. See `06_TARGETED.md`; no production Candidate 4 or gate relaxation followed.

@@ -2,5 +2,5 @@
 
 Status: `NOT_RUN_STOPPED`
 
-No A/B/C paired benchmark was dispatched because targeted qualification failed. Same-runner evidence is a
-performance-causality aid; it cannot replace correctness, fairness or the failed source-bound manifest.
+No A/B/C paired benchmark was dispatched because targeted run `31352270523` returned `NEGATIVE_SCALING`.
+Same-runner evidence is a performance-causality aid; it cannot replace or override the failed source-bound gate.

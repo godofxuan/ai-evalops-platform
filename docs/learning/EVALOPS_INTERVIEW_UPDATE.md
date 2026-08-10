@@ -1,6 +1,6 @@
 # AI EvalOps Platform — Interview Update
 
-Updated: 2026-08-09
+Updated: 2026-08-10
 Rule: 每题必须回答“源码在哪里、测试怎么证、真实实验是什么、证据边界是什么”，不能只讲通用定义。
 
 ## 1. 为什么 PostgreSQL 可以做 Job Queue？
@@ -193,42 +193,52 @@ priority regression 在 Candidate 3 ordinary CI 中通过。
 回答线索：旧 harness 是预先冻结的用户可见 committed receipt oracle。删除它只保留新 DB sequence 会让 Candidate 3
 针对新指标自证，无法证明 Candidate 2 的原始失败被修复。
 
-## 38. 为什么 correctness PASS 仍不能 release？
+## 38. 为什么 correctness/fairness PASS 仍不能 release？
 
-回答线索：2,000 unique claims、fencing、crash 和 1,600/1,600 rep1 correctness只覆盖状态安全；targeted bundle、四次
-fairness repetitions、capacity、fault、formal 与 manifest 完整性仍是独立 gates。
+回答线索：新 targeted 已有 64/64 arms、6,400/6,400 terminal 和四次 `2/2/2/2`，但 performance 是正交 gate。
+single/balanced/20:1 的 w8/w4 ratio 只有 0.782511/0.772797/0.796214，低于每类都必须达到的 0.95。
 
-## 39. Candidate 3 targeted 到底失败了什么？
+## 39. 旧 Candidate 3 targeted 到底失败了什么？
 
-回答线索：不是 16 个 raw arms 的 Job correctness，它们全部 VERIFIED；失败码是
-`postgres_explain_candidate_cardinality_mismatch`。fair EXPLAIN 现在输出 Tenant round membership（1/2/4/100），
-而 assessor 仍要求 Job queue size 1000，64/128 summaries mismatch。
+回答线索：历史 run `31327388006` 不是 Job correctness 失败，而是 schema-v1
+`postgres_explain_candidate_cardinality_mismatch`：fair 输出 Tenant members 1/4/2/100，assessor 错按 Jobs 1000。
+该 bundle 保持 immutable FAILED。
 
-## 40. 为什么 rep1 的 2/2/2/2 不能写成“公平调度已解决”？
+## 40. 为什么 schema v2 不是“看到 RED 后改 oracle 作弊”？
 
-回答线索：协议要求四次 repetition；rep1 bundle 自身未 verify，顶层 repetition_count=0。它只能作为 LIMITED diagnostic，
-不能替代完整 targeted fairness evidence。
+回答线索：它在单独授权阶段先预注册单位、compatibility 与 fail-closed 条件，再写 RED；旧 bundle 不重算；新 source 先过
+普通双 CI；新增 wrong-unit、wrong-cardinality、invalid Tenant count、boolean schema 与 arm spoof negatives。
 
-## 41. 为什么 targeted evidence 工具问题仍触发 STOP？
+## 41. 新 targeted 到底证明了什么？
 
-回答线索：预注册规则写的是 `targeted fail -> STOP`，不是“只有 production bug 才停止”。fail-closed 会牺牲一次机会，但
-避免在看到结果后修 oracle、重跑直到绿色；未来修复必须是单独授权、先注册语义的新阶段。
+回答线索：run `31352270523` 四个 rep bundle 都是 schema 2 VERIFIED；64 arms、6,400 terminal、protected counters
+全 0；每次 20:1 w1/w2/w4/w8 都是 2。它证明冻结 workload，不证明 universal/production fairness。
 
-## 42. 为什么 historical capacity 不能代表 Candidate 3？
+## 42. 为什么 workflow 是 failure，但四次 repetition 又是 success？
 
-回答线索：Candidate 3 增加表、round refill、permit row 和 sequence lock，SQL round trips/锁热点/候选单位都变了。
-`9987a28` 的 1k/10k/100k bundle 只能标 VERIFIED_HISTORICAL。
+回答线索：workflow 的执行四次、上传 artifact、提交证据、cleanup 都 success；assessment 对正式
+`NEGATIVE_SCALING` 返回非 0，所以 job 最终 failure。这是 gate 正常工作，不是 infra crash。
 
-## 43. 为什么当前仍不需要 Kafka/Celery/Temporal？
+## 43. 为什么 current performance verdict 不是 median 偶然？
 
-回答线索：当前失败是 PostgreSQL scheduler/evidence invariant，不是消息传输或长工作流功能缺失；换基础设施会增加 durable
-truth 和运维边界，也不会自动证明 application receipt fairness。
+回答线索：single/balanced/20:1 中每个 w8 observation 都低于每个 w4 observation；三类 median ratio 都远低于
+0.95，且 w8 retries/retry-per-success/claim p95 同时上升。
+
+## 44. 为什么 historical capacity 不能代表 Candidate 3？
+
+回答线索：Candidate 3 增加 round refill、permit state 和 sequence lock，SQL round trips/锁热点改变。
+`9987a28` 的 1k/10k/100k bundle 只能标 VERIFIED_HISTORICAL；current capacity 仍 NOT_RUN_STOPPED。
+
+## 45. 为什么当前仍不需要 Kafka/Celery/Temporal？
+
+回答线索：当前失败是 PostgreSQL scheduler 在 concentrated-Tenant workload 下的 scaling，不是消息传输或长工作流功能缺失；
+换基础设施会扩大 durable truth/运维边界，也不会自动消除数据库协调热点。
 
 ## 面试表达红线
 
 - 可以说“在真实 PostgreSQL CI 中证明并修复两类锁问题，并让失败在秒级可诊断”。
-- 可以说“Candidate 3 ordinary CI 的 20×10W/100J 取得 2,000 unique claims/Attempts，随后 targeted evidence
-  fail-closed”。
+- 可以说“Candidate 3 在四次 source-bound targeted 中完成 64 arms/6,400 Jobs，冻结 20:1 position 全为 2”。
+- 必须同句说明“三类 4→8 scaling 正式低于 0.95，因此 release NOT_READY”。
 - 不可以说“v0.1.0 已发布/production-ready”“current 32-arm 已通过”“线性扩展”“强公平 SLO”。
-- 不可以把 rep1 20:1 `2/2/2/2` 写成完整 fairness PASS。
-- 必须主动说清 historical、current、limited、failed 与 not-run；这是本项目最有价值的证据工程能力之一。
+- 不可以把 frozen workload fairness PASS 外推成 universal/production fairness。
+- 必须主动说清 verified-current、failed-current、historical 与 not-run；这是本项目最有价值的证据工程能力之一。
