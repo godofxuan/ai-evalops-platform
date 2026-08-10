@@ -88,6 +88,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run --no-sync alembic upgrade head
 
+      - name: Integration - passive PostgreSQL telemetry isolation
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_postgres_wait_telemetry.py
+          --junitxml=/tmp/junit-postgres-telemetry.xml
+
       - name: Start MinIO for integration
         if: ${{ !cancelled() }}
         run: >-
@@ -200,6 +206,7 @@ jobs:
         run: >-
           uv run --no-sync python scripts/ci_annotations.py junit
           /tmp/junit-unit.xml
+          /tmp/junit-postgres-telemetry.xml
           /tmp/junit-job-claiming.xml
           /tmp/junit-tenant-fair-claiming.xml
           /tmp/junit-tenant-claim-parallelism.xml

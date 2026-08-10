@@ -362,9 +362,7 @@ def assess_measurement_system(
         "overhead": overhead,
         "paired_block_observations": paired_blocks,
         "thresholds": {
-            "absolute_throughput_relative_change_max": (
-                THROUGHPUT_ABSOLUTE_PERTURBATION_LIMIT
-            ),
+            "absolute_throughput_relative_change_max": (THROUGHPUT_ABSOLUTE_PERTURBATION_LIMIT),
             "absolute_claim_p95_relative_change_max": CLAIM_P95_ABSOLUTE_PERTURBATION_LIMIT,
         },
         "formal_attribution": "NOT_RUN",

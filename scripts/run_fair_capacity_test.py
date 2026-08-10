@@ -1145,19 +1145,13 @@ def _arm_csv_row(
             measurement_contract["workflow_run_id"] if measurement_contract is not None else ""
         ),
         "measurement_code_sha": (
-            measurement_contract["measurement_code_sha"]
-            if measurement_contract is not None
-            else ""
+            measurement_contract["measurement_code_sha"] if measurement_contract is not None else ""
         ),
         "measurement_mode": (
-            measurement_contract["measurement_mode"]
-            if measurement_contract is not None
-            else ""
+            measurement_contract["measurement_mode"] if measurement_contract is not None else ""
         ),
         "measurement_block": (
-            measurement_contract["measurement_block"]
-            if measurement_contract is not None
-            else ""
+            measurement_contract["measurement_block"] if measurement_contract is not None else ""
         ),
         "measurement_order_position": (
             measurement_contract["measurement_order_position"]

@@ -1,0 +1,75 @@
+{
+  "frequencies_hz": [
+    1,
+    5,
+    10,
+    20
+  ],
+  "measurement_validity_claim": "NOT_PERMITTED_FROM_LOCAL_STUDY",
+  "observations": [
+    {
+      "database_query_latency": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "database_query_overhead": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "duration_seconds": 3.000942000071518,
+      "frequency_hz": 1,
+      "jsonl_bytes": 16609,
+      "jsonl_bytes_per_second": 5534.595470223741,
+      "modeled_sample_opportunities_in_representative_period": 3.6827861799999937,
+      "process_cpu_percent_of_one_core": 0.0,
+      "process_cpu_seconds": 0.0,
+      "python_peak_traced_bytes": 36286,
+      "rows_per_sample": 16,
+      "scope": "LOCAL_SYNTHETIC_PROJECTION_AND_STREAMING_ONLY",
+      "successful_samples": 3
+    },
+    {
+      "database_query_latency": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "database_query_overhead": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "duration_seconds": 3.004099200014025,
+      "frequency_hz": 5,
+      "jsonl_bytes": 83058,
+      "jsonl_bytes_per_second": 27648.221470054064,
+      "modeled_sample_opportunities_in_representative_period": 18.41393089999997,
+      "process_cpu_percent_of_one_core": 0.5201226377586683,
+      "process_cpu_seconds": 0.015625,
+      "python_peak_traced_bytes": 29399,
+      "rows_per_sample": 16,
+      "scope": "LOCAL_SYNTHETIC_PROJECTION_AND_STREAMING_ONLY",
+      "successful_samples": 15
+    },
+    {
+      "database_query_latency": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "database_query_overhead": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "duration_seconds": 3.0040811999933794,
+      "frequency_hz": 10,
+      "jsonl_bytes": 166118,
+      "jsonl_bytes_per_second": 55297.440029372745,
+      "modeled_sample_opportunities_in_representative_period": 36.82786179999994,
+      "process_cpu_percent_of_one_core": 0.0,
+      "process_cpu_seconds": 0.0,
+      "python_peak_traced_bytes": 29426,
+      "rows_per_sample": 16,
+      "scope": "LOCAL_SYNTHETIC_PROJECTION_AND_STREAMING_ONLY",
+      "successful_samples": 30
+    },
+    {
+      "database_query_latency": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "database_query_overhead": "NOT_RUN_NO_LOCAL_POSTGRESQL",
+      "duration_seconds": 3.0096680000424385,
+      "frequency_hz": 20,
+      "jsonl_bytes": 332257,
+      "jsonl_bytes_per_second": 110396.56201126335,
+      "modeled_sample_opportunities_in_representative_period": 73.65572359999987,
+      "process_cpu_percent_of_one_core": 0.0,
+      "process_cpu_seconds": 0.0,
+      "python_peak_traced_bytes": 29418,
+      "rows_per_sample": 16,
+      "scope": "LOCAL_SYNTHETIC_PROJECTION_AND_STREAMING_ONLY",
+      "successful_samples": 60
+    }
+  ],
+  "schema_version": 1,
+  "selected_frequency_hz": 5,
+  "selection_reason": "5 Hz provides about 18 sample opportunities in the historical 100-job period while limiting polling to half of 10 Hz and one quarter of 20 Hz; 1 Hz provides fewer than four opportunities. Real database query cost remains unverified locally.",
+  "status": "LOCAL_ENGINEERING_SELECTION_ONLY"
+}
