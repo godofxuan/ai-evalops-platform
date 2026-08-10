@@ -89,6 +89,32 @@ _CLAIM_PHASE_COUNTERS = (
     "permit_pending_count",
     "round_created_count",
 )
+_CLAIM_PHASE_COUNTER_BY_EVENT = {
+    "generation_advanced": "generation_advance_count",
+    "job_skip_locked_miss": "job_skip_locked_miss_count",
+    "permit_retained": "permit_pending_count",
+    "round_created": "round_created_count",
+    "tenant_permit_acquired": "permit_pending_count",
+    "tenant_permit_consumed": "permit_consumed_count",
+    "tenant_permit_empty": "permit_empty_count",
+}
+_CLAIM_PHASE_TIMED_EVENTS = frozenset(
+    {
+        "claim_entry",
+        "claim_return",
+        "durable_sequence_start",
+        "durable_sequence_updated",
+        "job_row_acquired",
+        "job_row_select_start",
+        "job_row_skipped",
+        "scheduler_coordination_acquired",
+        "scheduler_coordination_start",
+        "tenant_permit_acquired",
+        "tenant_permit_select_start",
+        "transaction_complete",
+        "transaction_work_complete",
+    }
+)
 
 
 class ClaimPhaseRecorder:
@@ -108,6 +134,12 @@ class ClaimPhaseRecorder:
             self._durations_ms[metric].append((now_ns - started_ns) / 1_000_000)
 
     def observe(self, phase: str) -> None:
+        counter = _CLAIM_PHASE_COUNTER_BY_EVENT.get(phase)
+        if counter is not None:
+            self._counts[counter] += 1
+        if phase not in _CLAIM_PHASE_TIMED_EVENTS:
+            return
+
         now_ns = self._clock_ns()
         if phase == "claim_entry":
             self._claim_started_ns = now_ns
@@ -125,7 +157,6 @@ class ClaimPhaseRecorder:
             self._starts[phase] = now_ns
         elif phase == "tenant_permit_acquired":
             self._finish("tenant_permit_wait_ms", "tenant_permit_select_start", now_ns)
-            self._counts["permit_pending_count"] += 1
         elif phase == "job_row_select_start":
             self._starts[phase] = now_ns
         elif phase in {"job_row_acquired", "job_row_skipped"}:
@@ -145,17 +176,6 @@ class ClaimPhaseRecorder:
                     (now_ns - self._transaction_work_completed_ns) / 1_000_000
                 )
             self._transaction_work_completed_ns = None
-
-        counter = {
-            "generation_advanced": "generation_advance_count",
-            "job_skip_locked_miss": "job_skip_locked_miss_count",
-            "permit_retained": "permit_pending_count",
-            "round_created": "round_created_count",
-            "tenant_permit_consumed": "permit_consumed_count",
-            "tenant_permit_empty": "permit_empty_count",
-        }.get(phase)
-        if counter is not None:
-            self._counts[counter] += 1
 
     def duration_values(self) -> dict[str, list[float]]:
         return {metric: list(values) for metric, values in self._durations_ms.items()}
@@ -388,9 +408,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prior-assessment", type=Path)
     parser.add_argument("--sample-jobs", type=int, default=100)
     parser.add_argument("--performance-attribution", action="store_true")
+    parser.add_argument(
+        "--arm-id",
+        help="run one exact arm already present in the frozen queue-size plan",
+    )
     parser.add_argument("--database-url-env", default="EVALOPS_EXPERIMENT_DATABASE_URL")
     parser.add_argument("--output-root", type=Path, default=Path("docs/results/release/v0.1.0"))
     return parser
+
+
+def select_requested_arms(
+    arms: Sequence[FairCapacityArm],
+    *,
+    arm_id: str | None,
+) -> tuple[FairCapacityArm, ...]:
+    frozen_arms = tuple(arms)
+    if arm_id is None:
+        return frozen_arms
+    selected = tuple(arm for arm in frozen_arms if arm.arm_id == arm_id)
+    if len(selected) != 1:
+        raise ExperimentError(f"requested benchmark arm is not in frozen plan: {arm_id}")
+    return selected
 
 
 def _resolve_stage_queue_sizes(args: argparse.Namespace) -> tuple[int, ...]:
@@ -1042,7 +1080,10 @@ async def _run(
     database_url = os.getenv(str(args.database_url_env))
     if database_url is None:
         raise ExperimentError(f"required environment variable {args.database_url_env} is unset")
-    arms = build_fair_capacity_plan(queue_sizes=queue_sizes)
+    arms = select_requested_arms(
+        build_fair_capacity_plan(queue_sizes=queue_sizes),
+        arm_id=args.arm_id,
+    )
     run_directory = Path(args.output_root) / str(args.run_id)
     if run_directory.exists():
         raise ExperimentError(f"refusing to overwrite fair-capacity run: {run_directory}")
@@ -1062,6 +1103,7 @@ async def _run(
             "sample_jobs_per_arm": args.sample_jobs,
             "explain_repetitions": EXPLAIN_REPETITIONS,
             "performance_attribution_enabled": bool(args.performance_attribution),
+            "selected_arm_id": args.arm_id,
             "worker_resource_scope": (
                 "single benchmark process running real EvaluationWorker objects"
             ),
