@@ -42,6 +42,13 @@ def test_telemetry_query_is_static_read_only_core_postgres_sql() -> None:
     )
 
 
+def test_telemetry_query_escapes_like_wildcards_for_psycopg_parameters() -> None:
+    assert "ILIKE '%%scheduler_claim_sequence%%'" in POSTGRES_TELEMETRY_QUERY
+    assert "ILIKE '%%scheduler_coordination%%'" in POSTGRES_TELEMETRY_QUERY
+    assert "ILIKE '%%tenant_scheduler_states%%'" in POSTGRES_TELEMETRY_QUERY
+    assert "ILIKE '%%evaluation_jobs%%'" in POSTGRES_TELEMETRY_QUERY
+
+
 def test_telemetry_rejects_sensitive_raw_query_in_public_projection() -> None:
     projected = project_public_row(
         _database_row(
