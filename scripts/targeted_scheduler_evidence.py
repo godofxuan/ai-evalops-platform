@@ -205,6 +205,11 @@ def assess_targeted_repetitions(
             for field in _ZERO_CORRECTNESS_FIELDS:
                 if _integer(row, field) != 0:
                     failures.append(f"{prefix}:{field}_nonzero")
+            empty_while_eligible = _integer(row, "empty_while_eligible")
+            if empty_while_eligible is None:
+                failures.append(f"{prefix}:empty_while_eligible_invalid")
+            elif empty_while_eligible != 0:
+                failures.append(f"{prefix}:empty_while_eligible_nonzero")
 
             for metric in TARGETED_METRICS:
                 metric_value = _metric_value(row, metric)

@@ -138,7 +138,13 @@ def _read_arm_rows(
         *_REQUIRED_COUNT_FIELDS,
     }
     if schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
-        required_fields.update({"tenant_count", "worker_concurrency", "claim_batch_size"})
+        required_fields.update(
+            {
+                "tenant_count",
+                "worker_concurrency",
+                "claim_batch_size",
+            }
+        )
     if not required_fields.issubset(reader.fieldnames):
         return rows, "arms_csv_invalid"
     return rows, None
@@ -511,6 +517,12 @@ def assess_release_bundle(
             if any(value is None for value in counts.values()):
                 blockers.append("arms_csv_invalid")
                 continue
+            if manifest_schema_version == RELEASE_BUNDLE_SCHEMA_VERSION:
+                empty_while_eligible = _integer(row, "empty_while_eligible")
+                if empty_while_eligible is None:
+                    blockers.append("empty_while_eligible_invalid")
+                elif empty_while_eligible != 0:
+                    blockers.append("empty_while_eligible_nonzero")
             if counts["submitted_count"] != counts["unique_job_count"]:
                 blockers.append("submitted_unique_mismatch")
             if counts["unique_job_count"] != counts["terminal_count"]:
