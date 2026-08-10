@@ -1,0 +1,202 @@
+name: Scheduler Performance Attribution Diagnostic
+
+on:
+  push:
+    branches:
+      - codex/evidence-gate-1
+    paths:
+      - .github/performance-attribution-trigger.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scheduler-performance-attribution-v1
+  cancel-in-progress: false
+
+jobs:
+  attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      EVALOPS_EXPERIMENT_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
+      ATTRIBUTION_OUTPUT_ROOT: docs/results/release/v0.1.0
+    steps:
+      - name: Check out exact diagnostic source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync locked dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Define immutable diagnostic identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          execution_id="performance-attribution-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          execution_root="$ATTRIBUTION_OUTPUT_ROOT/$execution_id"
+          echo "ATTRIBUTION_EXECUTION_ID=$execution_id" >> "$GITHUB_ENV"
+          echo "ATTRIBUTION_EXECUTION_ROOT=$execution_root" >> "$GITHUB_ENV"
+          mkdir -p "$execution_root/environment"
+          {
+            echo "source_commit=$GITHUB_SHA"
+            echo "instrumentation_commit=f1ecbf20d8e266eddadd85391d2c782c581ecad2"
+            echo "workflow_run_id=$GITHUB_RUN_ID"
+            echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "protocol=q1000;b1;workers=1,2,4,8;distributions=4;overhead=3off+3on;formal=4on"
+            git status --short
+          } > "$execution_root/environment/source.txt"
+
+      - name: Verify production source lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          locked="f1ecbf20d8e266eddadd85391d2c782c581ecad2"
+          test "$(git diff --name-only "$locked"..HEAD -- app scripts)" = ""
+
+      - name: Start isolated PostgreSQL and Redis
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --wait
+          --wait-timeout 180 postgres redis
+
+      - name: Apply migrations
+        run: uv run --no-sync alembic upgrade head
+
+      - name: Execute three instrumentation-OFF repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repetition in 1 2 3; do
+            uv run --no-sync python -m scripts.run_fair_capacity_test \
+              --run-id "overhead-off-rep${repetition}" \
+              --source-commit "$GITHUB_SHA" \
+              --stage targeted \
+              --queue-sizes "1000" \
+              --sample-jobs 100 \
+              --output-root "$ATTRIBUTION_EXECUTION_ROOT"
+          done
+
+      - name: Execute three instrumentation-ON repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repetition in 1 2 3; do
+            uv run --no-sync python -m scripts.run_fair_capacity_test \
+              --run-id "overhead-on-rep${repetition}" \
+              --source-commit "$GITHUB_SHA" \
+              --stage targeted \
+              --queue-sizes "1000" \
+              --sample-jobs 100 \
+              --performance-attribution \
+              --output-root "$ATTRIBUTION_EXECUTION_ROOT"
+          done
+
+      - name: Gate instrumentation overhead before formal attribution
+        run: >-
+          uv run --no-sync python -m scripts.performance_attribution_evidence
+          --source-commit "$GITHUB_SHA"
+          --off-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-off-rep1/bundle/arms.csv"
+          --off-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-off-rep2/bundle/arms.csv"
+          --off-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-off-rep3/bundle/arms.csv"
+          --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep1/bundle/arms.csv"
+          --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep2/bundle/arms.csv"
+          --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep3/bundle/arms.csv"
+          --overhead-only
+          --output "$ATTRIBUTION_EXECUTION_ROOT/overhead-assessment.json"
+
+      - name: Execute four formal attribution repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repetition in 1 2 3 4; do
+            uv run --no-sync python -m scripts.run_fair_capacity_test \
+              --run-id "formal-rep${repetition}" \
+              --source-commit "$GITHUB_SHA" \
+              --stage targeted \
+              --queue-sizes "1000" \
+              --sample-jobs 100 \
+              --performance-attribution \
+              --output-root "$ATTRIBUTION_EXECUTION_ROOT"
+          done
+
+      - name: Assess preregistered contention hypotheses
+        run: >-
+          uv run --no-sync python -m scripts.performance_attribution_evidence
+          --source-commit "$GITHUB_SHA"
+          --off-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-off-rep1/bundle/arms.csv"
+          --off-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-off-rep2/bundle/arms.csv"
+          --off-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-off-rep3/bundle/arms.csv"
+          --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep1/bundle/arms.csv"
+          --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep2/bundle/arms.csv"
+          --on-csv "$ATTRIBUTION_EXECUTION_ROOT/overhead-on-rep3/bundle/arms.csv"
+          --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep1/bundle/arms.csv"
+          --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep2/bundle/arms.csv"
+          --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep3/bundle/arms.csv"
+          --formal-csv "$ATTRIBUTION_EXECUTION_ROOT/formal-rep4/bundle/arms.csv"
+          --output "$ATTRIBUTION_EXECUTION_ROOT/assessment.json"
+
+      - name: Preserve diagnostic environment
+        if: always() && env.ATTRIBUTION_EXECUTION_ROOT != ''
+        shell: bash
+        run: |
+          set +e
+          evidence_dir="$ATTRIBUTION_EXECUTION_ROOT/environment"
+          mkdir -p "$evidence_dir"
+          {
+            echo "github_run_id=$GITHUB_RUN_ID"
+            echo "github_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "github_sha=$GITHUB_SHA"
+            echo "runner_os=$RUNNER_OS"
+            uname -a
+            lscpu
+            free -b
+            df -B1 .
+            docker version
+            docker compose version
+          } > "$evidence_dir/runner.txt" 2>&1
+          docker compose -f deploy/compose.yaml ps --all > "$evidence_dir/compose-ps.txt" 2>&1
+          docker compose -f deploy/compose.yaml logs --no-color \
+            > "$evidence_dir/compose.log" 2>&1
+
+      - name: Seal diagnostic manifest
+        if: always() && env.ATTRIBUTION_EXECUTION_ROOT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-sync python -c \
+            "from pathlib import Path; from scripts.fair_capacity_evidence import write_release_manifest; write_release_manifest(Path('$ATTRIBUTION_EXECUTION_ROOT'), source_commit='$GITHUB_SHA', claim_scope='performance_attribution_diagnostic', schema_version=2)"
+
+      - name: Upload immutable diagnostic evidence
+        if: always() && env.ATTRIBUTION_EXECUTION_ROOT != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ATTRIBUTION_EXECUTION_ID }}
+          path: ${{ env.ATTRIBUTION_EXECUTION_ROOT }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Commit immutable diagnostic evidence
+        if: always() && env.ATTRIBUTION_EXECUTION_ROOT != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$ATTRIBUTION_EXECUTION_ROOT"
+          git diff --cached --quiet && exit 1
+          git commit -m "evidence(perf): preserve contention attribution $ATTRIBUTION_EXECUTION_ID"
+          git push origin "HEAD:codex/evidence-gate-1"
+
+      - name: Stop isolated topology
+        if: always()
+        run: docker compose -f deploy/compose.yaml down --volumes
