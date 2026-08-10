@@ -89,19 +89,37 @@ def _repetition(
     ]
 
 
+def _overhead_repetition(
+    *,
+    instrumentation: bool,
+    throughput: float = 100.0,
+    claim_p95: float = 10.0,
+) -> list[dict[str, object]]:
+    return [
+        _row(
+            distribution="skew_20_to_1",
+            workers=8,
+            instrumentation=instrumentation,
+            throughput=throughput,
+            claim_p95=claim_p95,
+        )
+    ]
+
+
 def test_attribution_assessor_applies_overhead_gate_and_preregistered_hypotheses() -> None:
     assessment = assess_performance_attribution(
-        off_repetitions=[_repetition(instrumentation=False) for _ in range(3)],
+        off_repetitions=[_overhead_repetition(instrumentation=False) for _ in range(3)],
         on_repetitions=[
-            _repetition(
+            _overhead_repetition(
                 instrumentation=True,
-                overhead_throughput=98.0,
-                overhead_claim_p95=10.5,
+                throughput=98.0,
+                claim_p95=10.5,
             )
             for _ in range(3)
         ],
         formal_repetitions=[_repetition(instrumentation=True) for _ in range(4)],
         source_commit=SOURCE,
+        overhead_arm_only=True,
     )
 
     assert assessment["status"] == "ATTRIBUTION_COMPLETE"
@@ -133,15 +151,28 @@ def test_attribution_assessor_stops_when_instrumentation_is_too_intrusive() -> N
 
 def test_overhead_only_assessor_can_gate_formal_execution() -> None:
     assessment = assess_instrumentation_overhead(
-        off_repetitions=[_repetition(instrumentation=False) for _ in range(3)],
+        off_repetitions=[_overhead_repetition(instrumentation=False) for _ in range(3)],
         on_repetitions=[
-            _repetition(instrumentation=True, overhead_throughput=98.0) for _ in range(3)
+            _overhead_repetition(instrumentation=True, throughput=98.0) for _ in range(3)
         ],
         source_commit=SOURCE,
+        overhead_arm_only=True,
     )
 
     assert assessment["status"] == "VALID"
     assert assessment["failures"] == []
+
+
+def test_overhead_arm_only_contract_rejects_full_matrix() -> None:
+    assessment = assess_instrumentation_overhead(
+        off_repetitions=[_repetition(instrumentation=False) for _ in range(3)],
+        on_repetitions=[_repetition(instrumentation=True) for _ in range(3)],
+        source_commit=SOURCE,
+        overhead_arm_only=True,
+    )
+
+    assert assessment["status"] == "FAILED"
+    assert any("arm_set_mismatch" in value for value in assessment["failures"])
 
 
 def test_attribution_assessor_rejects_nonfinite_or_source_drift() -> None:
