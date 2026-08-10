@@ -137,6 +137,7 @@ def build_tenant_job_claim_statement(
     now: datetime,
     tenant_id: UUID,
     priority: int | None = None,
+    skip_locked: bool = True,
 ) -> Select[tuple[EvaluationJob, EvaluationRun]]:
     statement = (
         select(EvaluationJob, EvaluationRun)
@@ -152,11 +153,30 @@ def build_tenant_job_claim_statement(
             EvaluationJob.id.asc(),
         )
         .limit(1)
-        .with_for_update(of=EvaluationJob, skip_locked=True)
+        .with_for_update(of=EvaluationJob, skip_locked=skip_locked)
     )
     if priority is not None:
         statement = statement.where(EvaluationJob.priority == priority)
     return statement
+
+
+def build_tenant_eligible_job_exists_statement(
+    *,
+    now: datetime,
+    tenant_id: UUID,
+    priority: int,
+) -> Select[tuple[bool]]:
+    """Distinguish a locked eligible Job from a genuinely stale round permit."""
+
+    return select(
+        exists().where(
+            EvaluationJob.run_id == EvaluationRun.id,
+            EvaluationRun.tenant_id == tenant_id,
+            _eligible_job(now),
+            _eligible_run(),
+            EvaluationJob.priority == priority,
+        )
+    )
 
 
 def build_scheduler_round_members_statement(*, now: datetime) -> Select[Any]:
@@ -407,12 +427,23 @@ class SQLAlchemyJobClaimer:
                         now=eligible_at,
                         tenant_id=state.tenant_id,
                         priority=state.round_priority,
+                        skip_locked=skip_locked,
                     )
                 )
             ).all()
             if not rows:
-                state.status = SCHEDULER_PERMIT_EMPTY
-                state.version += 1
+                has_locked_or_visible_job = bool(
+                    await session.scalar(
+                        build_tenant_eligible_job_exists_statement(
+                            now=eligible_at,
+                            tenant_id=state.tenant_id,
+                            priority=state.round_priority,
+                        )
+                    )
+                )
+                if not has_locked_or_visible_job:
+                    state.status = SCHEDULER_PERMIT_EMPTY
+                    state.version += 1
                 if self._metrics is not None:
                     self._metrics.record_tenant_turn_without_job()
                 return ()

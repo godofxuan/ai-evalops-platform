@@ -6,6 +6,7 @@ from sqlalchemy.dialects import postgresql
 from app.jobs.claiming import (
     build_pending_scheduler_permit_statement,
     build_scheduler_round_members_statement,
+    build_tenant_eligible_job_exists_statement,
     build_tenant_job_claim_statement,
 )
 
@@ -61,3 +62,34 @@ def test_round_job_claim_is_scoped_to_frozen_tenant_priority() -> None:
     assert "evaluation_runs.tenant_id" in sql
     assert "evaluation_jobs.priority = 7" in sql
     assert "FOR UPDATE OF evaluation_jobs SKIP LOCKED" in sql
+
+
+def test_waiting_round_job_claim_blocks_instead_of_repeating_skip_locked_miss() -> None:
+    sql = compile_postgresql(
+        build_tenant_job_claim_statement(
+            now=NOW,
+            tenant_id=TENANT_ID,
+            priority=7,
+            skip_locked=False,
+        )
+    )
+
+    assert "FOR UPDATE OF evaluation_jobs" in sql
+    assert "SKIP LOCKED" not in sql
+
+
+def test_locked_job_probe_is_scoped_to_same_tenant_priority_and_eligibility() -> None:
+    sql = compile_postgresql(
+        build_tenant_eligible_job_exists_statement(
+            now=NOW,
+            tenant_id=TENANT_ID,
+            priority=7,
+        )
+    )
+
+    assert "EXISTS" in sql
+    assert "evaluation_runs.tenant_id" in sql
+    assert "evaluation_jobs.priority = 7" in sql
+    assert "evaluation_jobs.status" in sql
+    assert "evaluation_runs.status IN ('queued', 'running')" in sql
+    assert "FOR UPDATE" not in sql
