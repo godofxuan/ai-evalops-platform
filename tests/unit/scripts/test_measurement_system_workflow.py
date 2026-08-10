@@ -65,3 +65,6 @@ def test_measurement_workflow_locks_behavior_and_historical_evidence() -> None:
     assert "e321f63661645f728481ef11587f94fec9a0547a" in text
     assert "e2eecf765fba7300ecd8d48f0e301c78c5cbcf96" in text
     assert "adab7f560790f840f9db60eb4fbc23e62201e81b" in text
+    assert "f7c94423e3164e3fd3c6ba188ebce0a8c786ae0d" in text
+    assert "uv pip check" in text
+    assert "python -m pip check" not in text
