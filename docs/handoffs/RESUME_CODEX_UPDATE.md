@@ -1,5 +1,9 @@
 # AI EvalOps Platform — Resume Codex Update
 
+> **Authoritative entry changed on 2026-08-11:** use [`RESUME_CODEX_HANDOFF.md`](RESUME_CODEX_HANDOFF.md),
+> [`RESUME_METRIC_LEDGER.md`](RESUME_METRIC_LEDGER.md) and [`resume_package/`](resume_package/) instead. This file is a
+> historical snapshot and must not override current tests, passive measurement failure or zero candidate budgets.
+
 Updated: 2026-08-10<br>
 Branch: `codex/evidence-gate-1`<br>
 Qualification source: `91acdba9f5b5f1a84fb03640382c9e4871364afe`<br>

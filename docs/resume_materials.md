@@ -1,5 +1,10 @@
 # 简历与项目展示材料
 
+> **Historical Phase 9 material:** do not copy metrics or release state from this file into a current resume. The
+> authoritative 2026-08-11 package is [`docs/handoffs/RESUME_CODEX_HANDOFF.md`](handoffs/RESUME_CODEX_HANDOFF.md) and
+> [`docs/handoffs/RESUME_METRIC_LEDGER.md`](handoffs/RESUME_METRIC_LEDGER.md). Current v0.1.0 is NOT_READY, passive
+> measurement also failed qualification, and the local project suite is 783 passed / 33 skipped.
+
 ## 一句话项目描述
 
 设计并实现多租户异步 AI EvalOps 后端，以 PostgreSQL 事务和 lease fencing 支撑

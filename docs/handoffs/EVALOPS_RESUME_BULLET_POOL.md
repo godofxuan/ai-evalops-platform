@@ -1,5 +1,9 @@
 # AI EvalOps Platform — resume bullet pool
 
+> **Historical pool:** use [`RESUME_CODEX_HANDOFF.md`](RESUME_CODEX_HANDOFF.md) and
+> [`RESUME_METRIC_LEDGER.md`](RESUME_METRIC_LEDGER.md) for current bullets. This file predates the final passive
+> measurement failure, current 783/33 local suite and zero candidate budgets.
+
 Status binding: qualification source `91acdba`; targeted `31352270523` completed four reps and returned
 `NEGATIVE_SCALING`; release `NOT_READY`.
 

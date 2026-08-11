@@ -1,5 +1,9 @@
 # Resume-safe metrics
 
+> **Historical benchmark snapshot:** current resume authority is
+> [`docs/handoffs/RESUME_METRIC_LEDGER.md`](../handoffs/RESUME_METRIC_LEDGER.md). Do not copy a value from this file without
+> its source SHA and historical/current classification.
+
 ## VERIFIED_CURRENT
 
 - Qualification source `91acdba` passed real PostgreSQL push/PR CI `31351821014`/`31351825433`.
