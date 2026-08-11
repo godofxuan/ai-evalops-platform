@@ -3,6 +3,64 @@
 多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–9：工程底座、身份与不可变
 数据集、异步评测与恢复、实时事件、结果比较、双人盲评，以及可观测性与可复现实验入口。
 
+## Recruiter Quick View
+
+**一句话定位：** 这是一个以 PostgreSQL 为持久状态源的多租户异步 AI 评测后端，重点展示任务编排、
+并发正确性、故障恢复、证据合同和“证据不足时拒绝发布”的工程纪律；它适合作为作品集，**不代表 v0.1.0
+已经可以发布或投入生产**。
+
+### Problem
+
+AI evaluation workload 不是一次本地脚本调用。平台需要隔离租户身份与数据，在 Worker 崩溃、租约过期、
+重试和并发领取下保存可审计状态，同时用可复现证据决定一个候选版本是否允许发布。
+
+### System
+
+```text
+API -> Run -> Job -> Attempt -> Worker -> Target/Evaluator -> CaseResult -> Artifact/Evidence
+```
+
+PostgreSQL 保存权威状态；Redis 只承载可丢失的实时通知；Worker 采用 lease、heartbeat、version/attempt
+fencing 和 Reaper 恢复，执行语义明确限定为 at-least-once。
+
+### Strongest engineering evidence
+
+- 冻结 schema-v2 targeted experiment：64 arms、6,400 个提交/唯一/终态 Job，受保护的丢失、重复持久
+  结果、stale commit、非法状态迁移、孤儿终态与 Attempt 序列计数均为 0；范围仅限该冻结实验。
+- 冻结 20:1 workload：w1/w2/w4/w8、四次重复中，次级租户首个 durable receipt 均位于第 2 位；这是
+  workload-specific evidence，不是 universal/strong fairness 或 starvation-free 证明。
+- 真实 PostgreSQL RED→GREEN：确定性复现“唯一 eligible Job 被锁时 `SKIP LOCKED` 返回空、旧实现误把
+  permit 标成 `EMPTY`”的并发缺陷，并用独立 exists probe 保留 `PENDING` 修复该边界。
+- fail-closed evidence contract v2：assessor 从 raw PostgreSQL EXPLAIN 独立解析 candidate cardinality，
+  并重新校验 workload identity、protected counters 与 SHA-256 manifest，而不信任 producer summary 自证。
+
+### Negative release result
+
+**Release gate intentionally blocked release because the frozen scaling contract failed.** 4→8 Worker 的四个
+workload 中只有 many-small 达到 `0.95` 阈值；single、balanced、20:1 的 ratio 分别为 `0.782511`、
+`0.772797`、`0.796214`。随后三代 observer/telemetry 都未通过预注册的测量有效性或扰动门槛，因此没有
+对 H1/H2/H3 作因果归因。
+
+```text
+portfolio = usable
+v0.1.0 = NOT_READY_TARGETED_NEGATIVE_SCALING
+PR = Draft
+production readiness = NOT VERIFIED
+```
+
+先读：[项目最终状态](PROJECT_STATUS.md) · [项目证据地图](docs/handoffs/PROJECT_EVIDENCE_MAP.md) ·
+[招聘者 15/30/90 秒说明](docs/handoffs/RECRUITER_SUMMARY.md) ·
+[v0.1.0 release decision](docs/release/v0.1.0/RELEASE_DECISION.md)
+
+### Current archive verification
+
+- 2026-08-11 project `.venv` (Python 3.12): `783 passed, 33 skipped`；skips 明确要求本机未启用的真实
+  PostgreSQL/Redis/MinIO integration flags。
+- system Python 3.13 的直接 pytest 因缺少项目依赖/plugin 在 collection 阶段失败；它是错误环境证据，
+  不是代码回归。下面 Phase 9 表中的 `508 passed` 是当时的历史切片，不是当前总数。
+
+## Engineering Deep Dive
+
 ## 业务问题
 
 本项目要把只能本地运行的 RAG/Agent/大模型评测脚本，逐步改造成可提交、排队、执行、重试、恢复、取消、观察、比较和审计的后端平台。它不会复制现有 RAG 的检索或 Agent 代码；未来只通过 HTTP 把外部 RAG 当作被测目标。
@@ -617,6 +675,13 @@ domain，`empty_while_eligible` 也成为自动 release blocker。真实 Postgre
 `+0.5446%`，但 claim-p95 仍变化 `-13.4906%`，再次超过同一个 10% 绝对预算。因此第二次 verdict 仍为
 `INSTRUMENTATION_TOO_INTRUSIVE`；formal attribution 继续 skipped，H1/H2/H3 继续 `INCONCLUSIVE`。按第二次
 预注册，不再自动设计第三种 observer。
+
+在后续单独授权并预注册的最终 passive measurement qualification 中，workflow `31421039618` 使用外部
+PostgreSQL 5 Hz sampling 和固定的 `OFF/ON/ON/OFF`、`ON/OFF/OFF/ON` 区组顺序。throughput 中位数从
+`29.918848` 变为 `29.790450`（`-0.4292%`，在 5% 预算内），但 claim-p95 从 `708.689593 ms` 变为
+`509.975702 ms`（`-28.0396%`，绝对值超过 10% 预算）。即使 ON 更快，也说明 measurement mode 与被测
+结果不可忽略地相关，因此 verdict 是 `MEASUREMENT_SYSTEM_INVALID`，不是性能改善。正式 H1/H2/H3 仍未运行；
+最终归因状态为 `PERFORMANCE_ATTRIBUTION_STOPPED_BY_MEASUREMENT_VALIDITY`，measurement candidate budget 为 0。
 
 最终 source-bound 证据：
 
