@@ -1,5 +1,9 @@
 # AI EvalOps Platform — Teaching Codex Update
 
+> **Authoritative entry changed on 2026-08-11:** read
+> [`TEACHING_CODEX_HANDOFF.md`](TEACHING_CODEX_HANDOFF.md) first. It contains the ten-module curriculum, current passive
+> measurement result, source/test/evidence links and stop-decision boundary. This file is retained as a historical pointer.
+
 Updated: 2026-08-10<br>
 Branch: `codex/evidence-gate-1`<br>
 Scheduler source: `02f5e680e71d05c76c145da6895122a2cf04ba14`<br>

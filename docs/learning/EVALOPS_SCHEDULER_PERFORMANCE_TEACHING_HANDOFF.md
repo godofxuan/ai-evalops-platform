@@ -1,5 +1,10 @@
 # AI EvalOps Scheduler Performance — Teaching Handoff
 
+> **Historical deep dive (2026-08-11):** the authoritative current curriculum is
+> [`docs/handoffs/TEACHING_CODEX_HANDOFF.md`](../handoffs/TEACHING_CODEX_HANDOFF.md). Passive measurement workflow
+> `31421039618` also failed qualification; H1/H2/H3 remain inconclusive, both candidate budgets are zero, and v0.1.0
+> remains NOT_READY. Use this file for chronology, not current status.
+
 Updated: 2026-08-10
 Audience: 下一位负责带用户学习本项目的 ChatGPT/Codex
 Release context: Candidate 3 targeted correctness/fairness PASS, targeted scaling FAILED, v0.1.0 `NOT_READY`
