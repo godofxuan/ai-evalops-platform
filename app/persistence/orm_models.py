@@ -670,6 +670,65 @@ class CaseResult(Base):
     )
 
 
+class AgentExecutionArtifact(Base):
+    """Tenant-owned metadata for an immutable Agent trajectory payload in artifact storage."""
+
+    __tablename__ = "agent_execution_artifacts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_agent_exec_run_tenant",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["job_id", "run_id"],
+            ["evaluation_jobs.id", "evaluation_jobs.run_id"],
+            name="fk_agent_exec_job_run",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["artifact_reference_id"],
+            ["artifact_references.id"],
+            name="fk_agent_exec_reference",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "run_id",
+            "case_id",
+            "content_sha256",
+            name="uq_agent_execution_artifacts_content_identity",
+        ),
+        Index(
+            "ix_agent_execution_artifacts_tenant_id_run_id_case_id",
+            "tenant_id",
+            "run_id",
+            "case_id",
+        ),
+        Index("ix_agent_execution_artifacts_job_id_created_at", "job_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    case_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    artifact_reference_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    framework: Mapped[str] = mapped_column(String(100), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    terminal_state: Mapped[str | None] = mapped_column(String(100))
+    usage_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class RunMetric(Base):
     __tablename__ = "run_metrics"
     __table_args__ = (

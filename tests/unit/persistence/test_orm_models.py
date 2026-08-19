@@ -60,6 +60,7 @@ def check_expressions(table: Table) -> set[str]:
 def test_orm_metadata_has_current_tables_through_p2_1() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
+        "agent_execution_artifacts",
         "artifact_blobs",
         "artifact_references",
         "audit_events",

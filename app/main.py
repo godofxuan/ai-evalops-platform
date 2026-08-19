@@ -25,12 +25,14 @@ from app.api.errors import (
 )
 from app.api.middleware import RequestContextMiddleware
 from app.api.routes_datasets import router as datasets_router
+from app.api.routes_agent_artifacts import router as agent_artifacts_router
 from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
 from app.api.routes_observability import router as observability_router
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
+from app.agent_eval.service import SQLAlchemyAgentArtifactService
 from app.artifacts.storage import build_artifact_store
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
@@ -200,6 +202,10 @@ def create_app(
             session_factory,
             artifact_store=artifact_store,
         )
+        application.state.agent_artifact_service = SQLAlchemyAgentArtifactService(
+            session_factory,
+            artifact_store=artifact_store,
+        )
         application.state.redis_client = redis_client
         application.state.readiness_probe = build_infrastructure_readiness_probe(
             settings=runtime_settings,
@@ -235,6 +241,7 @@ def create_app(
     application.state.run_service = None
     application.state.result_service = None
     application.state.review_service = None
+    application.state.agent_artifact_service = None
     application.state.outbox_dispatcher = None
     application.state.outbox_dispatcher_task = None
     application.state.outbox_maintenance = None
@@ -244,6 +251,7 @@ def create_app(
     application.include_router(health_router)
     application.include_router(observability_router)
     application.include_router(datasets_router)
+    application.include_router(agent_artifacts_router)
     application.include_router(results_router)
     application.include_router(reviews_router)
     application.include_router(runs_router)

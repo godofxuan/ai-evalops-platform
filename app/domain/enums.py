@@ -17,6 +17,7 @@ class ArtifactType(StrEnum):
     FAILURE_CASES = "failure_cases"
     SUMMARY_REPORT = "summary_report"
     HUMAN_REVIEW_PACKET = "human_review_packet"
+    AGENT_EXECUTION = "agent_execution"
 
 
 class RunStatus(StrEnum):

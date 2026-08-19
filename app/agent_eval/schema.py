@@ -18,6 +18,15 @@ TrajectoryEventType = Literal[
     "citation",
     "terminal_state",
 ]
+TerminalState = Literal[
+    "answer",
+    "partial",
+    "refusal",
+    "permission_denied",
+    "budget_exhausted",
+    "tool_error",
+    "agent_error",
+]
 OpaqueIdentifier = Annotated[str, Field(min_length=1, max_length=200)]
 FrameworkName = Annotated[str, Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9._-]+$")]
 
@@ -37,6 +46,13 @@ class TrajectoryEvent(BaseModel):
     payload: dict[str, JsonValue] = Field(default_factory=dict)
 
 
+class AgentTerminal(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    state: TerminalState
+    reason: str | None = Field(default=None, min_length=1, max_length=500)
+
+
 class AgentRunArtifact(BaseModel):
     """Immutable semantic record emitted by an Agent runtime for one evaluation case."""
 
@@ -53,17 +69,21 @@ class AgentRunArtifact(BaseModel):
     retrieval: dict[str, JsonValue] = Field(default_factory=dict)
     evidence: dict[str, JsonValue] = Field(default_factory=dict)
     usage: dict[str, JsonValue] = Field(default_factory=dict)
-    terminal: dict[str, JsonValue]
+    terminal: AgentTerminal
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 def artifact_content_sha256(artifact: AgentRunArtifact) -> str:
     """Return the content identity over a canonical JSON representation."""
 
-    canonical = json.dumps(
+    canonical = canonical_artifact_bytes(artifact)
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def canonical_artifact_bytes(artifact: AgentRunArtifact) -> bytes:
+    return json.dumps(
         artifact.model_dump(mode="json"),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
     ).encode("utf-8")
-    return hashlib.sha256(canonical).hexdigest()
