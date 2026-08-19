@@ -21,6 +21,8 @@ def test_agent_execution_artifact_upgrade_preserves_artifact_store_boundary_offl
     command.upgrade(config, "20260810_0018:20260819_0019", sql=True)
 
     sql = capsys.readouterr().out
+    assert "DROP CONSTRAINT ck_artifact_references_artifact_type" in sql
+    assert "ck_artifact_references_ck_artifact_references_artifact_type" not in sql
     assert "CREATE TABLE agent_execution_artifacts" in sql
     assert "artifact_reference_id UUID NOT NULL" in sql
     assert "content_sha256 VARCHAR(64) NOT NULL" in sql

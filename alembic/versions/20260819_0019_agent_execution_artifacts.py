@@ -22,7 +22,11 @@ _NEW_ARTIFACT_TYPE_CHECK = (
 
 
 def upgrade() -> None:
-    op.drop_constraint("ck_artifact_references_artifact_type", "artifact_references", type_="check")
+    op.drop_constraint(
+        op.f("ck_artifact_references_artifact_type"),
+        "artifact_references",
+        type_="check",
+    )
     op.create_check_constraint(
         "artifact_type",
         "artifact_references",
@@ -98,7 +102,11 @@ def downgrade() -> None:
         table_name="agent_execution_artifacts",
     )
     op.drop_table("agent_execution_artifacts")
-    op.drop_constraint("ck_artifact_references_artifact_type", "artifact_references", type_="check")
+    op.drop_constraint(
+        op.f("ck_artifact_references_artifact_type"),
+        "artifact_references",
+        type_="check",
+    )
     op.create_check_constraint(
         "artifact_type",
         "artifact_references",
