@@ -61,3 +61,29 @@ existing orphan-cleanup flow; it does not create an unauthorized database refere
 
 - API contract, schema contract, ORM metadata and offline migration tests: passed;
 - Ruff, format and strict mypy checks: passed.
+
+## Stage C/D/E — Trajectory evaluators, attribution and regression decision
+
+### RED
+
+The evaluator test initially failed because `app.agent_eval.evaluators` did not exist. The regression/taxonomy test
+then failed because no failure classifier or configured Agent gate existed.
+
+### GREEN
+
+- implemented seven deterministic evaluators: task success, tool-call validity, trajectory efficiency,
+  grounding/citation, permission boundary, terminal state and cost/latency;
+- implemented a small evidence-led failure taxonomy; unsupported metrics do not become invented categories;
+- implemented run-to-run intersection/distribution comparison and a configuration-only regression gate for task
+  success, permission violations, latency p95 change and tool-error rate.
+
+### Important boundary
+
+The evaluators report counts and explicitly available values. They do not claim that fewer steps are better, infer a
+provider cost when none is supplied, or assert a universal release threshold. Gate thresholds are caller configuration
+and tests use fixed fixture values only.
+
+### Validation
+
+- trajectory evaluator and failure/regression tests: passed;
+- Ruff and strict mypy: passed.
