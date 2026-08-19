@@ -35,6 +35,7 @@ async def create_review_tasks(
         principal=principal,
         run_id=run_id,
         sample_size=payload.sample_size,
+        source=payload.source,
     )
 
 

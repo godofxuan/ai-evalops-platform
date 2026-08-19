@@ -2,19 +2,23 @@ import hashlib
 import json
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, and_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent_eval.review_packet import build_agent_review_packet
+from app.agent_eval.schema import AgentRunArtifact, artifact_content_sha256
 from app.artifacts.repository import ensure_artifact_reference
 from app.artifacts.storage import ArtifactStore, StoredArtifact
 from app.auth.principals import Principal
 from app.domain.enums import ArtifactType, JobStatus, ReviewTaskStatus
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
+    AgentEvaluationResultRecord,
+    AgentExecutionArtifact,
     AuditEvent,
     CaseResult,
     EvaluationJob,
@@ -57,6 +61,7 @@ class ReviewService(Protocol):
         principal: Principal,
         run_id: UUID,
         sample_size: int,
+        source: Literal["case_result", "agent_artifact"] = "case_result",
     ) -> list[ReviewTaskRead]:
         """Create or return deterministic blinded review tasks."""
 
@@ -183,8 +188,15 @@ class SQLAlchemyReviewService:
         principal: Principal,
         run_id: UUID,
         sample_size: int,
+        source: Literal["case_result", "agent_artifact"] = "case_result",
     ) -> list[ReviewTaskRead]:
         _require_task_creator(principal)
+        if source == "agent_artifact":
+            return await self._create_agent_tasks(
+                principal=principal,
+                run_id=run_id,
+                sample_size=sample_size,
+            )
         async with self._session_factory.begin() as session:
             await _require_run(
                 session,
@@ -260,6 +272,114 @@ class SQLAlchemyReviewService:
                     run_id=run_id,
                     stored=stored,
                 )
+        return task_reads
+
+    async def _create_agent_tasks(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        sample_size: int,
+    ) -> list[ReviewTaskRead]:
+        if self._artifact_store is None:
+            raise RuntimeError("artifact store is required for Agent review tasks")
+        async with self._session_factory() as session:
+            await _require_run(session, tenant_id=principal.tenant_id, run_id=run_id)
+            rows = (
+                await session.execute(
+                    select(AgentExecutionArtifact, AgentEvaluationResultRecord)
+                    .outerjoin(
+                        AgentEvaluationResultRecord,
+                        AgentEvaluationResultRecord.artifact_id == AgentExecutionArtifact.id,
+                    )
+                    .where(
+                        AgentExecutionArtifact.tenant_id == principal.tenant_id,
+                        AgentExecutionArtifact.run_id == run_id,
+                    )
+                    .order_by(
+                        AgentExecutionArtifact.case_id,
+                        AgentExecutionArtifact.created_at.desc(),
+                        AgentExecutionArtifact.id.desc(),
+                        AgentEvaluationResultRecord.evaluator_kind,
+                        AgentEvaluationResultRecord.created_at.desc(),
+                    )
+                )
+            ).all()
+
+        selected_artifacts: dict[str, AgentExecutionArtifact] = {}
+        evaluator_metrics: dict[str, dict[str, object]] = defaultdict(dict)
+        selected_kinds: dict[str, set[str]] = defaultdict(set)
+        for artifact, result in rows:
+            selected_artifact = selected_artifacts.setdefault(artifact.case_id, artifact)
+            if artifact.id != selected_artifact.id or result is None:
+                continue
+            if result.evaluator_kind in selected_kinds[artifact.case_id]:
+                continue
+            selected_kinds[artifact.case_id].add(result.evaluator_kind)
+            evaluator_metrics[artifact.case_id][result.evaluator_kind] = dict(
+                result.metrics_json
+            )
+
+        candidates: list[tuple[AgentExecutionArtifact, ReviewPacket]] = []
+        for artifact in selected_artifacts.values():
+            content = await self._artifact_store.get_bytes(artifact.content_sha256)
+            agent_artifact = AgentRunArtifact.model_validate_json(content)
+            if artifact_content_sha256(agent_artifact) != artifact.content_sha256:
+                raise RuntimeError("stored Agent artifact does not match its metadata digest")
+            packet_payload = build_agent_review_packet(
+                agent_artifact,
+                evaluator_results=evaluator_metrics[artifact.case_id],
+            )
+            candidates.append((artifact, _agent_packet(packet_payload)))
+        selected = sorted(
+            candidates,
+            key=lambda item: hashlib.sha256(f"{run_id}:{item[0].case_id}".encode()).digest(),
+        )[:sample_size]
+
+        async with self._session_factory.begin() as session:
+            await _require_run(session, tenant_id=principal.tenant_id, run_id=run_id)
+            for artifact, review_packet in selected:
+                await session.execute(
+                    postgresql_insert(HumanReviewTask)
+                    .values(
+                        id=uuid4(),
+                        tenant_id=principal.tenant_id,
+                        run_id=run_id,
+                        job_id=artifact.job_id,
+                        case_id=artifact.case_id,
+                        packet_json=review_packet.model_dump(mode="json"),
+                        status=ReviewTaskStatus.OPEN,
+                        created_by=principal.api_key_id,
+                    )
+                    .on_conflict_do_nothing(
+                        constraint="uq_human_review_tasks_run_id_case_id"
+                    )
+                )
+            tasks = (
+                (
+                    await session.execute(
+                        select(HumanReviewTask)
+                        .where(
+                            HumanReviewTask.tenant_id == principal.tenant_id,
+                            HumanReviewTask.run_id == run_id,
+                        )
+                        .order_by(HumanReviewTask.created_at, HumanReviewTask.id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        task_reads = [_task_read(task, own_submission=None) for task in tasks]
+        stored = await self._artifact_store.put_bytes(
+            serialize_review_packet_artifact(run_id, task_reads)
+        )
+        async with self._session_factory.begin() as session:
+            await _ensure_packet_artifact(
+                session,
+                tenant_id=principal.tenant_id,
+                run_id=run_id,
+                stored=stored,
+            )
         return task_reads
 
     async def list_tasks(
@@ -571,6 +691,25 @@ def _packet(candidate: ReviewCandidate) -> ReviewPacket:
         candidate_answer=candidate.answer.get("answer"),
         citations=_json_list(candidate.evidence.get("citations")),
         sources=_json_list(candidate.evidence.get("sources")),
+    )
+
+
+def _agent_packet(packet: dict[str, Any]) -> ReviewPacket:
+    input_value = packet.get("input")
+    input_mapping = input_value if isinstance(input_value, dict) else {}
+    question = input_mapping.get("message", input_mapping.get("question", ""))
+    return ReviewPacket.model_validate(
+        {
+            "case_id": packet["case_id"],
+            "question": str(question),
+            "reference_answer": input_mapping.get("expected_answer"),
+            "candidate_answer": packet.get("final_answer"),
+            "citations": _json_list(packet.get("citations")),
+            "sources": _json_list(packet.get("sources")),
+            "terminal_state": packet.get("terminal_state"),
+            "trajectory": _json_list(packet.get("trajectory")),
+            "evaluator_results": packet.get("evaluator_results", {}),
+        }
     )
 
 

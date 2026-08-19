@@ -25,6 +25,7 @@ def build_agent_review_packet(
         "input": artifact.input,
         "final_answer": artifact.output.get("answer"),
         "citations": artifact.evidence.get("citations", []),
+        "sources": artifact.evidence.get("sources", []),
         "terminal_state": artifact.terminal.state,
         "trajectory": [
             {"event_type": event.event_type, "tool_name": event.tool_name}

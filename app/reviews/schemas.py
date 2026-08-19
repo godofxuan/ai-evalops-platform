@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -33,6 +34,9 @@ class ReviewPacket(BaseModel):
     candidate_answer: JsonValue | None
     citations: list[JsonValue]
     sources: list[JsonValue]
+    terminal_state: str | None = None
+    trajectory: list[dict[str, JsonValue]] = Field(default_factory=list)
+    evaluator_results: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class ReviewSubmissionRead(BaseModel):
@@ -63,6 +67,7 @@ class ReviewTaskRead(BaseModel):
 
 class CreateReviewTasks(BaseModel):
     sample_size: int = Field(default=20, ge=1, le=200)
+    source: Literal["case_result", "agent_artifact"] = "case_result"
 
 
 class SubmitReview(BaseModel):

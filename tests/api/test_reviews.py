@@ -20,6 +20,12 @@ REVIEWER = Principal(
     key_prefix="evk_111122334455",
     can_review=True,
 )
+CREATOR = Principal(
+    tenant_id=TENANT_ID,
+    api_key_id=UUID("00000000-0000-0000-0000-000000000112"),
+    key_prefix="evk_222222222222",
+    can_create_review_tasks=True,
+)
 
 
 class RecordingReviewService:
@@ -56,6 +62,15 @@ class RecordingReviewService:
 class DenyingTaskCreationReviewService:
     async def create_tasks(self, **_kwargs: object) -> list[ReviewTaskRead]:
         raise ReviewTaskCreationPermissionError
+
+
+class RecordingTaskCreationReviewService:
+    def __init__(self) -> None:
+        self.source: str | None = None
+
+    async def create_tasks(self, **kwargs: object) -> list[ReviewTaskRead]:
+        self.source = str(kwargs["source"])
+        return []
 
 
 async def test_reviewer_task_packet_is_tenant_scoped_and_blinded() -> None:
@@ -126,3 +141,21 @@ async def test_request_data_cannot_self_grant_review_task_creation_permission() 
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "review_task_creator_required"
+
+
+async def test_review_tasks_can_explicitly_use_blinded_agent_artifacts() -> None:
+    service = RecordingTaskCreationReviewService()
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: CREATOR
+    application.state.review_service = service
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/runs/{RUN_ID}/review-tasks",
+            json={"sample_size": 8, "source": "agent_artifact"},
+        )
+
+    assert response.status_code == 201
+    assert service.source == "agent_artifact"
