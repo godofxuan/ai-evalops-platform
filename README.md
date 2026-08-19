@@ -1,63 +1,114 @@
 # AI EvalOps Platform
 
-多租户异步 AI 评测与任务编排平台。当前仓库已完成 Phase 0–9：工程底座、身份与不可变
-数据集、异步评测与恢复、实时事件、结果比较、双人盲评，以及可观测性与可复现实验入口。
+> 多租户异步 AI 评测与任务编排平台：将本地的 RAG、Agent 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的后端工作流。
 
-## Recruiter Quick View
+[![CI](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Async%20API-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-State%20Authority-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 
-**一句话定位：** 这是一个以 PostgreSQL 为持久状态源的多租户异步 AI 评测后端，重点展示任务编排、
-并发正确性、故障恢复、证据合同和“证据不足时拒绝发布”的工程纪律；它适合作为作品集，**不代表 v0.1.0
-已经可以发布或投入生产**。
+## Why it matters
 
-### Problem
+AI evaluation is more than running a script once. This platform provides the backend machinery needed to submit,
+schedule, execute, recover and audit evaluation work across tenants.
 
-AI evaluation workload 不是一次本地脚本调用。平台需要隔离租户身份与数据，在 Worker 崩溃、租约过期、
-重试和并发领取下保存可审计状态，同时用可复现证据决定一个候选版本是否允许发布。
+| Focus | What is implemented |
+| --- | --- |
+| Async orchestration | Immutable Runs, durable Jobs and lease-bound Attempts |
+| Multi-tenancy | Server-derived identity, tenant-scoped data and immutable Dataset Versions |
+| Concurrency safety | Lease fencing, stale-worker rejection, competing Reapers and explicit state transitions |
+| Evaluation operations | Target/evaluator registry, results, artifacts, metrics, comparison and human review |
+| Evidence engineering | Source-bound artifacts, raw PostgreSQL plan assessment and manifest verification |
 
-### System
+## System at a glance
 
-```text
-API -> Run -> Job -> Attempt -> Worker -> Target/Evaluator -> CaseResult -> Artifact/Evidence
+```mermaid
+flowchart LR
+    Client[Client / CI] --> API[FastAPI API]
+    API --> Run[Evaluation Run]
+    Run --> Job[Durable Job]
+    Job --> Attempt[Lease-bound Attempt]
+    Attempt --> Worker[Worker]
+    Worker --> Target[Target / Evaluator]
+    Target --> Result[CaseResult]
+    Result --> Artifact[Artifact & Evidence]
+    API --> PG[(PostgreSQL)]
+    Worker --> PG
+    Reaper[Reaper] --> PG
+    API -. Realtime events .-> Redis[(Redis)]
 ```
 
-PostgreSQL 保存权威状态；Redis 只承载可丢失的实时通知；Worker 采用 lease、heartbeat、version/attempt
-fencing 和 Reaper 恢复，执行语义明确限定为 at-least-once。
+PostgreSQL is the durable state authority. Redis carries realtime notifications. Workers use lease, heartbeat, version and
+Attempt identity to fence stale writers; Reapers recover expired work.
 
-### Strongest engineering evidence
+## Engineering highlights
 
-- 冻结 schema-v2 targeted experiment：64 arms、6,400 个提交/唯一/终态 Job，受保护的丢失、重复持久
-  结果、stale commit、非法状态迁移、孤儿终态与 Attempt 序列计数均为 0；范围仅限该冻结实验。
-- 冻结 20:1 workload：w1/w2/w4/w8、四次重复中，次级租户首个 durable receipt 均位于第 2 位；这是
-  workload-specific evidence，不是 universal/strong fairness 或 starvation-free 证明。
-- 真实 PostgreSQL RED→GREEN：确定性复现“唯一 eligible Job 被锁时 `SKIP LOCKED` 返回空、旧实现误把
-  permit 标成 `EMPTY`”的并发缺陷，并用独立 exists probe 保留 `PENDING` 修复该边界。
-- fail-closed evidence contract v2：assessor 从 raw PostgreSQL EXPLAIN 独立解析 candidate cardinality，
-  并重新校验 workload identity、protected counters 与 SHA-256 manifest，而不信任 producer summary 自证。
+### Durable execution and recovery
 
-### Negative release result
+Runs, Jobs and Attempts are deliberately separate: a Job is durable work, while an Attempt records one lease-bound
+execution generation. This creates a reliable foundation for retries, recovery and audit history.
 
-**Release gate intentionally blocked release because the frozen scaling contract failed.** 4→8 Worker 的四个
-workload 中只有 many-small 达到 `0.95` 阈值；single、balanced、20:1 的 ratio 分别为 `0.782511`、
-`0.772797`、`0.796214`。随后三代 observer/telemetry 都未通过预注册的测量有效性或扰动门槛，因此没有
-对 H1/H2/H3 作因果归因。
+- Explicit Job state machine and bounded retry policy
+- Heartbeat-based lease extension and fenced result/failure commit
+- `FOR UPDATE SKIP LOCKED` Reaper recovery
+
+### Real concurrency work, not just in-memory coordination
+
+The scheduler and commit paths are designed around PostgreSQL transaction semantics. The project includes deterministic
+RED → GREEN reproduction for a `SKIP LOCKED` false-empty race, as well as tests for stale Workers, concurrent claimers,
+competing Reapers and durable tenant scheduling.
 
 ```text
-portfolio = usable
-v0.1.0 = NOT_READY_TARGETED_NEGATIVE_SCALING
-PR = Draft
-production readiness = NOT VERIFIED
+lease owner + lease version + live expiry + active Attempt
+                         ↓
+                  fenced durable commit
 ```
 
-先读：[项目最终状态](PROJECT_STATUS.md) · [项目证据地图](docs/handoffs/PROJECT_EVIDENCE_MAP.md) ·
-[招聘者 15/30/90 秒说明](docs/handoffs/RECRUITER_SUMMARY.md) ·
-[v0.1.0 release decision](docs/release/v0.1.0/RELEASE_DECISION.md)
+### Reproducible evaluation evidence
 
-### Current archive verification
+Evidence tooling binds source revision, workload identity, protected correctness counters, raw PostgreSQL `EXPLAIN` output
+and a SHA-256 manifest. An independent assessor rejects missing, stale or inconsistent experiment artifacts.
 
-- 2026-08-11 project `.venv` (Python 3.12): `783 passed, 33 skipped`；skips 明确要求本机未启用的真实
-  PostgreSQL/Redis/MinIO integration flags。
-- system Python 3.13 的直接 pytest 因缺少项目依赖/plugin 在 collection 阶段失败；它是错误环境证据，
-  不是代码回归。下面 Phase 9 表中的 `508 passed` 是当时的历史切片，不是当前总数。
+## Explore the project
+
+| I want to see… | Start here |
+| --- | --- |
+| Architecture and data flow | [Architecture](docs/01_architecture.md) |
+| Run / Job / Attempt model | [Domain model](docs/02_domain_model.md) |
+| Tenant boundaries | [Security boundaries](docs/08_security_boundaries.md) |
+| Scheduler and concurrency tests | [Concurrency tests](tests/concurrency/) |
+| Evidence tooling | [Evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md) |
+| Engineering interview stories | [Story bank](docs/handoffs/INTERVIEW_STORY_BANK.md) |
+| Resume-ready project summary | [Resume package](docs/handoffs/resume_package/PROJECT_SUMMARY.md) |
+
+## Technology
+
+```text
+Python 3.12 · FastAPI · SQLAlchemy · psycopg · PostgreSQL · Redis
+pytest · Alembic · Docker Compose · Prometheus · OpenTelemetry · MinIO/S3
+```
+
+## Quick start
+
+```powershell
+uv python install 3.12
+uv sync --locked --all-groups
+Copy-Item .env.example .env
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload `
+  --loop app.core.event_loop:create_psycopg_compatible_event_loop
+```
+
+```powershell
+uv run pytest -q
+docker compose -f deploy/compose.yaml up --build --wait
+```
+
+For a fuller walkthrough, start with the [project evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md). The complete
+engineering and release record remains available in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
+<details>
+<summary><strong>Engineering deep dive and full project history</strong></summary>
 
 ## Engineering Deep Dive
 
@@ -774,3 +825,5 @@ PostgreSQL 5 Hz sampling 和固定的 `OFF/ON/ON/OFF`、`ON/OFF/OFF/ON` 区组�
     at-least-once 而不是 exactly-once。
 35. 展示 retention CTE 为什么只删除过期已发布行、如何用 `SKIP LOCKED` 并发维护，以及为什么
     migration downgrade 不能恢复已按策略删除的 delivered intent。
+
+</details>
