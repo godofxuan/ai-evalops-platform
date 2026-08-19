@@ -87,3 +87,22 @@ and tests use fixed fixture values only.
 
 - trajectory evaluator and failure/regression tests: passed;
 - Ruff and strict mypy: passed.
+
+## Stage F/G/I — Control plane, trace correlation and blinded review support
+
+### RED
+
+The MCP control-plane, safe trace-attribute and Agent review-packet tests each failed during import because those
+contracts did not exist.
+
+### GREEN
+
+- added a seven-tool MCP dispatcher whose only execution route is an authenticated service-layer adapter;
+- added an allow-listed Agent/EvalOps correlation attribute helper;
+- added a blinded, limited trajectory review-packet builder that omits framework and session identity.
+
+### Design decision
+
+The local environment has no MCP SDK. Rather than adding an unvalidated dependency or exposing an unauthenticated
+listener, the repository now has a transport-independent core with a testable Principal boundary. A future stdio/HTTP
+transport adapter must use this core and the existing API/service auth contract.
