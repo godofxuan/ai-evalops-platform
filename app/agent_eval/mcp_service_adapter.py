@@ -28,9 +28,7 @@ class McpResultService(Protocol):
         self, *, principal: Principal, run_id: UUID, query: CaseQuery
     ) -> CasePage: ...
 
-    async def get_case(
-        self, *, principal: Principal, run_id: UUID, case_id: str
-    ) -> CaseRead: ...
+    async def get_case(self, *, principal: Principal, run_id: UUID, case_id: str) -> CaseRead: ...
 
     async def compare_runs(
         self,

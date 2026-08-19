@@ -316,9 +316,7 @@ class SQLAlchemyReviewService:
             if result.evaluator_kind in selected_kinds[artifact.case_id]:
                 continue
             selected_kinds[artifact.case_id].add(result.evaluator_kind)
-            evaluator_metrics[artifact.case_id][result.evaluator_kind] = dict(
-                result.metrics_json
-            )
+            evaluator_metrics[artifact.case_id][result.evaluator_kind] = dict(result.metrics_json)
 
         candidates: list[tuple[AgentExecutionArtifact, ReviewPacket]] = []
         for artifact in selected_artifacts.values():
@@ -351,9 +349,7 @@ class SQLAlchemyReviewService:
                         status=ReviewTaskStatus.OPEN,
                         created_by=principal.api_key_id,
                     )
-                    .on_conflict_do_nothing(
-                        constraint="uq_human_review_tasks_run_id_case_id"
-                    )
+                    .on_conflict_do_nothing(constraint="uq_human_review_tasks_run_id_case_id")
                 )
             tasks = (
                 (

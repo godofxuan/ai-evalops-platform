@@ -39,9 +39,7 @@ class SQLAlchemyAgentRegressionService:
                     await session.execute(
                         select(EvaluationRun.id).where(
                             EvaluationRun.tenant_id == principal.tenant_id,
-                            EvaluationRun.id.in_(
-                                (request.left_run_id, request.right_run_id)
-                            ),
+                            EvaluationRun.id.in_((request.left_run_id, request.right_run_id)),
                         )
                     )
                 ).scalars()

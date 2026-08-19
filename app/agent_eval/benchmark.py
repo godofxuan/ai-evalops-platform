@@ -76,8 +76,7 @@ def run_adapter_comparison(path: Path) -> dict[str, Any]:
         "adapters": ["custom-controller", "langgraph-adapter"],
         "artifact_sha256": {
             "custom-controller": {
-                case_id: artifact_content_sha256(artifact)
-                for case_id, artifact in custom.items()
+                case_id: artifact_content_sha256(artifact) for case_id, artifact in custom.items()
             },
             "langgraph-adapter": {
                 case_id: artifact_content_sha256(artifact)

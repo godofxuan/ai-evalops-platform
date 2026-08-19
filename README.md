@@ -19,7 +19,10 @@ contract for tool use, terminal behavior, evidence and regression analysis.
 | Multi-tenancy | Server-derived identity, tenant-scoped data and immutable Dataset Versions |
 | Concurrency safety | Lease fencing, stale-worker rejection, competing Reapers and explicit state transitions |
 | Agent trajectories | Versioned framework-neutral artifact schema, content hash and tenant-scoped immutable ingestion |
-| Evaluation operations | Deterministic trajectory evaluators, results, comparison, regression gate and blinded review packet support |
+| Evaluation operations | Seven deterministic evaluators, immutable result rows, Run comparison and configurable regression gates |
+| Agent control plane | Official MCP SDK v2 stdio server with seven tools bound to the existing API-key Principal and service layer |
+| Human review | Existing double-review/adjudication workflow can consume bounded, identity-blinded Agent trajectory packets |
+| Adapter benchmark | Fixed eight-family Custom/LangGraph-compatibility replay with deterministic source-bound JSON evidence |
 | Evidence engineering | Source-bound artifacts, raw PostgreSQL plan assessment and manifest verification |
 
 ## System at a glance
@@ -36,6 +39,8 @@ flowchart LR
     Worker --> Target[Target / Evaluator]
     Target --> Result[CaseResult / Trajectory Evaluation]
     Result --> Artifact[Artifact & Evidence]
+    MCP[MCP stdio host] --> API
+    Result --> Review[Blinded human review]
     API --> PG[(PostgreSQL)]
     Worker --> PG
     Reaper[Reaper] --> PG
@@ -81,6 +86,7 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 | Agent artifact and trajectory contract | [Agent Run Artifact](docs/agent_eval/AGENT_RUN_ARTIFACT_SCHEMA.md) |
 | Agent failure attribution and regression | [Failure taxonomy](docs/agent_eval/FAILURE_TAXONOMY.md) |
 | Agent MCP control plane boundary | [MCP Eval Control Plane](docs/agent_eval/MCP_EVAL_CONTROL_PLANE.md) |
+| Fixed adapter benchmark and evidence scope | [Agent benchmark](docs/agent_eval/BENCHMARK.md) |
 | Run / Job / Attempt model | [Domain model](docs/02_domain_model.md) |
 | Tenant boundaries | [Security boundaries](docs/08_security_boundaries.md) |
 | Scheduler and concurrency tests | [Concurrency tests](tests/concurrency/) |
@@ -91,7 +97,7 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 ## Technology
 
 ```text
-Python 3.12 · FastAPI · SQLAlchemy · psycopg · PostgreSQL · Redis
+Python 3.12 · FastAPI · SQLAlchemy · psycopg · PostgreSQL · Redis · MCP Python SDK v2
 pytest · Alembic · Docker Compose · Prometheus · OpenTelemetry · MinIO/S3
 ```
 
@@ -110,6 +116,17 @@ uv run uvicorn app.main:app --reload `
 uv run pytest -q
 docker compose -f deploy/compose.yaml up --build --wait
 ```
+
+Run the local MCP server only after setting an existing tenant-scoped API key:
+
+```powershell
+$env:EVALOPS_MCP_API_KEY = "evk_..."
+uv run python -m app.agent_eval.mcp_stdio
+```
+
+The stdio process authenticates once through the same hashed API-key lookup as HTTP. No unauthenticated MCP HTTP
+listener is enabled. Reproduce the adapter-contract evidence with
+`uv run python -m scripts.run_agent_adapter_benchmark`.
 
 For a fuller walkthrough, start with the [project evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md). The complete
 engineering and release record remains available in [PROJECT_STATUS.md](PROJECT_STATUS.md).

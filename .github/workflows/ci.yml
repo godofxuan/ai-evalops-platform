@@ -80,6 +80,11 @@ jobs:
           uv run --no-sync pytest -m "not integration"
           --junitxml=/tmp/junit-unit.xml
 
+      - name: Verify deterministic Agent adapter evidence
+        run: |
+          uv run --no-sync python -m scripts.run_agent_adapter_benchmark
+          git diff --exit-code -- docs/agent_eval/adapter_comparison_evidence.json
+
       - name: Prepare artifact directory
         if: ${{ !cancelled() }}
         run: mkdir -p "$EVALOPS_ARTIFACT_ROOT"
@@ -139,6 +144,12 @@ jobs:
         run: >-
           uv run --no-sync pytest tests/integration/test_human_reviews.py
           --junitxml=/tmp/junit-human-reviews.xml
+
+      - name: Integration - Agent evaluation, regression, and review workflow
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_agent_eval_workflow.py
+          --junitxml=/tmp/junit-agent-eval-workflow.xml
 
       - name: Integration - tenant identity and immutable datasets
         if: ${{ !cancelled() }}
@@ -212,6 +223,7 @@ jobs:
           /tmp/junit-tenant-claim-parallelism.xml
           /tmp/junit-tenant-durable-fairness.xml
           /tmp/junit-human-reviews.xml
+          /tmp/junit-agent-eval-workflow.xml
           /tmp/junit-identity-datasets.xml
           /tmp/junit-tenant-rls.xml
           /tmp/junit-artifact-references.xml

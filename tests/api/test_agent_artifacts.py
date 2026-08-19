@@ -202,9 +202,7 @@ async def test_agent_trajectory_can_be_read_through_the_authenticated_api() -> N
     async with AsyncClient(
         transport=ASGITransport(app=application), base_url="http://test"
     ) as client:
-        response = await client.get(
-            f"/api/v1/runs/{RUN_ID}/agent-artifacts/{ARTIFACT_ID}"
-        )
+        response = await client.get(f"/api/v1/runs/{RUN_ID}/agent-artifacts/{ARTIFACT_ID}")
 
     assert response.status_code == 200
     assert response.json()["artifact"]["case_id"] == "case-001"

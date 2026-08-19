@@ -130,3 +130,87 @@ multi-step retrieval, denied access, missing/conflicting evidence, tool failure,
 The same artifact contract accepts `custom-controller` and `langgraph-adapter` labels, while comparison requires model,
 dataset, tools, retrieval, budget and prompt policy to be frozen first. No benchmark score is claimed until that run is
 actually executed and source-bound.
+
+## Stage K — Persisted evaluator evidence and exact reads
+
+### Design judgement
+
+Pure evaluator functions were insufficient for auditability: MCP, human review and regression needed a durable result
+identity. The chosen identity is Agent artifact + evaluator kind + server-owned implementation version + canonical
+configuration SHA-256. This allows implementation or configuration changes to create new evidence while exact retries
+reuse the existing row. A composite foreign key binds result, tenant and Run to the same Agent artifact.
+
+### RED / problems / correction
+
+- the API tracer initially failed because evaluation request/result contracts did not exist;
+- the ORM constraint tracer failed because the result model did not exist;
+- the first ORM edit accidentally placed the new class between `AgentExecutionArtifact` constraints and fields, so
+  SQLAlchemy correctly rejected a foreign key referencing a missing `run_id`; the class boundary was repaired before
+  proceeding;
+- the regression HTTP model initially used global strict mode and rejected UUID strings, which are the only UUID
+  representation JSON can carry; strict mode was removed only at that HTTP boundary while field/range checks remain;
+- the denied-access benchmark exposed that a correct `permission_denied` terminal was being counted as a permission
+  violation. The gate now counts observed `unauthorized_result_leak_count`; failure attribution remains separate.
+
+### Effect
+
+`20260819_0020` adds immutable result rows, the API can execute/list evaluator evidence and read exact trajectories,
+and Agent Run comparison applies caller-configured gates to the newest artifact and newest result per evaluator kind.
+An exact case-result endpoint was added so MCP does not scan paginated data.
+
+## Stage L — Official MCP stdio server
+
+### Design judgement
+
+The official MCP Python SDK v2 was selected after checking its current stable documentation. The locked dependency is
+`mcp>=2,<3`. The runnable transport is stdio because a local host can launch it without opening a network listener.
+Streamable HTTP remains disabled until an OAuth/resource-server deployment boundary is implemented and tested.
+
+### RED / problems / correction
+
+- the SDK protocol test first failed because no server adapter existed;
+- `uv` was not globally installed, but the repository’s ignored `.codex-tools` contained uv 0.11.32, so the lock was
+  updated without changing system Python;
+- the entry point fails before database/service startup when `EVALOPS_MCP_API_KEY` is missing;
+- a concrete adapter maps all seven tools to existing typed services and never accepts `tenant_id`.
+
+### Effect
+
+The official in-memory client discovers and calls all tools. The stdio process authenticates once through the existing
+scrypt lookup, binds the resulting Principal and disposes database/telemetry resources when the protocol exits.
+
+## Stage M — Agent evidence in the existing human-review state machine
+
+### Design judgement
+
+Creating a second Agent-only review system would duplicate permissions, task locking and adjudication. Instead,
+`CreateReviewTasks.source=agent_artifact` selects the latest immutable artifact per case and the latest evidence per
+evaluator kind, verifies content identity and writes the existing `HumanReviewTask` shape.
+
+### Effect
+
+Packets expose the question, final answer, citations/sources, terminal state, bounded semantic tool/citation events and
+evaluator evidence. They omit tenant, framework, session and raw model-step content. The existing double review,
+dispute and third-reviewer adjudication paths remain unchanged.
+
+## Stage N — Executable fixed adapter benchmark
+
+### RED / problems / correction
+
+The benchmark test first failed because only a prose specification existed. After implementation, directly executing
+`python scripts/run_agent_adapter_benchmark.py` failed to import the top-level app package; the supported reproducible
+entry is `python -m scripts.run_agent_adapter_benchmark`.
+
+### Effect and evidence boundary
+
+The fixed eight-family fixture replays controller-style and LangGraph-style callback mappings into the same artifact
+schema. Canonical evidence records the fixture and artifact SHA-256 values, 8/8 case intersection, equal fixture-derived
+success `0.875`, equal interpolated p95 about `83 ms`, and zero unauthorized-result leaks. The evidence labels itself
+as adapter-contract replay, not live runtime performance.
+
+## Stage O — Pending remote qualification
+
+The local environment still has no Docker executable. The new real PostgreSQL integration test therefore reports an
+explicit skip locally and must not be described as passed. CI now has a dedicated step covering artifact ingestion,
+seven persisted evaluators, idempotent replay, cross-tenant hiding, regression gating and Agent human-review packet
+creation after applying migrations to real PostgreSQL.

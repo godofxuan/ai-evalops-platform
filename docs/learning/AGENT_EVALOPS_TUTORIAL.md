@@ -27,6 +27,27 @@ regression or tool-error rate, but no default threshold is advertised as industr
 lacks a reliable automatic oracle, the existing dual-review/adjudication workflow receives a blinded packet with final
 answer, citations, a limited semantic trajectory and evaluator results—not model/framework identity.
 
+Evaluator evidence is immutable and reproducible by identity: artifact ID, evaluator kind, built-in implementation
+version and canonical configuration hash. Repeating an identical evaluation returns the same row; changing evaluator
+code version or configuration creates distinct evidence. Run comparison currently selects the newest artifact per case
+and the newest result per evaluator kind, making that selection rule visible rather than silently merging every version.
+
+A correct permission denial is not automatically a security violation. The taxonomy may call it a permission-related
+failure for diagnosis, while the release gate counts only observed unauthorized-result leakage.
+
+## MCP development loop
+
+The official MCP SDK v2 exposes seven stdio tools. The process requires an existing API key, validates it through the
+same lookup as HTTP and binds the resulting Principal before serving calls. The MCP adapter only translates JSON tool
+arguments into typed Run/Result/Agent services; it does not own SQL or accept tenant identity. HTTP is not mounted until
+its authentication and deployment boundary is separately qualified.
+
+## What the fixed benchmark proves
+
+The eight-family fixture proves that controller events and LangGraph-style callback events can be normalized into the
+same artifact and evaluated identically. It does not execute a live model or LangGraph runtime. The checked-in success
+and latency numbers are fixture-derived contract evidence, not a performance comparison.
+
 ## OTel and provenance
 
 Use `agent.session_id`, `agent.framework`, `eval.run_id`, `eval.job_id`, `eval.attempt_id`, `eval.case_id` and
