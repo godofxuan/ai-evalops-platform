@@ -12,10 +12,11 @@ from app.results.schemas import (
     ArtifactRead,
     CasePage,
     CaseQuery,
+    CaseRead,
     MetricsRead,
     RunComparisonRead,
 )
-from app.results.service import ResultService
+from app.results.service import CaseResultNotFoundError, ResultService
 
 router = APIRouter(prefix="/api/v1/runs", tags=["results"])
 
@@ -113,4 +114,28 @@ async def list_run_cases(
             status_code=422,
             code="invalid_cursor",
             message="The pagination cursor is invalid for this query.",
+        ) from None
+
+
+@router.get("/{run_id}/cases/{case_id}", response_model=CaseRead)
+async def get_run_case(
+    run_id: UUID,
+    case_id: str,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> CaseRead:
+    service = cast(ResultService | None, request.app.state.result_service)
+    if service is None:
+        raise RuntimeError("result service is not configured")
+    try:
+        return await service.get_case(
+            principal=principal,
+            run_id=run_id,
+            case_id=case_id,
+        )
+    except CaseResultNotFoundError:
+        raise APIError(
+            status_code=404,
+            code="case_result_not_found",
+            message="The case result was not found.",
         ) from None

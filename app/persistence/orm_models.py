@@ -700,6 +700,12 @@ class AgentExecutionArtifact(Base):
             "content_sha256",
             name="uq_agent_execution_artifacts_content_identity",
         ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            "run_id",
+            name="uq_agent_execution_artifacts_id_tenant_run",
+        ),
         Index(
             "ix_agent_execution_artifacts_tenant_id_run_id_case_id",
             "tenant_id",
@@ -722,6 +728,53 @@ class AgentExecutionArtifact(Base):
     terminal_state: Mapped[str | None] = mapped_column(String(100))
     usage_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class AgentEvaluationResultRecord(Base):
+    """Immutable, reproducible evaluator evidence for one Agent execution artifact."""
+
+    __tablename__ = "agent_evaluation_results"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["artifact_id", "tenant_id", "run_id"],
+            [
+                "agent_execution_artifacts.id",
+                "agent_execution_artifacts.tenant_id",
+                "agent_execution_artifacts.run_id",
+            ],
+            name="fk_agent_eval_result_artifact_tenant_run",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "artifact_id",
+            "evaluator_kind",
+            "evaluator_version",
+            "config_sha256",
+            name="uq_agent_eval_results_identity",
+        ),
+        Index(
+            "ix_agent_evaluation_results_tenant_run_kind",
+            "tenant_id",
+            "run_id",
+            "evaluator_kind",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    artifact_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    evaluator_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    config_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    failure_taxonomy_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

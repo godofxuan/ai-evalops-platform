@@ -1,6 +1,8 @@
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Table, UniqueConstraint
 
 from app.persistence.orm_models import (
+    AgentEvaluationResultRecord,
+    AgentExecutionArtifact,
     APIKey,
     ArtifactBlob,
     ArtifactReference,
@@ -60,6 +62,7 @@ def check_expressions(table: Table) -> set[str]:
 def test_orm_metadata_has_current_tables_through_p2_1() -> None:
     assert set(Base.metadata.tables) == {
         "api_keys",
+        "agent_evaluation_results",
         "agent_execution_artifacts",
         "artifact_blobs",
         "artifact_references",
@@ -79,6 +82,23 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
         "tenant_scheduler_states",
         "tenants",
     }
+
+
+def test_agent_evaluation_results_keep_tenant_run_and_artifact_lineage() -> None:
+    assert frozenset({"id", "tenant_id", "run_id"}) in unique_column_sets(
+        AgentExecutionArtifact.__table__
+    )
+    assert (
+        ("artifact_id", "tenant_id", "run_id"),
+        (
+            "agent_execution_artifacts.id",
+            "agent_execution_artifacts.tenant_id",
+            "agent_execution_artifacts.run_id",
+        ),
+    ) in foreign_key_specs(AgentEvaluationResultRecord.__table__)
+    assert frozenset(
+        {"artifact_id", "evaluator_kind", "evaluator_version", "config_sha256"}
+    ) in unique_column_sets(AgentEvaluationResultRecord.__table__)
 
 
 def test_tenant_metadata_includes_fair_claim_scheduling_state() -> None:

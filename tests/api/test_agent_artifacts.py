@@ -5,7 +5,13 @@ from httpx import ASGITransport, AsyncClient
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from app.agent_eval.schemas import AgentArtifactRead, AgentArtifactUpload
+from app.agent_eval.schemas import (
+    AgentArtifactDetailRead,
+    AgentArtifactEvaluationRequest,
+    AgentArtifactEvaluationResultRead,
+    AgentArtifactRead,
+    AgentArtifactUpload,
+)
 from app.agent_eval.service import AgentArtifactRunMismatchError
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
@@ -18,6 +24,7 @@ PRINCIPAL = Principal(
     key_prefix="evk_001122334455",
 )
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
+ARTIFACT_ID = UUID("00000000-0000-0000-0000-000000000701")
 
 
 def _payload() -> dict[str, object]:
@@ -57,7 +64,7 @@ class RecordingAgentArtifactService:
         self.called_with = (principal, run_id, request)
         artifact = request.artifact
         return AgentArtifactRead(
-            id=UUID("00000000-0000-0000-0000-000000000701"),
+            id=ARTIFACT_ID,
             run_id=run_id,
             case_id=artifact.case_id,
             schema_version=artifact.schema_version,
@@ -65,6 +72,64 @@ class RecordingAgentArtifactService:
             content_sha256="a" * 64,
             terminal_state="answer",
             created_at=datetime(2026, 8, 19, tzinfo=UTC),
+        )
+
+    async def evaluate(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        artifact_id: UUID,
+        request: AgentArtifactEvaluationRequest,
+    ) -> list[AgentArtifactEvaluationResultRead]:
+        assert principal == PRINCIPAL
+        assert run_id == RUN_ID
+        assert artifact_id == ARTIFACT_ID
+        assert request.evaluators == ["permission_boundary"]
+        return [
+            AgentArtifactEvaluationResultRead(
+                id=UUID("00000000-0000-0000-0000-000000000801"),
+                artifact_id=artifact_id,
+                evaluator_kind="permission_boundary",
+                evaluator_version="builtin-v1",
+                config_sha256="0" * 64,
+                metrics={"permission_boundary_passed": True},
+                failure_taxonomy=[],
+                created_at=datetime(2026, 8, 19, tzinfo=UTC),
+            )
+        ]
+
+    async def get(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        artifact_id: UUID,
+    ) -> AgentArtifactDetailRead:
+        assert principal == PRINCIPAL
+        assert run_id == RUN_ID
+        assert artifact_id == ARTIFACT_ID
+        return AgentArtifactDetailRead(
+            id=artifact_id,
+            content_sha256="a" * 64,
+            artifact=AgentArtifactUpload.model_validate(_payload()).artifact,
+        )
+
+    async def list_evaluations(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        artifact_id: UUID,
+    ) -> list[AgentArtifactEvaluationResultRead]:
+        return await self.evaluate(
+            principal=principal,
+            run_id=run_id,
+            artifact_id=artifact_id,
+            request=AgentArtifactEvaluationRequest(
+                evaluators=["permission_boundary"],
+                config={},
+            ),
         )
 
 
@@ -109,6 +174,57 @@ async def test_agent_artifact_run_mismatch_is_a_safe_validation_error() -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_agent_artifact"
+
+
+async def test_agent_artifact_can_be_evaluated_through_the_authenticated_api() -> None:
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.agent_artifact_service = RecordingAgentArtifactService()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/runs/{RUN_ID}/agent-artifacts/{ARTIFACT_ID}/evaluations",
+            json={"evaluators": ["permission_boundary"], "config": {}},
+        )
+
+    assert response.status_code == 200
+    assert response.json()[0]["evaluator_kind"] == "permission_boundary"
+    assert response.json()[0]["metrics"] == {"permission_boundary_passed": True}
+
+
+async def test_agent_trajectory_can_be_read_through_the_authenticated_api() -> None:
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.agent_artifact_service = RecordingAgentArtifactService()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/api/v1/runs/{RUN_ID}/agent-artifacts/{ARTIFACT_ID}"
+        )
+
+    assert response.status_code == 200
+    assert response.json()["artifact"]["case_id"] == "case-001"
+    assert response.json()["artifact"]["input"] == {"message": "find the handbook"}
+
+
+async def test_persisted_agent_evaluations_can_be_listed() -> None:
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.agent_artifact_service = RecordingAgentArtifactService()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            f"/api/v1/runs/{RUN_ID}/agent-artifacts/{ARTIFACT_ID}/evaluations"
+        )
+
+    assert response.status_code == 200
+    assert response.json()[0]["failure_taxonomy"] == []
 
 
 async def test_agent_artifact_ingestion_records_safe_correlation_span() -> None:

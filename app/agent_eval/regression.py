@@ -22,6 +22,7 @@ class AgentRegressionReport:
     right_only_count: int
     task_success_rate: dict[str, float | None]
     latency_p95_ms: dict[str, float | None]
+    permission_violation_count: dict[str, int]
     terminal_distribution: dict[str, dict[str, int]]
     failure_category_distribution: dict[str, dict[str, int]]
 
@@ -48,9 +49,7 @@ class AgentRegressionGate:
             candidate_success is None or candidate_success < self.task_success_min
         ):
             violations.append("task_success")
-        permission_count = report.failure_category_distribution.get(
-            FailureCategory.PERMISSION_FAILURE.value, {"right": 0}
-        )["right"]
+        permission_count = report.permission_violation_count["right"]
         if (
             self.permission_violation_max is not None
             and permission_count > self.permission_violation_max
@@ -97,6 +96,10 @@ def compare_agent_runs(
         right_only_count=len(right_ids - left_ids),
         task_success_rate={"left": _success_rate(left), "right": _success_rate(right)},
         latency_p95_ms={"left": _p95(left), "right": _p95(right)},
+        permission_violation_count={
+            "left": _metric_count(left, "unauthorized_result_leak_count"),
+            "right": _metric_count(right, "unauthorized_result_leak_count"),
+        },
         terminal_distribution=terminal,
         failure_category_distribution=failures,
     )
@@ -135,3 +138,13 @@ def _p95(cases: dict[str, AgentComparisonCase]) -> float | None:
     lower = int(position)
     upper = min(lower + 1, len(values) - 1)
     return values[lower] + (values[upper] - values[lower]) * (position - lower)
+
+
+def _metric_count(cases: dict[str, AgentComparisonCase], metric_name: str) -> int:
+    return sum(
+        int(value)
+        for item in cases.values()
+        if isinstance((value := item.metrics.get(metric_name)), (int, float))
+        and not isinstance(value, bool)
+        and value > 0
+    )

@@ -3,8 +3,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
 
-from app.agent_eval.schemas import AgentArtifactRead, AgentArtifactUpload
-from app.agent_eval.service import AgentArtifactRunMismatchError
+from app.agent_eval.schemas import (
+    AgentArtifactDetailRead,
+    AgentArtifactEvaluationRequest,
+    AgentArtifactEvaluationResultRead,
+    AgentArtifactRead,
+    AgentArtifactUpload,
+)
+from app.agent_eval.service import AgentArtifactNotFoundError, AgentArtifactRunMismatchError
 from app.api.errors import APIError
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
@@ -20,6 +26,34 @@ class AgentArtifactService(Protocol):
         request: AgentArtifactUpload,
     ) -> AgentArtifactRead:
         """Persist or replay an immutable Agent execution artifact."""
+
+    async def evaluate(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        artifact_id: UUID,
+        request: AgentArtifactEvaluationRequest,
+    ) -> list[AgentArtifactEvaluationResultRead]:
+        """Evaluate an authorized immutable Agent execution artifact."""
+
+    async def get(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        artifact_id: UUID,
+    ) -> AgentArtifactDetailRead:
+        """Read an authorized immutable Agent trajectory."""
+
+    async def list_evaluations(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        artifact_id: UUID,
+    ) -> list[AgentArtifactEvaluationResultRead]:
+        """List persisted evaluator evidence for an authorized artifact."""
 
 
 router = APIRouter(prefix="/api/v1/runs", tags=["agent-artifacts"])
@@ -59,3 +93,86 @@ async def ingest_agent_artifact(
                 code="invalid_agent_artifact",
                 message="The Agent artifact does not match this Run or case.",
             ) from None
+
+
+@router.post(
+    "/{run_id}/agent-artifacts/{artifact_id}/evaluations",
+    response_model=list[AgentArtifactEvaluationResultRead],
+)
+async def evaluate_agent_artifact(
+    run_id: UUID,
+    artifact_id: UUID,
+    payload: AgentArtifactEvaluationRequest,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> list[AgentArtifactEvaluationResultRead]:
+    service = cast(AgentArtifactService | None, request.app.state.agent_artifact_service)
+    if service is None:
+        raise RuntimeError("agent artifact service is not configured")
+    try:
+        return await service.evaluate(
+            principal=principal,
+            run_id=run_id,
+            artifact_id=artifact_id,
+            request=payload,
+        )
+    except AgentArtifactNotFoundError:
+        raise APIError(
+            status_code=404,
+            code="agent_artifact_not_found",
+            message="The Agent artifact was not found.",
+        ) from None
+
+
+@router.get(
+    "/{run_id}/agent-artifacts/{artifact_id}",
+    response_model=AgentArtifactDetailRead,
+)
+async def get_agent_artifact(
+    run_id: UUID,
+    artifact_id: UUID,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> AgentArtifactDetailRead:
+    service = cast(AgentArtifactService | None, request.app.state.agent_artifact_service)
+    if service is None:
+        raise RuntimeError("agent artifact service is not configured")
+    try:
+        return await service.get(
+            principal=principal,
+            run_id=run_id,
+            artifact_id=artifact_id,
+        )
+    except AgentArtifactNotFoundError:
+        raise APIError(
+            status_code=404,
+            code="agent_artifact_not_found",
+            message="The Agent artifact was not found.",
+        ) from None
+
+
+@router.get(
+    "/{run_id}/agent-artifacts/{artifact_id}/evaluations",
+    response_model=list[AgentArtifactEvaluationResultRead],
+)
+async def list_agent_artifact_evaluations(
+    run_id: UUID,
+    artifact_id: UUID,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> list[AgentArtifactEvaluationResultRead]:
+    service = cast(AgentArtifactService | None, request.app.state.agent_artifact_service)
+    if service is None:
+        raise RuntimeError("agent artifact service is not configured")
+    try:
+        return await service.list_evaluations(
+            principal=principal,
+            run_id=run_id,
+            artifact_id=artifact_id,
+        )
+    except AgentArtifactNotFoundError:
+        raise APIError(
+            status_code=404,
+            code="agent_artifact_not_found",
+            message="The Agent artifact was not found.",
+        ) from None

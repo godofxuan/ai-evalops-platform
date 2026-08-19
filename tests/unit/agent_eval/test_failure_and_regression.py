@@ -23,7 +23,11 @@ def test_agent_regression_gate_rejects_new_permission_violation() -> None:
     }
     candidate = {
         "case-1": AgentComparisonCase(
-            metrics={"task_success": False, "latency_ms": 110.0},
+            metrics={
+                "task_success": False,
+                "latency_ms": 110.0,
+                "unauthorized_result_leak_count": 1,
+            },
             terminal_state="permission_denied",
             failure_category=FailureCategory.PERMISSION_FAILURE,
         )
@@ -39,3 +43,21 @@ def test_agent_regression_gate_rejects_new_permission_violation() -> None:
     assert report.failure_category_distribution["permission_failure"]["right"] == 1
     assert decision.passed is False
     assert set(decision.violations) == {"task_success", "permission_violation"}
+
+
+def test_expected_permission_denial_is_not_counted_as_a_boundary_violation() -> None:
+    denied_without_leak = {
+        "case-1": AgentComparisonCase(
+            metrics={
+                "task_success": True,
+                "unauthorized_result_leak_count": 0,
+            },
+            terminal_state="permission_denied",
+            failure_category=FailureCategory.PERMISSION_FAILURE,
+        )
+    }
+
+    report = compare_agent_runs(denied_without_leak, denied_without_leak)
+    decision = AgentRegressionGate(permission_violation_max=0).assess(report)
+
+    assert decision.passed is True

@@ -58,6 +58,17 @@ class RecordingResultService:
             next_cursor="opaque-next",
         )
 
+    async def get_case(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        case_id: str,
+    ) -> CaseRead:
+        page = await self.list_cases(principal=principal, run_id=run_id, query=CaseQuery())
+        assert case_id == "case-1"
+        return page.items[0]
+
     async def get_metrics(
         self,
         *,
@@ -173,6 +184,24 @@ async def test_run_metrics_api_returns_tenant_scoped_aggregate() -> None:
     assert response.json()["success_rate"] == 0.75
     assert response.json()["latency"]["p95"] == 29
     assert service.metrics_called_with == (PRINCIPAL, RUN_ID)
+
+
+async def test_one_case_result_has_a_precise_tenant_scoped_endpoint() -> None:
+    service = RecordingResultService()
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.result_service = service
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(f"/api/v1/runs/{RUN_ID}/cases/case-1")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == str(JOB_ID)
+    assert service.called_with is not None
+    assert service.called_with[0] == PRINCIPAL
 
 
 async def test_compare_api_returns_dataset_warning_and_intersection_diff() -> None:

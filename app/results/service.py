@@ -60,6 +60,15 @@ class ResultService(Protocol):
     ) -> MetricsRead:
         """Recompute and persist aggregate metrics from durable case state."""
 
+    async def get_case(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        case_id: str,
+    ) -> CaseRead:
+        """Read one exact tenant-owned Run case."""
+
     async def compare_runs(
         self,
         *,
@@ -76,6 +85,10 @@ class ResultService(Protocol):
         run_id: UUID,
     ) -> list[ArtifactRead]:
         """Generate deterministic JSON reports and persist tenant/run metadata."""
+
+
+class CaseResultNotFoundError(Exception):
+    """The requested case is absent from the tenant-owned Run."""
 
 
 def build_case_page_statement(
@@ -228,6 +241,31 @@ class SQLAlchemyResultService:
             await _replace_run_metrics(session, run_id=run_id, summary=summary)
         return _metrics_read(summary)
 
+    async def get_case(
+        self,
+        *,
+        principal: Principal,
+        run_id: UUID,
+        case_id: str,
+    ) -> CaseRead:
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(EvaluationJob, CaseResult)
+                    .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+                    .outerjoin(CaseResult, CaseResult.job_id == EvaluationJob.id)
+                    .where(
+                        EvaluationRun.tenant_id == principal.tenant_id,
+                        EvaluationJob.run_id == run_id,
+                        EvaluationJob.case_id == case_id,
+                    )
+                )
+            ).one_or_none()
+        if row is None:
+            raise CaseResultNotFoundError
+        job, result = row
+        return _case_read(job, result)
+
     async def compare_runs(
         self,
         *,
@@ -365,6 +403,21 @@ def _sort_expression(query: CaseQuery) -> ColumnElement[Any]:
             cast(metric_value.astext, Float),
         ),
         else_=None,
+    )
+
+
+def _case_read(job: EvaluationJob, result: CaseResult | None) -> CaseRead:
+    return CaseRead(
+        job_id=job.id,
+        case_id=job.case_id,
+        status=job.status,
+        attempt_count=job.attempt_count,
+        error_code=job.last_error_code,
+        answer=None if result is None else result.answer_json,
+        evidence={} if result is None else result.evidence_json,
+        metrics={} if result is None else result.metrics_json,
+        latency_ms=None if result is None else result.latency_ms,
+        finished_at=job.finished_at,
     )
 
 
