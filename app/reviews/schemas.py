@@ -59,6 +59,14 @@ class ReviewTaskRead(BaseModel):
     id: UUID
     run_id: UUID
     case_id: str
+    source_type: Literal["case_result", "agent_artifact"]
+    source_record_id: UUID
+    source_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    packet_schema_version: str
+    artifact_id: UUID | None
+    artifact_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    packet_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evaluator_evidence_visible: bool
     status: ReviewTaskStatus
     packet: ReviewPacket
     own_submission: ReviewSubmissionRead | None

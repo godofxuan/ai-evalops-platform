@@ -151,6 +151,12 @@ jobs:
           uv run --no-sync pytest tests/integration/test_agent_eval_workflow.py
           --junitxml=/tmp/junit-agent-eval-workflow.xml
 
+      - name: Integration - MCP stdio credential revocation
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_mcp_stdio_auth.py
+          --junitxml=/tmp/junit-mcp-stdio-auth.xml
+
       - name: Integration - tenant identity and immutable datasets
         if: ${{ !cancelled() }}
         run: >-
@@ -174,6 +180,18 @@ jobs:
         run: >-
           uv run --no-sync pytest tests/integration/test_minio_artifact_storage.py
           --junitxml=/tmp/junit-minio-artifacts.xml
+
+      - name: Integration - authenticated Agent HTTP PostgreSQL MinIO workflow
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_agent_http_minio_e2e.py
+          --junitxml=/tmp/junit-agent-http-minio.xml
+
+      - name: Integration - orphan artifact reconciliation
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_artifact_reconciliation.py
+          --junitxml=/tmp/junit-artifact-reconciliation.xml
 
       - name: Integration - cross-table tenant consistency constraints
         if: ${{ !cancelled() }}
@@ -212,6 +230,12 @@ jobs:
           uv run --no-sync alembic downgrade 20260802_0009
           uv run --no-sync alembic upgrade head
 
+      - name: Migration - final hardening downgrade and re-upgrade
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --no-sync alembic downgrade 20260819_0020
+          uv run --no-sync alembic upgrade head
+
       - name: Annotate test failures
         if: ${{ failure() && !cancelled() }}
         run: >-
@@ -224,10 +248,13 @@ jobs:
           /tmp/junit-tenant-durable-fairness.xml
           /tmp/junit-human-reviews.xml
           /tmp/junit-agent-eval-workflow.xml
+          /tmp/junit-mcp-stdio-auth.xml
           /tmp/junit-identity-datasets.xml
           /tmp/junit-tenant-rls.xml
           /tmp/junit-artifact-references.xml
           /tmp/junit-minio-artifacts.xml
+          /tmp/junit-agent-http-minio.xml
+          /tmp/junit-artifact-reconciliation.xml
           /tmp/junit-tenant-consistency.xml
           /tmp/junit-readiness.xml
           /tmp/junit-redis-events.xml

@@ -104,6 +104,7 @@ class ReviewService(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ReviewCandidate:
+    source_record_id: UUID
     job_id: UUID
     case_id: str
     case_payload: dict[str, object]
@@ -115,9 +116,10 @@ def build_review_candidates_statement(
     *,
     tenant_id: UUID,
     run_id: UUID,
-) -> Select[tuple[UUID, str, dict[str, object], dict[str, object], dict[str, object]]]:
+) -> Select[tuple[UUID, UUID, str, dict[str, object], dict[str, object], dict[str, object]]]:
     return (
         select(
+            CaseResult.id,
             EvaluationJob.id,
             EvaluationJob.case_id,
             EvaluationJob.case_payload_json,
@@ -213,13 +215,14 @@ class SQLAlchemyReviewService:
             ).all()
             candidates = [
                 ReviewCandidate(
+                    source_record_id=source_record_id,
                     job_id=job_id,
                     case_id=case_id,
                     case_payload=dict(case_payload),
                     answer=dict(answer),
                     evidence=dict(evidence),
                 )
-                for job_id, case_id, case_payload, answer, evidence in rows
+                for source_record_id, job_id, case_id, case_payload, answer, evidence in rows
             ]
             selected = sorted(
                 candidates,
@@ -227,6 +230,14 @@ class SQLAlchemyReviewService:
             )[:sample_size]
             for item in selected:
                 task_id = uuid4()
+                packet_json = _packet(item).model_dump(mode="json")
+                source_sha256 = _canonical_sha256(
+                    {
+                        "case_payload": item.case_payload,
+                        "answer": item.answer,
+                        "evidence": item.evidence,
+                    }
+                )
                 await session.execute(
                     postgresql_insert(HumanReviewTask)
                     .values(
@@ -235,14 +246,24 @@ class SQLAlchemyReviewService:
                         run_id=run_id,
                         job_id=item.job_id,
                         case_id=item.case_id,
-                        packet_json=_packet(item).model_dump(mode="json"),
+                        source_type="case_result",
+                        source_record_id=item.source_record_id,
+                        source_content_sha256=source_sha256,
+                        packet_schema_version="review-packet/v1",
+                        artifact_id=None,
+                        artifact_sha256=None,
+                        packet_sha256=_canonical_sha256(packet_json),
+                        evaluator_visibility_policy="after-submission-or-adjudication",
+                        evaluator_evidence_json={},
+                        packet_json=packet_json,
                         status=ReviewTaskStatus.OPEN,
                         created_by=principal.api_key_id,
                     )
                     .on_conflict_do_nothing(
-                        constraint="uq_human_review_tasks_run_id_case_id",
+                        constraint="uq_human_review_tasks_source_identity",
                     )
                 )
+            selected_ids = [item.source_record_id for item in selected]
             tasks = (
                 (
                     await session.execute(
@@ -250,6 +271,8 @@ class SQLAlchemyReviewService:
                         .where(
                             HumanReviewTask.tenant_id == principal.tenant_id,
                             HumanReviewTask.run_id == run_id,
+                            HumanReviewTask.source_type == "case_result",
+                            HumanReviewTask.source_record_id.in_(selected_ids),
                         )
                         .order_by(
                             HumanReviewTask.created_at.asc(),
@@ -302,6 +325,7 @@ class SQLAlchemyReviewService:
                         AgentExecutionArtifact.id.desc(),
                         AgentEvaluationResultRecord.evaluator_kind,
                         AgentEvaluationResultRecord.created_at.desc(),
+                        AgentEvaluationResultRecord.id.desc(),
                     )
                 )
             ).all()
@@ -316,7 +340,12 @@ class SQLAlchemyReviewService:
             if result.evaluator_kind in selected_kinds[artifact.case_id]:
                 continue
             selected_kinds[artifact.case_id].add(result.evaluator_kind)
-            evaluator_metrics[artifact.case_id][result.evaluator_kind] = dict(result.metrics_json)
+            evaluator_metrics[artifact.case_id][result.evaluator_kind] = {
+                "metrics": dict(result.metrics_json),
+                "metric_provenance": dict(result.metric_provenance_json),
+                "implementation_version": result.evaluator_version,
+                "config_sha256": result.config_sha256,
+            }
 
         candidates: list[tuple[AgentExecutionArtifact, ReviewPacket]] = []
         for artifact in selected_artifacts.values():
@@ -337,6 +366,7 @@ class SQLAlchemyReviewService:
         async with self._session_factory.begin() as session:
             await _require_run(session, tenant_id=principal.tenant_id, run_id=run_id)
             for artifact, review_packet in selected:
+                packet_json = review_packet.model_dump(mode="json")
                 await session.execute(
                     postgresql_insert(HumanReviewTask)
                     .values(
@@ -345,12 +375,22 @@ class SQLAlchemyReviewService:
                         run_id=run_id,
                         job_id=artifact.job_id,
                         case_id=artifact.case_id,
-                        packet_json=review_packet.model_dump(mode="json"),
+                        source_type="agent_artifact",
+                        source_record_id=artifact.id,
+                        source_content_sha256=artifact.content_sha256,
+                        packet_schema_version="review-packet/v1",
+                        artifact_id=artifact.id,
+                        artifact_sha256=artifact.content_sha256,
+                        packet_sha256=_canonical_sha256(packet_json),
+                        evaluator_visibility_policy="after-submission-or-adjudication",
+                        evaluator_evidence_json=evaluator_metrics[artifact.case_id],
+                        packet_json=packet_json,
                         status=ReviewTaskStatus.OPEN,
                         created_by=principal.api_key_id,
                     )
-                    .on_conflict_do_nothing(constraint="uq_human_review_tasks_run_id_case_id")
+                    .on_conflict_do_nothing(constraint="uq_human_review_tasks_source_identity")
                 )
+            selected_ids = [artifact.id for artifact, _packet_value in selected]
             tasks = (
                 (
                     await session.execute(
@@ -358,6 +398,8 @@ class SQLAlchemyReviewService:
                         .where(
                             HumanReviewTask.tenant_id == principal.tenant_id,
                             HumanReviewTask.run_id == run_id,
+                            HumanReviewTask.source_type == "agent_artifact",
+                            HumanReviewTask.source_record_id.in_(selected_ids),
                         )
                         .order_by(HumanReviewTask.created_at, HumanReviewTask.id)
                     )
@@ -718,15 +760,43 @@ def _task_read(
     *,
     own_submission: HumanReviewSubmission | None,
 ) -> ReviewTaskRead:
+    if _canonical_sha256(task.packet_json) != task.packet_sha256:
+        raise RuntimeError("stored review packet does not match its immutable digest")
+    evaluator_evidence_visible = own_submission is not None or task.status in {
+        ReviewTaskStatus.DISPUTED,
+        ReviewTaskStatus.ADJUDICATED,
+    }
+    packet_payload = dict(task.packet_json)
+    packet_payload["evaluator_results"] = (
+        task.evaluator_evidence_json if evaluator_evidence_visible else {}
+    )
     return ReviewTaskRead(
         id=task.id,
         run_id=task.run_id,
         case_id=task.case_id,
+        source_type=task.source_type,
+        source_record_id=task.source_record_id,
+        source_content_sha256=task.source_content_sha256,
+        packet_schema_version=task.packet_schema_version,
+        artifact_id=task.artifact_id,
+        artifact_sha256=task.artifact_sha256,
+        packet_sha256=task.packet_sha256,
+        evaluator_evidence_visible=evaluator_evidence_visible,
         status=task.status,
-        packet=ReviewPacket.model_validate(task.packet_json),
+        packet=ReviewPacket.model_validate(packet_payload),
         own_submission=(None if own_submission is None else _submission_read(own_submission)),
         created_at=task.created_at,
     )
+
+
+def _canonical_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _submission_read(submission: HumanReviewSubmission) -> ReviewSubmissionRead:

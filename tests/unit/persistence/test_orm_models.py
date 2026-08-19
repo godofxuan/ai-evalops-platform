@@ -64,7 +64,10 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
         "api_keys",
         "agent_evaluation_results",
         "agent_execution_artifacts",
+        "agent_regression_comparisons",
+        "agent_regression_evidence",
         "artifact_blobs",
+        "artifact_reconciliation_events",
         "artifact_references",
         "audit_events",
         "case_results",
@@ -334,7 +337,9 @@ def test_run_metrics_are_unique_per_run_and_metric_name() -> None:
 
 
 def test_human_review_history_is_tenant_owned_and_immutable_by_constraint() -> None:
-    assert frozenset({"run_id", "case_id"}) in unique_column_sets(HumanReviewTask.__table__)
+    assert frozenset(
+        {"tenant_id", "source_type", "source_record_id", "packet_schema_version"}
+    ) in unique_column_sets(HumanReviewTask.__table__)
     assert frozenset({"task_id", "reviewer_id"}) in unique_column_sets(
         HumanReviewSubmission.__table__
     )

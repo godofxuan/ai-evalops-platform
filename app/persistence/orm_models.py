@@ -339,6 +339,13 @@ class ArtifactReference(Base):
             "tenant_id",
             name="uq_artifact_references_id_tenant_id",
         ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            "run_id",
+            "blob_sha256",
+            name="uq_artifact_references_agent_binding",
+        ),
         Index(
             "ix_artifact_references_tenant_id_created_at",
             "tenant_id",
@@ -372,6 +379,29 @@ class ArtifactReference(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class ArtifactReconciliationEvent(Base):
+    """Machine-readable audit record for orphan-object reconciliation decisions."""
+
+    __tablename__ = "artifact_reconciliation_events"
+    __table_args__ = (
+        Index(
+            "ix_artifact_reconciliation_events_sha_created",
+            "blob_sha256",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    blob_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    dry_run: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    details_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
 
@@ -688,9 +718,14 @@ class AgentExecutionArtifact(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["artifact_reference_id"],
-            ["artifact_references.id"],
-            name="fk_agent_exec_reference",
+            ["artifact_reference_id", "tenant_id", "run_id", "content_sha256"],
+            [
+                "artifact_references.id",
+                "artifact_references.tenant_id",
+                "artifact_references.run_id",
+                "artifact_references.blob_sha256",
+            ],
+            name="fk_agent_exec_reference_binding",
             ondelete="RESTRICT",
         ),
         UniqueConstraint(
@@ -757,6 +792,12 @@ class AgentEvaluationResultRecord(Base):
             "config_sha256",
             name="uq_agent_eval_results_identity",
         ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            "run_id",
+            name="uq_agent_eval_results_id_tenant_run",
+        ),
         Index(
             "ix_agent_evaluation_results_tenant_run_kind",
             "tenant_id",
@@ -774,11 +815,148 @@ class AgentEvaluationResultRecord(Base):
     config_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    metric_provenance_json: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     failure_taxonomy_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class AgentRegressionComparison(Base):
+    """Immutable decision and report for one resolved regression request."""
+
+    __tablename__ = "agent_regression_comparisons"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["left_run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_agent_regression_left_run_tenant",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["right_run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_agent_regression_right_run_tenant",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "request_sha256",
+            name="uq_agent_regression_comparison_request",
+        ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            name="uq_agent_regression_comparison_id_tenant",
+        ),
+        Index(
+            "ix_agent_regression_comparisons_tenant_created",
+            "tenant_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    left_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    right_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    left_dataset_version_id: Mapped[UUID | None] = mapped_column(Uuid)
+    right_dataset_version_id: Mapped[UUID | None] = mapped_column(Uuid)
+    request_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    case_set_policy: Mapped[str] = mapped_column(String(32), nullable=False)
+    gate_config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    report_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    decision_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AgentRegressionEvidence(Base):
+    """Pinned artifact and evaluator result identities used by a comparison."""
+
+    __tablename__ = "agent_regression_evidence"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["comparison_id", "tenant_id"],
+            ["agent_regression_comparisons.id", "agent_regression_comparisons.tenant_id"],
+            name="fk_agent_regression_evidence_comparison_tenant",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["left_artifact_id", "tenant_id", "left_run_id"],
+            [
+                "agent_execution_artifacts.id",
+                "agent_execution_artifacts.tenant_id",
+                "agent_execution_artifacts.run_id",
+            ],
+            name="fk_agent_regression_evidence_left_artifact",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["right_artifact_id", "tenant_id", "right_run_id"],
+            [
+                "agent_execution_artifacts.id",
+                "agent_execution_artifacts.tenant_id",
+                "agent_execution_artifacts.run_id",
+            ],
+            name="fk_agent_regression_evidence_right_artifact",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["left_evaluator_result_id", "tenant_id", "left_run_id"],
+            [
+                "agent_evaluation_results.id",
+                "agent_evaluation_results.tenant_id",
+                "agent_evaluation_results.run_id",
+            ],
+            name="fk_agent_regression_evidence_left_result",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["right_evaluator_result_id", "tenant_id", "right_run_id"],
+            [
+                "agent_evaluation_results.id",
+                "agent_evaluation_results.tenant_id",
+                "agent_evaluation_results.run_id",
+            ],
+            name="fk_agent_regression_evidence_right_result",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint(
+            "comparison_id",
+            "case_id",
+            "evaluator_kind",
+            name="uq_agent_regression_evidence_case_kind",
+        ),
+        Index(
+            "ix_agent_regression_evidence_tenant_comparison",
+            "tenant_id",
+            "comparison_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    comparison_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    left_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    right_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    case_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    left_artifact_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    right_artifact_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    evaluator_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    left_evaluator_result_id: Mapped[UUID | None] = mapped_column(Uuid)
+    right_evaluator_result_id: Mapped[UUID | None] = mapped_column(Uuid)
+    left_implementation_version: Mapped[str | None] = mapped_column(String(64))
+    right_implementation_version: Mapped[str | None] = mapped_column(String(64))
+    left_config_sha256: Mapped[str | None] = mapped_column(String(64))
+    right_config_sha256: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
 
@@ -834,15 +1012,38 @@ class HumanReviewTask(Base):
             name="fk_human_review_tasks_created_by_tenant_id_api_keys",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["artifact_id", "tenant_id", "run_id"],
+            [
+                "agent_execution_artifacts.id",
+                "agent_execution_artifacts.tenant_id",
+                "agent_execution_artifacts.run_id",
+            ],
+            name="fk_human_review_tasks_agent_artifact",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "id",
             "tenant_id",
             name="uq_human_review_tasks_id_tenant_id",
         ),
         UniqueConstraint(
-            "run_id",
-            "case_id",
-            name="uq_human_review_tasks_run_id_case_id",
+            "tenant_id",
+            "source_type",
+            "source_record_id",
+            "packet_schema_version",
+            name="uq_human_review_tasks_source_identity",
+        ),
+        CheckConstraint(
+            "source_type IN ('case_result', 'agent_artifact')",
+            name="human_review_tasks_source_type",
+        ),
+        CheckConstraint(
+            "(source_type = 'agent_artifact' AND artifact_id = source_record_id "
+            "AND artifact_sha256 IS NOT NULL) OR "
+            "(source_type = 'case_result' AND artifact_id IS NULL "
+            "AND artifact_sha256 IS NULL)",
+            name="human_review_tasks_source_binding",
         ),
         Index(
             "ix_human_review_tasks_tenant_id_status_created_at",
@@ -861,6 +1062,17 @@ class HumanReviewTask(Base):
     run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     case_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_record_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    source_content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    packet_schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_id: Mapped[UUID | None] = mapped_column(Uuid)
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64))
+    packet_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator_visibility_policy: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator_evidence_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     packet_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[ReviewTaskStatus] = mapped_column(
         review_task_status_enum,

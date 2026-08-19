@@ -1,3 +1,7 @@
+import math
+
+import pytest
+
 from app.agent_eval.schema import AgentRunArtifact, artifact_content_sha256
 
 
@@ -58,3 +62,51 @@ def test_schema_accepts_runtime_labels_without_framework_specific_fields() -> No
     }
 
     assert AgentRunArtifact.model_validate(payload).framework == "langgraph-adapter"
+
+
+@pytest.mark.parametrize(
+    ("usage_key", "invalid_value"),
+    [
+        ("latency_ms", -1),
+        ("cost", -0.01),
+        ("input_tokens", -1),
+        ("output_tokens", -1),
+        ("latency_ms", math.nan),
+        ("cost", math.inf),
+    ],
+)
+def test_schema_rejects_invalid_nonnegative_finite_usage(
+    usage_key: str, invalid_value: float
+) -> None:
+    payload = {
+        "schema_version": "agent-run-artifact/v1",
+        "run_id": "run-001",
+        "case_id": "case-001",
+        "session_id": "session-001",
+        "framework": "custom-controller",
+        "input": {},
+        "output": {},
+        "trajectory": [],
+        "usage": {usage_key: invalid_value},
+        "terminal": {"state": "answer"},
+    }
+
+    with pytest.raises(ValueError, match="non-negative finite"):
+        AgentRunArtifact.model_validate(payload)
+
+
+def test_schema_rejects_negative_trajectory_depth() -> None:
+    payload = {
+        "schema_version": "agent-run-artifact/v1",
+        "run_id": "run-001",
+        "case_id": "case-001",
+        "session_id": "session-001",
+        "framework": "custom-controller",
+        "input": {},
+        "output": {},
+        "trajectory": [{"event_id": "1", "event_type": "tool_call", "payload": {"depth": -1}}],
+        "terminal": {"state": "answer"},
+    }
+
+    with pytest.raises(ValueError, match="non-negative finite"):
+        AgentRunArtifact.model_validate(payload)

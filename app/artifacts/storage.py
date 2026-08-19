@@ -5,6 +5,7 @@ import os
 import tempfile
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -20,6 +21,12 @@ class StoredArtifact:
     size_bytes: int
     relative_path: Path
     created: bool
+
+
+@dataclass(frozen=True, slots=True)
+class StoredObjectInfo:
+    sha256: str
+    last_modified: datetime
 
 
 class ArtifactIntegrityError(RuntimeError):
@@ -41,6 +48,8 @@ class S3Client(Protocol):
 
     def head_bucket(self, **kwargs: Any) -> dict[str, Any]: ...
 
+    def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]: ...
+
 
 class ArtifactStore(Protocol):
     async def put_bytes(self, content: bytes) -> StoredArtifact:
@@ -56,6 +65,9 @@ class ArtifactStore(Protocol):
 class DeletableArtifactStore(ArtifactStore, Protocol):
     async def delete_bytes(self, sha256: str) -> bool:
         """Delete a verified content address, returning whether it existed."""
+
+    async def list_objects(self) -> list[StoredObjectInfo]:
+        """List content-addressed objects with storage modification time."""
 
 
 class LocalArtifactStore:
@@ -73,6 +85,9 @@ class LocalArtifactStore:
 
     async def check_ready(self) -> None:
         await asyncio.to_thread(self._check_ready_sync)
+
+    async def list_objects(self) -> list[StoredObjectInfo]:
+        return await asyncio.to_thread(self._list_objects_sync)
 
     def _put_bytes_sync(self, content: bytes) -> StoredArtifact:
         digest = hashlib.sha256(content).hexdigest()
@@ -207,6 +222,25 @@ class LocalArtifactStore:
             if probe_path is not None:
                 probe_path.unlink(missing_ok=True)
 
+    def _list_objects_sync(self) -> list[StoredObjectInfo]:
+        if not self._root.exists():
+            return []
+        objects: list[StoredObjectInfo] = []
+        for path in self._root.glob("[0-9a-f][0-9a-f]/*"):
+            if not path.is_file():
+                continue
+            try:
+                _validate_digest(path.name)
+            except ArtifactIntegrityError:
+                continue
+            objects.append(
+                StoredObjectInfo(
+                    sha256=path.name,
+                    last_modified=datetime.fromtimestamp(path.stat().st_mtime, tz=UTC),
+                )
+            )
+        return sorted(objects, key=lambda item: item.sha256)
+
 
 class S3ArtifactStore:
     _MAX_PUBLISH_ATTEMPTS = 3
@@ -229,6 +263,9 @@ class S3ArtifactStore:
 
     async def check_ready(self) -> None:
         await asyncio.to_thread(self._check_ready_sync)
+
+    async def list_objects(self) -> list[StoredObjectInfo]:
+        return await asyncio.to_thread(self._list_objects_sync)
 
     def _put_bytes_sync(self, content: bytes) -> StoredArtifact:
         digest = hashlib.sha256(content).hexdigest()
@@ -323,6 +360,38 @@ class S3ArtifactStore:
 
     def _check_ready_sync(self) -> None:
         self._client.head_bucket(Bucket=self._bucket)
+
+    def _list_objects_sync(self) -> list[StoredObjectInfo]:
+        prefix = f"{self._prefix}/"
+        token: str | None = None
+        objects: list[StoredObjectInfo] = []
+        while True:
+            arguments: dict[str, object] = {"Bucket": self._bucket, "Prefix": prefix}
+            if token is not None:
+                arguments["ContinuationToken"] = token
+            response = self._client.list_objects_v2(**arguments)
+            contents = response.get("Contents", [])
+            if isinstance(contents, list):
+                for item in contents:
+                    if not isinstance(item, dict):
+                        continue
+                    key = item.get("Key")
+                    modified = item.get("LastModified")
+                    if not isinstance(key, str) or not isinstance(modified, datetime):
+                        continue
+                    digest = key.rsplit("/", 1)[-1]
+                    try:
+                        _validate_digest(digest)
+                    except ArtifactIntegrityError:
+                        continue
+                    objects.append(StoredObjectInfo(digest, modified))
+            if not response.get("IsTruncated"):
+                break
+            next_token = response.get("NextContinuationToken")
+            if not isinstance(next_token, str):
+                raise ArtifactIntegrityError("truncated S3 listing omitted continuation token")
+            token = next_token
+        return sorted(objects, key=lambda item: item.sha256)
 
     def _relative_path(self, sha256: str) -> Path:
         _validate_digest(sha256)

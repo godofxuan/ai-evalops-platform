@@ -175,12 +175,23 @@ class SQLAlchemyAgentArtifactService:
             raise RuntimeError("stored Agent artifact does not match its metadata digest")
 
         descriptors = {item.kind: item for item in registered_agent_evaluators()}
-        computed: list[tuple[str, str, str, dict[str, object], dict[str, object], list[str]]] = []
+        computed: list[
+            tuple[
+                str,
+                str,
+                str,
+                dict[str, object],
+                dict[str, object],
+                dict[str, str],
+                list[str],
+            ]
+        ] = []
         for evaluator_kind in request.evaluators:
             config = request.config.get(evaluator_kind, {})
             config_sha256 = _configuration_sha256(config)
             descriptor = descriptors[evaluator_kind]
-            metrics = build_agent_evaluator(evaluator_kind, config).evaluate(artifact).metrics
+            evaluation = build_agent_evaluator(evaluator_kind, config).evaluate(artifact)
+            metrics = evaluation.metrics
             category = classify_agent_failure(metrics)
             computed.append(
                 (
@@ -189,6 +200,7 @@ class SQLAlchemyAgentArtifactService:
                     config_sha256,
                     config,
                     metrics,
+                    evaluation.metric_provenance,
                     [] if category is None else [category.value],
                 )
             )
@@ -210,6 +222,7 @@ class SQLAlchemyAgentArtifactService:
                 config_sha256,
                 config,
                 metrics,
+                metric_provenance,
                 taxonomy,
             ) in computed:
                 inserted_id = await session.scalar(
@@ -224,6 +237,7 @@ class SQLAlchemyAgentArtifactService:
                         config_sha256=config_sha256,
                         config_json=config,
                         metrics_json=metrics,
+                        metric_provenance_json=metric_provenance,
                         failure_taxonomy_json=taxonomy,
                     )
                     .on_conflict_do_nothing(constraint="uq_agent_eval_results_identity")
@@ -394,6 +408,7 @@ def _evaluation_read(
         evaluator_version=record.evaluator_version,
         config_sha256=record.config_sha256,
         metrics=record.metrics_json,
+        metric_provenance=record.metric_provenance_json,
         failure_taxonomy=record.failure_taxonomy_json,
         created_at=record.created_at,
     )

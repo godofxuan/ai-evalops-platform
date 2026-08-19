@@ -1,6 +1,11 @@
-"""Fail-closed stdio entry point for the official MCP SDK server."""
+"""Fail-closed stdio entry point with per-call database authorization."""
 
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime
+
+from sqlalchemy import select
 
 from app.agent_eval.control_plane import McpEvalControlPlane
 from app.agent_eval.mcp_server import build_mcp_server
@@ -8,12 +13,20 @@ from app.agent_eval.mcp_service_adapter import EvalOpsMcpServiceAdapter
 from app.agent_eval.regression_service import SQLAlchemyAgentRegressionService
 from app.agent_eval.service import SQLAlchemyAgentArtifactService
 from app.artifacts.storage import build_artifact_store
+from app.auth.api_keys import verify_api_key
+from app.auth.principals import Principal
 from app.auth.repository import SQLAlchemyAPIKeyLookup
-from app.auth.service import authenticate_api_key
+from app.auth.service import InvalidAPIKeyError, authenticate_api_key
 from app.core.config import Settings
 from app.core.event_loop import run_with_psycopg_compatible_event_loop
 from app.core.telemetry import Telemetry, parse_otlp_headers
-from app.persistence.database import create_database_engine, create_session_factory
+from app.domain.enums import APIKeyStatus, TenantStatus
+from app.persistence.database import (
+    AsyncSessionFactory,
+    create_database_engine,
+    create_session_factory,
+)
+from app.persistence.orm_models import APIKey, AuditEvent, Tenant
 from app.results.service import SQLAlchemyResultService
 from app.runs.repository import SQLAlchemyRunRepository
 from app.runs.service import SQLAlchemyRunService
@@ -23,6 +36,92 @@ def configured_mcp_api_key(settings: Settings) -> str:
     if settings.mcp_api_key is None:
         raise RuntimeError("EVALOPS_MCP_API_KEY is required for the MCP stdio server")
     return settings.mcp_api_key.get_secret_value()
+
+
+class SQLAlchemyMcpCallAuthorizer:
+    """Hold shared credential/tenant locks across one service-layer call."""
+
+    def __init__(
+        self,
+        session_factory: AsyncSessionFactory,
+        *,
+        plaintext_api_key: str,
+        credential_identity: Principal,
+    ) -> None:
+        self._session_factory = session_factory
+        self._plaintext_api_key = plaintext_api_key
+        self._credential_identity = credential_identity
+
+    def authorize(self, *, tool_name: str) -> AbstractAsyncContextManager[Principal]:
+        del tool_name
+        return self._authorize()
+
+    @asynccontextmanager
+    async def _authorize(self) -> AsyncIterator[Principal]:
+        session_factory = self._session_factory
+        async with session_factory.begin() as session:
+            row = (
+                await session.execute(
+                    select(APIKey, Tenant.status)
+                    .join(Tenant, Tenant.id == APIKey.tenant_id)
+                    .where(APIKey.id == self._credential_identity.api_key_id)
+                    .with_for_update(read=True)
+                )
+            ).one_or_none()
+            if row is None:
+                raise InvalidAPIKeyError
+            api_key, tenant_status = row
+            now = datetime.now(UTC)
+            hash_matches = await asyncio.to_thread(
+                verify_api_key,
+                self._plaintext_api_key,
+                api_key.key_hash,
+            )
+            if (
+                not hash_matches
+                or api_key.status is not APIKeyStatus.ACTIVE
+                or (api_key.expires_at is not None and api_key.expires_at <= now)
+                or tenant_status is not TenantStatus.ACTIVE
+            ):
+                raise InvalidAPIKeyError
+            api_key.last_used_at = now
+            yield Principal(
+                tenant_id=api_key.tenant_id,
+                api_key_id=api_key.id,
+                key_prefix=api_key.key_prefix,
+                can_review=api_key.can_review,
+                can_create_review_tasks=api_key.can_create_review_tasks,
+            )
+
+
+class SQLAlchemyMcpCallAuditor:
+    def __init__(self, session_factory: AsyncSessionFactory) -> None:
+        self._session_factory = session_factory
+
+    async def record(
+        self,
+        *,
+        principal: Principal,
+        tool_name: str,
+        status: str,
+        trace_id: str,
+    ) -> None:
+        session_factory = self._session_factory
+        async with session_factory.begin() as session:
+            session.add(
+                AuditEvent(
+                    tenant_id=principal.tenant_id,
+                    actor_id=str(principal.api_key_id),
+                    action="mcp.tool_called",
+                    resource_type="mcp_tool",
+                    metadata_json={
+                        "api_key_id": str(principal.api_key_id),
+                        "tool_name": tool_name,
+                        "status": status,
+                        "trace_id": trace_id,
+                    },
+                )
+            )
 
 
 async def run_stdio(settings: Settings | None = None) -> None:
@@ -71,7 +170,13 @@ async def run_stdio(settings: Settings | None = None) -> None:
         )
         server = build_mcp_server(
             control_plane=McpEvalControlPlane(services=services),
-            principal=principal,
+            authorizer=SQLAlchemyMcpCallAuthorizer(
+                session_factory,
+                plaintext_api_key=plaintext_api_key,
+                credential_identity=principal,
+            ),
+            auditor=SQLAlchemyMcpCallAuditor(session_factory),
+            credential_identity=principal,
         )
         await server.run_stdio_async()
     finally:

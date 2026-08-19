@@ -2,9 +2,10 @@
 
 import hashlib
 import json
+import math
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 ArtifactSchemaVersion = Literal["agent-run-artifact/v1"]
 TrajectoryEventType = Literal[
@@ -72,6 +73,27 @@ class AgentRunArtifact(BaseModel):
     terminal: AgentTerminal
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def numeric_evidence_is_nonnegative_and_finite(self) -> "AgentRunArtifact":
+        for key in (
+            "latency_ms",
+            "tool_latency_ms",
+            "cost",
+            "input_tokens",
+            "output_tokens",
+            "model_calls",
+            "step_count",
+        ):
+            if key in self.usage:
+                _require_nonnegative_finite(self.usage[key], f"usage.{key}")
+        for index, event in enumerate(self.trajectory):
+            for key in ("depth", "step_count"):
+                if key in event.payload:
+                    _require_nonnegative_finite(
+                        event.payload[key], f"trajectory[{index}].payload.{key}"
+                    )
+        return self
+
 
 def artifact_content_sha256(artifact: AgentRunArtifact) -> str:
     """Return the content identity over a canonical JSON representation."""
@@ -87,3 +109,13 @@ def canonical_artifact_bytes(artifact: AgentRunArtifact) -> bytes:
         separators=(",", ":"),
         ensure_ascii=False,
     ).encode("utf-8")
+
+
+def _require_nonnegative_finite(value: JsonValue, field_name: str) -> None:
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or value < 0
+    ):
+        raise ValueError(f"{field_name} must be a non-negative finite number")

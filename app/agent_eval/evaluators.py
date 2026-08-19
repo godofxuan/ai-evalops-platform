@@ -12,6 +12,7 @@ from app.agent_eval.schema import AgentRunArtifact, TrajectoryEvent
 @dataclass(frozen=True, slots=True)
 class AgentEvaluationResult:
     metrics: dict[str, Any]
+    metric_provenance: dict[str, str]
 
 
 class AgentTrajectoryEvaluator(Protocol):
@@ -24,6 +25,7 @@ class AgentEvaluatorDescriptor:
     kind: str
     implementation_version: str
     llm_judge: bool
+    trust_levels: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,12 +38,14 @@ class TaskSuccessEvaluator:
     def evaluate(self, artifact: AgentRunArtifact) -> AgentEvaluationResult:
         explicit = artifact.output.get("task_success")
         success = explicit if isinstance(explicit, bool) else None
+        metrics = {
+            "task_success": success,
+            "task_success_requires_human_review": success is None,
+            "terminal_state": artifact.terminal.state,
+        }
         return AgentEvaluationResult(
-            metrics={
-                "task_success": success,
-                "task_success_requires_human_review": success is None,
-                "terminal_state": artifact.terminal.state,
-            }
+            metrics=metrics,
+            metric_provenance={name: "reported" for name in metrics},
         )
 
 
@@ -53,15 +57,14 @@ class ToolCallValidityEvaluator:
         errors = sum(
             _bool_payload(item, "success") is False for item in _events(artifact, "tool_result")
         )
-        return AgentEvaluationResult(
-            metrics={
-                "tool_calls_total": len(calls),
-                "tool_calls_valid": valid,
-                "tool_calls_invalid": len(calls) - valid,
-                "tool_calls_denied": denied,
-                "tool_calls_error": errors,
-            }
-        )
+        metrics = {
+            "tool_calls_total": len(calls),
+            "tool_calls_valid": valid,
+            "tool_calls_invalid": len(calls) - valid,
+            "tool_calls_denied": denied,
+            "tool_calls_error": errors,
+        }
+        return _derived_result(metrics)
 
 
 class TrajectoryEfficiencyEvaluator:
@@ -71,16 +74,13 @@ class TrajectoryEfficiencyEvaluator:
         counts = Counter(call_identities)
         depths = [_numeric_payload(item, "depth") for item in artifact.trajectory]
         numeric_depths = [value for value in depths if value is not None]
-        return AgentEvaluationResult(
-            metrics={
-                "step_count": len(artifact.trajectory),
-                "tool_call_count": len(calls),
-                "repeated_tool_call_count": sum(
-                    count - 1 for count in counts.values() if count > 1
-                ),
-                "max_depth": max(numeric_depths, default=None),
-            }
-        )
+        metrics = {
+            "step_count": len(artifact.trajectory),
+            "tool_call_count": len(calls),
+            "repeated_tool_call_count": sum(count - 1 for count in counts.values() if count > 1),
+            "max_depth": max(numeric_depths, default=None),
+        }
+        return _derived_result(metrics)
 
 
 class GroundingCitationEvaluator:
@@ -89,14 +89,13 @@ class GroundingCitationEvaluator:
         claims = _events(artifact, "claim")
         invalid = sum(_bool_payload(item, "valid") is False for item in citations)
         unsupported = sum(_bool_payload(item, "supported") is False for item in claims)
-        return AgentEvaluationResult(
-            metrics={
-                "citation_count": len(citations),
-                "citation_presence": bool(citations),
-                "citation_invalid_count": invalid,
-                "unsupported_claim_count": unsupported,
-            }
-        )
+        metrics = {
+            "citation_count": len(citations),
+            "citation_presence": bool(citations),
+            "citation_invalid_count": invalid,
+            "unsupported_claim_count": unsupported,
+        }
+        return _derived_result(metrics)
 
 
 class PermissionBoundaryEvaluator:
@@ -107,34 +106,40 @@ class PermissionBoundaryEvaluator:
             _bool_payload(item, "unauthorized_result_leaked") is True
             for item in _events(artifact, "tool_result")
         )
-        return AgentEvaluationResult(
-            metrics={
-                "permission_denied_attempt_count": denied,
-                "unauthorized_result_leak_count": leaked,
-                "permission_boundary_passed": leaked == 0,
-            }
-        )
+        metrics = {
+            "permission_denied_attempt_count": denied,
+            "unauthorized_result_leak_count": leaked,
+            "permission_boundary_passed": leaked == 0,
+        }
+        return _derived_result(metrics)
 
 
 class TerminalStateEvaluator:
     def evaluate(self, artifact: AgentRunArtifact) -> AgentEvaluationResult:
-        return AgentEvaluationResult(metrics={"terminal_state": artifact.terminal.state})
+        return AgentEvaluationResult(
+            metrics={"terminal_state": artifact.terminal.state},
+            metric_provenance={"terminal_state": "reported"},
+        )
 
 
 class CostLatencyEvaluator:
     def evaluate(self, artifact: AgentRunArtifact) -> AgentEvaluationResult:
         usage = artifact.usage
         cost = usage.get("cost")
+        metrics = {
+            "latency_ms": _numeric_value(usage.get("latency_ms")),
+            "model_calls": _integer_value(usage.get("model_calls")),
+            "input_tokens": _integer_value(usage.get("input_tokens")),
+            "output_tokens": _integer_value(usage.get("output_tokens")),
+            "tool_latency_ms": _numeric_value(usage.get("tool_latency_ms")),
+            "cost": _numeric_value(cost),
+            "cost_available": _numeric_value(cost) is not None,
+        }
         return AgentEvaluationResult(
-            metrics={
-                "latency_ms": _numeric_value(usage.get("latency_ms")),
-                "model_calls": _integer_value(usage.get("model_calls")),
-                "input_tokens": _integer_value(usage.get("input_tokens")),
-                "output_tokens": _integer_value(usage.get("output_tokens")),
-                "tool_latency_ms": _numeric_value(usage.get("tool_latency_ms")),
-                "cost": _numeric_value(cost),
-                "cost_available": _numeric_value(cost) is not None,
-            }
+            metrics=metrics,
+            metric_provenance={
+                name: "derived" if name == "cost_available" else "reported" for name in metrics
+            },
         )
 
 
@@ -167,6 +172,7 @@ def _registration(
             kind=kind,
             implementation_version="builtin-v1",
             llm_judge=False,
+            trust_levels=("reported", "derived"),
         ),
         factory=factory,
     )
@@ -178,9 +184,19 @@ def registered_agent_evaluators() -> tuple[AgentEvaluatorDescriptor, ...]:
 
 def build_agent_evaluator(kind: str, config: Mapping[str, Any]) -> AgentTrajectoryEvaluator:
     try:
-        return _registry()[kind].factory(config)
+        registration = _registry()[kind]
     except KeyError:
         raise ValueError(f"unsupported Agent evaluator type: {kind}") from None
+    if config:
+        raise ValueError(f"Agent evaluator {kind} does not accept configuration")
+    return registration.factory(config)
+
+
+def _derived_result(metrics: dict[str, Any]) -> AgentEvaluationResult:
+    return AgentEvaluationResult(
+        metrics=metrics,
+        metric_provenance={name: "derived" for name in metrics},
+    )
 
 
 def _events(artifact: AgentRunArtifact, event_type: str) -> list[TrajectoryEvent]:

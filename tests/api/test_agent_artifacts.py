@@ -94,6 +94,7 @@ class RecordingAgentArtifactService:
                 evaluator_version="builtin-v1",
                 config_sha256="0" * 64,
                 metrics={"permission_boundary_passed": True},
+                metric_provenance={"permission_boundary_passed": "derived"},
                 failure_taxonomy=[],
                 created_at=datetime(2026, 8, 19, tzinfo=UTC),
             )

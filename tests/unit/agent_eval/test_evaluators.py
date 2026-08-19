@@ -1,3 +1,5 @@
+import pytest
+
 from app.agent_eval.evaluators import build_agent_evaluator, registered_agent_evaluators
 from app.agent_eval.schema import AgentRunArtifact
 
@@ -69,3 +71,16 @@ def test_registry_exposes_only_deterministic_agent_evaluators() -> None:
         "cost_latency",
     }
     assert all(item.llm_judge is False for item in descriptors.values())
+
+
+def test_unsupported_evaluator_config_is_rejected_instead_of_changing_only_identity() -> None:
+    with pytest.raises(ValueError, match="does not accept configuration"):
+        build_agent_evaluator("task_success", {"threshold": 0.9})
+
+
+def test_metric_provenance_does_not_call_producer_claims_verified() -> None:
+    task_result = build_agent_evaluator("task_success", {}).evaluate(_artifact())
+    tool_result = build_agent_evaluator("tool_call_validity", {}).evaluate(_artifact())
+
+    assert task_result.metric_provenance["task_success"] == "reported"
+    assert set(tool_result.metric_provenance.values()) == {"derived"}
