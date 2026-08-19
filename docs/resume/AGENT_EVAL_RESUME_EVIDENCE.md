@@ -16,3 +16,8 @@ and does not supersede the v0.1 scheduler release decision.
 The `0.875` success and approximately `83 ms` p95 values are fixed replay evidence only. Do not present them as live
 Agent, LangGraph, scheduler, production-capacity or model-quality measurements. Do not quote v0.1 scheduler throughput
 or fairness measurements as Agent Runtime metrics.
+
+Final branch qualification: source `6aef986`, GitHub Actions run
+[`32261125781`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32261125781), both
+`quality-and-integration` and `compose-smoke` succeeded. This proves the recorded test/deployment contracts passed; it
+does not prove production scale, reliability or live Agent quality.

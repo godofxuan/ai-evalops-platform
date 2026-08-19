@@ -208,9 +208,15 @@ schema. Canonical evidence records the fixture and artifact SHA-256 values, 8/8 
 success `0.875`, equal interpolated p95 about `83 ms`, and zero unauthorized-result leaks. The evidence labels itself
 as adapter-contract replay, not live runtime performance.
 
-## Stage O — Pending remote qualification
+## Stage O — Local and remote qualification
 
 The local environment still has no Docker executable. The new real PostgreSQL integration test therefore reports an
-explicit skip locally and must not be described as passed. CI now has a dedicated step covering artifact ingestion,
-seven persisted evaluators, idempotent replay, cross-tenant hiding, regression gating and Agent human-review packet
-creation after applying migrations to real PostgreSQL.
+explicit skip locally; local qualification is `810 passed, 34 deselected`, not a claim that Docker ran locally. Lock
+check, repository formatting, Ruff and strict mypy over 161 source files passed.
+
+GitHub Actions run `32261125781` at source `6aef986` completed both jobs successfully. Its dedicated Agent workflow
+step covered artifact ingestion, seven persisted evaluators, idempotent replay, cross-tenant hiding, regression gating
+and Agent human-review packet creation after applying migrations to real PostgreSQL. The same run passed the existing
+concurrency/fairness, RLS, MinIO, Outbox, downgrade/re-upgrade, image build and full Compose smoke contracts. This closes
+the remote validation gap for the vNext feature branch; it does not change the historical v0.1 scheduler performance
+decision or create a production SLO.
