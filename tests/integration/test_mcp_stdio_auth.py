@@ -91,7 +91,7 @@ async def test_real_stdio_mcp_revalidates_revocation_without_restart(
                     version=1,
                     schema_version="1",
                     sha256=dataset_sha,
-                    case_count=0,
+                    case_count=1,
                 )
             )
             await session.flush()

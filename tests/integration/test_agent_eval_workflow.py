@@ -509,6 +509,24 @@ async def test_real_postgresql_agent_evaluation_regression_and_review_workflow(
             await review_service.list_tasks(principal=reviewer_three, run_id=left_run_id)
     finally:
         async with session_factory.begin() as session:
+            # Regression evidence deliberately RESTRICTs deletion of the immutable
+            # artifacts/results it pins.  Remove the owned evidence graph before
+            # exercising the tenant-level CASCADE cleanup.
+            await session.execute(
+                delete(AgentRegressionEvidence).where(
+                    AgentRegressionEvidence.tenant_id.in_((tenant_a_id, tenant_b_id))
+                )
+            )
+            await session.execute(
+                delete(AgentRegressionComparison).where(
+                    AgentRegressionComparison.tenant_id.in_((tenant_a_id, tenant_b_id))
+                )
+            )
+            await session.execute(
+                delete(HumanReviewTask).where(
+                    HumanReviewTask.tenant_id.in_((tenant_a_id, tenant_b_id))
+                )
+            )
             await session.execute(delete(Tenant).where(Tenant.id.in_((tenant_a_id, tenant_b_id))))
             await session.execute(
                 delete(ArtifactBlob).where(ArtifactBlob.sha256.in_(owned_blob_shas))

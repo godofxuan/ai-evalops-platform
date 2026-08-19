@@ -18,6 +18,8 @@ from app.domain.enums import ArtifactType, JobStatus, RunStatus
 from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
+    AgentRegressionComparison,
+    AgentRegressionEvidence,
     APIKey,
     ArtifactBlob,
     ArtifactReference,
@@ -26,6 +28,7 @@ from app.persistence.orm_models import (
     DatasetVersion,
     EvaluationJob,
     EvaluationRun,
+    HumanReviewTask,
     Tenant,
 )
 from app.reviews.service import SQLAlchemyReviewService
@@ -322,6 +325,23 @@ async def test_agent_http_postgres_minio_auth_isolation_and_concurrent_idempoten
                 assert cross_review.status_code == 404
         finally:
             async with session_factory.begin() as session:
+                # Pinned regression and review evidence uses RESTRICT semantics;
+                # tear down that owned graph before deleting its tenant/runs.
+                await session.execute(
+                    delete(AgentRegressionEvidence).where(
+                        AgentRegressionEvidence.tenant_id.in_((tenant_a_id, tenant_b_id))
+                    )
+                )
+                await session.execute(
+                    delete(AgentRegressionComparison).where(
+                        AgentRegressionComparison.tenant_id.in_((tenant_a_id, tenant_b_id))
+                    )
+                )
+                await session.execute(
+                    delete(HumanReviewTask).where(
+                        HumanReviewTask.tenant_id.in_((tenant_a_id, tenant_b_id))
+                    )
+                )
                 await session.execute(
                     delete(Tenant).where(Tenant.id.in_((tenant_a_id, tenant_b_id)))
                 )
