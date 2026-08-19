@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
+from app.agent_eval.service import SQLAlchemyAgentArtifactService
 from app.api.errors import (
     APIError,
     handle_api_error,
@@ -24,15 +25,14 @@ from app.api.errors import (
     handle_run_not_found,
 )
 from app.api.middleware import RequestContextMiddleware
-from app.api.routes_datasets import router as datasets_router
 from app.api.routes_agent_artifacts import router as agent_artifacts_router
+from app.api.routes_datasets import router as datasets_router
 from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
 from app.api.routes_observability import router as observability_router
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
-from app.agent_eval.service import SQLAlchemyAgentArtifactService
 from app.artifacts.storage import build_artifact_store
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
