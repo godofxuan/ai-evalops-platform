@@ -16,13 +16,14 @@ contract for tool use, terminal behavior, evidence and regression analysis.
 | Focus | What is implemented |
 | --- | --- |
 | Async orchestration | Immutable Runs, durable Jobs and lease-bound Attempts |
-| Multi-tenancy | Server-derived identity, tenant-scoped data and immutable Dataset Versions |
-| Concurrency safety | Lease fencing, stale-worker rejection, competing Reapers and explicit state transitions |
-| Agent trajectories | Versioned framework-neutral artifact schema, content hash and tenant-scoped immutable ingestion |
-| Evaluation operations | Seven deterministic evaluators, immutable result rows, Run comparison and configurable regression gates |
-| Agent control plane | Official MCP SDK v2 stdio server with seven tools bound to the existing API-key Principal and service layer |
-| Human review | Existing double-review/adjudication workflow can consume bounded, identity-blinded Agent trajectory packets |
-| Adapter benchmark | Fixed eight-family Custom/LangGraph-compatibility replay with deterministic source-bound JSON evidence |
+| Multi-tenancy | Server-derived evidence identity, composite ownership constraints and Agent-table RLS policies |
+| Concurrency safety | Lease/heartbeat/fencing, stale-worker rejection, competing Reapers and durable fair-turn state |
+| Agent trajectories | Versioned framework-neutral artifact schema, canonical JSON/SHA-256 and immutable ingestion |
+| Evaluation operations | Seven deterministic trajectory metric extractors with reported/derived provenance and immutable result identity |
+| Regression evidence | Explicit case-set policy, fail-closed sample/coverage rules and pinned artifact/result manifest |
+| Agent control plane | Official MCP SDK v2 stdio server with per-call credential revalidation through the authenticated service layer |
+| Human review | Source-bound double-review/adjudication packets with selected runtime identifiers omitted and staged evaluator visibility |
+| Adapter evidence | Fixed eight-family Custom/LangGraph-callback fixture replay; not a live runtime or performance benchmark |
 | Evidence engineering | Source-bound artifacts, raw PostgreSQL plan assessment and manifest verification |
 
 ## System at a glance
@@ -39,8 +40,9 @@ flowchart LR
     Worker --> Target[Target / Evaluator]
     Target --> Result[CaseResult / Trajectory Evaluation]
     Result --> Artifact[Artifact & Evidence]
-    MCP[MCP stdio host] --> API
-    Result --> Review[Blinded human review]
+    MCP[MCP stdio host] --> Service[Authenticated service layer]
+    Service --> Run
+    Result --> Review[Source-bound human review]
     API --> PG[(PostgreSQL)]
     Worker --> PG
     Reaper[Reaper] --> PG
@@ -85,6 +87,7 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 | Architecture and data flow | [Architecture](docs/01_architecture.md) |
 | Agent artifact and trajectory contract | [Agent Run Artifact](docs/agent_eval/AGENT_RUN_ARTIFACT_SCHEMA.md) |
 | Agent failure attribution and regression | [Failure taxonomy](docs/agent_eval/FAILURE_TAXONOMY.md) |
+| Final hardening evidence and remaining gaps | [Final hardening report](docs/final_hardening/FINAL_HARDENING_REPORT.md) |
 | Agent MCP control plane boundary | [MCP Eval Control Plane](docs/agent_eval/MCP_EVAL_CONTROL_PLANE.md) |
 | Fixed adapter benchmark and evidence scope | [Agent benchmark](docs/agent_eval/BENCHMARK.md) |
 | Run / Job / Attempt model | [Domain model](docs/02_domain_model.md) |
@@ -124,8 +127,12 @@ $env:EVALOPS_MCP_API_KEY = "evk_..."
 uv run python -m app.agent_eval.mcp_stdio
 ```
 
-The stdio process authenticates once through the same hashed API-key lookup as HTTP. No unauthenticated MCP HTTP
-listener is enabled. Reproduce the adapter-contract evidence with
+The stdio process validates the configured scrypt API key at startup and revalidates key status, expiry, tenant status
+and current permissions before every tool call. It holds a PostgreSQL shared credential lock through the service call,
+so revocation is ordered against in-flight calls. The environment variable can leak to child processes, same-user host
+processes, shell history or diagnostics; stdio is therefore a local-host integration, not a remote multi-tenant MCP
+security boundary. No MCP HTTP listener, OAuth resource server or MCP-specific rate limiter is enabled. Reproduce the
+fixture adapter-contract evidence with
 `uv run python -m scripts.run_agent_adapter_benchmark`.
 
 For a fuller walkthrough, start with the [project evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md). The complete

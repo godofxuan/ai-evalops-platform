@@ -61,3 +61,56 @@ Explain the separation: “The Agent runtime produces a semantic trajectory; Eva
 evidence. A stale Worker may execute an external action again under at-least-once semantics, but lease fencing prevents
 its stale database result from replacing the current Attempt. Agent evaluators read immutable evidence rather than
 changing that correctness boundary.”
+
+## Final hardening lessons
+
+### An intersection count does not guarantee intersection metrics
+
+The first comparison implementation computed `intersection_count` correctly but passed the complete left and right
+maps into the metric functions. That creates a subtle numerator/denominator mismatch: a right-only tool failure can
+change a gate whose denominator is described as common cases. The repaired contract materializes one sorted common
+case set first, then derives success, latency, distributions, leak count and tool-error rate from that set only.
+
+`exact` refuses different case sets. `intersection` gates the overlap and reports omissions. `allow-diff` permits the
+diagnostic difference but still never mixes sets. Zero overlap, missing configured metrics, low coverage and small p95
+samples produce `insufficient_evidence`, not a quiet pass.
+
+### Resolve latest once, then pin IDs
+
+“Latest artifact” is useful while creating a comparison, but it is not a stable evidence contract. Creation resolves
+artifact and evaluator rows with `created_at DESC, id DESC`, persists every selected ID in a manifest, and stores the
+report/decision snapshot. Later uploads cannot change an old comparison. Idempotency is the canonical request SHA, not
+another dynamic read.
+
+### Human review needs source identity and staged machine evidence
+
+A case can have a normal `CaseResult` and several immutable Agent artifacts. Therefore `run_id + case_id` cannot
+identify the review evidence. Tasks bind source type/record/content SHA and packet SHA; Agent tasks also bind artifact
+ID/SHA. First-round reviewers receive no evaluator score, pass/fail or taxonomy. Their own submission unlocks the
+machine evidence for comparison, while an unsubmitted second reviewer remains unanchored. A disputed task exposes it
+to the third reviewer.
+
+The packet is not “anonymous.” It uses explicit allowlists and omits selected runtime identifiers, tool names and
+arbitrary nested metadata. Content may still identify a system through ordinary language, URLs or domain facts.
+
+### MCP revocation is a transaction-ordering problem
+
+Startup-only authentication leaves a long-lived Principal valid after key revocation. Per-call lookup closes most of
+the gap, but a revoke can still race between lookup and service work. The stdio authorizer holds PostgreSQL shared locks
+on the key and tenant through the service call. A revoke that already committed makes the new call fail; a revoke that
+arrives after authorization waits for that in-flight call. This is a clear linearization point, not instantaneous
+cancellation of work already authorized.
+
+### Object storage cleanup is reconciliation, not atomic commit
+
+An S3 put can succeed before the PostgreSQL transaction fails. The safe response is an observable reconciler: dry-run
+by default, grace period, initial scan, new-transaction reference recheck, shared-SHA protection, bounded delete and an
+audit row. A newly created reference before recheck blocks deletion. There is still no fictional atomic transaction
+across PostgreSQL and S3.
+
+### Reported, derived and verified are different claims
+
+`output.task_success` and usage latency are producer-reported. Counts derived from trajectory events are derived from
+the submitted record. A verified metric would need a server-owned schema, permission decision or authoritative audit
+log. This revision persists provenance and deliberately produces no `verified` metric. A release gate must explicitly
+opt into reported task success.

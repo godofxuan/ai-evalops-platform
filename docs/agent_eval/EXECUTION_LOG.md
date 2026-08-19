@@ -71,7 +71,7 @@ then failed because no failure classifier or configured Agent gate existed.
 
 ### GREEN
 
-- implemented seven deterministic evaluators: task success, tool-call validity, trajectory efficiency,
+- implemented seven deterministic trajectory metric extractors: task success, tool-call validity, trajectory efficiency,
   grounding/citation, permission boundary, terminal state and cost/latency;
 - implemented a small evidence-led failure taxonomy; unsupported metrics do not become invented categories;
 - implemented run-to-run intersection/distribution comparison and a configuration-only regression gate for task
@@ -176,8 +176,9 @@ Streamable HTTP remains disabled until an OAuth/resource-server deployment bound
 
 ### Effect
 
-The official in-memory client discovers and calls all tools. The stdio process authenticates once through the existing
-scrypt lookup, binds the resulting Principal and disposes database/telemetry resources when the protocol exits.
+The official in-memory client discovers and calls all tools. At that stage the stdio process authenticated once through
+the existing scrypt lookup. The 2026-08-20 hardening section below supersedes that startup-only behavior with per-call
+revalidation. Database and telemetry resources are still disposed when the protocol exits.
 
 ## Stage M — Agent evidence in the existing human-review state machine
 
@@ -220,3 +221,68 @@ and Agent human-review packet creation after applying migrations to real Postgre
 concurrency/fairness, RLS, MinIO, Outbox, downgrade/re-upgrade, image build and full Compose smoke contracts. This closes
 the remote validation gap for the vNext feature branch; it does not change the historical v0.1 scheduler performance
 decision or create a production SLO.
+
+## 2026-08-20 — final evidence hardening
+
+### Baseline and environment
+
+- Required base `8fb89bd383433d9e1b00b0b84df4522639e208c9` matched clean `main`.
+- Created `codex/final-evidence-hardening-v1`. Git first rejected the elevated command because the sandbox and desktop
+  users have different SIDs; a command-local `safe.directory` was used instead of changing global trust.
+- Global `pytest` lacked the locked asyncio plugin, so validation used `.venv\Scripts\python.exe` (Python 3.12).
+
+### Regression evidence
+
+Root cause: the old report returned an intersection count but calculated success, p95, distributions and leak counts
+over complete Runs. It also reselected the latest artifact/result on every request.
+
+Changes and effects:
+
+- every gated numerator and denominator now uses one sorted common-case set;
+- left/right-only cases remain full-run diagnostics;
+- explicit `exact`, `intersection` and `allow-diff` policies replace implicit tolerance;
+- count, coverage, missing count, stable case-ID digest and fail-closed insufficiency are returned;
+- migration `20260820_0021` persists comparison decisions and artifact/result manifests;
+- `created_at DESC, id DESC` is the deterministic creation-time resolver; replay uses request SHA-256.
+
+The first RED test observed `0.5` instead of `1.0` for `{A,B}` versus `{A,C}`. It passed after common-set isolation.
+
+### Human Review evidence
+
+Root cause: `run_id + case_id` plus conflict-ignore could return the wrong source, first-round packets contained machine
+scores, and only a few top-level identifiers were removed.
+
+Migration `20260820_0022` and service changes bind source record/content SHA, artifact ID/SHA, packet schema/SHA and
+visibility policy. Ordinary and Agent tasks can coexist; identical source replay is idempotent. Evaluator evidence is
+stored separately and shown only after the current reviewer submits or at dispute/adjudication. Reads verify packet
+SHA. Input/citation/source/trajectory data now use bounded allowlists; the claim is “selected runtime identifiers
+omitted,” not anonymity.
+
+### MCP, HTTP, RLS and object reconciliation
+
+- MCP now revalidates scrypt key hash, active/revoked/expiry state, tenant state and current permissions per call. A
+  shared PostgreSQL row lock is held through service execution, ordering revocation against in-flight calls. Audit rows
+  contain key ID, tenant, tool, outcome and trace ID, never plaintext key or arguments.
+- A real stdio subprocess/PostgreSQL test and a real FastAPI/scrypt/PostgreSQL/MinIO test were added. The HTTP test uses
+  20 concurrent identical uploads and evaluator calls, plus an instrumented store proving tenant rejection before blob
+  read.
+- Migration `20260820_0023` adds Agent/Human Review RLS policies and composite reference/tenant/Run/SHA binding. The
+  restricted-role test uses `NOBYPASSRLS`. Compose still does not split long-lived runtime and migration credentials,
+  so deployment-role separation remains partially verified.
+- Reconciliation defaults to dry-run, honors a grace period, rechecks global references in a new transaction, protects
+  shared SHA objects, records audit rows and supports deletion retry. It is not cross-system atomicity.
+
+### Metric trust
+
+Current metric extractors persist `reported` or `derived` provenance; none claims `verified`. Unsupported non-empty
+configs fail validation. Negative and non-finite latency, cost, token, model-call, step and depth evidence is rejected.
+Reported task success requires explicit gate opt-in.
+
+### Validation record
+
+- Focused Agent unit/API set after provenance work: `38 passed`.
+- First full non-integration run: `816 passed, 10 failed, 37 deselected`. The failures shared one offline migration
+  backfill cause plus old schema constructors/assertions.
+- Corrected affected subset: `38 passed`.
+- Docker CLI is unavailable locally. PostgreSQL/MinIO/subprocess tests therefore remain pending remote CI and are not
+  counted as passed in this entry.
