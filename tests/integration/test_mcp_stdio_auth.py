@@ -2,7 +2,7 @@ import hashlib
 import os
 import sys
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from mcp import ClientSession, StdioServerParameters
@@ -166,6 +166,7 @@ async def test_real_stdio_mcp_revalidates_revocation_without_restart(
             "succeeded",
             "failed",
         ]
+        assert all(row.resource_id == UUID(hex=row.metadata_json["trace_id"]) for row in audit_rows)
         assert all(plaintext_key not in str(row.metadata_json) for row in audit_rows)
     finally:
         async with session_factory.begin() as session:
