@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     )
     otel_exporter_otlp_endpoint: str | None = None
     otel_exporter_otlp_headers: SecretStr | None = None
+    mcp_api_key: SecretStr | None = None
     http_target_registry: dict[str, dict[str, JsonValue]] = Field(default_factory=dict)
 
     @field_validator("http_target_registry")
