@@ -107,6 +107,22 @@ The local environment has no MCP SDK. Rather than adding an unvalidated dependen
 listener, the repository now has a transport-independent core with a testable Principal boundary. A future stdio/HTTP
 transport adapter must use this core and the existing API/service auth contract.
 
+## Stage H follow-up — ingestion span propagation
+
+### RED
+
+The API trace test initially found no `agent_artifact.ingest` span.
+
+### GREEN
+
+The ingestion route now creates that span through the existing `Telemetry` implementation and records only framework,
+session/case/Run identifiers and tenant identity. The regression test asserts that the input message cannot appear in
+span attributes.
+
+### Validation
+
+The full non-integration suite passed: `796 passed, 33 deselected`.
+
 ## Stage J — Benchmark contract
 
 The benchmark is deliberately a fixed eight-family specification rather than synthetic volume. It covers lookup,

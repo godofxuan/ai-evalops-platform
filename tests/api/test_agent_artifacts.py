@@ -2,11 +2,14 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from httpx import ASGITransport, AsyncClient
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from app.agent_eval.schemas import AgentArtifactRead, AgentArtifactUpload
 from app.agent_eval.service import AgentArtifactRunMismatchError
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
+from app.core.telemetry import Telemetry
 from app.main import create_app
 
 PRINCIPAL = Principal(
@@ -106,3 +109,28 @@ async def test_agent_artifact_run_mismatch_is_a_safe_validation_error() -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_agent_artifact"
+
+
+async def test_agent_artifact_ingestion_records_safe_correlation_span() -> None:
+    exporter = InMemorySpanExporter()
+    telemetry = Telemetry(
+        service_name="evalops-agent-artifact-test",
+        span_processors=(SimpleSpanProcessor(exporter),),
+    )
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.agent_artifact_service = RecordingAgentArtifactService()
+    application.state.telemetry = telemetry
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post(f"/api/v1/runs/{RUN_ID}/agent-artifacts", json=_payload())
+
+    assert response.status_code == 201
+    span = next(
+        item for item in exporter.get_finished_spans() if item.name == "agent_artifact.ingest"
+    )
+    assert span.attributes is not None
+    assert span.attributes["agent.framework"] == "custom-controller"
+    assert span.attributes["eval.case_id"] == "case-001"
+    assert "find the handbook" not in span.attributes.values()
