@@ -106,3 +106,11 @@ contracts did not exist.
 The local environment has no MCP SDK. Rather than adding an unvalidated dependency or exposing an unauthenticated
 listener, the repository now has a transport-independent core with a testable Principal boundary. A future stdio/HTTP
 transport adapter must use this core and the existing API/service auth contract.
+
+## Stage J — Benchmark contract
+
+The benchmark is deliberately a fixed eight-family specification rather than synthetic volume. It covers lookup,
+multi-step retrieval, denied access, missing/conflicting evidence, tool failure, budget boundary and adversarial input.
+The same artifact contract accepts `custom-controller` and `langgraph-adapter` labels, while comparison requires model,
+dataset, tools, retrieval, budget and prompt policy to be frozen first. No benchmark score is claimed until that run is
+actually executed and source-bound.

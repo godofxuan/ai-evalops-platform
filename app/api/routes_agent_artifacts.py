@@ -4,6 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, status
 
 from app.agent_eval.schemas import AgentArtifactRead, AgentArtifactUpload
+from app.agent_eval.service import AgentArtifactRunMismatchError
+from app.api.errors import APIError
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
 
@@ -36,4 +38,11 @@ async def ingest_agent_artifact(
     service = cast(AgentArtifactService | None, request.app.state.agent_artifact_service)
     if service is None:
         raise RuntimeError("agent artifact service is not configured")
-    return await service.ingest(principal=principal, run_id=run_id, request=payload)
+    try:
+        return await service.ingest(principal=principal, run_id=run_id, request=payload)
+    except AgentArtifactRunMismatchError:
+        raise APIError(
+            status_code=422,
+            code="invalid_agent_artifact",
+            message="The Agent artifact does not match this Run or case.",
+        ) from None

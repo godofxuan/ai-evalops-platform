@@ -1,6 +1,6 @@
 # AI EvalOps Platform
 
-> 多租户异步 AI 评测与任务编排平台：将本地的 RAG、Agent 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的后端工作流。
+> RAG / Agent Evaluation Infrastructure：将本地 Agent、RAG 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的多租户评测工作流。
 
 [![CI](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -9,28 +9,32 @@
 
 ## Why it matters
 
-AI evaluation is more than running a script once. This platform provides the backend machinery needed to submit,
-schedule, execute, recover and audit evaluation work across tenants.
+Agent evaluation is more than checking a final answer. This platform preserves the backend machinery needed to submit,
+schedule, execute, recover and audit evaluation work across tenants, then adds a framework-neutral trajectory artifact
+contract for tool use, terminal behavior, evidence and regression analysis.
 
 | Focus | What is implemented |
 | --- | --- |
 | Async orchestration | Immutable Runs, durable Jobs and lease-bound Attempts |
 | Multi-tenancy | Server-derived identity, tenant-scoped data and immutable Dataset Versions |
 | Concurrency safety | Lease fencing, stale-worker rejection, competing Reapers and explicit state transitions |
-| Evaluation operations | Target/evaluator registry, results, artifacts, metrics, comparison and human review |
+| Agent trajectories | Versioned framework-neutral artifact schema, content hash and tenant-scoped immutable ingestion |
+| Evaluation operations | Deterministic trajectory evaluators, results, comparison, regression gate and blinded review packet support |
 | Evidence engineering | Source-bound artifacts, raw PostgreSQL plan assessment and manifest verification |
 
 ## System at a glance
 
 ```mermaid
 flowchart LR
+    Agent[Agent / RAG Runtime] --> Trajectory[Agent Run Artifact]
     Client[Client / CI] --> API[FastAPI API]
+    Trajectory --> API
     API --> Run[Evaluation Run]
     Run --> Job[Durable Job]
     Job --> Attempt[Lease-bound Attempt]
     Attempt --> Worker[Worker]
     Worker --> Target[Target / Evaluator]
-    Target --> Result[CaseResult]
+    Target --> Result[CaseResult / Trajectory Evaluation]
     Result --> Artifact[Artifact & Evidence]
     API --> PG[(PostgreSQL)]
     Worker --> PG
@@ -74,6 +78,9 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 | I want to see… | Start here |
 | --- | --- |
 | Architecture and data flow | [Architecture](docs/01_architecture.md) |
+| Agent artifact and trajectory contract | [Agent Run Artifact](docs/agent_eval/AGENT_RUN_ARTIFACT_SCHEMA.md) |
+| Agent failure attribution and regression | [Failure taxonomy](docs/agent_eval/FAILURE_TAXONOMY.md) |
+| Agent MCP control plane boundary | [MCP Eval Control Plane](docs/agent_eval/MCP_EVAL_CONTROL_PLANE.md) |
 | Run / Job / Attempt model | [Domain model](docs/02_domain_model.md) |
 | Tenant boundaries | [Security boundaries](docs/08_security_boundaries.md) |
 | Scheduler and concurrency tests | [Concurrency tests](tests/concurrency/) |

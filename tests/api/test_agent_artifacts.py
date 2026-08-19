@@ -4,6 +4,7 @@ from uuid import UUID
 from httpx import ASGITransport, AsyncClient
 
 from app.agent_eval.schemas import AgentArtifactRead, AgentArtifactUpload
+from app.agent_eval.service import AgentArtifactRunMismatchError
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
 from app.main import create_app
@@ -82,3 +83,26 @@ async def test_agent_artifact_ingestion_uses_server_derived_tenant_principal() -
     assert principal == PRINCIPAL
     assert run_id == RUN_ID
     assert request.artifact.framework == "custom-controller"
+
+
+async def test_agent_artifact_run_mismatch_is_a_safe_validation_error() -> None:
+    class MismatchService(RecordingAgentArtifactService):
+        async def ingest(
+            self,
+            *,
+            principal: Principal,
+            run_id: UUID,
+            request: AgentArtifactUpload,
+        ) -> AgentArtifactRead:
+            raise AgentArtifactRunMismatchError("mismatch")
+
+    application = create_app()
+    application.dependency_overrides[get_principal] = lambda: PRINCIPAL
+    application.state.agent_artifact_service = MismatchService()
+    async with AsyncClient(
+        transport=ASGITransport(app=application, raise_app_exceptions=False), base_url="http://test"
+    ) as client:
+        response = await client.post(f"/api/v1/runs/{RUN_ID}/agent-artifacts", json=_payload())
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_agent_artifact"

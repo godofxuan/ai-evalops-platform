@@ -42,3 +42,19 @@ def test_framework_neutral_agent_run_artifact_has_stable_content_identity() -> N
     assert artifact_content_sha256(artifact) == artifact_content_sha256(
         AgentRunArtifact.model_validate_json(artifact.model_dump_json())
     )
+
+
+def test_schema_accepts_runtime_labels_without_framework_specific_fields() -> None:
+    payload = {
+        "schema_version": "agent-run-artifact/v1",
+        "run_id": "run-001",
+        "case_id": "case-001",
+        "session_id": "session-001",
+        "framework": "langgraph-adapter",
+        "input": {},
+        "output": {},
+        "trajectory": [],
+        "terminal": {"state": "partial"},
+    }
+
+    assert AgentRunArtifact.model_validate(payload).framework == "langgraph-adapter"
