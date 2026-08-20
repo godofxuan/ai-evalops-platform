@@ -97,4 +97,5 @@
 - Tests: dedicated PostgreSQL, MinIO, stdio MCP, RLS, concurrency and Compose smoke steps.
 - Failure scenario: migrations pass offline but fail on PostgreSQL; auth/storage ordering differs from a recording service.
 - Why: separate focused JUnit-producing steps make evidence attributable.
-- Limitation: the final-hardening workflow URL is unavailable until this branch is pushed and Actions succeeds.
+- Evidence: final-hardening run `32282462281` passed quality/integration and Compose smoke at source `22fda89`.
+- Limitation: one CI topology is correctness evidence, not production-scale or SLO evidence.

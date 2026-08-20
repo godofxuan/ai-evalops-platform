@@ -4,10 +4,11 @@
 
 - Base SHA: `8fb89bd383433d9e1b00b0b84df4522639e208c9`
 - Branch: `codex/final-evidence-hardening-v1`
-- Final implementation SHA: `d9dd809b57879eddd2a2e8f89a8c9b7164cadfdc`
+- Final implementation SHA: `22fda896a1b24b0cf41cd1402ead521f74758ac6`
 - Migration head: `20260820_0025`
 - Local Docker: unavailable
-- Remote CI for this branch: NOT_VERIFIED_IN_REMOTE_CI
+- Remote CI: [run `32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281),
+  quality/integration and Compose smoke both successful
 
 ## Scope and root causes
 
@@ -22,7 +23,7 @@
 | Orphan objects | Object put can outlive a rolled-back database transaction | Dry-run/grace/recheck/delete/audit reconciliation | No false cross-system atomicity; periodic operation still required |
 | Metric claims | Producer fields were presented beside derived counts without provenance | Persisted reported/derived provenance, strict config rejection, numeric validation | No current metric is independently verified |
 
-## Closed in code and local tests
+## Closed in code and executed tests
 
 - All gated rates/counts use the same common-case set.
 - Exact case-set mismatch and insufficient evidence do not execute a passing gate.
@@ -34,10 +35,19 @@
 - Reconciliation is dry-run-first and performs a new-transaction reference recheck.
 - Unsupported evaluator configs and invalid negative/non-finite numeric evidence are rejected.
 
-## Not yet closed or not yet verified
+## Qualification outcome
 
-- The desktop has no Docker CLI. New PostgreSQL/MinIO/MCP subprocess tests have not run locally.
-- This branch has no successful remote Actions run yet.
+- Final CI at exact source `22fda896a1b24b0cf41cd1402ead521f74758ac6` passed formatting, Ruff, mypy, 826
+  non-integration tests, every dedicated PostgreSQL/Redis/MinIO/MCP/concurrency step, both migration downgrade/upgrade
+  paths, image build and Compose smoke.
+- The first remote run exposed evidence-graph cleanup ordering and an invalid zero-case test fixture. The second run
+  passed those repaired paths and exposed a missing non-null MCP audit `resource_id`. The third run passed after binding
+  that resource identity to the call trace UUID. These failures and repairs are retained as evidence, not hidden.
+
+## Not yet closed
+
+- The desktop has no Docker CLI; external-service qualification therefore comes from the linked remote run, not a
+  claimed local execution.
 - Compose still uses one database credential for migration and long-lived app processes. Restricted-role RLS behavior is
   tested, but deployment role separation is not complete.
 - There is no verified evaluator backed by an authoritative server-side permission/tool audit source.
@@ -59,9 +69,9 @@
 
 ## Production-readiness gaps
 
-Run the remote matrix, split migration/runtime DB roles, set tenant context on every runtime transaction under the
-restricted role, add authoritative verified evaluator inputs, schedule/monitor reconciliation, define retention/SLOs,
-perform threat modeling and load/failure testing, and establish remote MCP security before opening a network listener.
+Split migration/runtime DB roles, set tenant context on every runtime transaction under the restricted role, add
+authoritative verified evaluator inputs, schedule/monitor reconciliation, define retention/SLOs, perform threat
+modeling and load/failure testing, and establish remote MCP security before opening a network listener.
 
 Historical scheduler evidence is unchanged: the frozen 4→8 Worker runs contain negative scaling and measurement
 limitations. This hardening work does not turn them into Agent performance evidence.

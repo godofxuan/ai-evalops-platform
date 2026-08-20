@@ -1,7 +1,8 @@
 # Agent Eval Resume Evidence
 
-This file maps claims to evidence. It is not a finished personal résumé. Remote-CI status for the final-hardening branch
-must remain unverified until a real workflow succeeds.
+This file maps claims to evidence. It is not a finished personal résumé. Final-hardening claims are bound to successful
+GitHub Actions run [`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281) at source
+`22fda896a1b24b0cf41cd1402ead521f74758ac6`.
 
 ## Durable orchestration and recovery
 
@@ -9,7 +10,7 @@ must remain unverified until a real workflow succeeds.
 PostgreSQL-backed Run/Job/Attempt orchestration with lease, heartbeat, fencing and Reaper recovery.
 
 **Status**
-VERIFIED on the prior `main` baseline; final-hardening regression pending CI.
+VERIFIED on the prior `main` baseline and reverified by final-hardening CI.
 
 **Exact code paths**
 `app/jobs/claiming.py`, `app/jobs/heartbeat.py`, `app/jobs/completion.py`, `app/reaper/service.py`.
@@ -19,7 +20,7 @@ VERIFIED on the prior `main` baseline; final-hardening regression pending CI.
 `tests/concurrency/test_reaper_concurrency.py`.
 
 **CI step**
-`Integration - job claiming, trace propagation, and lease fencing`; prior successful main run `32262682367`.
+`Integration - job claiming, trace propagation, and lease fencing`; final run `32282462281` passed.
 
 **Known limitation**
 Execution is at-least-once; external side effects can repeat. Historical 4→8 Worker performance evidence is negative.
@@ -43,7 +44,7 @@ Versioned trajectory artifacts use canonical JSON/SHA-256 identity; extractor re
 version, config SHA and metric provenance.
 
 **Status**
-PARTIALLY_VERIFIED: unit/API evidence passes locally; final real PostgreSQL/MinIO CI pending.
+VERIFIED: unit/API evidence passed locally and the real PostgreSQL/MinIO workflow passed remotely.
 
 **Exact code paths**
 `app/agent_eval/schema.py`, `app/agent_eval/service.py`, `app/agent_eval/evaluators.py`, migration
@@ -54,7 +55,7 @@ PARTIALLY_VERIFIED: unit/API evidence passes locally; final real PostgreSQL/MinI
 `tests/integration/test_agent_http_minio_e2e.py`.
 
 **CI step**
-`Integration - authenticated Agent HTTP PostgreSQL MinIO workflow` — NOT_VERIFIED_IN_REMOTE_CI.
+`Integration - authenticated Agent HTTP PostgreSQL MinIO workflow` — run `32282462281` passed.
 
 **Known limitation**
 Current metrics are reported or derived; no extractor currently produces independently verified evidence.
@@ -78,7 +79,7 @@ The difference between producer-reported, trajectory-derived and authority-verif
 Regression gates use an explicit common-case policy, fail closed on insufficient evidence and pin artifact/result IDs.
 
 **Status**
-PARTIALLY_VERIFIED: unit/API tests pass; immutable PostgreSQL replay test pending final CI.
+VERIFIED: unit/API tests and immutable PostgreSQL replay passed.
 
 **Exact code paths**
 `app/agent_eval/regression.py`, `app/agent_eval/regression_service.py`, migration
@@ -89,7 +90,7 @@ PARTIALLY_VERIFIED: unit/API tests pass; immutable PostgreSQL replay test pendin
 `tests/integration/test_agent_eval_workflow.py`.
 
 **CI step**
-`Integration - Agent evaluation, regression, and review workflow` — NOT_VERIFIED_IN_REMOTE_CI for this revision.
+`Integration - Agent evaluation, regression, and review workflow` — run `32282462281` passed.
 
 **Known limitation**
 Thresholds are caller policy, not universal quality standards; reported task success requires explicit opt-in.
@@ -114,7 +115,7 @@ Local MCP stdio tools revalidate scrypt API-key and tenant state per call, order
 bounded audit events.
 
 **Status**
-PARTIALLY_VERIFIED: official in-memory client passes; real stdio subprocess/PostgreSQL CI pending.
+VERIFIED for the stated local-stdio boundary: official in-memory client and real stdio subprocess/PostgreSQL tests pass.
 
 **Exact code paths**
 `app/agent_eval/mcp_server.py`, `app/agent_eval/mcp_stdio.py`, `app/agent_eval/mcp_service_adapter.py`.
@@ -123,7 +124,7 @@ PARTIALLY_VERIFIED: official in-memory client passes; real stdio subprocess/Post
 `tests/unit/agent_eval/test_mcp_server.py`, `tests/integration/test_mcp_stdio_auth.py`.
 
 **CI step**
-`Integration - MCP stdio credential revocation` — NOT_VERIFIED_IN_REMOTE_CI.
+`Integration - MCP stdio credential revocation` — run `32282462281` passed.
 
 **Known limitation**
 stdio is a local-host boundary. There is no MCP HTTP listener, OAuth resource server, network rate limiter or remote
@@ -148,7 +149,7 @@ Why rechecking without holding a lock still leaves a revoke-versus-service race.
 Human Review tasks bind immutable source/packet identities and hide evaluator evidence from an unsubmitted reviewer.
 
 **Status**
-PARTIALLY_VERIFIED: packet/API tests pass; staged visibility and PostgreSQL conflict tests pending final CI.
+VERIFIED: packet/API tests, staged visibility and PostgreSQL source-conflict tests passed.
 
 **Exact code paths**
 `app/reviews/service.py`, `app/reviews/schemas.py`, `app/agent_eval/review_packet.py`, migration
@@ -158,7 +159,7 @@ PARTIALLY_VERIFIED: packet/API tests pass; staged visibility and PostgreSQL conf
 `tests/unit/agent_eval/test_review_packet.py`, `tests/integration/test_agent_eval_workflow.py`.
 
 **CI step**
-`Integration - Agent evaluation, regression, and review workflow` — NOT_VERIFIED_IN_REMOTE_CI for this revision.
+`Integration - Agent evaluation, regression, and review workflow` — run `32282462281` passed.
 
 **Known limitation**
 Allowlisting omits selected runtime identifiers; it does not guarantee anonymity or eliminate all reviewer bias.
@@ -182,7 +183,7 @@ Why `run_id + case_id` could not distinguish an ordinary result from multiple Ag
 Added conservative orphan-object reconciliation and RLS/composite constraints for Agent evidence tables.
 
 **Status**
-PARTIALLY_VERIFIED.
+VERIFIED for tested behavior; deployment credential separation remains incomplete.
 
 **Exact code paths**
 `app/artifacts/reconciliation.py`, migrations `20260820_0023_agent_rls_constraints.py` and
@@ -192,7 +193,7 @@ PARTIALLY_VERIFIED.
 `tests/integration/test_artifact_reconciliation.py`, `tests/integration/test_agent_eval_workflow.py`.
 
 **CI step**
-`Integration - orphan artifact reconciliation` and Agent workflow — NOT_VERIFIED_IN_REMOTE_CI.
+`Integration - orphan artifact reconciliation` and Agent workflow — run `32282462281` passed.
 
 **Known limitation**
 PostgreSQL and S3 are not atomic. Compose does not yet separate long-lived runtime and migration-owner credentials.

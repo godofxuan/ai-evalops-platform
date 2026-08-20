@@ -9,14 +9,13 @@
 
 ## Safe with qualification
 
-- Implemented fail-closed common-case regression logic and a PostgreSQL manifest schema that pins artifact/result IDs;
-  final migrated-database CI is pending.
+- Implemented and remotely verified fail-closed common-case regression logic and a PostgreSQL manifest that pins
+  artifact/result IDs.
 - Implemented source-bound human review packets with staged machine-evidence visibility; this omits selected runtime
   identifiers but does not guarantee anonymity or remove all bias.
 - Implemented local MCP stdio per-call credential revalidation and lock-ordered revocation; there is no remote MCP
   network security boundary.
-- Added real HTTP/scrypt/PostgreSQL/MinIO and concurrent idempotency tests; they become resume-safe external-service
-  evidence only after the final branch CI succeeds.
+- Added real HTTP/scrypt/PostgreSQL/MinIO and concurrent idempotency tests, executed successfully in final branch CI.
 - Added Agent evidence RLS policies and restricted-role tests; Compose runtime/migration credential separation remains.
 - Added dry-run-first orphan reconciliation with grace period and reference recheck; PostgreSQL/S3 are not atomic.
 

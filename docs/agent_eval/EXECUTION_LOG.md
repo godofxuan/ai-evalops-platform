@@ -284,5 +284,21 @@ Reported task success requires explicit gate opt-in.
 - First full non-integration run: `816 passed, 10 failed, 37 deselected`. The failures shared one offline migration
   backfill cause plus old schema constructors/assertions.
 - Corrected affected subset: `38 passed`.
-- Docker CLI is unavailable locally. PostgreSQL/MinIO/subprocess tests therefore remain pending remote CI and are not
-  counted as passed in this entry.
+- Docker CLI is unavailable locally. PostgreSQL/MinIO/subprocess tests were therefore pending remote CI at this local
+  checkpoint and are not counted as local passes.
+
+### Remote evidence closure
+
+The first branch run (`32280535475`) failed for concrete reasons: evidence-pin `RESTRICT` constraints required the
+integration fixtures to delete their owned regression/review graph before deleting tenants, and the MCP fixture used a
+zero case count forbidden by the established dataset invariant. After that repair, run `32281558165` passed Agent
+workflow, HTTP/MinIO and both migration paths, then exposed a missing non-null `AuditEvent.resource_id` in the real MCP
+subprocess path. The auditor now uses the per-call trace UUID as that bounded resource identity and the integration test
+checks the trace/resource binding.
+
+Final GitHub Actions run
+[`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281) at exact source
+`22fda896a1b24b0cf41cd1402ead521f74758ac6` completed both `quality-and-integration` and `compose-smoke` successfully.
+It passed all focused PostgreSQL/Redis/MinIO/MCP/RLS/reconciliation/concurrency steps, both downgrade/re-upgrade paths,
+the image build and the complete Compose smoke topology. This verifies the stated behaviors in one CI topology; it is
+not production-scale, SLO or universal performance evidence.

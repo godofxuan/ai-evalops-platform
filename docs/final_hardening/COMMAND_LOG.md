@@ -22,8 +22,6 @@ inputs and outcome were identical.
 | new PostgreSQL/MinIO/MCP integration files run without integration env | Explicitly skipped by their declared environment guards. |
 | `git diff --check` | Passed at the pre-documentation checkpoint. |
 
-Pending commands and their actual results are appended after final local validation, commit/push and remote CI.
-
 ## Final local qualification
 
 | Command | Result summary |
@@ -41,4 +39,16 @@ Pending commands and their actual results are appended after final local validat
 | `.venv\Scripts\python.exe --version` | `Python 3.12.13`. |
 | SHA-256 of `uv.lock` | `8ed48f1d7a65f08df458a1752bceb9c9a61fcd95ea571db877cd01ed8c7c72c5`. |
 | `.venv\Scripts\alembic.exe heads` | `20260820_0025 (head)`. |
-| implementation commit | `d9dd809b57879eddd2a2e8f89a8c9b7164cadfdc`. |
+| initial implementation commit | `d9dd809b57879eddd2a2e8f89a8c9b7164cadfdc`. |
+
+## Remote qualification and evidence-driven repairs
+
+| Command / run | Observed result |
+| --- | --- |
+| push docs head `950b0f1`; Actions run `32280535475` | Failure: Agent workflow and HTTP cleanup hit immutable-evidence `RESTRICT`; MCP fixture used forbidden `case_count=0`; both migration checks then failed because failed cleanup left data. |
+| cleanup-order + MCP fixture commit `6eaf630` | Explicitly removed owned evidence/comparison/review rows before tenant cleanup; changed fixture `case_count` to 1. |
+| Actions run `32281558165` | Agent workflow, HTTP/MinIO, both migration paths and all other steps passed; MCP first call failed because audit insert omitted required `resource_id`. |
+| MCP audit commit `22fda896a1b24b0cf41cd1402ead521f74758ac6` | Bound audit `resource_id` to the call trace UUID and asserted trace/resource consistency. |
+| [Actions run `32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281) | `quality-and-integration` success; `compose-smoke` success; exact source `22fda896...`. |
+| final quality job `96164159696` | Formatting, Ruff, mypy, 826 non-integration tests, all focused external-service/concurrency tests, migrations, image build passed. |
+| final Compose job `96164159877` | Complete topology build, migration, bucket provisioning, readiness, observability and hardening checks passed. |
