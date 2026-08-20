@@ -1,9 +1,31 @@
 # AI EvalOps Platform — Project Evidence Map
 
-Revalidated: 2026-08-11. Archive baseline: `39f381e8369e044392fbad39c3fbc75d5bdeb942`.
+Revalidated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Current implementation baseline:
+`22fda896a1b24b0cf41cd1402ead521f74758ac6`; migration head: `20260820_0025`; successful final-hardening workflow:
+[`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281).
 
 This is the claim-to-proof index for recruiters, interviewers, Teaching Codex and Resume Codex. A claim is usable only
-inside its Scope. The release-state authority remains `docs/release/v0.1.0/RELEASE_DECISION.md`.
+inside its Scope. [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md) is the current cross-layer state authority; the historical
+v0.1.0 scheduler release decision remains authoritative for its frozen gate.
+
+## Current final-hardening evidence
+
+| Claim | Code / migration | Tests / remote evidence | Safe scope | Forbidden expansion |
+| --- | --- | --- | --- | --- |
+| Framework-neutral trajectory artifact with canonical JSON/SHA-256 and immutable ingestion | `app/agent_eval/schemas.py`, service/storage paths, migration `0019` | schema/service/API plus authenticated PostgreSQL/MinIO workflow; run `32282462281` | stable content identity and immutable project evidence | signature/authenticity or support for every Agent framework |
+| Seven deterministic trajectory metric extractors with `reported`/`derived` provenance | `app/agent_eval/evaluators.py`, result records, migrations `0020`/`0025` | evaluator/schema and workflow tests | deterministic stored-evidence extraction | “seven verified evaluators” or authority-verified truth |
+| Common-case-only regression with explicit case-set, coverage and sufficiency fail-closed policy | `app/agent_eval/regression.py`, `regression_service.py`, migration `0021` | unit/API/workflow replay tests | immutable selected IDs and bounded caller policy | universal model-quality standard |
+| Source/result/artifact/packet-bound review with staged visibility | review service/schema, migration `0022` | review unit/API/workflow tests | auditable packet identity and controlled evaluator visibility | objective ground truth or proof reviewers are unbiased |
+| Per-call MCP stdio credential revalidation | `mcp_server.py`, `mcp_stdio.py`, service adapter | in-memory protocol plus real stdio revoke integration; run `32282462281` | local authenticated stdio | Streamable HTTP, OAuth resource server or remote rate limit |
+| Agent evidence tenant constraints | RLS/context repositories, migration `0023` | real PostgreSQL RLS/composite-FK integrations | configured CI topology | complete production role isolation |
+| Dry-run-first orphan reconciliation | reconciliation service/repository, migration `0024` | PostgreSQL/MinIO dry-run/grace/recheck/retry/audit integration | compensating cleanup | atomic PostgreSQL/S3 commit or two-phase commit |
+| Fixed eight-family adapter evidence | `app/agent_eval/benchmark.py`, `benchmarks/agent_eval_v1/` | canonical checked-in fixture replay | deterministic Custom/LangGraph-style mapping | live LangGraph runtime or performance benchmark |
+
+## Historical scheduler/archive evidence — revalidated 2026-08-11
+
+The sections below preserve archive baseline `39f381e8369e044392fbad39c3fbc75d5bdeb942`. Their dates, SHAs, 64-arm/6,400-Job
+counts, negative scaling and invalid measurement results are historical and remain binding for the blocked v0.1.0 release;
+they are not current production-capacity evidence.
 
 ## 1. Multi-tenant immutable evaluation inputs
 

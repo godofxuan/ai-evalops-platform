@@ -1,7 +1,20 @@
 # Resume / Interview Consistency Audit
 
-Updated: 2026-08-11. Every candidate bullet in `RESUME_CODEX_HANDOFF.md` must survive this table. Reference answers are in
+Updated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Every candidate bullet in `RESUME_CODEX_HANDOFF.md` must survive this table. Reference answers are in
 `TEACHING_CODEX_HANDOFF.md`; STAR-like outlines are in `INTERVIEW_STORY_BANK.md`.
+
+## Current Agent claims — `CURRENT_POSITIVE_RESUME`
+
+| Bullet | Likely follow-up | Required defensible answer / evidence | Status |
+| --- | --- | --- | --- |
+| AE1 trajectory identity | What does SHA prove; why not verified truth? | canonical bytes, immutable ingestion, reported/derived provenance | `READY` |
+| AE2 regression | Why common cases; what happens with low coverage? | immutable manifest; exact/intersection/allow-diff; sufficiency fail-closed | `READY` |
+| AE3 review | How is blind review enforced? | source/result/artifact/packet hashes; staged evaluator visibility | `READY` |
+| AE4 MCP | Why reauthenticate every call? | real stdio revoke test; local stdio only; no remote/OAuth claim | `READY` |
+| AE5 reconciliation | Can a blob still be orphaned? | grace/recheck/retry/audit; database/object store are not atomic | `READY` |
+| AE6 tenant evidence | Is RLS production-complete? | composite FKs/context tests; shared Compose role limitation | `READY` |
+
+## Scheduler claims — `INTERVIEW_ONLY` / `HISTORICAL_NEGATIVE`
 
 | Bullet | Likely follow-up | Required defensible answer / evidence | Status |
 | --- | --- | --- | --- |
@@ -32,3 +45,6 @@ Reject a bullet if the candidate cannot explain its calculation, design alternat
 why execution is not exactly-once; why release remains NOT_READY; why H1/H2/H3 remain inconclusive; or why Candidate 4 was
 stopped. Also reject any bullet requiring production operation, Kubernetes, on-call, achieved SLO, production capacity,
 universal fairness or a proved root cause.
+
+Also reject “seven verified evaluators,” all-framework/live-LangGraph claims, remote/OAuth MCP, atomic PostgreSQL/S3,
+complete production RLS isolation or any current-positive use of the historical 783/33 local total.

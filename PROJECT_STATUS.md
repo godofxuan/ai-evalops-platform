@@ -1,10 +1,87 @@
-# AI EvalOps Platform — Final Portfolio Status
+# AI EvalOps Platform — Current Portfolio and Release Status
 
-Last evidence revalidation: 2026-08-11
+## Current canonical state — 2026-08-20
+
+- Current branch: `codex/final-evidence-hardening-v1`.
+- Documentation sync PRE_SYNC_HEAD: `0b7c1a340a0dc362ff1af6948664e3a95ac06f19`.
+- Final-hardening implementation baseline: `22fda896a1b24b0cf41cd1402ead521f74758ac6`.
+- Migration head: `20260820_0025` (single Alembic head, verified from the revision chain).
+- Portfolio state: `PORTFOLIO_READY_WITH_EXPLICIT_LIMITS`.
+- Release state: `NOT_READY_TARGETED_NEGATIVE_SCALING`; no v0.1.0 tag or GitHub Release.
+- Production readiness: `NOT_VERIFIED`; controlled tests and CI do not establish capacity, SLOs or a production
+  security boundary.
+
+```text
+portfolio-ready != release-ready != production-ready
+```
+
+### What is current
+
+The project now combines two evidence layers without allowing either to overwrite the other:
+
+1. **Durable evaluation orchestration:** immutable Dataset Versions; Run → Job → lease-bound Attempt → CaseResult;
+   heartbeat, owner/version/expiry/Attempt fencing; stale result/failure rejection; Reaper recovery; PostgreSQL
+   `SKIP LOCKED` false-empty repair; and durable fair-turn state.
+2. **Agent Evaluation Infrastructure:** framework-neutral trajectory artifacts; canonical JSON/SHA-256 identity;
+   immutable ingestion; seven deterministic trajectory metric extractors with `reported`/`derived` provenance;
+   common-case-only regression with explicit case-set, coverage and sufficiency fail-closed rules; source/artifact/packet
+   hash-bound review with staged evaluator visibility; per-call MCP stdio credential revalidation; Agent evidence RLS
+   and composite ownership foreign keys; and dry-run-first orphan-object reconciliation.
+
+### Current CI evidence
+
+- Final implementation run
+  [`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281) passed at source
+  `22fda896a1b24b0cf41cd1402ead521f74758ac6`.
+- Documentation-head run
+  [`32341372636`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32341372636) passed at source
+  `0b7c1a340a0dc362ff1af6948664e3a95ac06f19`.
+- The current gate covers lock/format/Ruff/mypy, 826 non-integration tests, deterministic adapter evidence,
+  PostgreSQL/Redis/MinIO/MCP/concurrency integrations, RLS, reconciliation, migration downgrade/re-upgrade, image build
+  and Compose smoke. This is one CI topology, not production-scale evidence.
+
+### Historical scheduler result that remains binding for release
+
+- Bounded correctness passed in the frozen schema-v2 experiment: 64 arms and 6,400 submitted/unique/terminal Jobs,
+  with protected correctness counters zero.
+- Exact-workload fairness passed only for the frozen 20:1 q1000/sample100/batch1 protocol: the secondary durable
+  receipt position was 2 for w1/w2/w4/w8 in all four repetitions, versus historical legacy position 953.
+- Formal 4→8 scaling remains `NEGATIVE_SCALING`: single `0.782511`, balanced `0.772797`, 20:1 `0.796214`, and
+  many-small `1.014063`, against a frozen 0.95 minimum for every workload.
+- Measurement validity remains failed: two synchronous observers and passive PostgreSQL telemetry exceeded the frozen
+  absolute claim-p95 perturbation budget. H1/H2/H3 were not run and remain inconclusive; no root cause is claimed.
+- Scheduler and measurement candidate budgets remain zero. This sync does not retune or rerun frozen experiments.
+
+### Boundaries not closed
+
+- Execution is at-least-once; external Target/tool side effects may repeat.
+- Current Agent metrics are producer-reported or trajectory-derived; none is authority-verified.
+- PostgreSQL and S3/MinIO do not share an atomic commit; reconciliation reduces orphan risk but is not two-phase commit.
+- Compose still shares migration/runtime database credentials, so complete production RLS role isolation is absent.
+- MCP is local stdio only; no Streamable HTTP, OAuth resource server or remote MCP rate limiter exists.
+- The adapter evidence is fixed fixture replay, not a live LangGraph runtime or performance benchmark.
+- No production capacity, linear-scaling, SLO, on-call or security-certification claim is supported.
+
+### Authoritative current reading order
+
+1. [Project status](PROJECT_STATUS.md)
+2. [Project evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md)
+3. [Final hardening report](docs/final_hardening/FINAL_HARDENING_REPORT.md)
+4. [Agent EvalOps tutorial](docs/learning/AGENT_EVALOPS_TUTORIAL.md)
+5. [Agent resume evidence](docs/resume/AGENT_EVAL_RESUME_EVIDENCE.md)
+6. [Resume metric ledger](docs/handoffs/RESUME_METRIC_LEDGER.md)
+7. [Interview story bank](docs/handoffs/INTERVIEW_STORY_BANK.md)
+8. [Final portfolio synchronization report](docs/handoffs/FINAL_PORTFOLIO_SYNC_REPORT_20260820.md)
+9. [Third-party provenance review](docs/handoffs/THIRD_PARTY_PROVENANCE.md)
+
+## Historical scheduler/archive baseline — revalidated 2026-08-11
+
+The remainder of this file preserves the scheduler-only archive state. Its branch, SHA, test totals and workflow IDs
+are historical evidence, not the current portfolio branch.
 
 Archive baseline: `39f381e8369e044392fbad39c3fbc75d5bdeb942`
 
-Branch: `codex/evidence-gate-1`
+Historical branch: `codex/evidence-gate-1`
 
 Pull Request: [#1](https://github.com/godofxuan/ai-evalops-platform/pull/1)
 

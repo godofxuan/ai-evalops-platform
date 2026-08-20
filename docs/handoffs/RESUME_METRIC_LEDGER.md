@@ -1,6 +1,24 @@
 # AI EvalOps Platform — Resume Metric Ledger
 
-Revalidated: 2026-08-11 from checked-in artifacts. Every value requires its Scope.
+Revalidated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Every value requires its Scope and claim tier.
+
+Claim tiers: `CURRENT_POSITIVE_RESUME`, `JD_SPECIFIC_BACKUP`, `INTERVIEW_ONLY`, `HISTORICAL_NEGATIVE`, `FORBIDDEN`.
+
+## Current evidence — `CURRENT_POSITIVE_RESUME`
+
+| Metric / capability | Value | Scope and evidence | Boundary |
+| --- | --- | --- | --- |
+| Final-hardening identity | source `22fda896a1b24b0cf41cd1402ead521f74758ac6`; migration `20260820_0025` | successful CI `32282462281` | implementation baseline, not this later documentation commit |
+| Current non-integration suite | 826 non-integration tests | successful CI `32282462281`; Python 3.12 gate | test count, not production traffic or capacity |
+| Agent trajectory artifact kinds | exactly 7 deterministic kinds | schema/evaluator unit tests and Agent workflow integration | metrics are `reported` or `derived`, not authority-verified |
+| Regression evidence policy | exact/intersection/allow-diff case-set policies; fail-closed coverage/sample sufficiency | immutable manifest/API/workflow tests | thresholds are caller policy |
+| MCP authorization | per-call MCP stdio credential revalidation | real stdio subprocess revocation integration | local stdio only; no remote/OAuth claim |
+| Object reconciliation | dry-run, grace, recheck, delete retry and durable audit | PostgreSQL/MinIO integration | reduces orphan risk; no atomic cross-store commit |
+
+## Historical metrics — `INTERVIEW_ONLY` / `HISTORICAL_NEGATIVE`
+
+The table below is the historical 2026-08-11 local rerun and frozen scheduler experiment. Its negative results remain
+binding for release; its positive counts must not be reframed as current production capacity.
 
 | Metric | Value | Scope | Evidence | Allowed | Forbidden |
 | --- | ---: | --- | --- | --- | --- |
@@ -24,7 +42,7 @@ Revalidated: 2026-08-11 from checked-in artifacts. Every value requires its Scop
 | Passive claim-p95 | OFF 708.689593 ms; ON 509.975702 ms; -28.0396% | same; absolute change exceeds 10% | measurement `assessment.json` | measurement invalid | ON improved scheduler |
 | Passive telemetry integrity | 69 successful; 65 wait-observing; 5,393 rows; 0 errors/drops/overflow | 5 Hz qualification | eight telemetry summaries | collector ran cleanly | causal bottleneck evidence |
 | Passive manifest | 151/151, 0 missing/size/hash mismatch | independently rehashed 2026-08-11 | measurement root `manifest.json` | artifact integrity | signed evidence |
-| Local project test suite | 783 passed, 33 skipped | `.venv` Python 3.12; skips require external PostgreSQL/Redis/MinIO flags | 2026-08-11 rerun | exact local result | “816 tests passed” |
+| Local project test suite | 783 passed, 33 skipped | `.venv` Python 3.12; skips require external PostgreSQL/Redis/MinIO flags | historical 2026-08-11 local rerun | exact dated local result | current suite total or “816 tests passed” |
 | System-Python attempt | exit 4, 55 collection errors | Python 3.13 missing project dependencies/plugin | 2026-08-11 rerun | environment diagnosis | code regression |
 | Compileall | exit 0 | system Python, `app scripts tests` | 2026-08-11 rerun | syntax compilation | full-test substitute |
 | Pre-archive CI | `31422948234`, `31422955446` success | baseline `39f381e`; branch and PR CI | GitHub Actions | historical baseline CI | final archive CI until rerun passes |
@@ -36,3 +54,8 @@ Revalidated: 2026-08-11 from checked-in artifacts. Every value requires its Scop
 - Scaling ratios were read from assessor `self_scaling`, whose w4/w8 throughput values are four-repetition medians.
 - Both root manifests were rehashed by relative path and checked for missing file, size and SHA-256 mismatch.
 - Fault total is 18 summary rows × 3 repetitions = 54, split 27 before/27 after; it remains historical.
+
+## Unsupported metrics — `FORBIDDEN`
+
+No current production capacity, linear scaling, universal fairness, exactly-once, independently verified Agent metric,
+production SLO, complete tenant isolation or released-v0.1.0 number is authorized.

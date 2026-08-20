@@ -1,10 +1,15 @@
 # JD Keyword Map
 
+Current branch: `codex/final-evidence-hardening-v1`. Classify output as `CURRENT_POSITIVE_RESUME`, `JD_SPECIFIC_BACKUP`,
+`INTERVIEW_ONLY`, `HISTORICAL_NEGATIVE` or `FORBIDDEN` before using a JD keyword.
+
 Research authority: [`JD_RESEARCH_2026-08-11.md`](../JD_RESEARCH_2026-08-11.md), 14 formal postings.
 
 | Keyword family | Classification | Resume use |
 | --- | --- | --- |
 | evaluation infrastructure / reproducibility | `VERIFIED` | yes |
+| Agent trajectory / regression evidence | `VERIFIED_BOUNDED` | yes: canonical identity, deterministic metrics, explicit sufficiency |
+| MCP | `VERIFIED_LOCAL_STDIO` | yes only when the JD accepts local control-plane evidence; no remote/OAuth claim |
 | Python / FastAPI / PostgreSQL | `VERIFIED` | yes when JD asks |
 | backend APIs / platform services | `VERIFIED` | yes |
 | distributed concurrency | `VERIFIED_BOUNDED` | yes with race/test scope |

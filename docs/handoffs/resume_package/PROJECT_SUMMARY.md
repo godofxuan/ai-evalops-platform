@@ -1,9 +1,14 @@
 # Project Summary
 
+Current branch: `codex/final-evidence-hardening-v1`; implementation baseline: `22fda896a1b24b0cf41cd1402ead521f74758ac6`;
+migration head: `20260820_0025`. Claim tiers are `CURRENT_POSITIVE_RESUME`, `JD_SPECIFIC_BACKUP`, `INTERVIEW_ONLY`,
+`HISTORICAL_NEGATIVE` and `FORBIDDEN`.
+
 ## One-line positioning
 
 AI EvalOps Platform is a multi-tenant asynchronous AI evaluation backend that demonstrates durable orchestration,
-distributed-state correctness and evidence-based release gating; it is portfolio-ready, while v0.1.0 remains NOT_READY.
+distributed-state correctness, framework-neutral Agent trajectory evidence and evidence-based release gating; it is
+portfolio-ready, while v0.1.0 remains NOT_READY.
 
 ## Problem and flow
 
@@ -16,6 +21,10 @@ FastAPI -> Run -> Job -> Attempt -> Worker -> Target/Evaluator -> CaseResult -> 
 
 PostgreSQL is authoritative; Redis is only a lossy event path. Execution is at-least-once. Lease owner/version/expiry and
 Attempt identity fence stale writes; competing Reapers recover expired work.
+
+The current Agent layer adds canonical JSON/SHA-256 immutable trajectory ingestion, seven deterministic metric extractors
+with reported/derived provenance, manifest-pinned common-case regression, source-bound review, per-call MCP stdio
+authorization, Agent evidence RLS/composite FKs and dry-run-first orphan reconciliation.
 
 ## Strongest evidence
 

@@ -4,6 +4,11 @@ This file maps claims to evidence. It is not a finished personal résumé. Final
 GitHub Actions run [`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281) at source
 `22fda896a1b24b0cf41cd1402ead521f74758ac6`.
 
+Current branch: `codex/final-evidence-hardening-v1`. The capability sections below are `CURRENT_POSITIVE_RESUME` when their
+Known limitation is retained. Scheduler experiment/failure details are `INTERVIEW_ONLY` or `HISTORICAL_NEGATIVE`.
+Production-ready, exactly-once, seven verified evaluators, all-framework/live-LangGraph, remote/OAuth MCP, atomic
+PostgreSQL/S3, complete production RLS and linear-scaling statements are `FORBIDDEN`.
+
 ## Durable orchestration and recovery
 
 **Claim**
@@ -13,7 +18,7 @@ PostgreSQL-backed Run/Job/Attempt orchestration with lease, heartbeat, fencing a
 VERIFIED on the prior `main` baseline and reverified by final-hardening CI.
 
 **Exact code paths**
-`app/jobs/claiming.py`, `app/jobs/heartbeat.py`, `app/jobs/completion.py`, `app/reaper/service.py`.
+`app/jobs/claiming.py`, `app/jobs/heartbeat.py`, `app/jobs/results.py`, `app/jobs/failures.py`, `app/jobs/reaper.py`.
 
 **Exact tests**
 `tests/concurrency/test_job_claiming.py`, `tests/concurrency/test_stale_worker.py`,

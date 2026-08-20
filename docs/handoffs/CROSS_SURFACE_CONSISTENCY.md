@@ -1,10 +1,24 @@
 # AI EvalOps Platform — cross-surface consistency
 
-Updated: 2026-08-11
+Updated: 2026-08-20
 
 ## Canonical current state
 
-- branch: `codex/evidence-gate-1`;
+- branch: `codex/final-evidence-hardening-v1`;
+- PRE_SYNC_HEAD: `0b7c1a340a0dc362ff1af6948664e3a95ac06f19`;
+- final-hardening implementation baseline: `22fda896a1b24b0cf41cd1402ead521f74758ac6`;
+- migration head: `20260820_0025`;
+- current CI: `32282462281` passed the implementation baseline, including 826 non-integration tests and the declared
+  PostgreSQL/Redis/MinIO/MCP/concurrency/migration/image/Compose gates;
+- current capability: durable orchestration plus framework-neutral immutable Agent trajectory evidence, deterministic
+  reported/derived metric extraction, fail-closed common-case regression, source-bound review, per-call MCP stdio auth,
+  Agent evidence RLS/composite FKs and compensating orphan reconciliation;
+- portfolio: `PORTFOLIO_READY_WITH_EXPLICIT_LIMITS`; production readiness: `NOT_VERIFIED`;
+- release remains `NOT_READY_TARGETED_NEGATIVE_SCALING` because the historical frozen scheduler gate is still binding;
+
+## Historical scheduler/archive state — 2026-08-11
+
+- historical branch: `codex/evidence-gate-1`;
 - Candidate 3 scheduler source: `02f5e680e71d05c76c145da6895122a2cf04ba14`;
 - schema-v2 qualification source: `91acdba9f5b5f1a84fb03640382c9e4871364afe`;
 - evidence commit: `15bab58150385c9a39778d64a3e4163c10892ecc`;

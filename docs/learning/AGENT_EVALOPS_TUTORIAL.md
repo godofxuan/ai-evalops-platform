@@ -29,8 +29,9 @@ answer, citations, a limited semantic trajectory and evaluator results—not mod
 
 Evaluator evidence is immutable and reproducible by identity: artifact ID, evaluator kind, built-in implementation
 version and canonical configuration hash. Repeating an identical evaluation returns the same row; changing evaluator
-code version or configuration creates distinct evidence. Run comparison currently selects the newest artifact per case
-and the newest result per evaluator kind, making that selection rule visible rather than silently merging every version.
+code version or configuration creates distinct evidence. On a new comparison request, the service resolves the selected
+artifact/result identities once, writes them into an immutable comparison manifest, and replays that manifest thereafter;
+it does not dynamically merge or silently replace versions on later reads.
 
 A correct permission denial is not automatically a security violation. The taxonomy may call it a permission-related
 failure for diagnosis, while the release gate counts only observed unauthorized-result leakage.

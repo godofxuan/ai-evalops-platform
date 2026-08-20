@@ -1,6 +1,26 @@
 # Bullet Candidates
 
-Select three primary bullets from one role family; two backups are replacement inventory, not extra resume content.
+Current branch: `codex/final-evidence-hardening-v1`. Select three primary bullets from one role family; backups are
+replacement inventory, not extra resume content.
+
+Claim tiers: `CURRENT_POSITIVE_RESUME` (`CURRENT_RESUME_SAFE`), `JD_SPECIFIC_BACKUP`, `INTERVIEW_ONLY`,
+`HISTORICAL_NEGATIVE` (`HISTORICAL_INTERVIEW_ONLY`) and `FORBIDDEN`.
+
+## Current Agent Evaluation Infrastructure — `CURRENT_POSITIVE_RESUME`
+
+1. Built framework-neutral Agent trajectory evidence with canonical JSON/SHA-256 identity, immutable ingestion and
+   explicit `reported`/`derived` metric provenance.
+2. Implemented common-case regression gates with immutable comparison manifests and fail-closed case coverage/sample
+   sufficiency; thresholds remain caller policy.
+3. Bound human-review packets to source/result/artifact hashes and staged evaluator visibility.
+4. Enforced per-call MCP stdio credential revalidation and resource-scoped audit traces, including real-process revocation
+   tests; no remote/OAuth MCP claim.
+5. Added dry-run-first object reconciliation with grace/recheck/retry/audit behavior; no atomic cross-store claim.
+
+## Historical scheduler selection — `INTERVIEW_ONLY` / `HISTORICAL_NEGATIVE`
+
+The role-family bullets below are the dated 2026-08-11 scheduler evidence pool. Preserve their exact frozen scope and
+negative release result; prefer the current Agent bullets for the present project state.
 
 ## AI Evaluation
 
@@ -35,3 +55,8 @@ Select three primary bullets from one role family; two backups are replacement i
 5. Backup: structured/redacted logging, metrics, tracing and readiness without production-operation claims.
 
 Canonical full wording: [`RESUME_CODEX_HANDOFF.md`](../RESUME_CODEX_HANDOFF.md).
+
+## Unsupported claims — `FORBIDDEN`
+
+Production-ready/production-scale, exactly-once, universal fairness, linear scaling, verified Agent truth, live LangGraph,
+remote/OAuth MCP, atomic PostgreSQL/object-store commit, complete tenant isolation, SLO/on-call and released v0.1.0.

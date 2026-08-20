@@ -1,5 +1,9 @@
 # Forbidden Claims
 
+Current branch: `codex/final-evidence-hardening-v1`. This is the `FORBIDDEN` tier; positive wording belongs in
+`CURRENT_POSITIVE_RESUME`, replacements in `JD_SPECIFIC_BACKUP`, and negative evidence in
+`INTERVIEW_ONLY`/`HISTORICAL_NEGATIVE`.
+
 Do not write any of the following unless future evidence materially changes:
 
 - production-ready / production-scale / enterprise-grade production;
@@ -11,6 +15,10 @@ Do not write any of the following unless future evidence materially changes:
 - achieved SLO, production on-call or incident-response experience;
 - Kubernetes/GPU/streaming experience from this project;
 - complete tenant isolation or security certification.
+- seven verified evaluators or independently verified Agent truth;
+- every Agent framework or a live LangGraph runtime/performance benchmark;
+- Streamable HTTP/OAuth/remote MCP or remote rate limiting;
+- atomic PostgreSQL/S3 or two-phase commit.
 
 Safe replacements:
 

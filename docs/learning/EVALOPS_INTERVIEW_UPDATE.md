@@ -1,5 +1,11 @@
 # AI EvalOps Platform — Interview Update
 
+> Historical scheduler interview snapshot. For the 2026-08-20 final-hardening curriculum and current Agent Evaluation
+> Infrastructure stories, use [`TEACHING_CODEX_HANDOFF.md`](../handoffs/TEACHING_CODEX_HANDOFF.md),
+> [`INTERVIEW_STORY_BANK.md`](../handoffs/INTERVIEW_STORY_BANK.md) and
+> [`AGENT_EVALOPS_TUTORIAL.md`](AGENT_EVALOPS_TUTORIAL.md). Current branch:
+> `codex/final-evidence-hardening-v1`.
+
 Updated: 2026-08-10
 Rule: 每题必须回答“源码在哪里、测试怎么证、真实实验是什么、证据边界是什么”，不能只讲通用定义。
 

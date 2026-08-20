@@ -1,8 +1,13 @@
 # AI EvalOps Platform — Teaching Codex Update
 
-> **Authoritative entry changed on 2026-08-11:** read
-> [`TEACHING_CODEX_HANDOFF.md`](TEACHING_CODEX_HANDOFF.md) first. It contains the ten-module curriculum, current passive
-> measurement result, source/test/evidence links and stop-decision boundary. This file is retained as a historical pointer.
+> **Authoritative entry changed again on 2026-08-20:** read
+> [`TEACHING_CODEX_HANDOFF.md`](TEACHING_CODEX_HANDOFF.md) first. It now contains the current 21-module orchestration,
+> concurrency and Agent Evaluation Infrastructure curriculum. This file is retained as a 2026-08-10 scheduler snapshot.
+
+Current branch: `codex/final-evidence-hardening-v1`. Current required reading also includes
+[`AGENT_EVALOPS_TUTORIAL.md`](../learning/AGENT_EVALOPS_TUTORIAL.md),
+[`FINAL_HARDENING_REPORT.md`](../final_hardening/FINAL_HARDENING_REPORT.md) and
+[`AGENT_EVAL_RESUME_EVIDENCE.md`](../resume/AGENT_EVAL_RESUME_EVIDENCE.md).
 
 Updated: 2026-08-10<br>
 Branch: `codex/evidence-gate-1`<br>

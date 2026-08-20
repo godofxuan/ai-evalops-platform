@@ -2,7 +2,7 @@
 
 > RAG / Agent Evaluation Infrastructure：将本地 Agent、RAG 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的多租户评测工作流。
 
-[![CI](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml)
+[![CI](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml/badge.svg?branch=codex%2Ffinal-evidence-hardening-v1)](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml?query=branch%3Acodex%2Ffinal-evidence-hardening-v1)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Async%20API-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-State%20Authority-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
@@ -84,6 +84,7 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 
 | I want to see… | Start here |
 | --- | --- |
+| Current portfolio/release state | [Project status](PROJECT_STATUS.md) |
 | Architecture and data flow | [Architecture](docs/01_architecture.md) |
 | Agent artifact and trajectory contract | [Agent Run Artifact](docs/agent_eval/AGENT_RUN_ARTIFACT_SCHEMA.md) |
 | Agent failure attribution and regression | [Failure taxonomy](docs/agent_eval/FAILURE_TAXONOMY.md) |
@@ -96,6 +97,13 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 | Evidence tooling | [Evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md) |
 | Engineering interview stories | [Story bank](docs/handoffs/INTERVIEW_STORY_BANK.md) |
 | Resume-ready project summary | [Resume package](docs/handoffs/resume_package/PROJECT_SUMMARY.md) |
+| Step-by-step learning path | [Agent EvalOps tutorial](docs/learning/AGENT_EVALOPS_TUTORIAL.md) |
+| Third-party origin and license review | [Provenance review](docs/handoffs/THIRD_PARTY_PROVENANCE.md) |
+
+The current portfolio branch is `codex/final-evidence-hardening-v1`; the final-hardening implementation evidence is bound
+to source `22fda896a1b24b0cf41cd1402ead521f74758ac6`, migration head `20260820_0025` and successful CI run
+[`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281). The historical scheduler evidence
+still blocks v0.1.0: portfolio-ready does not mean release-ready or production-ready.
 
 ## Technology
 

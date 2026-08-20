@@ -1,9 +1,13 @@
 # Role Positioning
 
+Current branch: `codex/final-evidence-hardening-v1`. Default to `CURRENT_POSITIVE_RESUME`; use `JD_SPECIFIC_BACKUP` only
+as a replacement; keep `INTERVIEW_ONLY` and `HISTORICAL_NEGATIVE` out of the primary summary; reject `FORBIDDEN` claims.
+
 ## A — AI Evaluation / EvalOps
 
 Lead with evaluation workflow, immutable identity/provenance, evaluator registry, evidence contract, reproducibility and the
-release gate. Best match to evaluation-infrastructure roles.
+release gate. Add canonical Agent trajectories, deterministic reported/derived metrics, fail-closed common-case regression,
+source-bound review and local MCP stdio control-plane boundaries. Best match to evaluation-infrastructure roles.
 
 ## B — AI Platform / Python Backend
 

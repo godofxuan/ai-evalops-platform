@@ -1,9 +1,62 @@
 # AI EvalOps Platform — Resume Codex Handoff
 
-Updated: 2026-08-11. This is the authoritative entry for resume writing. Read `PROJECT_STATUS.md`,
-`RESUME_METRIC_LEDGER.md`, `JD_RESEARCH_2026-08-11.md`, `resume_package/`, then `RESUME_INTERVIEW_CONSISTENCY.md`.
+Updated: 2026-08-20. This is the authoritative entry for resume writing on
+`codex/final-evidence-hardening-v1`. Read `PROJECT_STATUS.md`, `RESUME_METRIC_LEDGER.md`,
+`docs/resume/AGENT_EVAL_RESUME_EVIDENCE.md`, `resume_package/`, then `RESUME_INTERVIEW_CONSISTENCY.md`.
 
-## Position the project correctly
+## Claim tiers
+
+- `CURRENT_POSITIVE_RESUME` (`CURRENT_RESUME_SAFE`): implemented and covered by current tests/CI; suitable for a resume when its stated boundary is
+  retained.
+- `JD_SPECIFIC_BACKUP`: current verified capability that can replace, but not expand, a primary bullet for a matching role.
+- `INTERVIEW_ONLY`: mechanisms and failure stories that need more context than a resume bullet permits.
+- `HISTORICAL_NEGATIVE` (`HISTORICAL_INTERVIEW_ONLY`): useful engineering history, dated frozen experiment or failed result; discuss in an
+  interview, but do not present it as a current positive capability or current capacity metric.
+- `FORBIDDEN`: unsupported production, universality, independent-verification, exactly-once, scale or release claims.
+
+## Current Agent Evaluation Infrastructure bullets — `CURRENT_POSITIVE_RESUME`
+
+Choose at most three and keep the limitation paired with the claim.
+
+**AE1.** Extended a multi-tenant asynchronous Python evaluation backend with framework-neutral Agent trajectory artifacts,
+canonical JSON/SHA-256 content identity, immutable ingestion and seven deterministic trajectory metric extractors,
+preserving implementation/configuration identity and `reported` versus `derived` metric provenance.
+
+**AE2.** Implemented deterministic trajectory evaluation and common-case regression gates that pin artifact/result IDs in
+an immutable comparison manifest and fail closed on insufficient case coverage or samples; thresholds remain caller policy,
+not universal quality standards.
+
+**AE3.** Bound human-review packets to source/result/artifact hashes and staged evaluator visibility, making review inputs
+auditable without claiming that human labels are objective ground truth.
+
+**AE4.** Added per-call MCP stdio authorization with credential revalidation and resource-scoped audit traces, plus
+authenticated real-process revocation tests; remote MCP transports and OAuth resource-server behavior are not implemented.
+
+**AE5.** Added dry-run-first PostgreSQL/S3-compatible artifact reconciliation with grace windows, rechecks, shared SHA-256
+identity and durable audit records; reconciliation reduces orphan risk but is not a cross-system atomic transaction.
+
+**AE6.** Hardened Agent evidence ownership with PostgreSQL RLS and composite tenant foreign keys and exercised an
+authenticated HTTP→PostgreSQL→MinIO workflow; Compose still shares migration/runtime database credentials.
+
+Current verification is bound to implementation source `22fda896a1b24b0cf41cd1402ead521f74758ac6`, migration head
+`20260820_0025`, and successful workflow
+[`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281).
+
+## Historical scheduler evidence — `INTERVIEW_ONLY` / `HISTORICAL_NEGATIVE`
+
+The 2026-08-11 scheduler qualification below remains evidence of concurrency/release-gating practice. It must retain the
+frozen workload and date, the three failed 4→8 ratios, invalid measurement systems, inconclusive H1/H2/H3 and blocked
+v0.1.0 release. It is not current production-scale proof.
+
+## Unsupported claims — `FORBIDDEN`
+
+Do not say production-ready, production-scale, enterprise-grade, exactly-once, universally fair, starvation-free,
+deadlock-free, linearly scalable, independently verified metrics, live LangGraph integration, remote/OAuth MCP, complete
+tenant isolation, atomic PostgreSQL/object-store commits, production SLO/on-call experience, or released v0.1.0.
+
+## Historical 2026-08-11 resume inventory
+
+### Position the project correctly
 
 This is not “an AI website” or a middleware inventory. It demonstrates AI Evaluation Infrastructure, asynchronous Python
 backend systems, distributed state machines/concurrency correctness, reliability/evidence engineering and performance-

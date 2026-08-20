@@ -1,7 +1,11 @@
 # AI EvalOps Platform — Interview Story Bank
 
-Updated: 2026-08-11. Use these as evidence-backed outlines, not memorized scripts. Start with the decision/result, then show
+Updated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Use these as evidence-backed outlines, not memorized scripts. Start with the decision/result, then show
 the mechanism. Never remove limitations or turn historical evidence into current production claims.
+
+Stories 1–10 preserve orchestration/scheduler/release history; stories 11–15 cover current final-hardening Agent Evaluation
+Infrastructure. The latter can defend `CURRENT_POSITIVE_RESUME` bullets. Negative performance/measurement results remain
+`HISTORICAL_NEGATIVE` and belong in interviews or limitations, not the default resume summary.
 
 ## Story 1 — Making retries auditable with Job and Attempt
 
@@ -122,3 +126,63 @@ the mechanism. Never remove limitations or turn historical evidence into current
 - **Decision:** close as portfolio-ready but release-not-ready.
 - **Limitation:** future progress requires newly scoped authorization and preregistration.
 - **What I learned:** stopping is engineering work when more activity would reduce evidentiary credibility.
+
+## Story 11 — Making trajectory identity reproducible without calling it truth
+
+- **Problem:** Agent frameworks emit differently shaped, mutable traces that are hard to compare later.
+- **Risk:** reserialization or producer claims can silently change the evidence behind a metric.
+- **Hypothesis:** normalize into one versioned envelope and hash canonical bytes before immutable ingestion.
+- **Implementation:** framework-neutral trajectory schema, canonical JSON/SHA-256, immutable artifact reference and implementation/config/provenance-bound result rows.
+- **Experiment:** schema/evaluator unit tests plus authenticated PostgreSQL/MinIO workflow in CI `32282462281`.
+- **Evidence:** exactly seven deterministic extractor kinds persist `reported` or `derived` provenance.
+- **Decision:** use content identity and deterministic extraction, but never call the metrics authority-verified.
+- **Limitation:** a hash proves byte identity, not factual truth, authorship or signature authenticity.
+- **What I learned:** reproducibility and epistemic authority are different axes.
+
+## Story 12 — Failing regression closed on insufficient common evidence
+
+- **Problem:** two runs can have different case sets or too little overlap for a defensible regression verdict.
+- **Risk:** aggregate comparison can turn one favorable common case into a false PASS.
+- **Hypothesis:** pin every selected evidence ID and require an explicit case policy, coverage and minimum sample count.
+- **Implementation:** exact/intersection/allow-diff policies, common-case calculation, sufficiency gates and immutable comparison manifest/request SHA replay.
+- **Experiment:** unit, API and real Agent workflow tests cover missing cases, low coverage, low samples and replay.
+- **Evidence:** insufficient evidence becomes a fail-closed verdict rather than a silently comparable run.
+- **Decision:** keep thresholds caller-defined and visible; never advertise a universal model-quality standard.
+- **Limitation:** intersection improves comparability while potentially hiding behavior outside the common set.
+- **What I learned:** evidence selection is part of the result and must itself be immutable.
+
+## Story 13 — Reducing reviewer anchoring with source-bound packets
+
+- **Problem:** reviewers can see prior evaluator/reviewer outcomes or review different source material.
+- **Risk:** anchoring and source drift make adjudication difficult to audit.
+- **Hypothesis:** bind packet identity to source/result/artifact hashes and stage visibility until adjudication.
+- **Implementation:** immutable review source identity, packet SHA, double-review flow and evaluator-visibility policy.
+- **Experiment:** review unit/API/workflow tests cover packet hashes, source binding and visibility stages.
+- **Evidence:** current CI verifies that the packet and selected evidence identities remain linked.
+- **Decision:** describe the workflow as auditable review, not objective or independently verified truth.
+- **Limitation:** software controls cannot remove human bias or make a label universally correct.
+- **What I learned:** blinding is a data-access invariant, not merely a reviewer instruction.
+
+## Story 14 — Revoking an MCP credential between calls
+
+- **Problem:** a long-lived stdio process can outlive the validity of its startup credential.
+- **Risk:** session-only authorization allows calls after revocation or tenant disablement.
+- **Hypothesis:** revalidate credential and tenant status inside every tool/resource call.
+- **Implementation:** official MCP SDK v2 stdio adapter delegates through the authenticated service layer and records bounded trace/resource audit identity.
+- **Experiment:** a real MCP stdio subprocess authenticates, succeeds, is revoked, then is denied on the next call.
+- **Evidence:** MCP integrations passed run `32282462281`.
+- **Decision:** keep the implemented claim to local stdio per-call authorization.
+- **Limitation:** no Streamable HTTP, OAuth resource server or remote rate limiter exists.
+- **What I learned:** transport connection lifetime is not an authorization lifetime.
+
+## Story 15 — Reconciling non-atomic database and object-store writes
+
+- **Problem:** PostgreSQL rows and S3/MinIO objects cannot commit in one local ACID transaction.
+- **Risk:** a crash can leave an unreferenced blob, while premature cleanup can delete an in-flight object.
+- **Hypothesis:** scan dry-run-first, wait through a grace window, recheck references, retry deletion and audit every action.
+- **Implementation:** shared SHA-256 identity, reconciliation repository/service and durable audit events.
+- **Experiment:** real PostgreSQL/MinIO tests cover dry-run, grace, recheck-before-delete, retry and audit behavior.
+- **Evidence:** reconciliation integration passed run `32282462281`.
+- **Decision:** use compensating cleanup and explicitly reject an atomic/two-phase-commit claim.
+- **Limitation:** reconciliation is eventual risk reduction and depends on correct retention/grace policy.
+- **What I learned:** an honest cross-store design starts by naming the half-commit windows.

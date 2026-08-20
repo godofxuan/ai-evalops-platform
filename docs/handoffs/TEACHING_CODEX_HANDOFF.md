@@ -1,7 +1,264 @@
 # AI EvalOps Platform — Teaching Codex Handoff
 
-Updated: 2026-08-11. This is the authoritative teaching entry. Read `PROJECT_STATUS.md` and
-`docs/handoffs/PROJECT_EVIDENCE_MAP.md` first; demonstrate each answer with source, test and evidence rather than memory.
+Updated: 2026-08-20 on `codex/final-evidence-hardening-v1`. This is the authoritative teaching entry. Demonstrate every
+answer with source, transaction boundary, test and evidence rather than memory. The original 2026-08-11 scheduler lessons
+below remain a historical deep dive; the current curriculum adds final-hardening Agent Evaluation Infrastructure.
+
+## Required reading order
+
+1. [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md)
+2. [`PROJECT_EVIDENCE_MAP.md`](PROJECT_EVIDENCE_MAP.md)
+3. Core domain/state-machine sources: `app/persistence/orm_models.py`, `app/jobs/`, `app/workers/`
+4. [`EVALOPS_SCHEDULER_PERFORMANCE_TEACHING_HANDOFF.md`](../learning/EVALOPS_SCHEDULER_PERFORMANCE_TEACHING_HANDOFF.md)
+5. [`FINAL_HARDENING_REPORT.md`](../final_hardening/FINAL_HARDENING_REPORT.md)
+6. [`AGENT_EVALOPS_TUTORIAL.md`](../learning/AGENT_EVALOPS_TUTORIAL.md)
+7. [`AGENT_EVAL_RESUME_EVIDENCE.md`](../resume/AGENT_EVAL_RESUME_EVIDENCE.md)
+8. [`RESUME_METRIC_LEDGER.md`](RESUME_METRIC_LEDGER.md)
+9. [`INTERVIEW_STORY_BANK.md`](INTERVIEW_STORY_BANK.md)
+
+## Required workshop record for every module
+
+Every one of the 21 modules must be taught and recorded in this order: **Concept** → **Real code chain** →
+**SQL / transaction boundary** → **Test** → **Failure mode** → **Trade-off** → **Observed result** →
+**Interview follow-up** → **Independent answer** → **Small modification exercise**. A learner has not completed a module
+by reading the reference answer: they must first predict the failure, trace one transaction, answer unaided, and make or
+design the bounded exercise without weakening an invariant.
+
+## Current 21-module curriculum
+
+The compact cards below contain all ten required workshop fields. Paths name the first evidence location; the required
+reading above supplies the detailed walkthroughs.
+
+### Curriculum 1 — Why Run, Job and Attempt are separate
+
+- **Concept / Real code chain:** immutable input and desired work are distinct from an execution generation; trace
+  `EvaluationRun → EvaluationJob → JobAttempt → CaseResult` in `app/persistence/orm_models.py` and `app/runs/`.
+- **SQL / transaction boundary / Test:** Run creation is idempotent; claim creates the Attempt in the same PostgreSQL
+  transaction; use Run idempotency and Job-claiming tests.
+- **Failure mode / Trade-off / Observed result:** one mutable row loses retry history; more tables cost joins but preserve
+  provenance; controlled evidence records unique Jobs/Attempts without claiming production capacity.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain why a retry is not a new Job; answer
+  without notes; add a test that a second Attempt cannot overwrite the first Attempt's identity.
+
+### Curriculum 2 — At-least-once versus exactly-once
+
+- **Concept / Real code chain:** `lease_runner`, result/failure services and retry policy provide at-least-once execution
+  with fenced durable acceptance, not exactly-once external effects.
+- **SQL / transaction boundary / Test:** Job/Attempt/result updates are atomic inside PostgreSQL, while Target/tool effects
+  are outside it; trace stale-result and retry tests.
+- **Failure mode / Trade-off / Observed result:** a crash after an external side effect can repeat it; idempotency/fencing
+  protect persisted results but cannot erase that window; the project explicitly retains this limitation.
+- **Interview follow-up / Independent answer / Small modification exercise:** describe the crash window; state the guarantee
+  unaided; design an idempotency key for one external Target without calling it exactly-once.
+
+### Curriculum 3 — Lease, heartbeat and fencing token
+
+- **Concept / Real code chain:** claim grants temporary owner/version/Attempt authority, heartbeat extends expiry, and each
+  write revalidates all of it in `app/jobs/claiming.py`, `heartbeat.py`, `results.py` and `failures.py`.
+- **SQL / transaction boundary / Test:** conditional updates lock/check the current Job and active Attempt in one transaction;
+  use heartbeat and stale-write unit/concurrency tests.
+- **Failure mode / Trade-off / Observed result:** Worker identity alone permits an old generation to write; shorter leases
+  recover sooner but false-expire more easily; tested stale writes are rejected.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain why expiry must be checked at commit;
+  enumerate the fence unaided; write a boundary test for an expired heartbeat.
+
+### Curriculum 4 — How a stale Worker can overwrite a new result
+
+- **Concept / Real code chain:** a paused Worker can resume after Reaper/retry assigned the Job to a new Attempt; compare
+  old and current owner/version/Attempt in result and failure commits.
+- **SQL / transaction boundary / Test:** serialization is at the locked Job/Attempt rows, not the Python process; run stale
+  success and stale failure tests.
+- **Failure mode / Trade-off / Observed result:** last-write-wins corrupts the accepted generation; strict fences reject late
+  valid-looking work at the cost of discarding its computation; protected counters were zero in frozen scope.
+- **Interview follow-up / Independent answer / Small modification exercise:** draw the two-Worker timeline; name every fence
+  unaided; mutate one fence out of a test double and predict the failing assertion.
+
+### Curriculum 5 — Reaper, retry and Attempt generation
+
+- **Concept / Real code chain:** Reaper closes expired Attempts and chooses retry/fail/cancel before a replacement claim;
+  trace `app/jobs/reaper.py`, retry policy and cancellation.
+- **SQL / transaction boundary / Test:** `FOR UPDATE SKIP LOCKED` partitions expired Jobs among Reapers and closes the old
+  Attempt atomically; use competing-Reaper and crash-recovery tests.
+- **Failure mode / Trade-off / Observed result:** duplicate recovery can create conflicting generations; row locks constrain
+  concurrency but do not prove universal liveness; tested recovery remains bounded.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain why Reaper owns no Target work; trace
+  retry_count unaided; add a permanent-failure classification case.
+
+### Curriculum 6 — PostgreSQL row locks and `SKIP LOCKED`
+
+- **Concept / Real code chain:** row locks serialize mutations while `SKIP LOCKED` lets claimers make progress on other
+  eligible rows; trace the ordered candidate query in `app/jobs/claiming.py`.
+- **SQL / transaction boundary / Test:** the candidate selection and state transition share a transaction; inspect real
+  PostgreSQL claim and parallelism tests.
+- **Failure mode / Trade-off / Observed result:** locked first candidates can be invisible, and inconsistent lock order can
+  deadlock; non-blocking progress trades complete visibility for throughput; bounded CI passes.
+- **Interview follow-up / Independent answer / Small modification exercise:** contrast blocking and skip-locked selection;
+  explain the visibility gap unaided; alter a test fixture to lock the first eligible Job.
+
+### Curriculum 7 — Deterministic false-empty race
+
+- **Concept / Real code chain:** the selected tenant can still have an eligible but locked Job, so an empty skip-locked query
+  must not consume its durable permit; trace the independent eligibility probe in `claiming.py`.
+- **SQL / transaction boundary / Test:** one transaction holds the Job lock while another claims; Barrier/Event-controlled
+  real-PostgreSQL tests reproduce RED then GREEN.
+- **Failure mode / Trade-off / Observed result:** consuming on false-empty overtakes the tenant; a second probe adds query
+  cost but preserves `PENDING`; one RED and two GREEN workflows document the repair.
+- **Interview follow-up / Independent answer / Small modification exercise:** narrate the exact interleaving; distinguish
+  “no visible row” from “no eligible row”; add a second locked eligible Job to the fixture.
+
+### Curriculum 8 — Durable fair-turn scope
+
+- **Concept / Real code chain:** reusable per-tenant round state controls durable receipt order; it is not a proof of universal
+  fairness; trace fair-turn state and permit consumption in `claiming.py`.
+- **SQL / transaction boundary / Test:** round membership/turn and claim mutate transactionally; use deterministic fairness
+  tests and frozen targeted evidence.
+- **Failure mode / Trade-off / Observed result:** reservation order can differ from durable receipt order; state adds lock
+  contention; exact frozen 20:1 observations moved secondary receipt position from 953 to 2.
+- **Interview follow-up / Independent answer / Small modification exercise:** state what the experiment cannot prove; answer
+  its exact workload unaided; propose a new test without changing the frozen benchmark.
+
+### Curriculum 9 — Trajectory artifact schema
+
+- **Concept / Real code chain:** a framework-neutral envelope records steps, tool calls, handoffs and context events in
+  `app/agent_eval/schemas.py` and artifact models.
+- **SQL / transaction boundary / Test:** metadata and tenant reference persist in PostgreSQL while content uses the artifact
+  storage path; schema and Agent workflow tests validate shape/ownership.
+- **Failure mode / Trade-off / Observed result:** framework-specific traces cannot be compared consistently; a neutral schema
+  loses some native detail but enables deterministic fixtures; eight fixed adapters are fixture replay only.
+- **Interview follow-up / Independent answer / Small modification exercise:** identify required versus optional identity;
+  explain why this is not “all frameworks supported”; add one invalid-step schema case.
+
+### Curriculum 10 — canonical JSON and SHA-256
+
+- **Concept / Real code chain:** canonical serialization makes semantically identical normalized artifacts produce stable
+  bytes and SHA-256 identity; trace canonical helpers and artifact ingestion.
+- **SQL / transaction boundary / Test:** digest identity is computed before immutable metadata/reference persistence; canonical
+  ordering and hash tests cover determinism.
+- **Failure mode / Trade-off / Observed result:** ordinary JSON key/number differences create unstable hashes; normalization
+  constrains accepted forms; current artifacts have reproducible content identity, not signatures.
+- **Interview follow-up / Independent answer / Small modification exercise:** distinguish hash identity from authenticity;
+  derive the stable-byte rule unaided; add a key-order equivalence test.
+
+### Curriculum 11 — immutable Agent artifact ingestion
+
+- **Concept / Real code chain:** accepted trajectory content and provenance are append-only evidence; trace Agent ingestion
+  service, ArtifactBlob/Reference and migration `20260820_0019`.
+- **SQL / transaction boundary / Test:** database identity/metadata commit is atomic only within PostgreSQL; object bytes are
+  a separate store; API/workflow tests reject conflicting reuse.
+- **Failure mode / Trade-off / Observed result:** mutation invalidates past comparisons; immutability creates versions and
+  storage growth; integration evidence confirms stable replay.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain why update-in-place is unsafe; list the
+  immutable fields unaided; add a conflicting digest/metadata test.
+
+### Curriculum 12 — seven deterministic trajectory metric extractors
+
+- **Concept / Real code chain:** exactly seven deterministic extractor kinds map a stored trajectory to reproducible metric
+  records; trace `app/agent_eval/evaluators.py` and schemas.
+- **SQL / transaction boundary / Test:** extraction runs from persisted evidence and result rows commit with identity/provenance;
+  unit and Agent workflow tests cover every kind.
+- **Failure mode / Trade-off / Observed result:** calling them “verified evaluators” overstates authority; deterministic rules
+  are reproducible but bounded; all seven kinds pass current CI as extractors.
+- **Interview follow-up / Independent answer / Small modification exercise:** name the distinction between deterministic and
+  verified; classify one extractor unaided; add an invalid-input test without adding an eighth public kind.
+
+### Curriculum 13 — reported versus derived provenance
+
+- **Concept / Real code chain:** `reported` values come from the producer; `derived` values are computed from stored trajectory;
+  neither is authority-verified; trace metric provenance fields and migration `20260820_0025`.
+- **SQL / transaction boundary / Test:** provenance is persisted with the metric record in its transaction; schema/evaluator
+  and migration tests enforce the enum/shape.
+- **Failure mode / Trade-off / Observed result:** merging sources makes trust invisible; explicit provenance adds query/policy
+  work; current records keep the distinction.
+- **Interview follow-up / Independent answer / Small modification exercise:** say what evidence would justify `verified`;
+  classify task-success unaided; test explicit opt-in for reported task success.
+
+### Curriculum 14 — common-case-only regression
+
+- **Concept / Real code chain:** a comparison evaluates only the explicit common case set unless a named policy permits
+  difference; trace `app/agent_eval/regression.py` and `regression_service.py`.
+- **SQL / transaction boundary / Test:** immutable manifest pins baseline/candidate artifact and result IDs before verdict
+  persistence; unit/API/workflow tests cover exact/intersection/allow-diff.
+- **Failure mode / Trade-off / Observed result:** comparing aggregate runs with different cases creates false conclusions;
+  common cases improve comparability but reduce coverage; verdict includes scope.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain intersection bias; choose a policy
+  unaided for a missing case; add a manifest-replay assertion.
+
+### Curriculum 15 — case-set, coverage and sufficiency fail-closed
+
+- **Concept / Real code chain:** verdicts require explicit case policy, minimum common samples and coverage; insufficient
+  evidence cannot become PASS.
+- **SQL / transaction boundary / Test:** evidence counts/manifest and verdict persist together; regression tests cover missing,
+  low-coverage and low-sample branches.
+- **Failure mode / Trade-off / Observed result:** a one-case overlap can look excellent; fail-closed gates reduce false PASS
+  at the cost of more inconclusive results; current tests exercise insufficiency.
+- **Interview follow-up / Independent answer / Small modification exercise:** distinguish failure from insufficient evidence;
+  calculate coverage unaided; raise a threshold in a test and predict the verdict.
+
+### Curriculum 16 — source-bound double review and adjudication
+
+- **Concept / Real code chain:** review packets bind source/result/artifact hashes and stage evaluator visibility before
+  adjudication; trace human-review service and migration `20260820_0022`.
+- **SQL / transaction boundary / Test:** task creation and immutable source identity commit in PostgreSQL; API/workflow tests
+  cover reviewer visibility and packet SHA.
+- **Failure mode / Trade-off / Observed result:** showing prior judgments anchors reviewers; staged visibility costs workflow
+  complexity; current evidence makes packet identity auditable, not objectively true.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain double-review independence; describe the
+  hash chain unaided; test that a packet hash changes when source identity changes.
+
+### Curriculum 17 — MCP per-call authentication
+
+- **Concept / Real code chain:** authentication/authorization is revalidated for every MCP stdio tool/resource call, including
+  after credential revocation; trace MCP server/auth code and audit resource identity.
+- **SQL / transaction boundary / Test:** each call obtains tenant context for its database work; a real stdio subprocess test
+  revokes credentials between calls and expects denial.
+- **Failure mode / Trade-off / Observed result:** session-only auth leaves revoked credentials active; per-call checks add
+  latency but close that window; current local-stdio CI passes.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain why connection auth is insufficient;
+  state the transport boundary unaided; add a resource-read revocation case.
+
+### Curriculum 18 — Agent evidence RLS and composite foreign keys
+
+- **Concept / Real code chain:** tenant ownership is repeated in Agent rows and composite references so cross-tenant links
+  cannot rely only on service filtering; RLS consumes transaction tenant context.
+- **SQL / transaction boundary / Test:** `SET LOCAL`-style context/policies and composite foreign keys live within a database
+  transaction; RLS and tenant-consistency integrations exercise them.
+- **Failure mode / Trade-off / Observed result:** global-ID-only FKs permit ownership mismatch and owner roles may bypass RLS;
+  redundancy improves defense but complicates migrations; current CI covers the configured topology.
+- **Interview follow-up / Independent answer / Small modification exercise:** explain why composite ownership matters; state
+  the shared-role limitation unaided; design a cross-tenant insert rejection.
+
+### Curriculum 19 — orphan-object reconciliation
+
+- **Concept / Real code chain:** a dry-run-first reconciler finds unreferenced object-store blobs after grace, rechecks before
+  deletion, retries failures and records durable audit events.
+- **SQL / transaction boundary / Test:** PostgreSQL reference scan/audit and object deletion are separate operations; real
+  PostgreSQL/MinIO tests cover dry-run, grace, recheck and retry.
+- **Failure mode / Trade-off / Observed result:** deleting immediately can race an in-flight database commit; grace/recheck
+  retain garbage longer but reduce false deletion; reconciliation integration passes current CI.
+- **Interview follow-up / Independent answer / Small modification exercise:** narrate an upload-before-commit crash; explain
+  recheck unaided; add a newly referenced object between scan and delete.
+
+### Curriculum 20 — PostgreSQL and object storage are not one atomic transaction
+
+- **Concept / Real code chain:** database commit and S3/MinIO object mutation have no shared transaction manager; artifact
+  service and reconciler implement compensation, not two-phase commit.
+- **SQL / transaction boundary / Test:** only database rows share ACID; HTTP object calls sit outside; artifact and reconciliation
+  tests cover known failure windows.
+- **Failure mode / Trade-off / Observed result:** either side may succeed alone; compensation is simpler and eventually repairs
+  known orphans but cannot promise atomicity; limitation remains explicit.
+- **Interview follow-up / Independent answer / Small modification exercise:** enumerate both half-commit states; reject the
+  atomicity claim unaided; design an outbox-based cleanup trigger without claiming 2PC.
+
+### Curriculum 21 — portfolio-ready is not release-ready
+
+- **Concept / Real code chain:** engineering depth and honest evidence make a portfolio useful while frozen release gates can
+  still fail; trace release decision, final report and current status.
+- **SQL / transaction boundary / Test:** no single SQL transaction changes an evidence verdict; fail-closed assessors and
+  cross-document tests preserve boundaries.
+- **Failure mode / Trade-off / Observed result:** hiding negative scaling creates a misleading resume; layering it as historical
+  protects candor while current Agent capabilities lead; v0.1.0 remains `NOT_READY_TARGETED_NEGATIVE_SCALING`.
+- **Interview follow-up / Independent answer / Small modification exercise:** defend the stop decision; state
+  `portfolio-ready != release-ready != production-ready` unaided; classify a new claim into resume/interview/forbidden tiers.
 
 ## Teaching contract
 

@@ -1,5 +1,8 @@
 # Safe Metrics
 
+Current branch: `codex/final-evidence-hardening-v1`. Current values are `CURRENT_POSITIVE_RESUME`; dated scheduler/local
+records are `INTERVIEW_ONLY`/`HISTORICAL_NEGATIVE`; unsupported extrapolations are `FORBIDDEN`.
+
 Use only with scope:
 
 | Metric | Safe shorthand | Required qualifier |
@@ -11,6 +14,9 @@ Use only with scope:
 | false-empty | 1 RED / 2 GREEN workflows | deterministic real PostgreSQL test |
 | fault matrix | 54/54 successful, zero recorded violations | historical A–I before/after controlled scope |
 | observer perturbation | 11.3194%, 13.4906%, 28.0396% absolute claim-p95 | instruments rejected; no root cause |
-| local tests | 783 passed / 33 skipped | `.venv` Python 3.12; external services not enabled locally |
+| historical local tests | 783 passed / 33 skipped | 2026-08-11 `.venv` Python 3.12; external services not enabled locally |
+| final-hardening CI | 826 non-integration tests | source `22fda896`; workflow `32282462281`; plus named external-service gates |
+| Agent metric kinds | seven deterministic trajectory metric extractors | reported/derived provenance; not verified evaluators |
+| adapter cases | fixed eight-family replay | not live LangGraph/runtime performance evidence |
 
 Full authority: [`RESUME_METRIC_LEDGER.md`](../RESUME_METRIC_LEDGER.md).
