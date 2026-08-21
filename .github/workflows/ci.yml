@@ -80,6 +80,9 @@ jobs:
           uv run --no-sync pytest -m "not integration"
           --junitxml=/tmp/junit-unit.xml
 
+      - name: Validate external harness review state
+        run: uv run --no-sync python -m human_review.validate_reviews --allow-pending
+
       - name: Verify deterministic Agent adapter evidence
         run: |
           uv run --no-sync python -m scripts.run_agent_adapter_benchmark

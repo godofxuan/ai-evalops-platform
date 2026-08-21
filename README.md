@@ -866,3 +866,6 @@ PostgreSQL 5 Hz sampling 和固定的 `OFF/ON/ON/OFF`、`ON/OFF/OFF/ON` 区组�
     migration downgrade 不能恢复已按策略删除的 delivered intent。
 
 </details>
+## External Agent evaluation gate
+
+The repository now includes a real [Inspect AI interoperability layer](docs/external_harness/INSPECT_INTEGRATION.md), exact-SHA RAG harness validation, paired bootstrap utilities, W3C trace links, and a two-reviewer blinded-review kit. The current frozen A/B decision is deliberately **INPUT_BLOCKED** because the baseline SHA predates the versioned harness contract; see [automated evidence](docs/external_harness/AUTOMATED_RESULTS.md) and [resume-safe claims](docs/external_harness/RESUME_SAFE_CLAIMS.md). No quality or human-review result is fabricated.
