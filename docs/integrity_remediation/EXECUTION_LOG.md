@@ -121,3 +121,40 @@ patch files were removed immediately.
 
 The pytest cache emitted one Windows permission warning for a mojibake-rendered cache path.
 It did not affect test execution or results. No skipped integration was relabeled as passed.
+
+## Remote validation and corrective loop
+
+The first pushed candidate was commit
+`529562042b0fe848ab0576accf164314a11f606f` on the required branch. GitHub Actions
+run `32514058544` completed with `compose-smoke` passing and the main job failing in
+exactly one integration step. Formatting, lint, mypy, 855 locally runnable tests,
+manifest verification, migration upgrade, scheduler fairness/concurrency, Artifact
+ownership/reconciliation, real MinIO, tenant isolation, authenticated Agent workflow,
+Redis/outbox, migration downgrade/re-upgrade and application image build all passed.
+
+The only failing step was `Integration - MCP stdio credential revocation`. The new
+durable outbox delivery path had changed the externally visible AuditEvent resource
+from the stable MCP call identity (`resource_type=mcp_tool`,
+`resource_id=UUID(trace_id)`) to its internal delivery row
+(`resource_type=mcp_audit_outbox`, `resource_id=outbox.id`). This was a semantic
+regression: the outbox is the transport for reliable audit delivery, not the audited
+business resource. The existing PostgreSQL + real stdio test caught the resource ID
+change; an explicit resource-type assertion was added to preserve the complete
+contract.
+
+The corrective change restores the stable MCP audit resource semantics while retaining
+the outbox reservation, durable outcome, atomic AuditEvent delivery, retry and
+idempotency behavior. Local corrective validation produced:
+
+- MCP server unit tests: 4 passed;
+- Ruff on the corrected MCP and test files: passed;
+- mypy on `app/agent_eval/mcp_stdio.py`: passed;
+- real stdio integration collection: 1 skipped because no local PostgreSQL integration
+  environment is configured.
+
+The native patch helper and in-app browser connection both encountered the same Windows
+sandbox `helper_unknown_error`; the public GitHub API still supplied exact job/step
+outcomes. Full logs required authenticated admin access, but the failure was reproduced
+at the already-existing contract assertion by comparing the candidate implementation
+with the frozen base semantics. The next GitHub Actions run is the authoritative
+red-to-green check for the corrected real-service seam.

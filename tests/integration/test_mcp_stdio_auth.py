@@ -166,6 +166,7 @@ async def test_real_stdio_mcp_revalidates_revocation_without_restart(
             "succeeded",
             "failed",
         ]
+        assert all(row.resource_type == "mcp_tool" for row in audit_rows)
         assert all(row.resource_id == UUID(hex=row.metadata_json["trace_id"]) for row in audit_rows)
         assert all(plaintext_key not in str(row.metadata_json) for row in audit_rows)
     finally:

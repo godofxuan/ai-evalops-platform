@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -200,8 +201,8 @@ class SQLAlchemyMcpCallAuditor:
                     tenant_id=principal.tenant_id,
                     actor_id=str(principal.api_key_id),
                     action="mcp.tool_called",
-                    resource_type="mcp_audit_outbox",
-                    resource_id=row.id,
+                    resource_type="mcp_tool",
+                    resource_id=UUID(hex=trace_id),
                     metadata_json={
                         "api_key_id": str(principal.api_key_id),
                         "tool_name": row.tool_name,
