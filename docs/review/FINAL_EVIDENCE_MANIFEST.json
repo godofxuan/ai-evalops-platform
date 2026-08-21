@@ -1,0 +1,45 @@
+{
+  "schema_version": "ai-evalops-final-review-manifest/v1",
+  "repository": "https://github.com/godofxuan/ai-evalops-platform",
+  "default_branch": "main",
+  "reviewed_source_sha": "ecb3c664609deca909fc8927036d1087857eacd1",
+  "ci": {
+    "run_id": 32489399266,
+    "url": "https://github.com/godofxuan/ai-evalops-platform/actions/runs/32489399266",
+    "head_sha": "ecb3c664609deca909fc8927036d1087857eacd1",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": {
+      "quality-and-integration": "success",
+      "compose-smoke": "success"
+    }
+  },
+  "external_rag_evaluation": {
+    "baseline_sha": "909a9710932c6c4744c462db0e33ed0d222ecb1a",
+    "candidate_sha": "e848d8e6090267b28d351758fe8d3cb557dcd586",
+    "dataset_case_count": 9,
+    "dataset_evidence_class": "mechanism_ci",
+    "dataset_sha256": "08ccad71d7c96cdd2d558018b480a1e421abd3781527a828793aa4430d517d11",
+    "baseline_harness_contract_available": false,
+    "candidate_harness_contract_available": true,
+    "formal_ab_executed": false,
+    "automated_status": "INPUT_BLOCKED",
+    "human_review_status": "PENDING",
+    "shadow_gate_status": "INPUT_BLOCKED"
+  },
+  "local_validation": {
+    "non_integration_tests_passed": 845,
+    "tests_deselected": 37,
+    "ruff": "passed",
+    "mypy": "passed"
+  },
+  "evidence_entry": "docs/review/GPT_REVIEW_ENTRY.md",
+  "authoritative_results": [
+    "docs/external_harness/AUTOMATED_RESULTS.json",
+    "docs/external_harness/HUMAN_REVIEW_RESULTS.md",
+    "docs/external_harness/SHADOW_GATE.md",
+    "docs/final_hardening/FINAL_HARDENING_REPORT.md",
+    "docs/handoffs/PROJECT_EVIDENCE_MAP.md"
+  ],
+  "release_claim": "No production release pass is claimed."
+}
