@@ -1,3 +1,7 @@
+> 2026-08-22 safe addition: strict producer event-chain/root/Artifact digest
+> verification, explicit event-loss accounting, strict Inspect formal conversion,
+> non-gating diagnostic conversion, and common-case/category sufficiency rules are
+> implemented on the remediation branch. Nine cases remain non-formal.
 # Resume-safe claims
 
 Safe now:

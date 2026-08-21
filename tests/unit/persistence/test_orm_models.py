@@ -79,6 +79,7 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
         "human_review_submissions",
         "human_review_tasks",
         "job_attempts",
+        "mcp_audit_outbox",
         "progress_event_outbox",
         "run_metrics",
         "scheduler_coordination",
@@ -224,7 +225,14 @@ def test_artifact_blob_and_reference_metadata_separate_content_from_ownership() 
         "sha256",
         "byte_size",
         "storage_path",
+        "lifecycle_status",
+        "deletion_token",
+        "deletion_lease_expires_at",
+        "delete_attempt_count",
+        "deletion_error_code",
+        "deleted_at",
         "created_at",
+        "updated_at",
     }
     assert foreign_key_targets(ArtifactReference.__table__, "blob_sha256") == {
         "artifact_blobs.sha256"

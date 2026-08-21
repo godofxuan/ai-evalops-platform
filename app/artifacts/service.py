@@ -15,6 +15,7 @@ class ArtifactReferenceLocation:
 class DeletedArtifactReference:
     blob_sha256: str
     last_reference: bool
+    deletion_token: UUID | None = None
 
 
 class ArtifactReferenceNotFoundError(Exception):
@@ -42,6 +43,16 @@ class ArtifactReferenceGateway(Protocol):
 
     async def claim_unreferenced_blob(self, *, sha256: str) -> bool:
         """Remove unreferenced metadata before physical orphan cleanup."""
+
+    async def finalize_blob_deletion(
+        self,
+        *,
+        sha256: str,
+        deletion_token: UUID,
+        succeeded: bool,
+        error_code: str | None = None,
+    ) -> None:
+        """CAS-finalize a physical deletion outside the metadata transaction."""
 
 
 class ArtifactAccessService:
@@ -86,7 +97,23 @@ class ArtifactAccessService:
             raise ArtifactReferenceNotFoundError
         if not deleted.last_reference:
             return
-        await self._store.delete_bytes(deleted.blob_sha256)
+        if deleted.deletion_token is None:
+            raise RuntimeError("last-reference deletion omitted lifecycle token")
+        try:
+            await self._store.delete_bytes(deleted.blob_sha256)
+        except Exception as error:
+            await self._gateway.finalize_blob_deletion(
+                sha256=deleted.blob_sha256,
+                deletion_token=deleted.deletion_token,
+                succeeded=False,
+                error_code=type(error).__name__,
+            )
+            raise
+        await self._gateway.finalize_blob_deletion(
+            sha256=deleted.blob_sha256,
+            deletion_token=deleted.deletion_token,
+            succeeded=True,
+        )
 
     async def collect_orphan_blob(self, *, sha256: str) -> bool:
         if not await self._gateway.claim_unreferenced_blob(sha256=sha256):

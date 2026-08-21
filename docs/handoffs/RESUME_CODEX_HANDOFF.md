@@ -1,3 +1,10 @@
+# 2026-08-22 resume boundary update
+
+Safe only after final branch validation: implemented leased/CAS Artifact reconciliation,
+RAG producer digest verification, strict loss-accounted Inspect ingestion, explicit
+insufficient-evidence gates, and durable idempotent MCP audit delivery. Do not claim
+release readiness, production readiness, formal external A/B completion, positive
+scheduler scaling, or completed human review.
 # AI EvalOps Platform — Resume Codex Handoff
 
 Updated: 2026-08-20. This is the authoritative entry for resume writing on

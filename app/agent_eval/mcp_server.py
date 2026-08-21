@@ -1,8 +1,8 @@
-"""Official MCP SDK adapter with per-call authorization and safe auditing."""
+"""Official MCP SDK adapter with durable, idempotent call auditing."""
 
 from contextlib import AbstractAsyncContextManager
 from typing import Any, Protocol
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from mcp.server import MCPServer
 
@@ -16,6 +16,16 @@ class McpCallAuthorizer(Protocol):
 
 
 class McpCallAuditor(Protocol):
+    async def reserve(
+        self,
+        *,
+        principal: Principal,
+        tool_name: str,
+        call_identity: str,
+        trace_id: str,
+    ) -> None:
+        """Durably reserve one audit outbox row before a mutation."""
+
     async def record(
         self,
         *,
@@ -24,7 +34,7 @@ class McpCallAuditor(Protocol):
         status: str,
         trace_id: str,
     ) -> None:
-        """Record only bounded credential and outcome metadata."""
+        """Atomically deliver the reserved outcome to the audit log."""
 
 
 def build_mcp_server(
@@ -42,31 +52,66 @@ def build_mcp_server(
     )
 
     async def invoke(name: str, arguments: dict[str, object]) -> dict[str, object]:
-        trace_id = uuid4().hex
+        idempotency_key = arguments.get("idempotency_key")
+        if name == "submit_evaluation" and isinstance(idempotency_key, str):
+            call_identity = f"idempotency:{idempotency_key}"
+            trace_id = uuid5(
+                NAMESPACE_URL,
+                f"{credential_identity.tenant_id}:{name}:{call_identity}",
+            ).hex
+        else:
+            trace_id = uuid4().hex
+            call_identity = f"trace:{trace_id}"
         principal = credential_identity
+        reserved = False
         try:
             async with authorizer.authorize(tool_name=name) as current_principal:
                 principal = current_principal
+                await auditor.reserve(
+                    principal=principal,
+                    tool_name=name,
+                    call_identity=call_identity,
+                    trace_id=trace_id,
+                )
+                reserved = True
                 result = await control_plane.call_tool(
                     principal=current_principal,
                     name=name,
                     arguments=arguments,
                 )
+        except Exception:
+            try:
+                if not reserved:
+                    await auditor.reserve(
+                        principal=principal,
+                        tool_name=name,
+                        call_identity=call_identity,
+                        trace_id=trace_id,
+                    )
+                await auditor.record(
+                    principal=principal,
+                    tool_name=name,
+                    status="failed",
+                    trace_id=trace_id,
+                )
+            except Exception:
+                pass
+            raise
+
+        audit_delivery_status = "delivered"
+        try:
             await auditor.record(
                 principal=principal,
                 tool_name=name,
                 status="succeeded",
                 trace_id=trace_id,
             )
-            return result
         except Exception:
-            await auditor.record(
-                principal=principal,
-                tool_name=name,
-                status="failed",
-                trace_id=trace_id,
-            )
-            raise
+            audit_delivery_status = "pending"
+        return {
+            "operation_result": result,
+            "audit_delivery_status": audit_delivery_status,
+        }
 
     @server.tool(name="submit_evaluation")
     async def submit_evaluation(

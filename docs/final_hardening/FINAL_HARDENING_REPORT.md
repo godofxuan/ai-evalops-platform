@@ -1,3 +1,8 @@
+> 2026-08-22 remediation overlay: the candidate branch adds database-leased
+> ArtifactBlob deletion, object-identity checks, scheduler diagnostic sequence
+> decontention, strict RAG/Inspect integrity, evidence sufficiency, durable MCP
+> audit delivery, and a per-file evidence manifest. This overlay is not merged or
+> released; the historical negative scaling and production limitations below remain.
 # Final Hardening Report
 
 ## Identity

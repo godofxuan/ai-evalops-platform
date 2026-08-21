@@ -17,6 +17,9 @@ TrajectoryEventType = Literal[
     "evidence_rejection",
     "claim",
     "citation",
+    "policy_decision",
+    "interrupt",
+    "resume",
     "terminal_state",
 ]
 TerminalState = Literal[

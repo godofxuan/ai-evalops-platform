@@ -346,6 +346,22 @@ class SQLAlchemyJobClaimer:
     async def _ensure_active_scheduler_round(self, *, eligible_at: datetime) -> bool:
         """Create one fair round iff no current-generation permit remains pending."""
 
+        async with self._session_factory() as session:
+            has_pending = bool(
+                await session.scalar(
+                    select(
+                        exists().where(
+                            TenantSchedulerState.generation
+                            == SchedulerCoordination.active_generation,
+                            TenantSchedulerState.status == SCHEDULER_PERMIT_PENDING,
+                            SchedulerCoordination.id == SCHEDULER_COORDINATION_ID,
+                        )
+                    )
+                )
+            )
+        if has_pending:
+            return True
+
         self._observe_claim_phase("scheduler_coordination_start")
         async with self._session_factory.begin() as session:
             coordination = (
@@ -489,23 +505,17 @@ class SQLAlchemyJobClaimer:
                 state.version += 1
                 self._observe_claim_phase("tenant_permit_consumed")
 
-                # This lock is intentionally acquired only after the Job/Attempt/
-                # Audit/Outbox writes have been constructed. It linearizes durable
-                # diagnostic order at the transaction tail, not the whole claim.
+                # Diagnostic ordering must not serialize independent claims.
                 self._observe_claim_phase("durable_sequence_start")
-                coordination = (
-                    await session.execute(
-                        select(SchedulerCoordination)
-                        .where(SchedulerCoordination.id == SCHEDULER_COORDINATION_ID)
-                        .with_for_update(of=SchedulerCoordination)
-                    )
-                ).scalar_one()
-                coordination.durable_claim_sequence += 1
-                coordination.version += 1
-                sequence = coordination.durable_claim_sequence
+                sequence_value = await session.scalar(
+                    select(func.nextval("scheduler_claim_receipt_seq"))
+                )
+                if sequence_value is None:
+                    raise RuntimeError("scheduler claim sequence did not return a value")
+                sequence = int(sequence_value)
                 for attempt in attempts:
                     attempt.scheduler_claim_sequence = sequence
-                self._observe_claim_phase("durable_sequence_updated")
+                self._observe_claim_phase("durable_sequence_allocated")
                 self._observe_claim_phase("transaction_work_complete")
                 return tuple(replace(claim, scheduler_claim_sequence=sequence) for claim in claims)
         finally:

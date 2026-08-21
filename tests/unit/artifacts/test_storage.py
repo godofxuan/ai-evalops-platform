@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from app.artifacts.storage import ArtifactIntegrityError, LocalArtifactStore
+from app.artifacts.storage import (
+    ArtifactIntegrityError,
+    ArtifactPublishConflictError,
+    LocalArtifactStore,
+)
 
 
 def list_files(root: Path) -> list[Path]:
@@ -138,3 +142,18 @@ async def test_delete_bytes_removes_only_the_verified_content_address(tmp_path: 
     assert not (tmp_path / stored.relative_path).exists()
     with pytest.raises(ArtifactIntegrityError):
         await store.get_bytes(stored.sha256)
+
+
+async def test_identity_delete_rejects_local_object_replaced_after_scan(
+    tmp_path: Path,
+) -> None:
+    store = LocalArtifactStore(tmp_path)
+    stored = await store.put_bytes(b"scanned")
+    expected = (await store.list_objects())[0]
+    path = tmp_path / stored.relative_path
+    path.write_bytes(b"replaced-after-scan")
+
+    with pytest.raises(ArtifactPublishConflictError, match="changed after"):
+        await store.delete_object(expected)
+
+    assert path.read_bytes() == b"replaced-after-scan"

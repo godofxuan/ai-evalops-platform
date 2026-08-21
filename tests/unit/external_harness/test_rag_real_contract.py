@@ -4,6 +4,7 @@ from app.external_harness.rag_harness import (
     RagHarnessContractError,
     convert_rag_harness_result,
 )
+from tests.unit.external_harness.rag_fixture import seal_rag_result
 
 
 def test_real_producer_fields_are_validated_and_preserved() -> None:
@@ -38,7 +39,18 @@ def test_real_producer_fields_are_validated_and_preserved() -> None:
             },
             "input": {"question": "What is the remote policy?"},
             "output": {"mode": "answered"},
-            "trajectory": [],
+            "trajectory": [
+                {
+                    "schema_version": "1.0",
+                    "event_id": "event-001",
+                    "session_id": "session-001",
+                    "trace_id": trace_id,
+                    "sequence": 1,
+                    "event_type": "session.completed",
+                    "timestamp": "2026-08-21T00:00:01Z",
+                    "payload": {"mode": "answered"},
+                }
+            ],
             "retrieval": {},
             "evidence": {},
             "usage": {},
@@ -52,10 +64,15 @@ def test_real_producer_fields_are_validated_and_preserved() -> None:
         "error_classification": "ok",
     }
 
+    result = seal_rag_result(result)
+
     artifact = convert_rag_harness_result(result)
 
     assert artifact.input == result["trajectory_artifact"]["input"]
-    assert artifact.metadata["producer_artifact_sha256"] == "c" * 64
+    assert (
+        artifact.metadata["producer_artifact_sha256"]
+        == result["trajectory_artifact"]["artifact_sha256"]
+    )
 
     result["trajectory_artifact"]["case_id"] = "different-case"
     with pytest.raises(RagHarnessContractError, match="case"):

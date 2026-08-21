@@ -4,9 +4,9 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime
-from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
 from app.agent_eval.control_plane import McpEvalControlPlane
 from app.agent_eval.mcp_server import build_mcp_server
@@ -27,7 +27,7 @@ from app.persistence.database import (
     create_database_engine,
     create_session_factory,
 )
-from app.persistence.orm_models import APIKey, AuditEvent, Tenant
+from app.persistence.orm_models import APIKey, AuditEvent, McpAuditOutbox, Tenant
 from app.results.service import SQLAlchemyResultService
 from app.runs.repository import SQLAlchemyRunRepository
 from app.runs.service import SQLAlchemyRunService
@@ -99,6 +99,38 @@ class SQLAlchemyMcpCallAuditor:
     def __init__(self, session_factory: AsyncSessionFactory) -> None:
         self._session_factory = session_factory
 
+    async def reserve(
+        self,
+        *,
+        principal: Principal,
+        tool_name: str,
+        call_identity: str,
+        trace_id: str,
+    ) -> None:
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                postgresql_insert(McpAuditOutbox)
+                .values(
+                    tenant_id=principal.tenant_id,
+                    api_key_id=principal.api_key_id,
+                    tool_name=tool_name,
+                    call_identity=call_identity,
+                    trace_id=trace_id,
+                )
+                .on_conflict_do_nothing(constraint="uq_mcp_audit_outbox_call_identity")
+            )
+            row = (
+                await session.execute(
+                    select(McpAuditOutbox).where(
+                        McpAuditOutbox.tenant_id == principal.tenant_id,
+                        McpAuditOutbox.tool_name == tool_name,
+                        McpAuditOutbox.call_identity == call_identity,
+                    )
+                )
+            ).scalar_one()
+            if row.api_key_id != principal.api_key_id or row.trace_id != trace_id:
+                raise RuntimeError("MCP audit call identity conflicts with prior reservation")
+
     async def record(
         self,
         *,
@@ -107,23 +139,81 @@ class SQLAlchemyMcpCallAuditor:
         status: str,
         trace_id: str,
     ) -> None:
-        session_factory = self._session_factory
-        async with session_factory.begin() as session:
+        async with self._session_factory.begin() as session:
+            row = (
+                await session.execute(
+                    select(McpAuditOutbox)
+                    .where(
+                        McpAuditOutbox.tenant_id == principal.tenant_id,
+                        McpAuditOutbox.tool_name == tool_name,
+                        McpAuditOutbox.trace_id == trace_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+            if row.delivery_status == "DELIVERED":
+                return
+            row.outcome_status = status
+            row.attempt_count += 1
+        await self._deliver(principal=principal, trace_id=trace_id)
+
+    async def retry_pending(self, *, principal: Principal, limit: int = 100) -> int:
+        async with self._session_factory() as session:
+            trace_ids = tuple(
+                await session.scalars(
+                    select(McpAuditOutbox.trace_id)
+                    .where(
+                        McpAuditOutbox.tenant_id == principal.tenant_id,
+                        McpAuditOutbox.api_key_id == principal.api_key_id,
+                        McpAuditOutbox.delivery_status == "PENDING",
+                        McpAuditOutbox.outcome_status.is_not(None),
+                    )
+                    .order_by(McpAuditOutbox.created_at, McpAuditOutbox.id)
+                    .limit(limit)
+                )
+            )
+        delivered = 0
+        for trace_id in trace_ids:
+            await self._deliver(principal=principal, trace_id=trace_id)
+            delivered += 1
+        return delivered
+
+    async def _deliver(self, *, principal: Principal, trace_id: str) -> None:
+        async with self._session_factory.begin() as session:
+            row = (
+                await session.execute(
+                    select(McpAuditOutbox)
+                    .where(
+                        McpAuditOutbox.tenant_id == principal.tenant_id,
+                        McpAuditOutbox.api_key_id == principal.api_key_id,
+                        McpAuditOutbox.trace_id == trace_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+            if row.delivery_status == "DELIVERED":
+                return
+            if row.outcome_status is None:
+                raise RuntimeError("MCP audit outcome is not durable")
             session.add(
                 AuditEvent(
                     tenant_id=principal.tenant_id,
                     actor_id=str(principal.api_key_id),
                     action="mcp.tool_called",
-                    resource_type="mcp_tool",
-                    resource_id=UUID(hex=trace_id),
+                    resource_type="mcp_audit_outbox",
+                    resource_id=row.id,
                     metadata_json={
                         "api_key_id": str(principal.api_key_id),
-                        "tool_name": tool_name,
-                        "status": status,
+                        "tool_name": row.tool_name,
+                        "status": row.outcome_status,
                         "trace_id": trace_id,
+                        "delivery_attempt": row.attempt_count,
                     },
                 )
             )
+            row.delivery_status = "DELIVERED"
+            row.delivered_at = datetime.now(UTC)
+            row.last_error_code = None
 
 
 async def run_stdio(settings: Settings | None = None) -> None:
@@ -170,6 +260,8 @@ async def run_stdio(settings: Settings | None = None) -> None:
             agent_artifact_service=agent_artifact_service,
             agent_regression_service=agent_regression_service,
         )
+        auditor = SQLAlchemyMcpCallAuditor(session_factory)
+        await auditor.retry_pending(principal=principal)
         server = build_mcp_server(
             control_plane=McpEvalControlPlane(services=services),
             authorizer=SQLAlchemyMcpCallAuthorizer(
@@ -177,7 +269,7 @@ async def run_stdio(settings: Settings | None = None) -> None:
                 plaintext_api_key=plaintext_api_key,
                 credential_identity=principal,
             ),
-            auditor=SQLAlchemyMcpCallAuditor(session_factory),
+            auditor=auditor,
             credential_identity=principal,
         )
         await server.run_stdio_async()

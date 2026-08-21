@@ -1,3 +1,7 @@
+> 2026-08-22 candidate-only additions may be claimed only after branch CI passes:
+> leased/CAS Artifact deletion, producer digest verification, loss-accounted Inspect,
+> insufficient-evidence gates, and durable MCP audit delivery. No release, production,
+> positive scaling, formal A/B, or completed human-review claim is supported.
 # Resume-Safe Claims
 
 ## Safe now

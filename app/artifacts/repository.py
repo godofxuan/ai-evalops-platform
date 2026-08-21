@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, exists, select
@@ -5,6 +6,10 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
+from app.artifacts.lifecycle import (
+    ArtifactBlobStatus,
+    ArtifactLifecycleConflictError,
+)
 from app.artifacts.service import (
     ArtifactReferenceLocation,
     DeletedArtifactReference,
@@ -55,6 +60,7 @@ class SQLAlchemyArtifactReferenceGateway:
         reference_id: UUID,
         run_id: UUID | None,
     ) -> DeletedArtifactReference | None:
+        deletion_token: UUID | None = None
         async with self._session_factory.begin() as session:
             statement = select(ArtifactReference).where(
                 ArtifactReference.id == reference_id,
@@ -68,26 +74,66 @@ class SQLAlchemyArtifactReferenceGateway:
             reference = (await session.execute(statement.with_for_update())).scalar_one_or_none()
             if reference is None:
                 return None
-
+            blob = (
+                await session.execute(
+                    select(ArtifactBlob)
+                    .where(ArtifactBlob.sha256 == reference.blob_sha256)
+                    .with_for_update()
+                )
+            ).scalar_one()
             blob_sha256 = reference.blob_sha256
             await session.delete(reference)
             await session.flush()
-            deleted_blob_sha256 = await session.scalar(
-                delete(ArtifactBlob)
-                .where(
-                    ArtifactBlob.sha256 == blob_sha256,
-                    ~exists(
-                        select(ArtifactReference.id).where(
-                            ArtifactReference.blob_sha256 == blob_sha256
-                        )
-                    ),
+            remaining = bool(
+                await session.scalar(
+                    select(exists().where(ArtifactReference.blob_sha256 == blob_sha256))
                 )
-                .returning(ArtifactBlob.sha256)
             )
+            if not remaining:
+                deletion_token = uuid4()
+                blob.lifecycle_status = ArtifactBlobStatus.DELETE_PENDING
+                blob.deletion_token = deletion_token
+                blob.deletion_lease_expires_at = datetime.now(UTC) + timedelta(minutes=5)
+                blob.delete_attempt_count += 1
+                blob.deletion_error_code = None
         return DeletedArtifactReference(
             blob_sha256=blob_sha256,
-            last_reference=deleted_blob_sha256 is not None,
+            last_reference=deletion_token is not None,
+            deletion_token=deletion_token,
         )
+
+    async def finalize_blob_deletion(
+        self,
+        *,
+        sha256: str,
+        deletion_token: UUID,
+        succeeded: bool,
+        error_code: str | None = None,
+    ) -> None:
+        async with self._session_factory.begin() as session:
+            blob = (
+                await session.execute(
+                    select(ArtifactBlob).where(ArtifactBlob.sha256 == sha256).with_for_update()
+                )
+            ).scalar_one_or_none()
+            if blob is None or blob.deletion_token != deletion_token:
+                return
+            referenced = bool(
+                await session.scalar(
+                    select(exists().where(ArtifactReference.blob_sha256 == sha256))
+                )
+            )
+            if referenced:
+                blob.lifecycle_status = ArtifactBlobStatus.RESTORE_REQUIRED
+                blob.deletion_error_code = "reference_created_after_delete_claim"
+            elif succeeded:
+                blob.lifecycle_status = ArtifactBlobStatus.DELETED
+                blob.deleted_at = datetime.now(UTC)
+                blob.deletion_error_code = None
+            else:
+                blob.lifecycle_status = ArtifactBlobStatus.DELETE_FAILED
+                blob.deletion_error_code = error_code or "artifact_delete_failed"
+            blob.deletion_lease_expires_at = None
 
     async def claim_unreferenced_blob(self, *, sha256: str) -> bool:
         async with self._session_factory.begin() as session:
@@ -204,8 +250,14 @@ async def _ensure_artifact_blob(
         .on_conflict_do_nothing(index_elements=[ArtifactBlob.sha256])
     )
     blob = (
-        await session.execute(select(ArtifactBlob).where(ArtifactBlob.sha256 == stored.sha256))
+        await session.execute(
+            select(ArtifactBlob).where(ArtifactBlob.sha256 == stored.sha256).with_for_update()
+        )
     ).scalar_one()
+    if blob.lifecycle_status != ArtifactBlobStatus.ACTIVE:
+        raise ArtifactLifecycleConflictError(
+            f"artifact blob is not referenceable: {blob.lifecycle_status}"
+        )
     if blob.byte_size != stored.size_bytes or blob.storage_path != stored.relative_path.as_posix():
         raise ArtifactMetadataIntegrityError(
             "artifact blob metadata conflicts with its content address"

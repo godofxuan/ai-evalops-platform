@@ -252,7 +252,7 @@ def test_same_tenant_lock_diagnostics_are_uploaded_even_on_failure() -> None:
     assert job["env"]["EVALOPS_SCHEDULER_DIAGNOSTIC_DIR"] == ("/tmp/evalops-final-scheduler")
     upload = by_name["Upload final scheduler lock diagnostics"]
     assert "always()" in upload["if"]
-    assert upload["uses"] == "actions/upload-artifact@v6"
+    assert upload["uses"] == ("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f")
     assert upload["with"]["path"] == "/tmp/evalops-final-scheduler"
     assert upload["with"]["if-no-files-found"] == "warn"
 
@@ -312,3 +312,15 @@ def test_outbox_alert_rules_detect_stale_metrics_refresh() -> None:
             "description": "No durable Outbox metrics refresh has succeeded within five minutes.",
         },
     }
+
+
+def test_all_github_actions_are_pinned_to_full_commit_sha() -> None:
+    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    uses_values = [
+        step["uses"] for job in workflow["jobs"].values() for step in job["steps"] if "uses" in step
+    ]
+    assert uses_values
+    for value in uses_values:
+        revision = value.rsplit("@", 1)[-1]
+        assert len(revision) == 40
+        assert all(character in "0123456789abcdef" for character in revision)

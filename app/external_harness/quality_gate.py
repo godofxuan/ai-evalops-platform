@@ -9,8 +9,14 @@ import random
 from dataclasses import dataclass
 from typing import Literal
 
-GateStatus = Literal["PASS", "FAIL", "HUMAN_REVIEW_PENDING", "INPUT_BLOCKED"]
-AutomatedStatus = Literal["PASS", "FAIL", "INPUT_BLOCKED"]
+GateStatus = Literal[
+    "PASS", "FAIL", "HUMAN_REVIEW_PENDING", "INPUT_BLOCKED", "INSUFFICIENT_EVIDENCE"
+]
+AutomatedStatus = Literal["PASS", "FAIL", "INPUT_BLOCKED", "INSUFFICIENT_EVIDENCE"]
+
+
+class InsufficientEvidenceError(ValueError):
+    """A statistical estimate was requested without enough paired evidence."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +37,27 @@ class BootstrapInterval:
     resamples: int
     seed: int
     common_case_ids_sha256: str
+    method: Literal["paired-percentile-bootstrap"]
+
+
+@dataclass(frozen=True, slots=True)
+class EvidencePolicy:
+    minimum_common_cases: int = 100
+    minimum_cases_per_category: int = 10
+    required_categories: tuple[str, ...] = ()
+
+
+DEFAULT_EVIDENCE_POLICY = EvidencePolicy()
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceSufficiency:
+    status: Literal["SUFFICIENT", "INSUFFICIENT_EVIDENCE"]
+    common_case_count: int
+    category_counts: dict[str, int]
+    left_only_ids: tuple[str, ...]
+    right_only_ids: tuple[str, ...]
+    reasons: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +66,7 @@ class ShadowGateInputs:
     human_review_complete: bool
     trace_correlation_passed: bool
     failure_matrix_passed: bool
+    required_segments_passed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +93,7 @@ def paired_bootstrap_delta(
     resamples: int = 10_000,
     seed: int = 20_260_821,
     confidence_level: float = 0.95,
+    minimum_common_cases: int = 2,
 ) -> BootstrapInterval:
     """Estimate candidate-minus-baseline delta only over the frozen intersection."""
 
@@ -72,9 +101,13 @@ def paired_bootstrap_delta(
         raise ValueError("resamples must be at least 100")
     if not 0.0 < confidence_level < 1.0:
         raise ValueError("confidence_level must be between zero and one")
+    if minimum_common_cases < 2:
+        raise ValueError("minimum_common_cases must be at least two")
     common = common_case_set(left, right)
-    if not common.common_ids:
-        raise ValueError("paired bootstrap requires at least one common case")
+    if len(common.common_ids) < minimum_common_cases:
+        raise InsufficientEvidenceError(
+            f"paired bootstrap requires at least {minimum_common_cases} common cases"
+        )
     deltas = [
         _finite(right[case_id], f"right[{case_id}]") - _finite(left[case_id], f"left[{case_id}]")
         for case_id in common.common_ids
@@ -94,6 +127,39 @@ def paired_bootstrap_delta(
         resamples=resamples,
         seed=seed,
         common_case_ids_sha256=common.common_ids_sha256,
+        method="paired-percentile-bootstrap",
+    )
+
+
+def assess_evidence_sufficiency(
+    left: dict[str, float],
+    right: dict[str, float],
+    *,
+    category_by_case: dict[str, str],
+    policy: EvidencePolicy = DEFAULT_EVIDENCE_POLICY,
+) -> EvidenceSufficiency:
+    common = common_case_set(left, right)
+    counts = {
+        category: sum(category_by_case.get(case_id) == category for case_id in common.common_ids)
+        for category in policy.required_categories
+    }
+    reasons: list[str] = []
+    if len(common.common_ids) < policy.minimum_common_cases:
+        reasons.append("minimum_common_cases_not_met")
+    reasons.extend(
+        f"category_under_minimum:{category}"
+        for category, count in counts.items()
+        if count < policy.minimum_cases_per_category
+    )
+    if any(case_id not in category_by_case for case_id in common.common_ids):
+        reasons.append("required_category_mapping_missing")
+    return EvidenceSufficiency(
+        status="INSUFFICIENT_EVIDENCE" if reasons else "SUFFICIENT",
+        common_case_count=len(common.common_ids),
+        category_counts=counts,
+        left_only_ids=common.left_only_ids,
+        right_only_ids=common.right_only_ids,
+        reasons=tuple(reasons),
     )
 
 
@@ -103,6 +169,7 @@ def evaluate_shadow_gate(inputs: ShadowGateInputs) -> ShadowGateDecision:
         for condition, reason in (
             (not inputs.trace_correlation_passed, "trace_correlation_failed"),
             (not inputs.failure_matrix_passed, "failure_matrix_failed"),
+            (not inputs.required_segments_passed, "required_segment_failed"),
             (inputs.automated_status == "FAIL", "automated_quality_failed"),
         )
         if condition
@@ -111,6 +178,11 @@ def evaluate_shadow_gate(inputs: ShadowGateInputs) -> ShadowGateDecision:
         return ShadowGateDecision("FAIL", hard_failures)
     if inputs.automated_status == "INPUT_BLOCKED":
         return ShadowGateDecision("INPUT_BLOCKED", ("automated_comparison_input_missing",))
+    if inputs.automated_status == "INSUFFICIENT_EVIDENCE":
+        return ShadowGateDecision(
+            "INSUFFICIENT_EVIDENCE",
+            ("formal_sample_or_coverage_minimum_not_met",),
+        )
     if not inputs.human_review_complete:
         return ShadowGateDecision("HUMAN_REVIEW_PENDING", ("real_human_review_incomplete",))
     return ShadowGateDecision("PASS", ())
@@ -132,8 +204,12 @@ def _quantile(values: list[float], probability: float) -> float:
 __all__ = [
     "BootstrapInterval",
     "CommonCaseSet",
+    "EvidencePolicy",
+    "EvidenceSufficiency",
+    "InsufficientEvidenceError",
     "ShadowGateDecision",
     "ShadowGateInputs",
+    "assess_evidence_sufficiency",
     "common_case_set",
     "evaluate_shadow_gate",
     "paired_bootstrap_delta",

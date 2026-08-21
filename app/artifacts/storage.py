@@ -27,6 +27,10 @@ class StoredArtifact:
 class StoredObjectInfo:
     sha256: str
     last_modified: datetime
+    size_bytes: int
+    storage_path: str
+    version_token: str
+    version_id: str | None = None
 
 
 class ArtifactIntegrityError(RuntimeError):
@@ -66,6 +70,9 @@ class DeletableArtifactStore(ArtifactStore, Protocol):
     async def delete_bytes(self, sha256: str) -> bool:
         """Delete a verified content address, returning whether it existed."""
 
+    async def delete_object(self, expected: StoredObjectInfo) -> bool:
+        """Delete only if the current object still has the listed identity."""
+
     async def list_objects(self) -> list[StoredObjectInfo]:
         """List content-addressed objects with storage modification time."""
 
@@ -82,6 +89,9 @@ class LocalArtifactStore:
 
     async def delete_bytes(self, sha256: str) -> bool:
         return await asyncio.to_thread(self._delete_bytes_sync, sha256)
+
+    async def delete_object(self, expected: StoredObjectInfo) -> bool:
+        return await asyncio.to_thread(self._delete_object_sync, expected)
 
     async def check_ready(self) -> None:
         await asyncio.to_thread(self._check_ready_sync)
@@ -178,6 +188,22 @@ class LocalArtifactStore:
             path.parent.rmdir()
         return True
 
+    def _delete_object_sync(self, expected: StoredObjectInfo) -> bool:
+        path = self._artifact_path(expected.sha256)
+        if not path.exists():
+            return False
+        stat = path.stat()
+        current_token = f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+        if (
+            current_token != expected.version_token
+            or stat.st_size != expected.size_bytes
+            or path.relative_to(self._root).as_posix() != expected.storage_path
+        ):
+            raise ArtifactPublishConflictError(
+                f"artifact changed after reconciliation scan: {expected.sha256}"
+            )
+        return self._delete_bytes_sync(expected.sha256)
+
     def _artifact_path(self, sha256: str) -> Path:
         _validate_digest(sha256)
         digest_directory = self._root / sha256[:2]
@@ -233,10 +259,16 @@ class LocalArtifactStore:
                 _validate_digest(path.name)
             except ArtifactIntegrityError:
                 continue
+            stat = path.stat()
             objects.append(
                 StoredObjectInfo(
                     sha256=path.name,
-                    last_modified=datetime.fromtimestamp(path.stat().st_mtime, tz=UTC),
+                    last_modified=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+                    size_bytes=stat.st_size,
+                    storage_path=path.relative_to(self._root).as_posix(),
+                    version_token=(
+                        f"{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+                    ),
                 )
             )
         return sorted(objects, key=lambda item: item.sha256)
@@ -260,6 +292,9 @@ class S3ArtifactStore:
 
     async def delete_bytes(self, sha256: str) -> bool:
         return await asyncio.to_thread(self._delete_bytes_sync, sha256)
+
+    async def delete_object(self, expected: StoredObjectInfo) -> bool:
+        return await asyncio.to_thread(self._delete_object_sync, expected)
 
     async def check_ready(self) -> None:
         await asyncio.to_thread(self._check_ready_sync)
@@ -358,6 +393,46 @@ class S3ArtifactStore:
         self._client.delete_object(Bucket=self._bucket, Key=key)
         return True
 
+    def _delete_object_sync(self, expected: StoredObjectInfo) -> bool:
+        key = self._relative_path(expected.sha256).as_posix()
+        if key != expected.storage_path:
+            raise ArtifactIntegrityError(
+                f"artifact storage path changed after scan: {expected.sha256}"
+            )
+        try:
+            head = self._client.head_object(Bucket=self._bucket, Key=key)
+        except Exception as error:
+            if _is_s3_missing(error):
+                return False
+            raise
+        etag = str(head.get("ETag", "")).strip('"')
+        current_token = f"{head.get('ContentLength')}:{etag}"
+        if (
+            head.get("ContentLength") != expected.size_bytes
+            or current_token != expected.version_token
+            or head.get("Metadata") != {"sha256": expected.sha256}
+        ):
+            raise ArtifactPublishConflictError(
+                f"artifact changed after reconciliation scan: {expected.sha256}"
+            )
+        arguments: dict[str, object] = {
+            "Bucket": self._bucket,
+            "Key": key,
+            "IfMatch": etag,
+        }
+        if expected.version_id is not None:
+            arguments["VersionId"] = expected.version_id
+        try:
+            self._client.delete_object(**arguments)
+        except Exception as error:
+            status_code, error_code = _s3_error_identity(error)
+            if status_code == 412 or error_code == "PreconditionFailed":
+                raise ArtifactPublishConflictError(
+                    f"artifact changed during conditional delete: {expected.sha256}"
+                ) from error
+            raise
+        return True
+
     def _check_ready_sync(self) -> None:
         self._client.head_bucket(Bucket=self._bucket)
 
@@ -384,7 +459,25 @@ class S3ArtifactStore:
                         _validate_digest(digest)
                     except ArtifactIntegrityError:
                         continue
-                    objects.append(StoredObjectInfo(digest, modified))
+                    size = item.get("Size")
+                    etag_value = item.get("ETag")
+                    if not isinstance(size, int) or not isinstance(etag_value, str):
+                        continue
+                    etag = etag_value.strip('"')
+                    storage_path = self._relative_path(digest).as_posix()
+                    if key != storage_path:
+                        continue
+                    version_id = item.get("VersionId")
+                    objects.append(
+                        StoredObjectInfo(
+                            digest,
+                            modified,
+                            size,
+                            storage_path,
+                            f"{size}:{etag}",
+                            version_id if isinstance(version_id, str) else None,
+                        )
+                    )
             if not response.get("IsTruncated"):
                 break
             next_token = response.get("NextContinuationToken")

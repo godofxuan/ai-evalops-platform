@@ -49,7 +49,7 @@ jobs:
       EVALOPS_SCHEDULER_DIAGNOSTIC_DIR: /tmp/evalops-final-scheduler
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
@@ -65,6 +65,9 @@ jobs:
 
       - name: Check lock file
         run: uv lock --check
+
+      - name: Verify final evidence file manifest
+        run: uv run --no-sync python -m scripts.verify_final_evidence_manifest
 
       - name: Check formatting
         run: uv run --no-sync ruff format --check .
@@ -136,7 +139,7 @@ jobs:
 
       - name: Upload final scheduler lock diagnostics
         if: ${{ always() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: final-scheduler-lock-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: /tmp/evalops-final-scheduler
@@ -281,7 +284,7 @@ jobs:
       EVALOPS_ARTIFACT_S3_SECRET_ACCESS_KEY: minioadmin
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Build the complete current topology
         run: docker compose -f deploy/compose.yaml build

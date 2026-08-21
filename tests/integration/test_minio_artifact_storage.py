@@ -8,7 +8,12 @@ import pytest
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from app.artifacts.storage import ArtifactIntegrityError, S3ArtifactStore, S3Client
+from app.artifacts.storage import (
+    ArtifactIntegrityError,
+    ArtifactPublishConflictError,
+    S3ArtifactStore,
+    S3Client,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -59,6 +64,7 @@ async def test_real_minio_upload_download_dedup_failure_and_concurrent_publish()
     assert len({item.sha256 for item in published}) == 1
     assert await store.get_bytes(published[0].sha256) == content
 
+    expected_identity = (await store.list_objects())[0]
     key = published[0].relative_path.as_posix()
     raw_client.put_object(
         Bucket=bucket,
@@ -68,6 +74,8 @@ async def test_real_minio_upload_download_dedup_failure_and_concurrent_publish()
     )
     with pytest.raises(ArtifactIntegrityError):
         await store.get_bytes(published[0].sha256)
+    with pytest.raises(ArtifactPublishConflictError):
+        await store.delete_object(expected_identity)
     with pytest.raises(ArtifactIntegrityError):
         await store.delete_bytes(published[0].sha256)
 

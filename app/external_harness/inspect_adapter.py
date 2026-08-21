@@ -1,11 +1,12 @@
-"""Fail-closed conversion from Inspect AI evaluation logs to EvalOps artifacts."""
+"""Fail-closed, loss-accounted conversion from Inspect AI logs."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from collections.abc import Mapping
-from typing import Any, cast
+from datetime import datetime
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel
 
@@ -14,6 +15,7 @@ from app.agent_eval.schema import (
     AgentTerminal,
     TerminalState,
     TrajectoryEvent,
+    TrajectoryEventType,
 )
 
 
@@ -21,20 +23,55 @@ class InspectLogContractError(ValueError):
     """The external log cannot be interpreted without guessing."""
 
 
+_SUPPORTED_VERSION = 2
+_SUPPORTED_EVENTS = frozenset(
+    {
+        "sample_init",
+        "sample_limit",
+        "sandbox",
+        "state",
+        "store",
+        "model",
+        "tool",
+        "anchor",
+        "approval",
+        "branch",
+        "checkpoint",
+        "compaction",
+        "input",
+        "interrupt",
+        "score",
+        "score_edit",
+        "error",
+        "logger",
+        "info",
+        "span_begin",
+        "span_end",
+        "step",
+        "subtask",
+    }
+)
+
+
 def convert_inspect_log_to_artifact(
     log: object,
     *,
     sample_index: int,
+    mode: Literal["formal", "diagnostic"] = "formal",
 ) -> AgentRunArtifact:
-    """Convert one Inspect sample while preserving source identity and provenance."""
+    """Convert one Inspect sample with an explicit supported-event registry."""
 
     payload = _json_mapping(log, "log")
     version = payload.get("version")
-    if not isinstance(version, (int, str)) or isinstance(version, bool):
-        raise InspectLogContractError("Inspect log version is missing or invalid")
+    if version != _SUPPORTED_VERSION or isinstance(version, bool):
+        raise InspectLogContractError(f"unsupported Inspect log version: {version!r}")
     status = payload.get("status")
     if status not in {"success", "error", "cancelled", "started"}:
         raise InspectLogContractError(f"unsupported Inspect log status: {status!r}")
+    if mode == "formal" and status != "success":
+        raise InspectLogContractError(
+            f"formal conversion requires terminal success status, got {status!r}"
+        )
     samples = payload.get("samples")
     if not isinstance(samples, list) or not samples:
         raise InspectLogContractError("Inspect log contains no samples")
@@ -48,16 +85,9 @@ def convert_inspect_log_to_artifact(
     eval_id = _required_text(evaluation, "eval_id")
     task = _required_text(evaluation, "task")
     model = _model_name(evaluation.get("model"))
-    completion = _completion(sample.get("output"))
-    terminal_state = {
-        "success": "answer",
-        "error": "agent_error",
-        "cancelled": "agent_error",
-        "started": "partial",
-    }[cast(str, status)]
-    trajectory = _trajectory(sample.get("events"))
+    completion = _completion(sample.get("output"), partial=status != "success")
+    trajectory, unmapped_count = _trajectory(sample.get("events"), mode=mode)
     scores = _json_safe_mapping(sample.get("scores", {}), "scores")
-
     source_identity = _sha256(
         {
             "eval_id": eval_id,
@@ -66,6 +96,15 @@ def convert_inspect_log_to_artifact(
             "version": version,
         }
     )
+    terminal_state = {
+        "success": "answer",
+        "error": "agent_error",
+        "cancelled": "agent_error",
+        "started": "partial",
+    }[cast(str, status)]
+    source_count = len(sample.get("events") or [])
+    partial = status != "success"
+    formal_gate_eligible = not partial and unmapped_count == 0
     return AgentRunArtifact(
         schema_version="agent-run-artifact/v1",
         run_id=f"inspect-{eval_id}",
@@ -80,57 +119,120 @@ def convert_inspect_log_to_artifact(
             "inspect_eval_id": eval_id,
             "inspect_log_version": version,
             "inspect_task": task,
+            "inspect_status": status,
+            "conversion_mode": mode,
             "model": model,
             "sample_index": sample_index,
             "source_identity_sha256": source_identity,
+            "source_event_count": source_count,
+            "converted_event_count": len(trajectory),
+            "unmapped_event_count": unmapped_count,
+            "dropped_event_count": 0,
+            "partial": partial,
+            "formal_gate_eligible": formal_gate_eligible,
+            "loss_manifest": (
+                []
+                if unmapped_count == 0
+                else [{"reason": "unknown_event_preserved_raw", "count": unmapped_count}]
+            ),
         },
     )
 
 
-def _trajectory(raw_events: object) -> list[TrajectoryEvent]:
+def _trajectory(
+    raw_events: object,
+    *,
+    mode: Literal["formal", "diagnostic"],
+) -> tuple[list[TrajectoryEvent], int]:
     if raw_events is None:
-        return []
+        return [], 0
     if not isinstance(raw_events, list):
         raise InspectLogContractError("sample events must be a list")
     converted: list[TrajectoryEvent] = []
+    seen_ids: set[str] = set()
+    prior_timestamp: datetime | None = None
+    unmapped_count = 0
     for index, raw_event in enumerate(raw_events):
         event = _json_mapping(raw_event, f"events[{index}]")
         kind = event.get("event")
-        if kind == "tool":
-            tool_name = _required_text(event, "function")
-            converted.append(
-                TrajectoryEvent(
-                    event_id=_event_id(event, index),
-                    event_type="tool_call",
-                    tool_name=tool_name,
-                    payload={
-                        "arguments": _json_safe(event.get("arguments", {}), "arguments"),
-                        "result": _json_safe(event.get("result"), "result"),
-                    },
-                )
-            )
-        elif kind in {"model", "message"}:
-            converted.append(
-                TrajectoryEvent(
-                    event_id=_event_id(event, index),
-                    event_type="model_step",
-                    tool_name=None,
-                    payload={"inspect_event": _json_safe_mapping(event, "event")},
-                )
-            )
-    return converted
+        if not isinstance(kind, str):
+            raise InspectLogContractError(f"events[{index}].event is missing")
+        if kind not in _SUPPORTED_EVENTS:
+            if mode == "formal":
+                raise InspectLogContractError(f"unsupported Inspect event: {kind!r}")
+            unmapped_count += 1
+        event_id = _event_id(event, index)
+        if event_id in seen_ids:
+            raise InspectLogContractError(f"duplicate Inspect event id: {event_id}")
+        seen_ids.add(event_id)
+        timestamp = _event_timestamp(event)
+        if timestamp is not None:
+            if prior_timestamp is not None and timestamp < prior_timestamp:
+                raise InspectLogContractError("Inspect events are out of timestamp order")
+            prior_timestamp = timestamp
+        converted.append(_convert_event(event, index, kind, event_id))
+    return converted, unmapped_count
+
+
+def _convert_event(
+    event: Mapping[str, Any],
+    index: int,
+    kind: str,
+    event_id: str,
+) -> TrajectoryEvent:
+    event_type = cast(
+        TrajectoryEventType,
+        {
+            "tool": "tool_call",
+            "input": "user_message",
+            "interrupt": "interrupt",
+            "approval": "policy_decision",
+        }.get(kind, "model_step"),
+    )
+    tool_name: str | None = None
+    if kind == "tool":
+        tool_name = _required_text(event, "function")
+    return TrajectoryEvent(
+        event_id=event_id,
+        event_type=event_type,
+        tool_name=tool_name,
+        payload={
+            "inspect_event_type": kind,
+            "inspect_event_index": index,
+            "inspect_event": _json_safe_mapping(event, f"events[{index}]"),
+        },
+    )
 
 
 def _event_id(event: Mapping[str, Any], index: int) -> str:
-    value = event.get("id")
-    return value if isinstance(value, str) and value else f"inspect-event-{index}"
+    for key in ("uuid", "id"):
+        value = event.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return f"inspect-event-{index}"
 
 
-def _completion(output: object) -> str:
+def _event_timestamp(event: Mapping[str, Any]) -> datetime | None:
+    value = event.get("timestamp")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise InspectLogContractError("Inspect event timestamp must be an ISO string")
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise InspectLogContractError("Inspect event timestamp is invalid") from error
+
+
+def _completion(output: object, *, partial: bool) -> str:
+    if output is None and partial:
+        return ""
     if isinstance(output, str):
         return output
     mapping = _json_mapping(output, "output")
     value = mapping.get("completion")
+    if value is None and partial:
+        return ""
     if not isinstance(value, str):
         raise InspectLogContractError("sample output completion is missing")
     return value

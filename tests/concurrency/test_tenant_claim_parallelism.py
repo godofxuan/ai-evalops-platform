@@ -997,3 +997,92 @@ async def test_same_tenant_eight_worker_contention_diagnostics() -> None:
     assert len(claimed_job_ids) == 8, json.dumps(diagnostics, sort_keys=True)
     assert len(set(claimed_job_ids)) == 8, json.dumps(diagnostics, sort_keys=True)
     assert successful_requests == 8, json.dumps(diagnostics, sort_keys=True)
+
+
+@pytest.mark.integration
+async def test_targeted_claim_microbenchmark_reports_1_2_4_8_diagnostics() -> None:
+    """Targeted lock diagnostic only; this is not the frozen formal scaling protocol."""
+
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    install_postgres_test_timeouts(engine)
+    session_factory = create_session_factory(engine)
+    now = datetime(2026, 8, 22, 8, 0, tzinfo=UTC)
+    arms: list[dict[str, object]] = []
+    try:
+        for workers in (1, 2, 4, 8):
+            fixture = await _create_claim_fixture(
+                session_factory,
+                created_at=now + timedelta(minutes=workers),
+                job_count=64,
+            )
+            claimer = InstrumentedClaimer(
+                session_factory,
+                lease_policy=LeasePolicy(timedelta(seconds=30)),
+                clock=FixedClock(now),
+            )
+            latencies_ms: list[float] = []
+
+            async def drain(
+                worker_number: int,
+                active_claimer: InstrumentedClaimer,
+                arm_workers: int,
+                latency_sink: list[float],
+            ) -> int:
+                claimed = 0
+                while True:
+                    started = perf_counter()
+                    batch = await active_claimer.claim(
+                        worker_id=f"micro-w{arm_workers}-{worker_number}",
+                        limit=1,
+                    )
+                    latency_sink.append((perf_counter() - started) * 1_000)
+                    if not batch:
+                        return claimed
+                    claimed += len(batch)
+
+            started = perf_counter()
+            try:
+                counts = await wait_for_lock_sensitive(
+                    asyncio.gather(
+                        *(drain(index, claimer, workers, latencies_ms) for index in range(workers))
+                    ),
+                    operation=f"targeted claim microbenchmark w{workers}",
+                )
+                elapsed = perf_counter() - started
+                sorted_latencies = sorted(latencies_ms)
+                arms.append(
+                    {
+                        "workers": workers,
+                        "claimed_jobs": sum(counts),
+                        "elapsed_seconds": elapsed,
+                        "jobs_per_second": 64 / elapsed,
+                        "claim_latency_p50_ms": median(sorted_latencies),
+                        "claim_latency_p95_ms": quantiles(
+                            sorted_latencies, n=100, method="inclusive"
+                        )[94],
+                        "contention_retries": claimer.claim_attempts - sum(counts),
+                        "waiting_fallbacks": claimer.waiting_fallbacks,
+                        "postgres_lock_waits": "captured_by_ci_lock_diagnostic_on_failure",
+                    }
+                )
+            finally:
+                await _delete_claim_fixture(session_factory, fixture)
+    finally:
+        await engine.dispose()
+
+    write_lock_diagnostic(
+        {
+            "schema_version": "targeted-claim-microbenchmark/v1",
+            "classification": "TARGETED_DIAGNOSTIC_NOT_FORMAL_SCALING",
+            "worker_counts": [1, 2, 4, 8],
+            "arms": arms,
+        }
+    )
+    assert [arm["workers"] for arm in arms] == [1, 2, 4, 8]
+    assert all(arm["claimed_jobs"] == 64 for arm in arms)

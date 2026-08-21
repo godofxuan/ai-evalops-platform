@@ -74,6 +74,7 @@ class FakeS3Client:
         return {
             "ContentLength": len(self.objects[identity]),
             "Metadata": self.metadata[identity],
+            "ETag": hashlib.md5(self.objects[identity], usedforsecurity=False).hexdigest(),
         }
 
     def delete_object(self, **kwargs: Any) -> dict[str, Any]:
@@ -81,6 +82,22 @@ class FakeS3Client:
         del self.objects[identity]
         del self.metadata[identity]
         return {"ResponseMetadata": {"HTTPStatusCode": 204}}
+
+    def list_objects_v2(self, **kwargs: Any) -> dict[str, Any]:
+        prefix = kwargs["Prefix"]
+        return {
+            "Contents": [
+                {
+                    "Key": key,
+                    "LastModified": __import__("datetime").datetime.now(__import__("datetime").UTC),
+                    "Size": len(content),
+                    "ETag": hashlib.md5(content, usedforsecurity=False).hexdigest(),
+                }
+                for (bucket, key), content in self.objects.items()
+                if bucket == kwargs["Bucket"] and key.startswith(prefix)
+            ],
+            "IsTruncated": False,
+        }
 
     def head_bucket(self, **_kwargs: Any) -> dict[str, Any]:
         if self.fail_head_bucket is not None:
@@ -253,3 +270,17 @@ def test_prefix_rejects_parent_traversal_and_empty_segments() -> None:
     for prefix in ("../content", "/absolute", "content//v1", "content/./v1"):
         with pytest.raises(ValueError, match="prefix"):
             S3ArtifactStore(client=client, bucket="evalops", prefix=prefix)
+
+
+async def test_identity_delete_rejects_object_replaced_after_scan() -> None:
+    client = FakeS3Client()
+    store = build_store(client)
+    stored = await store.put_bytes(b"scanned")
+    expected = (await store.list_objects())[0]
+    identity = ("evalops", stored.relative_path.as_posix())
+    client.objects[identity] = b"replaced-after-scan"
+
+    with pytest.raises(ArtifactPublishConflictError, match="changed after"):
+        await store.delete_object(expected)
+
+    assert client.objects[identity] == b"replaced-after-scan"

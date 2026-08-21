@@ -1,3 +1,15 @@
+# 2026-08-22 Integrity remediation candidate
+
+- Branch: codex/evalops-integrity-remediation-v1.
+- Base: 5eb1d7eebc4917e32aa0a0617521ae96f5a201d0.
+- Migration head: 20260822_0026.
+- Scope implemented: Artifact lifecycle/CAS reconciliation, scheduler diagnostic-lock
+  removal, strict RAG/Inspect integrity, evidence sufficiency, MCP audit outbox, evidence
+  manifest verification, and full-SHA GitHub Actions pinning.
+- State: CANDIDATE_NOT_MERGED_NOT_RELEASED; final SHA and CI run are pending validation.
+- External A/B: no formal 100-200-case run was performed. The existing nine-case set is
+  mechanism evidence only and is INSUFFICIENT_EVIDENCE for formal statistics.
+- Historical scheduler scaling remains negative and no production-readiness claim is made.
 # AI EvalOps Platform — Current Portfolio and Release Status
 
 ## Current canonical state — 2026-08-20

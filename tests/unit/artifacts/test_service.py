@@ -13,6 +13,7 @@ from app.artifacts.storage import StoredArtifact
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000201")
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
 REFERENCE_ID = UUID("00000000-0000-0000-0000-000000000701")
+DELETION_TOKEN = UUID("00000000-0000-0000-0000-000000000801")
 SHA256 = "a" * 64
 
 
@@ -44,6 +45,10 @@ class StaticArtifactGateway:
         del sha256
         raise AssertionError("orphan cleanup should not be called")
 
+    async def finalize_blob_deletion(self, **kwargs: object) -> None:
+        del kwargs
+        raise AssertionError("finalize should not be called")
+
 
 class StaticDeletableStore:
     def __init__(self, content: bytes) -> None:
@@ -67,6 +72,7 @@ class StaticDeletableStore:
 class StaticDeletingGateway:
     def __init__(self, deleted: DeletedArtifactReference | None) -> None:
         self.deleted = deleted
+        self.finalized: list[dict[str, object]] = []
 
     async def get_location(
         self,
@@ -91,6 +97,23 @@ class StaticDeletingGateway:
     async def claim_unreferenced_blob(self, *, sha256: str) -> bool:
         del sha256
         raise AssertionError("orphan cleanup should not be called")
+
+    async def finalize_blob_deletion(
+        self,
+        *,
+        sha256: str,
+        deletion_token: UUID,
+        succeeded: bool,
+        error_code: str | None = None,
+    ) -> None:
+        self.finalized.append(
+            {
+                "sha256": sha256,
+                "deletion_token": deletion_token,
+                "succeeded": succeeded,
+                "error_code": error_code,
+            }
+        )
 
 
 class StaticOrphanGateway(StaticDeletingGateway):
@@ -159,7 +182,11 @@ async def test_delete_last_reference_removes_physical_blob() -> None:
     store = StaticDeletableStore(b"last content")
     service = ArtifactAccessService(
         gateway=StaticDeletingGateway(
-            DeletedArtifactReference(blob_sha256=SHA256, last_reference=True)
+            DeletedArtifactReference(
+                blob_sha256=SHA256,
+                last_reference=True,
+                deletion_token=DELETION_TOKEN,
+            )
         ),
         store=store,
     )

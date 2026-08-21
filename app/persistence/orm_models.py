@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     MetaData,
     String,
     Text,
@@ -300,16 +301,39 @@ class ArtifactBlob(Base):
     __tablename__ = "artifact_blobs"
     __table_args__ = (
         CheckConstraint("byte_size >= 0", name="byte_size_nonnegative"),
+        CheckConstraint(
+            "lifecycle_status IN ('ACTIVE', 'DELETE_PENDING', 'DELETED', "
+            "'DELETE_FAILED', 'RESTORE_REQUIRED')",
+            name="lifecycle_status_known",
+        ),
+        CheckConstraint(
+            "delete_attempt_count >= 0",
+            name="delete_attempt_count_nonnegative",
+        ),
         UniqueConstraint("storage_path", name="uq_artifact_blobs_storage_path"),
     )
 
     sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
     byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     storage_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="ACTIVE"
+    )
+    deletion_token: Mapped[UUID | None] = mapped_column(Uuid)
+    deletion_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delete_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    deletion_error_code: Mapped[str | None] = mapped_column(String(100))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
@@ -1264,4 +1288,49 @@ class AuditEvent(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class McpAuditOutbox(Base):
+    """Durable MCP call outcome awaiting atomic AuditEvent delivery."""
+
+    __tablename__ = "mcp_audit_outbox"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "tool_name",
+            "call_identity",
+            name="uq_mcp_audit_outbox_call_identity",
+        ),
+        CheckConstraint(
+            "delivery_status IN ('PENDING', 'DELIVERED')",
+            name="delivery_status_known",
+        ),
+        CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
+        Index("ix_mcp_audit_outbox_pending", "delivery_status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    api_key_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    call_identity: Mapped[str] = mapped_column(String(255), nullable=False)
+    trace_id: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    outcome_status: Mapped[str | None] = mapped_column(String(32))
+    delivery_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="PENDING"
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(100))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )

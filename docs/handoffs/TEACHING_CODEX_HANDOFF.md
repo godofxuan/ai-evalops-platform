@@ -1,3 +1,10 @@
+# 2026-08-22 teaching update
+
+Teach the integrity remediation through five invariants: database-leased Artifact
+deletion with object identity; fair scheduling without diagnostic singleton locking;
+producer-digest and event-loss verification; evidence sufficiency before statistics; and
+business-success/audit-delivery separation. See docs/integrity_remediation/EXECUTION_LOG.md.
+Do not teach the nine-case dataset as a formal A/B result.
 # AI EvalOps Platform — Teaching Codex Handoff
 
 Updated: 2026-08-20 on `codex/final-evidence-hardening-v1`. This is the authoritative teaching entry. Demonstrate every

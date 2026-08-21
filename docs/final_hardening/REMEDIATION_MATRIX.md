@@ -1,3 +1,6 @@
+> 2026-08-22: P1 integrity remediation implemented on candidate branch. Validation
+> remains incomplete until real PostgreSQL/MinIO/Compose CI passes. See
+> docs/integrity_remediation/EXECUTION_LOG.md for exact decisions and boundaries.
 # Remediation Matrix
 
 `VERIFIED` requires an executed relevant test. Remote evidence below is bound to successful run

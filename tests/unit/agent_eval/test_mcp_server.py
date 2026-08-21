@@ -50,6 +50,18 @@ class RevocableAuthorizer:
 class RecordingAuditor:
     def __init__(self) -> None:
         self.records: list[tuple[UUID, str, str, str]] = []
+        self.reservations: list[tuple[str, str, str]] = []
+
+    async def reserve(
+        self,
+        *,
+        principal: Principal,
+        tool_name: str,
+        call_identity: str,
+        trace_id: str,
+    ) -> None:
+        del principal
+        self.reservations.append((tool_name, call_identity, trace_id))
 
     async def record(
         self,
@@ -138,3 +150,75 @@ def test_stdio_server_fails_closed_without_a_configured_api_key() -> None:
         assert str(error) == "EVALOPS_MCP_API_KEY is required for the MCP stdio server"
     else:
         raise AssertionError("missing MCP credentials must fail closed")
+
+
+class FailOnceDeliveryAuditor(RecordingAuditor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.failures_remaining = 1
+
+    async def record(
+        self,
+        *,
+        principal: Principal,
+        tool_name: str,
+        status: str,
+        trace_id: str,
+    ) -> None:
+        if self.failures_remaining:
+            self.failures_remaining -= 1
+            raise OSError("injected audit delivery failure")
+        await super().record(
+            principal=principal,
+            tool_name=tool_name,
+            status=status,
+            trace_id=trace_id,
+        )
+
+
+class IdempotentMutationServices(RecordingServices):
+    def __init__(self) -> None:
+        super().__init__()
+        self.side_effect_count = 0
+        self.seen_keys: set[str] = set()
+
+    async def invoke(
+        self,
+        *,
+        tool_name: str,
+        principal: Principal,
+        arguments: dict[str, object],
+    ) -> dict[str, object]:
+        key = str(arguments["idempotency_key"])
+        if key not in self.seen_keys:
+            self.seen_keys.add(key)
+            self.side_effect_count += 1
+        self.called = (tool_name, principal, arguments)
+        return {"status": "running", "idempotency_key": key}
+
+
+async def test_mutation_audit_failure_returns_pending_and_retry_is_idempotent() -> None:
+    services = IdempotentMutationServices()
+    auditor = FailOnceDeliveryAuditor()
+    server = build_mcp_server(
+        control_plane=McpEvalControlPlane(services=services),
+        authorizer=RevocableAuthorizer(),
+        auditor=auditor,
+        credential_identity=PRINCIPAL,
+    )
+
+    arguments = {
+        "idempotency_key": "same-operation",
+        "request": {"dataset_version_id": "dataset"},
+    }
+    async with Client(server) as client:
+        first = await client.call_tool("submit_evaluation", arguments)
+        second = await client.call_tool("submit_evaluation", arguments)
+
+    assert first.is_error is False
+    assert second.is_error is False
+    assert services.side_effect_count == 1
+    assert auditor.reservations[0] == auditor.reservations[1]
+    assert len(auditor.records) == 1
+    assert "pending" in str(first)
+    assert "delivered" in str(second)

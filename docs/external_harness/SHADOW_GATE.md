@@ -1,3 +1,8 @@
+> 2026-08-22 integrity update: the primary decision remains INPUT_BLOCKED because
+> the baseline contract is absent. Independently, evidence sufficiency is
+> INSUFFICIENT_EVIDENCE: the nine-case mechanism dataset does not meet the
+> 100-common-case formal minimum or required category coverage. Required segment
+> failure produces overall FAIL; neither state can become PASS.
 # Shadow release gate
 
 Current decision: **INPUT_BLOCKED**

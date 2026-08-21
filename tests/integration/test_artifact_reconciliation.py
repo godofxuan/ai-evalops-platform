@@ -45,6 +45,12 @@ class FailOnceStore:
             raise OSError("injected retryable delete failure")
         return await self.inner.delete_bytes(sha256)
 
+    async def delete_object(self, expected: StoredObjectInfo) -> bool:
+        if expected.sha256 == self.fail_sha256 and not self.failed:
+            self.failed = True
+            raise OSError("injected retryable delete failure")
+        return await self.inner.delete_object(expected)
+
 
 @pytest.mark.integration
 async def test_orphan_reconciliation_is_dry_run_safe_rechecks_and_retries(

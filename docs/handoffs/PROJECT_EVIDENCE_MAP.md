@@ -1,3 +1,11 @@
+# Integrity remediation evidence overlay
+
+Current candidate branch: codex/evalops-integrity-remediation-v1. New primary evidence:
+docs/integrity_remediation/EXECUTION_LOG.md,
+docs/external_harness/RAG_ARTIFACT_INTEGRITY_CONTRACT.md,
+alembic/versions/20260822_0026_artifact_lifecycle_and_claim_sequence.py, and
+docs/review/FINAL_EVIDENCE_MANIFEST.json. The material below remains historical unless
+explicitly revalidated by the candidate branch. No release or production claim follows.
 # AI EvalOps Platform — Project Evidence Map
 
 Revalidated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Current implementation baseline:

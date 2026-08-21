@@ -1,3 +1,11 @@
+# Review update: integrity remediation candidate
+
+Review branch codex/evalops-integrity-remediation-v1 before relying on the historical
+package below. Start with docs/integrity_remediation/EXECUTION_LOG.md,
+docs/external_harness/RAG_ARTIFACT_INTEGRITY_CONTRACT.md, migration 20260822_0026, and
+docs/review/FINAL_EVIDENCE_MANIFEST.json. Treat final SHA/CI as pending until the branch
+commit and workflow complete. Do not infer a release, formal external A/B pass, human
+review completion, positive scheduler scaling, or production readiness.
 # AI EvalOps Platform — GPT review entry
 
 Use this page as the single entry point for an independent review. The repository is public, but reviewers should not

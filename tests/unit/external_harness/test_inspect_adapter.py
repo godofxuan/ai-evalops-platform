@@ -1,3 +1,4 @@
+import pytest
 from inspect_ai.log import EvalLog
 
 from app.agent_eval.schema import artifact_content_sha256
@@ -80,3 +81,81 @@ def test_real_inspect_eval_log_model_interoperates_without_fixture_translation()
     artifact = convert_inspect_log_to_artifact(log, sample_index=0)
 
     assert artifact.case_id == "real-inspect-sample"
+
+
+def _inspect_log(
+    events: list[dict[str, object]],
+    *,
+    status: str = "success",
+) -> dict[str, object]:
+    return {
+        "version": 2,
+        "status": status,
+        "eval": {
+            "eval_id": "strict-001",
+            "task": "strict_task",
+            "model": "mockllm/model",
+        },
+        "samples": [
+            {
+                "id": "strict-case",
+                "input": "prompt",
+                "output": {"completion": "done"} if status == "success" else None,
+                "scores": {},
+                "events": events,
+            }
+        ],
+    }
+
+
+def test_inspect_unknown_partial_duplicate_order_and_version_fail_closed() -> None:
+    unknown = _inspect_log([{"event": "future_event", "uuid": "event-1"}])
+    with pytest.raises(ValueError, match="unsupported Inspect event"):
+        convert_inspect_log_to_artifact(unknown, sample_index=0)
+
+    diagnostic = convert_inspect_log_to_artifact(unknown, sample_index=0, mode="diagnostic")
+    assert diagnostic.metadata["formal_gate_eligible"] is False
+    assert diagnostic.metadata["unmapped_event_count"] == 1
+    assert diagnostic.metadata["dropped_event_count"] == 0
+
+    started = _inspect_log([], status="started")
+    with pytest.raises(ValueError, match="terminal success"):
+        convert_inspect_log_to_artifact(started, sample_index=0)
+    partial = convert_inspect_log_to_artifact(started, sample_index=0, mode="diagnostic")
+    assert partial.terminal.state == "partial"
+    assert partial.metadata["partial"] is True
+    assert partial.metadata["formal_gate_eligible"] is False
+
+    duplicate = _inspect_log(
+        [
+            {"event": "info", "uuid": "same"},
+            {"event": "step", "uuid": "same"},
+        ]
+    )
+    with pytest.raises(ValueError, match="duplicate"):
+        convert_inspect_log_to_artifact(duplicate, sample_index=0)
+
+    out_of_order = _inspect_log(
+        [
+            {
+                "event": "info",
+                "uuid": "event-1",
+                "timestamp": "2026-08-21T00:00:02Z",
+            },
+            {
+                "event": "step",
+                "uuid": "event-2",
+                "timestamp": "2026-08-21T00:00:01Z",
+            },
+        ]
+    )
+    with pytest.raises(ValueError, match="timestamp order"):
+        convert_inspect_log_to_artifact(out_of_order, sample_index=0)
+
+    wrong_version = _inspect_log([])
+    wrong_version["version"] = 1
+    with pytest.raises(ValueError, match="unsupported Inspect log version"):
+        convert_inspect_log_to_artifact(wrong_version, sample_index=0)
+
+    with pytest.raises(ValueError, match="must be an object"):
+        convert_inspect_log_to_artifact('{"truncated":', sample_index=0)

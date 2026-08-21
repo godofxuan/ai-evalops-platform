@@ -1,3 +1,9 @@
+> Integrity remediation candidate (2026-08-22): branch
+> codex/evalops-integrity-remediation-v1 adds ArtifactBlob deletion leases and tombstones,
+> removes diagnostic scheduler singleton locking, verifies RAG producer hash chains,
+> makes Inspect conversion loss-accounted, adds evidence-sufficiency gates, and introduces
+> durable MCP audit delivery. This branch is not merged or released; historical negative
+> scheduler scaling and the blocked/insufficient formal external A/B evidence remain binding.
 # AI EvalOps Platform
 
 > RAG / Agent Evaluation Infrastructure：将本地 Agent、RAG 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的多租户评测工作流。
