@@ -1,9 +1,10 @@
-import hashlib
 import json
 from pathlib import Path
 
+from app.external_harness.dataset_identity import canonical_dataset_sha256
+
 ROOT = Path(__file__).resolve().parents[3]
-EXPECTED_DATASET_SHA256 = "8963cc0385af516d076d992497a02770c2fef3fc8e0039706d7d7b8a086a686c"
+EXPECTED_DATASET_SHA256 = "08ccad71d7c96cdd2d558018b480a1e421abd3781527a828793aa4430d517d11"
 
 
 def test_frozen_evidence_package_is_consistent_and_human_review_is_empty() -> None:
@@ -14,7 +15,7 @@ def test_frozen_evidence_package_is_consistent_and_human_review_is_empty() -> No
     )
     review_lines = (ROOT / "human_review/review_form.csv").read_text(encoding="utf-8").splitlines()
 
-    assert hashlib.sha256(dataset_path.read_bytes()).hexdigest() == EXPECTED_DATASET_SHA256
+    assert canonical_dataset_sha256(dataset_path) == EXPECTED_DATASET_SHA256
     assert result["dataset_sha256"] == EXPECTED_DATASET_SHA256
     assert result["status"] == "INPUT_BLOCKED"
     assert result["formal_ab_executed"] is False

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
+from app.external_harness.dataset_identity import canonical_dataset_sha256
 from app.external_harness.rag_subprocess import harness_contract_available
 
 BASELINE_SHA = "909a9710932c6c4744c462db0e33ed0d222ecb1a"
 CANDIDATE_SHA = "e848d8e6090267b28d351758fe8d3cb557dcd586"
-EXPECTED_DATASET_SHA256 = "8963cc0385af516d076d992497a02770c2fef3fc8e0039706d7d7b8a086a686c"
+EXPECTED_DATASET_SHA256 = "08ccad71d7c96cdd2d558018b480a1e421abd3781527a828793aa4430d517d11"
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -20,7 +20,7 @@ def main() -> int:
         "--dataset", type=Path, default=ROOT / "benchmarks/external_harness_v1/cases.json"
     )
     args = parser.parse_args()
-    dataset_hash = hashlib.sha256(args.dataset.read_bytes()).hexdigest()
+    dataset_hash = canonical_dataset_sha256(args.dataset)
     if dataset_hash != EXPECTED_DATASET_SHA256:
         raise SystemExit("dataset digest does not match the frozen preregistration")
     baseline = harness_contract_available(args.rag_repo, BASELINE_SHA)
