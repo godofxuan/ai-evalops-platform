@@ -156,5 +156,12 @@ The native patch helper and in-app browser connection both encountered the same 
 sandbox `helper_unknown_error`; the public GitHub API still supplied exact job/step
 outcomes. Full logs required authenticated admin access, but the failure was reproduced
 at the already-existing contract assertion by comparing the candidate implementation
-with the frozen base semantics. The next GitHub Actions run is the authoritative
-red-to-green check for the corrected real-service seam.
+with the frozen base semantics.
+
+The corrective code commit `b8eeebfed98438f7eea38d5e1b7090f112b4d1d9` triggered
+GitHub Actions run `32515596915`. Both `compose-smoke` and
+`quality-and-integration` completed successfully. Because the MCP stdio test is a
+non-optional step in the successful main job, this is the authoritative red-to-green
+result for the corrected real PostgreSQL + stdio seam. The evidence-only follow-up
+commit uses `[skip ci]` to record this already-completed result without recursively
+creating another validation run solely by documenting the previous run.
