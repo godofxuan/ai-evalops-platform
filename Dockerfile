@@ -30,7 +30,7 @@ RUN mkdir -p /data/artifacts \
 
 USER 10001:10001
 
-EXPOSE 8000 9101 9102
+EXPOSE 8000 9101 9102 9103
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
     CMD ["python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/live', timeout=2).read()"]

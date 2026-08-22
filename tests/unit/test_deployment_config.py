@@ -191,7 +191,12 @@ def test_prometheus_and_otel_collector_are_configured_and_verified() -> None:
         for static in scrape["static_configs"]
         for target in static["targets"]
     }
-    assert targets == {"api:8000", "worker:9101", "reaper:9102"}
+    assert targets == {
+        "api:8000",
+        "worker:9101",
+        "reaper:9102",
+        "audit-dispatcher:9103",
+    }
     assert collector["receivers"]["otlp"]["protocols"]["http"]["endpoint"] == ("0.0.0.0:4318")
     assert collector["exporters"]["debug"]["verbosity"] == "detailed"
     verify = steps["Verify Prometheus and OpenTelemetry data paths"]["run"]
@@ -212,7 +217,10 @@ def test_compose_smoke_verifies_effective_runtime_hardening() -> None:
     assert len(matching_steps) == 1
     command = matching_steps[0]["run"]
     assert "python3 scripts/verify_compose_hardening.py" in command
-    assert "postgres redis minio prometheus otel-collector api worker reaper" in command
+    assert (
+        "postgres redis minio prometheus otel-collector api worker reaper audit-dispatcher"
+        in command
+    )
 
 
 def test_integration_prerequisites_run_after_an_independent_unit_failure() -> None:

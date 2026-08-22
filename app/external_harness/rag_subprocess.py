@@ -12,10 +12,11 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent_eval.schema import AgentRunArtifact
-from app.external_harness.rag_harness import (
-    RagHarnessContractError,
-    convert_rag_harness_result,
+from app.external_harness.harness_envelope import (
+    seal_rag_harness_result,
+    verify_and_convert_rag_envelope,
 )
+from app.external_harness.rag_harness import RagHarnessContractError
 
 _MAX_STDOUT_BYTES = 5 * 1024 * 1024
 
@@ -101,9 +102,13 @@ class RagHarnessSubprocessClient:
         except json.JSONDecodeError as error:
             raise HarnessExecutionError("RAG harness did not return JSON") from error
         try:
-            artifact = convert_rag_harness_result(payload)
+            envelope = seal_rag_harness_result(
+                payload,
+                producer_source_sha=self.git_sha,
+            )
+            artifact = verify_and_convert_rag_envelope(envelope)
         except RagHarnessContractError as error:
-            raise HarnessExecutionError("RAG harness JSON violates schema 1.0") from error
+            raise HarnessExecutionError("RAG harness JSON violates sealed schema 1.1") from error
         if artifact.metadata["producer_git_sha"] != self.git_sha:
             raise HarnessExecutionError("RAG harness result came from an unexpected Git SHA")
         return artifact

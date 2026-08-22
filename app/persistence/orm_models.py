@@ -1303,11 +1303,27 @@ class McpAuditOutbox(Base):
             name="uq_mcp_audit_outbox_call_identity",
         ),
         CheckConstraint(
-            "delivery_status IN ('PENDING', 'DELIVERED')",
+            "delivery_status IN ('PENDING', 'DELIVERED', 'DEAD_LETTER')",
             name="delivery_status_known",
         ),
         CheckConstraint("attempt_count >= 0", name="attempt_count_nonnegative"),
-        Index("ix_mcp_audit_outbox_pending", "delivery_status", "created_at"),
+        CheckConstraint("lease_version >= 0", name="lease_version_nonnegative"),
+        CheckConstraint("max_attempts > 0", name="max_attempts_positive"),
+        CheckConstraint(
+            "(lease_owner IS NULL) = (lease_expires_at IS NULL)",
+            name="lease_fields_consistent",
+        ),
+        CheckConstraint(
+            "delivery_status = 'PENDING' OR (lease_owner IS NULL AND lease_expires_at IS NULL)",
+            name="terminal_delivery_not_leased",
+        ),
+        Index(
+            "ix_mcp_audit_outbox_pending",
+            "available_at",
+            "created_at",
+            "id",
+            postgresql_where=text("delivery_status = 'PENDING'"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -1315,6 +1331,7 @@ class McpAuditOutbox(Base):
         Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     api_key_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
     tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
     call_identity: Mapped[str] = mapped_column(String(255), nullable=False)
     trace_id: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
@@ -1323,8 +1340,16 @@ class McpAuditOutbox(Base):
         String(16), nullable=False, server_default="PENDING"
     )
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="8")
     last_error_code: Mapped[str | None] = mapped_column(String(100))
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_version: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

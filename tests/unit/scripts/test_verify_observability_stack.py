@@ -5,7 +5,7 @@ import pytest
 import scripts.verify_observability_stack as verifier
 
 
-def test_verify_requires_three_targets_metrics_and_process_roles(monkeypatch) -> None:
+def test_verify_requires_four_targets_metrics_and_three_span_roles(monkeypatch) -> None:
     queries: list[str] = []
 
     def fake_json(url: str) -> dict[str, object]:
@@ -15,7 +15,7 @@ def test_verify_requires_three_targets_metrics_and_process_roles(monkeypatch) ->
                 "data": {
                     "activeTargets": [
                         {"scrapePool": f"evalops-{role}", "health": "up"}
-                        for role in ("api", "worker", "reaper")
+                        for role in ("api", "worker", "reaper", "audit-dispatcher")
                     ]
                 }
             }
@@ -34,9 +34,11 @@ def test_verify_requires_three_targets_metrics_and_process_roles(monkeypatch) ->
         deadline_seconds=1,
     )
 
-    assert len(queries) == 6
+    assert len(queries) == 8
     assert any("api_request_total" in query for query in queries)
     assert any("job_retry_total" in query for query in queries)
+    assert any("mcp_audit_pending" in query for query in queries)
+    assert any("mcp_audit_dead_letter_count" in query for query in queries)
 
 
 def test_metric_query_fails_closed_when_series_is_missing(monkeypatch) -> None:

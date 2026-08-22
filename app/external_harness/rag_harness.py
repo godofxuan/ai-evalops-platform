@@ -130,6 +130,10 @@ class RagHarnessResultV1(_StrictModel):
     root_span_id: str = Field(pattern=r"^[0-9a-f]{16}$")
     propagated_traceparent: str = Field(pattern=r"^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$")
     error_classification: str
+    durability_scope: Literal["access_request_draft_only"]
+    start_idempotency_supported: Literal[True]
+    resume_concurrency_fenced: Literal[True]
+    multi_instance_ha: Literal[False]
 
     @model_validator(mode="after")
     def identities_match(self) -> RagHarnessResultV1:

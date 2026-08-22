@@ -37,6 +37,13 @@ x-app-environment: &app-environment
   EVALOPS_OUTBOX_RETENTION_SECONDS: "${EVALOPS_OUTBOX_RETENTION_SECONDS:-604800}"
   EVALOPS_OUTBOX_CLEANUP_INTERVAL_SECONDS: "${EVALOPS_OUTBOX_CLEANUP_INTERVAL_SECONDS:-60}"
   EVALOPS_OUTBOX_CLEANUP_BATCH_SIZE: "${EVALOPS_OUTBOX_CLEANUP_BATCH_SIZE:-500}"
+  EVALOPS_AUDIT_DISPATCHER_POLL_SECONDS: "${EVALOPS_AUDIT_DISPATCHER_POLL_SECONDS:-0.5}"
+  EVALOPS_AUDIT_DISPATCHER_BATCH_SIZE: "${EVALOPS_AUDIT_DISPATCHER_BATCH_SIZE:-50}"
+  EVALOPS_AUDIT_DISPATCHER_LEASE_SECONDS: "${EVALOPS_AUDIT_DISPATCHER_LEASE_SECONDS:-30}"
+  EVALOPS_AUDIT_DISPATCHER_DELIVERY_TIMEOUT_SECONDS: "${EVALOPS_AUDIT_DISPATCHER_DELIVERY_TIMEOUT_SECONDS:-5}"
+  EVALOPS_AUDIT_DISPATCHER_RETRY_BASE_SECONDS: "${EVALOPS_AUDIT_DISPATCHER_RETRY_BASE_SECONDS:-1}"
+  EVALOPS_AUDIT_DISPATCHER_RETRY_MAX_SECONDS: "${EVALOPS_AUDIT_DISPATCHER_RETRY_MAX_SECONDS:-60}"
+  EVALOPS_AUDIT_DISPATCHER_METRICS_PORT: "9103"
   EVALOPS_RETRY_BASE_DELAY_SECONDS: "1.0"
   EVALOPS_RETRY_MAX_DELAY_SECONDS: "60.0"
   EVALOPS_RETRY_JITTER_RATIO: "0.2"
@@ -203,6 +210,8 @@ services:
         condition: service_started
       reaper:
         condition: service_started
+      audit-dispatcher:
+        condition: service_started
 
   migrate:
     <<: *app-service
@@ -258,6 +267,13 @@ services:
     command: ["python", "-m", "app.cli", "reaper"]
     expose:
       - "9102"
+    depends_on: *ready-dependencies
+
+  audit-dispatcher:
+    <<: *app-service
+    command: ["python", "-m", "app.cli", "audit-dispatcher"]
+    expose:
+      - "9103"
     depends_on: *ready-dependencies
 
 volumes:

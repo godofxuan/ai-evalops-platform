@@ -97,6 +97,38 @@ def test_outbox_cleanup_settings_have_bounded_operational_defaults() -> None:
     assert settings.outbox_cleanup_batch_size == 500
 
 
+def test_audit_dispatcher_settings_have_bounded_operational_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.audit_dispatcher_poll_seconds == 0.5
+    assert settings.audit_dispatcher_batch_size == 50
+    assert settings.audit_dispatcher_lease_seconds == 30
+    assert settings.audit_dispatcher_delivery_timeout_seconds == 5
+    assert settings.audit_dispatcher_retry_base_seconds == 1
+    assert settings.audit_dispatcher_retry_max_seconds == 60
+    assert settings.audit_dispatcher_metrics_port == 9103
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "audit_dispatcher_delivery_timeout_seconds": 30,
+            "audit_dispatcher_lease_seconds": 30,
+        },
+        {
+            "audit_dispatcher_retry_base_seconds": 61,
+            "audit_dispatcher_retry_max_seconds": 60,
+        },
+    ],
+)
+def test_audit_dispatcher_settings_reject_unsafe_cross_field_timing(
+    overrides: dict[str, int],
+) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **overrides)
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -118,6 +150,7 @@ def test_observability_settings_have_safe_bounded_defaults() -> None:
     assert settings.metrics_host == "0.0.0.0"
     assert settings.worker_metrics_port == 9101
     assert settings.reaper_metrics_port == 9102
+    assert settings.audit_dispatcher_metrics_port == 9103
     assert settings.otel_enabled is True
     assert settings.otel_service_name == "ai-evalops-platform"
     assert settings.otel_exporter_otlp_endpoint is None

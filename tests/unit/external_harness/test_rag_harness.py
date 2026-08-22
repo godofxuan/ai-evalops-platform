@@ -70,6 +70,10 @@ def test_rag_harness_result_converts_with_trace_and_source_identity() -> None:
         "root_span_id": "2" * 16,
         "propagated_traceparent": f"00-{'1' * 32}-{'2' * 16}-01",
         "error_classification": "ok",
+        "durability_scope": "access_request_draft_only",
+        "start_idempotency_supported": True,
+        "resume_concurrency_fenced": True,
+        "multi_instance_ha": False,
     }
 
     result = seal_rag_result(result)
@@ -138,6 +142,10 @@ def test_rag_producer_digest_chain_order_duplicates_and_tool_surface_fail_closed
         "root_span_id": "2" * 16,
         "propagated_traceparent": f"00-{trace_id}-{'2' * 16}-01",
         "error_classification": "ok",
+        "durability_scope": "access_request_draft_only",
+        "start_idempotency_supported": True,
+        "resume_concurrency_fenced": True,
+        "multi_instance_ha": False,
     }
     sealed = seal_rag_result(base)
 

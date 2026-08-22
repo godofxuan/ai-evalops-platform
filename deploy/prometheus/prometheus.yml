@@ -15,3 +15,6 @@ scrape_configs:
   - job_name: evalops-reaper
     static_configs:
       - targets: ["reaper:9102"]
+  - job_name: evalops-audit-dispatcher
+    static_configs:
+      - targets: ["audit-dispatcher:9103"]

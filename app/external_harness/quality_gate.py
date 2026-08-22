@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import random
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -13,6 +14,9 @@ GateStatus = Literal[
     "PASS", "FAIL", "HUMAN_REVIEW_PENDING", "INPUT_BLOCKED", "INSUFFICIENT_EVIDENCE"
 ]
 AutomatedStatus = Literal["PASS", "FAIL", "INPUT_BLOCKED", "INSUFFICIENT_EVIDENCE"]
+EvidenceOutcome = Literal[
+    "PASS", "FAIL", "INPUT_BLOCKED", "INSUFFICIENT_EVIDENCE", "CONTRACT_VERIFIED"
+]
 
 
 class InsufficientEvidenceError(ValueError):
@@ -61,12 +65,65 @@ class EvidenceSufficiency:
 
 
 @dataclass(frozen=True, slots=True)
-class ShadowGateInputs:
-    automated_status: AutomatedStatus
-    human_review_complete: bool
-    trace_correlation_passed: bool
-    failure_matrix_passed: bool
+class FormalEvidenceDecision:
+    dataset_hash: str
+    policy_hash: str
+    baseline_sha: str
+    candidate_sha: str
+    evalops_sha: str
+    common_case_ids_hash: str
+    common_case_count: int
+    per_category_counts: dict[str, int]
+    a_only_count: int
+    b_only_count: int
+    required_category_coverage: tuple[str, ...]
+    minimum_common_cases: int
+    minimum_per_category: int
+    bootstrap_method: Literal["paired-percentile-bootstrap"]
+    automated_metrics_digest: str
+    automated_metrics_passed: bool
+    human_review_status: Literal["PENDING", "COMPLETE"]
+    trace_status: Literal["PASS", "FAIL"]
+    failure_matrix_status: Literal["PASS", "FAIL"]
+    formal_ab_eligible: bool
+    evidence_sufficiency: Literal["SUFFICIENT", "INSUFFICIENT_EVIDENCE"]
     required_segments_passed: bool = True
+    contract_verified: bool = False
+
+    def __post_init__(self) -> None:
+        for name in (
+            "dataset_hash",
+            "policy_hash",
+            "common_case_ids_hash",
+            "automated_metrics_digest",
+        ):
+            if re.fullmatch(r"[0-9a-f]{64}", getattr(self, name)) is None:
+                raise ValueError(f"{name} must be a lowercase SHA-256 digest")
+        for name in ("baseline_sha", "candidate_sha", "evalops_sha"):
+            if re.fullmatch(r"[0-9a-f]{40}", getattr(self, name)) is None:
+                raise ValueError(f"{name} must be an exact lowercase Git SHA")
+        counts = (self.common_case_count, self.a_only_count, self.b_only_count)
+        if any(count < 0 for count in counts) or any(
+            count < 0 for count in self.per_category_counts.values()
+        ):
+            raise ValueError("evidence counts must be nonnegative")
+        if self.minimum_common_cases < 2 or self.minimum_per_category < 1:
+            raise ValueError("formal evidence minimums are invalid")
+        if self.formal_ab_eligible and self.contract_verified:
+            raise ValueError("formal A/B evidence cannot also be a contract-only result")
+
+    @property
+    def outcome(self) -> EvidenceOutcome:
+        if not self.formal_ab_eligible:
+            return "CONTRACT_VERIFIED" if self.contract_verified else "INPUT_BLOCKED"
+        if self.evidence_sufficiency == "INSUFFICIENT_EVIDENCE":
+            return "INSUFFICIENT_EVIDENCE"
+        if self.common_case_count < self.minimum_common_cases or any(
+            self.per_category_counts.get(category, 0) < self.minimum_per_category
+            for category in self.required_category_coverage
+        ):
+            return "INSUFFICIENT_EVIDENCE"
+        return "PASS" if self.automated_metrics_passed else "FAIL"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,27 +220,34 @@ def assess_evidence_sufficiency(
     )
 
 
-def evaluate_shadow_gate(inputs: ShadowGateInputs) -> ShadowGateDecision:
+def evaluate_shadow_gate(inputs: FormalEvidenceDecision) -> ShadowGateDecision:
     hard_failures = tuple(
         reason
         for condition, reason in (
-            (not inputs.trace_correlation_passed, "trace_correlation_failed"),
-            (not inputs.failure_matrix_passed, "failure_matrix_failed"),
+            (inputs.trace_status != "PASS", "trace_correlation_failed"),
+            (inputs.failure_matrix_status != "PASS", "failure_matrix_failed"),
             (not inputs.required_segments_passed, "required_segment_failed"),
-            (inputs.automated_status == "FAIL", "automated_quality_failed"),
+            (inputs.outcome == "FAIL", "automated_quality_failed"),
         )
         if condition
     )
     if hard_failures:
         return ShadowGateDecision("FAIL", hard_failures)
-    if inputs.automated_status == "INPUT_BLOCKED":
+    if not inputs.formal_ab_eligible:
+        reason = (
+            "contract_verified_not_formal_ab"
+            if inputs.contract_verified
+            else "formal_ab_ineligible"
+        )
+        return ShadowGateDecision("INPUT_BLOCKED", (reason,))
+    if inputs.outcome == "INPUT_BLOCKED":
         return ShadowGateDecision("INPUT_BLOCKED", ("automated_comparison_input_missing",))
-    if inputs.automated_status == "INSUFFICIENT_EVIDENCE":
+    if inputs.outcome == "INSUFFICIENT_EVIDENCE":
         return ShadowGateDecision(
             "INSUFFICIENT_EVIDENCE",
             ("formal_sample_or_coverage_minimum_not_met",),
         )
-    if not inputs.human_review_complete:
+    if inputs.human_review_status != "COMPLETE":
         return ShadowGateDecision("HUMAN_REVIEW_PENDING", ("real_human_review_incomplete",))
     return ShadowGateDecision("PASS", ())
 
@@ -208,7 +272,7 @@ __all__ = [
     "EvidenceSufficiency",
     "InsufficientEvidenceError",
     "ShadowGateDecision",
-    "ShadowGateInputs",
+    "FormalEvidenceDecision",
     "assess_evidence_sufficiency",
     "common_case_set",
     "evaluate_shadow_gate",

@@ -33,7 +33,12 @@ def _wait_for_prometheus(base_url: str, deadline_seconds: float) -> None:
                 for item in active
                 if isinstance(item, dict)
             }
-            expected = {"evalops-api", "evalops-worker", "evalops-reaper"}
+            expected = {
+                "evalops-api",
+                "evalops-worker",
+                "evalops-reaper",
+                "evalops-audit-dispatcher",
+            }
             if states.keys() >= expected and all(states[name] == "up" for name in expected):
                 return
             last_error = f"target states: {states}"
@@ -79,6 +84,8 @@ def verify(*, prometheus_url: str, compose_file: Path, deadline_seconds: float) 
         "job_queue_depth",
         "job_retry_total",
         "job_lease_expired_total",
+        "mcp_audit_pending",
+        "mcp_audit_dead_letter_count",
     ):
         _require_metric(prometheus_url, metric)
 

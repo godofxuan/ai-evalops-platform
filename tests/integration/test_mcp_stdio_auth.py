@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import os
 import sys
@@ -10,6 +11,11 @@ from mcp.client.stdio import stdio_client
 from pydantic import SecretStr
 from sqlalchemy import delete, select
 
+from app.agent_eval.audit_dispatcher import (
+    AuditDispatcher,
+    SQLAlchemyAuditEventSink,
+    SQLAlchemyAuditOutboxStore,
+)
 from app.auth.api_keys import generate_api_key
 from app.core.config import Settings
 from app.domain.enums import APIKeyStatus, ArtifactType, RunStatus
@@ -22,6 +28,7 @@ from app.persistence.orm_models import (
     Dataset,
     DatasetVersion,
     EvaluationRun,
+    McpAuditOutbox,
     Tenant,
 )
 
@@ -150,6 +157,28 @@ async def test_real_stdio_mcp_revalidates_revocation_without_restart(
             assert second.is_error is True
 
         async with session_factory() as session:
+            audit_before_dispatch = (
+                (await session.execute(select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)))
+                .scalars()
+                .all()
+            )
+        assert audit_before_dispatch == []
+
+        dispatcher = AuditDispatcher(
+            store=SQLAlchemyAuditOutboxStore(
+                session_factory,
+                dispatcher_id="integration-system-dispatcher",
+                lease_seconds=30,
+            ),
+            sink=SQLAlchemyAuditEventSink(session_factory),
+            delivery_timeout_seconds=5,
+            retry_base_seconds=1,
+            retry_max_seconds=60,
+        )
+        dispatch_result = await dispatcher.dispatch_once(limit=100)
+        assert dispatch_result.delivered == 2
+
+        async with session_factory() as session:
             audit_rows = (
                 (
                     await session.execute(
@@ -173,4 +202,85 @@ async def test_real_stdio_mcp_revalidates_revocation_without_restart(
         async with session_factory.begin() as session:
             await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
             await session.execute(delete(ArtifactBlob).where(ArtifactBlob.sha256 == dataset_sha))
+        await engine.dispose()
+
+
+@pytest.mark.integration
+async def test_multi_dispatcher_recovers_lost_ack_without_duplicate_audit() -> None:
+    if os.getenv("EVALOPS_RUN_INTEGRATION") != "1":
+        pytest.skip("set EVALOPS_RUN_INTEGRATION=1 with migrated real PostgreSQL")
+    database_url = os.getenv("EVALOPS_DATABASE_URL")
+    if database_url is None:
+        pytest.fail("integration test requires EVALOPS_DATABASE_URL")
+
+    settings = Settings(_env_file=None, database_url=SecretStr(database_url))
+    engine = create_database_engine(settings)
+    session_factory = create_session_factory(engine)
+    tenant_id = uuid4()
+    outbox_id = uuid4()
+    api_key_id = uuid4()
+    trace_id = uuid4().hex
+    try:
+        async with session_factory.begin() as session:
+            session.add(Tenant(id=tenant_id, slug=f"audit-{tenant_id.hex}", name="Audit test"))
+            await session.flush()
+            session.add(
+                McpAuditOutbox(
+                    id=outbox_id,
+                    tenant_id=tenant_id,
+                    api_key_id=api_key_id,
+                    actor_id=str(api_key_id),
+                    tool_name="submit_evaluation",
+                    call_identity="idempotency:lost-ack",
+                    trace_id=trace_id,
+                    outcome_status="succeeded",
+                )
+            )
+            session.add(
+                AuditEvent(
+                    id=outbox_id,
+                    tenant_id=tenant_id,
+                    actor_id=str(api_key_id),
+                    action="mcp.tool_called",
+                    resource_type="mcp_tool",
+                    resource_id=UUID(hex=trace_id),
+                    metadata_json={"source_outbox_id": str(outbox_id)},
+                )
+            )
+
+        def build_dispatcher(dispatcher_id: str) -> AuditDispatcher:
+            return AuditDispatcher(
+                store=SQLAlchemyAuditOutboxStore(
+                    session_factory,
+                    dispatcher_id=dispatcher_id,
+                    lease_seconds=30,
+                ),
+                sink=SQLAlchemyAuditEventSink(session_factory),
+                delivery_timeout_seconds=5,
+                retry_base_seconds=1,
+                retry_max_seconds=60,
+            )
+
+        results = await asyncio.gather(
+            build_dispatcher("system-a").dispatch_once(limit=1),
+            build_dispatcher("system-b").dispatch_once(limit=1),
+        )
+
+        assert sum(result.claimed for result in results) == 1
+        assert sum(result.delivered for result in results) == 1
+        async with session_factory() as session:
+            audit_events = (
+                (await session.execute(select(AuditEvent).where(AuditEvent.id == outbox_id)))
+                .scalars()
+                .all()
+            )
+            outbox = await session.get(McpAuditOutbox, outbox_id)
+        assert len(audit_events) == 1
+        assert outbox is not None
+        assert outbox.delivery_status == "DELIVERED"
+        assert outbox.attempt_count == 1
+        assert outbox.lease_version == 1
+    finally:
+        async with session_factory.begin() as session:
+            await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
         await engine.dispose()

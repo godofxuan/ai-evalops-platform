@@ -62,6 +62,10 @@ def test_real_producer_fields_are_validated_and_preserved() -> None:
         "root_span_id": span_id,
         "propagated_traceparent": f"00-{trace_id}-{span_id}-01",
         "error_classification": "ok",
+        "durability_scope": "access_request_draft_only",
+        "start_idempotency_supported": True,
+        "resume_concurrency_fenced": True,
+        "multi_instance_ha": False,
     }
 
     result = seal_rag_result(result)

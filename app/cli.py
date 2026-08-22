@@ -3,6 +3,7 @@ import asyncio
 import signal
 from collections.abc import Sequence
 
+from app.agent_eval.audit_runtime import run_audit_dispatcher_process
 from app.core.config import Settings
 from app.core.event_loop import run_with_psycopg_compatible_event_loop
 from app.core.logging import configure_logging, get_logger
@@ -11,7 +12,7 @@ from app.workers.runtime import run_reaper_process, run_worker_process
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI EvalOps background process lifecycle")
-    parser.add_argument("role", choices=("worker", "reaper"))
+    parser.add_argument("role", choices=("worker", "reaper", "audit-dispatcher"))
     parser.add_argument(
         "--check",
         action="store_true",
@@ -36,8 +37,14 @@ async def _run_lifecycle(role: str, settings: Settings, *, once: bool) -> None:
 
     if role == "worker":
         await run_worker_process(settings, stop_requested=stop_requested, once=once)
-    else:
+    elif role == "reaper":
         await run_reaper_process(settings, stop_requested=stop_requested, once=once)
+    else:
+        await run_audit_dispatcher_process(
+            settings,
+            stop_requested=stop_requested,
+            once=once,
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

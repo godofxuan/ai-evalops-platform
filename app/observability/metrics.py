@@ -158,6 +158,31 @@ class PlatformMetrics:
             "Published Outbox rows deleted after the configured retention period.",
             registry=self.registry,
         )
+        self._audit_pending = Gauge(
+            "mcp_audit_pending",
+            "Durable MCP audit outcomes awaiting delivery.",
+            registry=self.registry,
+        )
+        self._audit_oldest_pending_age = Gauge(
+            "mcp_audit_oldest_pending_age_seconds",
+            "Age of the oldest pending MCP audit outcome.",
+            registry=self.registry,
+        )
+        self._audit_dead_letter_count = Gauge(
+            "mcp_audit_dead_letter_count",
+            "Durable MCP audit outcomes in the dead-letter state.",
+            registry=self.registry,
+        )
+        self._audit_delivery_failures = Counter(
+            "mcp_audit_delivery_failures",
+            "MCP audit sink delivery attempts that failed.",
+            registry=self.registry,
+        )
+        self._audit_dead_letters = Counter(
+            "mcp_audit_dead_letters",
+            "MCP audit outcomes moved to the terminal dead-letter state.",
+            registry=self.registry,
+        )
 
     def observe_api_request(
         self,
@@ -254,6 +279,23 @@ class PlatformMetrics:
     def record_outbox_cleanup_deleted(self, count: int) -> None:
         if count > 0:
             self._outbox_cleanup_deleted.inc(count)
+
+    def set_audit_pending(self, count: int) -> None:
+        self._audit_pending.set(max(count, 0))
+
+    def set_audit_oldest_pending_age(self, seconds: float) -> None:
+        self._audit_oldest_pending_age.set(max(seconds, 0.0))
+
+    def set_audit_dead_letter_count(self, count: int) -> None:
+        self._audit_dead_letter_count.set(max(count, 0))
+
+    def record_audit_delivery_failure(self, count: int = 1) -> None:
+        if count > 0:
+            self._audit_delivery_failures.inc(count)
+
+    def record_audit_dead_letter(self, count: int = 1) -> None:
+        if count > 0:
+            self._audit_dead_letters.inc(count)
 
     def render(self) -> bytes:
         return generate_latest(self.registry)

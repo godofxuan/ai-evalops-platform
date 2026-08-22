@@ -244,26 +244,34 @@ async def test_real_postgresql_agent_evaluation_regression_and_review_workflow(
             (left_run_id, True, 100),
             (right_run_id, False, 150),
         ):
+            upload_request = AgentArtifactUpload.model_validate(
+                {
+                    "artifact": {
+                        "schema_version": "agent-run-artifact/v1",
+                        "run_id": str(run_id),
+                        "case_id": "case-1",
+                        "session_id": f"session-{run_id}",
+                        "framework": "custom-controller",
+                        "input": {"message": "safe?"},
+                        "output": {"answer": "yes", "task_success": success},
+                        "trajectory": [],
+                        "usage": {"latency_ms": latency},
+                        "terminal": {"state": "answer"},
+                    }
+                }
+            )
             uploaded = await artifact_service.ingest(
                 principal=principal_a,
                 run_id=run_id,
-                request=AgentArtifactUpload.model_validate(
-                    {
-                        "artifact": {
-                            "schema_version": "agent-run-artifact/v1",
-                            "run_id": str(run_id),
-                            "case_id": "case-1",
-                            "session_id": f"session-{run_id}",
-                            "framework": "custom-controller",
-                            "input": {"message": "safe?"},
-                            "output": {"answer": "yes", "task_success": success},
-                            "trajectory": [],
-                            "usage": {"latency_ms": latency},
-                            "terminal": {"state": "answer"},
-                        }
-                    }
-                ),
+                request=upload_request,
             )
+            duplicate = await artifact_service.ingest(
+                principal=principal_a,
+                run_id=run_id,
+                request=upload_request,
+            )
+            assert duplicate.id == uploaded.id
+            assert duplicate.content_sha256 == uploaded.content_sha256
             artifact_ids.append(uploaded.id)
             owned_blob_shas.add(uploaded.content_sha256)
             evaluation_request = AgentArtifactEvaluationRequest(

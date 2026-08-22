@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     outbox_retention_seconds: int = Field(default=7 * 24 * 60 * 60, ge=3_600, le=31_536_000)
     outbox_cleanup_interval_seconds: float = Field(default=60, gt=0, le=3_600)
     outbox_cleanup_batch_size: int = Field(default=500, ge=1, le=10_000)
+    audit_dispatcher_poll_seconds: float = Field(default=0.5, gt=0, le=60)
+    audit_dispatcher_batch_size: int = Field(default=50, ge=1, le=1_000)
+    audit_dispatcher_lease_seconds: float = Field(default=30, gt=0, le=3_600)
+    audit_dispatcher_delivery_timeout_seconds: float = Field(default=5, gt=0, le=30)
+    audit_dispatcher_retry_base_seconds: float = Field(default=1, gt=0, le=300)
+    audit_dispatcher_retry_max_seconds: float = Field(default=60, gt=0, le=3_600)
     retry_base_delay_seconds: float = Field(default=1.0, gt=0, le=300)
     retry_max_delay_seconds: float = Field(default=60.0, gt=0, le=3_600)
     retry_jitter_ratio: float = Field(default=0.2, ge=0, le=1)
@@ -70,6 +76,7 @@ class Settings(BaseSettings):
     metrics_host: str = "0.0.0.0"
     worker_metrics_port: int = Field(default=9101, ge=1, le=65_535)
     reaper_metrics_port: int = Field(default=9102, ge=1, le=65_535)
+    audit_dispatcher_metrics_port: int = Field(default=9103, ge=1, le=65_535)
     otel_enabled: bool = True
     otel_service_name: str = Field(
         default="ai-evalops-platform",
@@ -115,6 +122,10 @@ class Settings(BaseSettings):
             raise ValueError("retry base delay must not exceed maximum delay")
         if self.outbox_retry_base_seconds > self.outbox_retry_max_seconds:
             raise ValueError("outbox retry base delay must not exceed maximum delay")
+        if self.audit_dispatcher_retry_base_seconds > self.audit_dispatcher_retry_max_seconds:
+            raise ValueError("audit dispatcher retry base must not exceed maximum delay")
+        if self.audit_dispatcher_delivery_timeout_seconds >= self.audit_dispatcher_lease_seconds:
+            raise ValueError("audit dispatcher delivery timeout must be shorter than lease")
         if self.outbox_publish_timeout_seconds >= self.outbox_lease_seconds:
             raise ValueError("outbox publish timeout must be shorter than lease")
         if self.artifact_backend == "s3" and not self.artifact_s3_bucket:
