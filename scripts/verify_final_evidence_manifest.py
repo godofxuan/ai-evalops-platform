@@ -157,7 +157,7 @@ def verify_cross_repository_manifest(
         candidate = (project_root / relative).resolve()
         if resolved_root not in candidate.parents or not candidate.is_file():
             raise SystemExit(f"cross-repository evidence path escapes scope: {relative}")
-        content = candidate.read_bytes()
+        content = _canonical_repository_bytes(candidate)
         if entry.get("byte_size") != len(content):
             raise SystemExit(f"cross-repository evidence size drift: {relative}")
         if entry.get("sha256") != hashlib.sha256(content).hexdigest():
