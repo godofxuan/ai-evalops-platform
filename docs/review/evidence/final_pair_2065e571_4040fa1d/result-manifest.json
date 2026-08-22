@@ -1,0 +1,186 @@
+{
+  "schema_version": "evalops.final-pair-contract/1.0.results",
+  "rag_source_sha": "2065e571d77439babf76a763ac459a618950f218",
+  "evalops_source_sha": "4040fa1db7cee6c8380ff8580fa21be17464435b",
+  "implementation_ci": "https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596",
+  "harness_schema": "enterprise.agent-harness-envelope/1.1",
+  "case_count": 18,
+  "case_ids": [
+    "read-only-search",
+    "policy-projection",
+    "citation-projection",
+    "terminal-projection",
+    "trace-propagation",
+    "zero-event-loss",
+    "tampered-outer-envelope",
+    "tampered-producer-artifact",
+    "unknown-producer-event",
+    "unknown-tool-deny",
+    "ask-is-not-allow",
+    "start-idempotency-retry",
+    "process-restart-duplicate-resume",
+    "wrong-tenant-expired-approval",
+    "concurrent-resume-fencing",
+    "inspect-partial-unknown-duplicate-fail-closed",
+    "duplicate-content-identity",
+    "duplicate-import-idempotency"
+  ],
+  "dataset_hash": "7a6705b94f31f2375677abcfd8e250c3c49d2e9c238f5fba44c130a6f50aecf4",
+  "case_manifest_sha256": "2d652964de6293fd489fa56aa67cbed91ad2f676d424aea9b86efc37679bcbc0",
+  "rag_output_digest": "4d59e9ef6da53d48762c981cfdb4dac8404bd51d7297ad6ea039a6927edea5a4",
+  "harness_result_sha256": "edd044e7c984fa4c4166fab85994ac4187c6a0d008d253fba673f4df0e4ff7b5",
+  "evalops_artifact_digest": "e3b917855bd7eaae2c290a500db84cc9abf406074765df3ce09d060861c1f8c6",
+  "source_event_count": 15,
+  "converted_event_count": 15,
+  "unmapped_event_count": 0,
+  "dropped_event_count": 0,
+  "trace_identity": {
+    "trace_id": "11111111111111111111111111111111",
+    "root_span_id": "13403ad799801af2",
+    "traceparent": "00-11111111111111111111111111111111-13403ad799801af2-01"
+  },
+  "all_cases_terminal": true,
+  "all_expected_projections_match": true,
+  "all_tampering_tests_rejected": true,
+  "duplicate_imports_idempotent": true,
+  "formal_ab_executed": false,
+  "human_review_status": "PENDING",
+  "shadow_release_status": "INPUT_BLOCKED",
+  "production_ready": false,
+  "result": "FINAL_PAIR_CONTRACT_VERIFIED",
+  "cases": [
+    {
+      "case_id": "read-only-search",
+      "result": "PASS",
+      "evidence": "real RAG CLI tool.completed projection",
+      "details": {}
+    },
+    {
+      "case_id": "policy-projection",
+      "result": "PASS",
+      "evidence": "policy projection SHA and Envelope verification",
+      "details": {}
+    },
+    {
+      "case_id": "citation-projection",
+      "result": "PASS",
+      "evidence": "citation.checked Artifact events",
+      "details": {}
+    },
+    {
+      "case_id": "terminal-projection",
+      "result": "PASS",
+      "evidence": "Producer terminal to EvalOps terminal",
+      "details": {}
+    },
+    {
+      "case_id": "trace-propagation",
+      "result": "PASS",
+      "evidence": "traceparent and Artifact trace identity",
+      "details": {}
+    },
+    {
+      "case_id": "zero-event-loss",
+      "result": "PASS",
+      "evidence": "EvalOps loss accounting",
+      "details": {
+        "source_event_count": 15,
+        "converted_event_count": 15,
+        "dropped_event_count": 0,
+        "unmapped_event_count": 0
+      }
+    },
+    {
+      "case_id": "tampered-outer-envelope",
+      "result": "PASS",
+      "evidence": "HARNESS_DIGEST_MISMATCH",
+      "details": {}
+    },
+    {
+      "case_id": "tampered-producer-artifact",
+      "result": "PASS",
+      "evidence": "producer digest/hash chain",
+      "details": {}
+    },
+    {
+      "case_id": "unknown-producer-event",
+      "result": "PASS",
+      "evidence": "strict ProducerEventType",
+      "details": {}
+    },
+    {
+      "case_id": "unknown-tool-deny",
+      "result": "PASS",
+      "evidence": "tests/agent_runtime/test_tool_policy.py::test_deny_precedes_ask_and_allow_and_unknown_tools_fail_closed",
+      "details": {
+        "source_sha": "2065e571d77439babf76a763ac459a618950f218"
+      }
+    },
+    {
+      "case_id": "ask-is-not-allow",
+      "result": "PASS",
+      "evidence": "tests/agent_runtime/test_tool_policy.py::test_ask_cannot_be_treated_as_allow",
+      "details": {
+        "source_sha": "2065e571d77439babf76a763ac459a618950f218"
+      }
+    },
+    {
+      "case_id": "start-idempotency-retry",
+      "result": "PASS",
+      "evidence": "tests/agent_runtime/test_start_lifecycle.py::test_same_start_key_is_stable_and_does_not_duplicate_checkpoint_or_trajectory",
+      "details": {
+        "source_sha": "2065e571d77439babf76a763ac459a618950f218"
+      }
+    },
+    {
+      "case_id": "process-restart-duplicate-resume",
+      "result": "PASS",
+      "evidence": "tests/agent_runtime/test_durable_orchestrator.py::test_interrupt_survives_process_restart_and_duplicate_resume_is_idempotent",
+      "details": {
+        "source_sha": "2065e571d77439babf76a763ac459a618950f218"
+      }
+    },
+    {
+      "case_id": "wrong-tenant-expired-approval",
+      "result": "PASS",
+      "evidence": "tests/agent_runtime/test_durable_orchestrator.py::test_wrong_tenant_user_role_hash_and_expiry_cannot_resume",
+      "details": {
+        "source_sha": "2065e571d77439babf76a763ac459a618950f218"
+      }
+    },
+    {
+      "case_id": "concurrent-resume-fencing",
+      "result": "PASS",
+      "evidence": "tests/agent_runtime/test_durable_orchestrator.py::test_two_connections_concurrently_resume_once_and_complete_once",
+      "details": {
+        "source_sha": "2065e571d77439babf76a763ac459a618950f218"
+      }
+    },
+    {
+      "case_id": "inspect-partial-unknown-duplicate-fail-closed",
+      "result": "PASS",
+      "evidence": "tests/unit/external_harness/test_inspect_adapter.py::test_inspect_unknown_partial_duplicate_order_and_version_fail_closed",
+      "details": {
+        "source_sha": "4040fa1db7cee6c8380ff8580fa21be17464435b"
+      }
+    },
+    {
+      "case_id": "duplicate-content-identity",
+      "result": "PASS",
+      "evidence": "tests/unit/agent_eval/test_artifact_schema.py::test_framework_neutral_agent_run_artifact_has_stable_content_identity",
+      "details": {
+        "source_sha": "4040fa1db7cee6c8380ff8580fa21be17464435b"
+      }
+    },
+    {
+      "case_id": "duplicate-import-idempotency",
+      "result": "PASS",
+      "evidence": "https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596",
+      "details": {
+        "source_sha": "4040fa1db7cee6c8380ff8580fa21be17464435b",
+        "integration_node_id": "tests/integration/test_agent_eval_workflow.py::test_real_postgresql_agent_evaluation_regression_and_review_workflow"
+      }
+    }
+  ],
+  "result_manifest_sha256": "2b39a7b1fc96241153add2fba8a60af321ab0f7d57bf0b563a3ae69e9ee10122"
+}

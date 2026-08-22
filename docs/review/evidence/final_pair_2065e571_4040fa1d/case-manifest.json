@@ -1,0 +1,111 @@
+{
+  "schema_version": "evalops.final-pair-contract/1.0.cases",
+  "case_count": 18,
+  "case_ids": [
+    "read-only-search",
+    "policy-projection",
+    "citation-projection",
+    "terminal-projection",
+    "trace-propagation",
+    "zero-event-loss",
+    "tampered-outer-envelope",
+    "tampered-producer-artifact",
+    "unknown-producer-event",
+    "unknown-tool-deny",
+    "ask-is-not-allow",
+    "start-idempotency-retry",
+    "process-restart-duplicate-resume",
+    "wrong-tenant-expired-approval",
+    "concurrent-resume-fencing",
+    "inspect-partial-unknown-duplicate-fail-closed",
+    "duplicate-content-identity",
+    "duplicate-import-idempotency"
+  ],
+  "dataset_hash": "7a6705b94f31f2375677abcfd8e250c3c49d2e9c238f5fba44c130a6f50aecf4",
+  "rag_source_sha": "2065e571d77439babf76a763ac459a618950f218",
+  "evalops_source_sha": "4040fa1db7cee6c8380ff8580fa21be17464435b",
+  "cases": [
+    {
+      "case_id": "read-only-search",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "policy-projection",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "citation-projection",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "terminal-projection",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "trace-propagation",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "zero-event-loss",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "tampered-outer-envelope",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "tampered-producer-artifact",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "unknown-producer-event",
+      "kind": "real-pair"
+    },
+    {
+      "case_id": "unknown-tool-deny",
+      "kind": "rag-mechanism",
+      "node_id": "tests/agent_runtime/test_tool_policy.py::test_deny_precedes_ask_and_allow_and_unknown_tools_fail_closed"
+    },
+    {
+      "case_id": "ask-is-not-allow",
+      "kind": "rag-mechanism",
+      "node_id": "tests/agent_runtime/test_tool_policy.py::test_ask_cannot_be_treated_as_allow"
+    },
+    {
+      "case_id": "start-idempotency-retry",
+      "kind": "rag-mechanism",
+      "node_id": "tests/agent_runtime/test_start_lifecycle.py::test_same_start_key_is_stable_and_does_not_duplicate_checkpoint_or_trajectory"
+    },
+    {
+      "case_id": "process-restart-duplicate-resume",
+      "kind": "rag-mechanism",
+      "node_id": "tests/agent_runtime/test_durable_orchestrator.py::test_interrupt_survives_process_restart_and_duplicate_resume_is_idempotent"
+    },
+    {
+      "case_id": "wrong-tenant-expired-approval",
+      "kind": "rag-mechanism",
+      "node_id": "tests/agent_runtime/test_durable_orchestrator.py::test_wrong_tenant_user_role_hash_and_expiry_cannot_resume"
+    },
+    {
+      "case_id": "concurrent-resume-fencing",
+      "kind": "rag-mechanism",
+      "node_id": "tests/agent_runtime/test_durable_orchestrator.py::test_two_connections_concurrently_resume_once_and_complete_once"
+    },
+    {
+      "case_id": "inspect-partial-unknown-duplicate-fail-closed",
+      "kind": "evalops-mechanism",
+      "node_id": "tests/unit/external_harness/test_inspect_adapter.py::test_inspect_unknown_partial_duplicate_order_and_version_fail_closed"
+    },
+    {
+      "case_id": "duplicate-content-identity",
+      "kind": "evalops-mechanism",
+      "node_id": "tests/unit/agent_eval/test_artifact_schema.py::test_framework_neutral_agent_run_artifact_has_stable_content_identity"
+    },
+    {
+      "case_id": "duplicate-import-idempotency",
+      "kind": "implementation-ci-integration",
+      "node_id": "tests/integration/test_agent_eval_workflow.py::test_real_postgresql_agent_evaluation_regression_and_review_workflow"
+    }
+  ],
+  "case_manifest_sha256": "2d652964de6293fd489fa56aa67cbed91ad2f676d424aea9b86efc37679bcbc0"
+}

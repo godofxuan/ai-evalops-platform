@@ -1,0 +1,583 @@
+{
+  "schema_name": "enterprise.agent-harness-result",
+  "schema_version": "1.0",
+  "case_id": "final-pair-contract",
+  "attempt_id": "final-pair-contract-attempt-v1",
+  "answer": "Remote policy allows three days per month.",
+  "terminal_state": "answered",
+  "citations": [
+    {
+      "claim_id": "claim-1",
+      "cited_chunk_ids": [
+        "policy-chunk-1"
+      ],
+      "citation_present": true,
+      "references_visible_evidence": true,
+      "lexical_support": 1.0,
+      "supported": true,
+      "unsupported_reason": null
+    }
+  ],
+  "tool_events": [
+    {
+      "event_type": "tool.requested",
+      "tool_name": "search",
+      "sequence": 4,
+      "payload": {
+        "tool_call_id": "agent-step-1",
+        "query": "What is the remote work policy?",
+        "purpose": "collect visible evidence for required aspect: answer",
+        "top_k": 5,
+        "mode": "hybrid"
+      }
+    },
+    {
+      "event_type": "tool.completed",
+      "tool_name": "search",
+      "sequence": 5,
+      "payload": {
+        "status": "ok",
+        "visible_count": 1,
+        "items": [
+          {
+            "doc_id": "policy-doc-1",
+            "chunk_id": "policy-chunk-1",
+            "version_id": "policy@2026",
+            "source_path": "documents/policy.md"
+          }
+        ],
+        "security": {
+          "candidate_count": 1,
+          "scanned_count": 2,
+          "admitted_count": 2,
+          "quarantined_count": 0,
+          "scanned_chars": 80,
+          "decoded_candidate_count": 1,
+          "top_up_attempts": 0,
+          "post_guard_evidence_count": 1,
+          "guard_error_count": 0,
+          "risk_categories": [],
+          "rule_ids": [],
+          "detector_version": "rcg-v1.2.0"
+        }
+      }
+    }
+  ],
+  "policy_decisions": [
+    {
+      "lifecycle": "pre_tool_use",
+      "tool_name": "search",
+      "decision": "ALLOW",
+      "reason_code": "policy_allowed",
+      "arguments_sha256": "811cc956cff753b4f764734cf2dd094d98a650f633a0fadf967920dfdaf2df1a"
+    },
+    {
+      "lifecycle": "post_tool_use",
+      "tool_name": "search",
+      "decision": "ALLOW",
+      "reason_code": "policy_allowed",
+      "arguments_sha256": "811cc956cff753b4f764734cf2dd094d98a650f633a0fadf967920dfdaf2df1a"
+    }
+  ],
+  "trajectory_artifact": {
+    "schema_name": "enterprise.agent-run",
+    "schema_version": "1.0",
+    "run_id": "harness-7769ff77ce1505afde85",
+    "case_id": "final-pair-contract",
+    "git_sha": "2065e571d77439babf76a763ac459a618950f218",
+    "created_at": "2026-08-22T07:20:34.261414Z",
+    "session_id": "harness-7769ff77ce1505afde85",
+    "trace_id": "11111111111111111111111111111111",
+    "trace_context": {
+      "trace_id": "11111111111111111111111111111111",
+      "root_span_id": "13403ad799801af2",
+      "trace_schema_version": "enterprise.agent.telemetry/1.0",
+      "content_capture_policy": "off",
+      "sanitized_model_metadata": {},
+      "sanitized_tool_metadata": {
+        "runtime.mode": "deterministic_mock"
+      }
+    },
+    "input": {
+      "question": "What is the remote work policy?"
+    },
+    "output": {
+      "mode": "answered",
+      "answer": "Remote policy allows three days per month.",
+      "sources": [
+        {
+          "doc_id": "policy-doc-1",
+          "chunk_id": "policy-chunk-1",
+          "source_path": "documents/policy.md"
+        }
+      ],
+      "warnings": []
+    },
+    "trajectory": [
+      {
+        "schema_version": "1.0",
+        "event_id": "5e75575b280140b48e0b69ffa37edbf9",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 1,
+        "event_type": "session.started",
+        "timestamp": "2026-08-22T07:20:33.704333Z",
+        "payload": {
+          "request_id": "request-7769ff77ce1505afde85",
+          "orchestrator": "bounded",
+          "tenant_id": "eval-tenant",
+          "user_id": "eval-employee"
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": null,
+        "event_hash": "0b0ec8564672894b28c9cd6d5f9f075df719f104bcbe32f66e5c26f66cb414ad"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "2fe59b75819849beb593e99df3cde9d2",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 2,
+        "event_type": "user.message",
+        "timestamp": "2026-08-22T07:20:33.707331Z",
+        "payload": {
+          "question": "What is the remote work policy?"
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "0b0ec8564672894b28c9cd6d5f9f075df719f104bcbe32f66e5c26f66cb414ad",
+        "event_hash": "ee87828361e476490fab268519731bd9c3e36f855221d0886c5642bb63a23eda"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "7f99b4e6b1ae4ec4844e59abb425d7ac",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 3,
+        "event_type": "step.started",
+        "timestamp": "2026-08-22T07:20:33.709334Z",
+        "payload": {
+          "purpose": "collect visible evidence for required aspect: answer",
+          "aspect": "answer"
+        },
+        "step_id": "step-1",
+        "tool_name": "search",
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "ee87828361e476490fab268519731bd9c3e36f855221d0886c5642bb63a23eda",
+        "event_hash": "f95346d33eacf76dc3f621045d74a063db11c365960e0e7692fecba5cf304145"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "3d274c14f3bb413088980fba55d1d913",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 4,
+        "event_type": "tool.requested",
+        "timestamp": "2026-08-22T07:20:33.710335Z",
+        "payload": {
+          "tool_call_id": "agent-step-1",
+          "query": "What is the remote work policy?",
+          "purpose": "collect visible evidence for required aspect: answer",
+          "top_k": 5,
+          "mode": "hybrid"
+        },
+        "step_id": "step-1",
+        "tool_name": "search",
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "f95346d33eacf76dc3f621045d74a063db11c365960e0e7692fecba5cf304145",
+        "event_hash": "dcd66a1e7244246a953fc183caae1f6a4ee3ee51b2fdd410b66bcce8e6d4e7da"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "4ab2d3ca15004d3699342044a83ee4da",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 5,
+        "event_type": "tool.completed",
+        "timestamp": "2026-08-22T07:20:33.717334Z",
+        "payload": {
+          "status": "ok",
+          "visible_count": 1,
+          "items": [
+            {
+              "doc_id": "policy-doc-1",
+              "chunk_id": "policy-chunk-1",
+              "version_id": "policy@2026",
+              "source_path": "documents/policy.md"
+            }
+          ],
+          "security": {
+            "candidate_count": 1,
+            "scanned_count": 2,
+            "admitted_count": 2,
+            "quarantined_count": 0,
+            "scanned_chars": 80,
+            "decoded_candidate_count": 1,
+            "top_up_attempts": 0,
+            "post_guard_evidence_count": 1,
+            "guard_error_count": 0,
+            "risk_categories": [],
+            "rule_ids": [],
+            "detector_version": "rcg-v1.2.0"
+          }
+        },
+        "step_id": "step-1",
+        "tool_name": "search",
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "dcd66a1e7244246a953fc183caae1f6a4ee3ee51b2fdd410b66bcce8e6d4e7da",
+        "event_hash": "739eb2975ac2d9cbd742d796cf1ca56dc0d5aba020780831c41b059d688387bf"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "de58fc86e6b94941837139b060c706e2",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 6,
+        "event_type": "retrieval.completed",
+        "timestamp": "2026-08-22T07:20:33.718337Z",
+        "payload": {
+          "status": "ok",
+          "visible_count": 1,
+          "items": [
+            {
+              "doc_id": "policy-doc-1",
+              "chunk_id": "policy-chunk-1",
+              "version_id": "policy@2026",
+              "source_path": "documents/policy.md"
+            }
+          ],
+          "security": {
+            "candidate_count": 1,
+            "scanned_count": 2,
+            "admitted_count": 2,
+            "quarantined_count": 0,
+            "scanned_chars": 80,
+            "decoded_candidate_count": 1,
+            "top_up_attempts": 0,
+            "post_guard_evidence_count": 1,
+            "guard_error_count": 0,
+            "risk_categories": [],
+            "rule_ids": [],
+            "detector_version": "rcg-v1.2.0"
+          }
+        },
+        "step_id": "step-1",
+        "tool_name": "search",
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "739eb2975ac2d9cbd742d796cf1ca56dc0d5aba020780831c41b059d688387bf",
+        "event_hash": "0568aa8efb55af3384499931783bcb008836cf287b96601694472aa3e7c03a84"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "d9abe2e93f0f4cc1aed5a0cca521afd9",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 7,
+        "event_type": "evidence.admitted",
+        "timestamp": "2026-08-22T07:20:33.719336Z",
+        "payload": {
+          "status": "ok",
+          "visible_count": 1,
+          "items": [
+            {
+              "doc_id": "policy-doc-1",
+              "chunk_id": "policy-chunk-1",
+              "version_id": "policy@2026",
+              "source_path": "documents/policy.md"
+            }
+          ],
+          "security": {
+            "candidate_count": 1,
+            "scanned_count": 2,
+            "admitted_count": 2,
+            "quarantined_count": 0,
+            "scanned_chars": 80,
+            "decoded_candidate_count": 1,
+            "top_up_attempts": 0,
+            "post_guard_evidence_count": 1,
+            "guard_error_count": 0,
+            "risk_categories": [],
+            "rule_ids": [],
+            "detector_version": "rcg-v1.2.0"
+          }
+        },
+        "step_id": "step-1",
+        "tool_name": "search",
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "0568aa8efb55af3384499931783bcb008836cf287b96601694472aa3e7c03a84",
+        "event_hash": "c317d0c5ef869bd2508158cbee701ff99048feaf570e671667e954a6177b71e5"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "3c861974b6684514881a83e7f7434272",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 8,
+        "event_type": "budget.updated",
+        "timestamp": "2026-08-22T07:20:33.721334Z",
+        "payload": {
+          "budget": {
+            "max_search_calls": 3,
+            "max_find_calls": 2,
+            "max_open_calls": 4,
+            "max_steps": 12,
+            "max_context_chars": 12000,
+            "deadline_ms": 15000
+          },
+          "search_calls": 1,
+          "find_calls": 0,
+          "open_calls": 0,
+          "steps": 1,
+          "context_chars": 121,
+          "deadline_at_ms": 266676795.99999997
+        },
+        "step_id": "step-1",
+        "tool_name": "search",
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "c317d0c5ef869bd2508158cbee701ff99048feaf570e671667e954a6177b71e5",
+        "event_hash": "24bdfe4dce47a419fe658154f905dd0439fb730be804f78984f48b7c182e33bd"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "d7b4842cde2443f88e50fcab53bc6c70",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 9,
+        "event_type": "claim.proposed",
+        "timestamp": "2026-08-22T07:20:34.254415Z",
+        "payload": {
+          "claim_id": "claim-1",
+          "cited_chunk_ids": [
+            "policy-chunk-1"
+          ]
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "24bdfe4dce47a419fe658154f905dd0439fb730be804f78984f48b7c182e33bd",
+        "event_hash": "270b54c14cdf3f6e96b2d35214a986573620173f140140c0b47fc9edee08e1f2"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "c11eb4d2653247879f14bc0b5bab90a5",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 10,
+        "event_type": "claim.accepted",
+        "timestamp": "2026-08-22T07:20:34.257417Z",
+        "payload": {
+          "claim_id": "claim-1",
+          "cited_chunk_ids": [
+            "policy-chunk-1"
+          ]
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "270b54c14cdf3f6e96b2d35214a986573620173f140140c0b47fc9edee08e1f2",
+        "event_hash": "9fbeca820766cc30207a27113b942301019d009ef00581cb67a4e2b09d049763"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "e09858b4588a442085c5de43e850263b",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 11,
+        "event_type": "citation.checked",
+        "timestamp": "2026-08-22T07:20:34.258415Z",
+        "payload": {
+          "claim_id": "claim-1",
+          "cited_chunk_ids": [
+            "policy-chunk-1"
+          ],
+          "citation_present": true,
+          "references_visible_evidence": true,
+          "lexical_support": 1.0,
+          "supported": true,
+          "unsupported_reason": null
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": null,
+        "previous_hash": "9fbeca820766cc30207a27113b942301019d009ef00581cb67a4e2b09d049763",
+        "event_hash": "481a9befd08927128ac638dfdf421574462c403fe4bd4941ef84776e8bf6e579"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "b1497526f4964eb7aea74b961fa5cb3d",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 12,
+        "event_type": "terminal.reached",
+        "timestamp": "2026-08-22T07:20:34.260415Z",
+        "payload": {
+          "mode": "answered",
+          "answer": "Remote policy allows three days per month.",
+          "sources": [
+            {
+              "doc_id": "policy-doc-1",
+              "chunk_id": "policy-chunk-1",
+              "source_path": "documents/policy.md"
+            }
+          ],
+          "warnings": []
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": "completed",
+        "previous_hash": "481a9befd08927128ac638dfdf421574462c403fe4bd4941ef84776e8bf6e579",
+        "event_hash": "c10356fbf2f06df5722070b906516a88d2e09356c31edd6f23a329c41a85572f"
+      },
+      {
+        "schema_version": "1.0",
+        "event_id": "38e30663a28d46ba9a17edc8a50bcaff",
+        "session_id": "harness-7769ff77ce1505afde85",
+        "trace_id": "11111111111111111111111111111111",
+        "sequence": 13,
+        "event_type": "session.completed",
+        "timestamp": "2026-08-22T07:20:34.261414Z",
+        "payload": {
+          "orchestrator": "bounded",
+          "mode": "answered"
+        },
+        "step_id": null,
+        "tool_name": null,
+        "latency_ms": null,
+        "token_usage": null,
+        "cost_usd": null,
+        "error_code": null,
+        "terminal_reason": "completed",
+        "previous_hash": "c10356fbf2f06df5722070b906516a88d2e09356c31edd6f23a329c41a85572f",
+        "event_hash": "0383a57331329969efe06508e5b3fd7cd25d102e71cd3b0d6f5d5733484f76e9"
+      }
+    ],
+    "retrieval": {
+      "tool_steps": [
+        {
+          "step_id": "step-1",
+          "tool_name": "search",
+          "request": {
+            "tool_call_id": "agent-step-1",
+            "query": "What is the remote work policy?",
+            "purpose": "collect visible evidence for required aspect: answer",
+            "top_k": 5,
+            "mode": "hybrid"
+          },
+          "result": {
+            "status": "ok",
+            "visible_count": 1,
+            "items": [
+              {
+                "doc_id": "policy-doc-1",
+                "chunk_id": "policy-chunk-1",
+                "version_id": "policy@2026",
+                "source_path": "documents/policy.md"
+              }
+            ],
+            "security": {
+              "candidate_count": 1,
+              "scanned_count": 2,
+              "admitted_count": 2,
+              "quarantined_count": 0,
+              "scanned_chars": 80,
+              "decoded_candidate_count": 1,
+              "top_up_attempts": 0,
+              "post_guard_evidence_count": 1,
+              "guard_error_count": 0,
+              "risk_categories": [],
+              "rule_ids": [],
+              "detector_version": "rcg-v1.2.0"
+            }
+          },
+          "status": "ok",
+          "error_code": null
+        }
+      ]
+    },
+    "evidence": {
+      "admitted": [
+        {
+          "doc_id": "policy-doc-1",
+          "chunk_id": "policy-chunk-1",
+          "version_id": "policy@2026",
+          "source_path": "documents/policy.md"
+        }
+      ],
+      "admitted_count": 1
+    },
+    "usage": {
+      "trajectory_event_count": 13,
+      "tool_call_count": 1,
+      "model_call_count": 0,
+      "token_usage": 0,
+      "cost_usd": 0.0,
+      "recorded_latency_ms": 0.0
+    },
+    "terminal": {
+      "mode": "answered",
+      "reason": "completed",
+      "completed": true
+    },
+    "source_trajectory_root_hash": "0383a57331329969efe06508e5b3fd7cd25d102e71cd3b0d6f5d5733484f76e9",
+    "artifact_sha256": "4d59e9ef6da53d48762c981cfdb4dac8404bd51d7297ad6ea039a6927edea5a4"
+  },
+  "trace_id": "11111111111111111111111111111111",
+  "root_span_id": "13403ad799801af2",
+  "propagated_traceparent": "00-11111111111111111111111111111111-13403ad799801af2-01",
+  "error_classification": "ok",
+  "durability_scope": "access_request_draft_only",
+  "start_idempotency_supported": true,
+  "resume_concurrency_fenced": true,
+  "multi_instance_ha": false
+}

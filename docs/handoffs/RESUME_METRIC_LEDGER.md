@@ -1,3 +1,8 @@
+<!-- FINAL-CROSS-REPO-CLOSEOUT:START -->
+> Canonical closeout snapshot (2026-08-22): branch `codex/final-resume-readiness-closeout-v1`; RAG `2065e571d77439babf76a763ac459a618950f218`; EvalOps implementation `4040fa1db7cee6c8380ff8580fa21be17464435b`; exact implementation CI [32558950596](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596); Final Pair `FINAL_PAIR_CONTRACT_VERIFIED` (18 cases, 15 converted/source events, 0 dropped, 0 unmapped).
+>
+> Status: `IMPLEMENTATION_COMPLETE` · `NOT_MERGED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`. Content below this notice that cites earlier branches/SHAs is historical, not the current fact source.
+<!-- FINAL-CROSS-REPO-CLOSEOUT:END -->
 # AI EvalOps Platform — Resume Metric Ledger
 
 Revalidated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Every value requires its Scope and claim tier.

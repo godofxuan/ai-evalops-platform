@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "docs/review/FINAL_EVIDENCE_MANIFEST.json"
+CROSS_MANIFEST_PATH = PROJECT_ROOT / "docs/review/FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json"
 SCHEMA_VERSION = "ai-evalops-evidence-file/v1"
 PRODUCING_COMMAND = (
     "python -m scripts.verify_final_evidence_manifest --write --source-sha <evidence-source-sha>"
@@ -101,6 +103,83 @@ def verify_manifest() -> None:
             raise SystemExit(f"evidence digest drift: {entry['path']}")
 
 
+def _self_excluding_digest(payload: dict[str, object], field: str) -> str:
+    unsigned = dict(payload)
+    unsigned.pop(field, None)
+    canonical = json.dumps(
+        unsigned,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def verify_cross_repository_manifest(
+    manifest_path: Path = CROSS_MANIFEST_PATH,
+    *,
+    project_root: Path = PROJECT_ROOT,
+) -> None:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise SystemExit("cross-repository evidence manifest is not an object")
+    if manifest.get("schema_version") != "ai-evalops-final-cross-repository-evidence/v1":
+        raise SystemExit("cross-repository evidence manifest schema is invalid")
+    for field in ("rag_source_sha", "evalops_implementation_sha"):
+        value = manifest.get(field)
+        if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+            raise SystemExit(f"cross-repository manifest {field} is not an exact Git SHA")
+    expected_boundaries = {
+        "formal_ab_executed": False,
+        "human_review_status": "PENDING",
+        "shadow_release_status": "INPUT_BLOCKED",
+        "production_ready": False,
+    }
+    for field, expected in expected_boundaries.items():
+        if manifest.get(field) != expected:
+            raise SystemExit(f"cross-repository evidence boundary drift: {field}")
+    entries = manifest.get("file_digests")
+    if not isinstance(entries, list) or not entries:
+        raise SystemExit("cross-repository evidence manifest has no file digests")
+    observed_paths: set[str] = set()
+    resolved_root = project_root.resolve()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise SystemExit("cross-repository file digest entry is not an object")
+        relative = entry.get("path")
+        if not isinstance(relative, str) or not relative or "\\" in relative:
+            raise SystemExit("cross-repository file digest path is invalid")
+        manifest_relative = manifest_path.relative_to(project_root).as_posix()
+        if relative in observed_paths or relative == manifest_relative:
+            raise SystemExit("cross-repository manifest has duplicate or recursive file digest")
+        observed_paths.add(relative)
+        candidate = (project_root / relative).resolve()
+        if resolved_root not in candidate.parents or not candidate.is_file():
+            raise SystemExit(f"cross-repository evidence path escapes scope: {relative}")
+        content = candidate.read_bytes()
+        if entry.get("byte_size") != len(content):
+            raise SystemExit(f"cross-repository evidence size drift: {relative}")
+        if entry.get("sha256") != hashlib.sha256(content).hexdigest():
+            raise SystemExit(f"cross-repository evidence digest drift: {relative}")
+        for field in ("schema_version", "source_sha", "producing_command", "result"):
+            if not isinstance(entry.get(field), str) or not entry[field]:
+                raise SystemExit(f"cross-repository evidence metadata missing: {relative}:{field}")
+        if re.fullmatch(r"[0-9a-f]{40}", entry["source_sha"]) is None:
+            raise SystemExit(f"cross-repository evidence source SHA is invalid: {relative}")
+    pair = project_root / "docs/review/evidence/final_pair_2065e571_4040fa1d"
+    for filename, field in (
+        ("case-manifest.json", "case_manifest_sha256"),
+        ("result-manifest.json", "result_manifest_sha256"),
+    ):
+        payload = json.loads((pair / filename).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise SystemExit(f"Final Pair {filename} is not an object")
+        computed = _self_excluding_digest(payload, field)
+        if payload.get(field) != computed or manifest.get(field) != computed:
+            raise SystemExit(f"Final Pair self-excluding digest drift: {filename}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
@@ -113,6 +192,7 @@ def main() -> None:
         generated_at = args.generated_at or datetime.now(UTC).isoformat()
         write_manifest(source_sha=args.source_sha, generated_at=generated_at)
     verify_manifest()
+    verify_cross_repository_manifest()
 
 
 if __name__ == "__main__":

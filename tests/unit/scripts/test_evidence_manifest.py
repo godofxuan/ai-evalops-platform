@@ -2,12 +2,14 @@ import json
 
 from scripts.verify_final_evidence_manifest import (
     MANIFEST_PATH,
+    verify_cross_repository_manifest,
     verify_manifest,
 )
 
 
 def test_final_evidence_manifest_rehashes_all_scoped_files() -> None:
     verify_manifest()
+    verify_cross_repository_manifest()
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     integrity = manifest["file_integrity"]
     entries = integrity["files"]

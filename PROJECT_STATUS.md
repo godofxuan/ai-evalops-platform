@@ -1,16 +1,28 @@
-# 2026-08-22 Integrity remediation candidate
-
-- Branch: codex/evalops-integrity-remediation-v1.
-- Base: 5eb1d7eebc4917e32aa0a0617521ae96f5a201d0.
-- Migration head: 20260822_0026.
-- Scope implemented: Artifact lifecycle/CAS reconciliation, scheduler diagnostic-lock
-  removal, strict RAG/Inspect integrity, evidence sufficiency, MCP audit outbox, evidence
-  manifest verification, and full-SHA GitHub Actions pinning.
-- State: CANDIDATE_NOT_MERGED_NOT_RELEASED; final SHA and CI run are pending validation.
-- External A/B: no formal 100-200-case run was performed. The existing nine-case set is
-  mechanism evidence only and is INSUFFICIENT_EVIDENCE for formal statistics.
-- Historical scheduler scaling remains negative and no production-readiness claim is made.
 # AI EvalOps Platform — Current Portfolio and Release Status
+
+## Canonical final closeout snapshot — 2026-08-22
+
+- Branch: `codex/final-resume-readiness-closeout-v1`.
+- Base/start SHA: `c323d56906a30b654d59fc7c847a0efffab0a452`.
+- RAG producer SHA: `2065e571d77439babf76a763ac459a618950f218`; exact CI [32555135411](https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/32555135411) succeeded.
+- EvalOps implementation SHA: `4040fa1db7cee6c8380ff8580fa21be17464435b`; exact CI [32558950596](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596) succeeded.
+- Migration head: `20260822_0027`.
+- Final Pair Contract: `FINAL_PAIR_CONTRACT_VERIFIED`, 18 deterministic mechanism cases, 15 source/converted events, 0 dropped, 0 unmapped.
+- State: `IMPLEMENTATION_COMPLETE`, `EXACT_SHA_CI_REQUIRED` satisfied for the implementation SHA, `FINAL_PAIR_CONTRACT_REQUIRED` satisfied, `NOT_MERGED`, `NOT_RELEASED`, `PORTFOLIO_READY`.
+- Evidence limits: `FORMAL_AB_NOT_RUN`, `HUMAN_REVIEW_PENDING`, `SHADOW_RELEASE_NOT_PASSED`, `PRODUCTION_NOT_VERIFIED`.
+
+The final evidence commit and its own exact CI are an append-only second-stage attestation. Until that CI succeeds, this branch must not be described as fully closed. The cross-repository contract verifies interoperability/mechanisms only; it does not demonstrate answer-quality improvement or production capacity.
+
+## What this closeout adds
+
+1. A versioned outer Harness Envelope digest and verified projections for answer, citations, terminal state, policy, errors and tools.
+2. A `FormalEvidenceDecision` that binds dataset/case/source identities and prevents callers from supplying a naked automated `PASS`.
+3. An independent system-identity Audit Dispatcher with leased `SKIP LOCKED` claims, bounded exponential retry, dead letter, idempotent sink identity and revoked-key-safe delivery.
+4. An exact RAG/EvalOps Final Pair suite and machine-readable file/digest evidence.
+
+## Historical evidence below
+
+Everything below this heading is retained as historical context. Its former branch names, SHAs, test totals and release wording are not the current snapshot above.
 
 ## Current canonical state — 2026-08-20
 

@@ -1,117 +1,43 @@
-# Review update: integrity remediation candidate
+# AI EvalOps Platform — independent review entry
 
-Review branch codex/evalops-integrity-remediation-v1 before relying on the historical
-package below. Start with docs/integrity_remediation/EXECUTION_LOG.md,
-docs/external_harness/RAG_ARTIFACT_INTEGRITY_CONTRACT.md, migration 20260822_0026, and
-docs/review/FINAL_EVIDENCE_MANIFEST.json. Treat final SHA/CI as pending until the branch
-commit and workflow complete. Do not infer a release, formal external A/B pass, human
-review completion, positive scheduler scaling, or production readiness.
-# AI EvalOps Platform — GPT review entry
+> Status vocabulary: `IMPLEMENTATION_COMPLETE` · `EXACT_SHA_CI_REQUIRED` · `FINAL_PAIR_CONTRACT_REQUIRED` · `NOT_MERGED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`.
 
-Use this page as the single entry point for an independent review. The repository is public, but reviewers should not
-infer completion from the landing page alone. Follow the evidence links below and keep implemented mechanisms, executed
-validation, and blocked release claims separate.
+## Review target
 
-## Final handoff statement
+- Repository: https://github.com/godofxuan/ai-evalops-platform
+- Branch: `codex/final-resume-readiness-closeout-v1`
+- RAG producer: `2065e571d77439babf76a763ac459a618950f218`
+- RAG exact CI: https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/32555135411
+- EvalOps implementation: `4040fa1db7cee6c8380ff8580fa21be17464435b`
+- EvalOps implementation CI: https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596
+- Final Pair result: `FINAL_PAIR_CONTRACT_VERIFIED`
 
-The reviewed AI EvalOps implementation was merged into this repository's `main` branch by a conflict-free fast-forward.
-The implementation evidence is bound to source commit
-`ecb3c664609deca909fc8927036d1087857eacd1`. GitHub Actions run
-[`32489399266`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32489399266) completed successfully for that
-exact SHA: both `quality-and-integration` and `compose-smoke` passed.
+## Current status
 
-This does **not** merge the external RAG repository into EvalOps. RAG remains a separate project and is treated as a
-system under evaluation through a versioned harness contract, subprocess boundary, trace propagation, and immutable
-evidence artifacts.
+`IMPLEMENTATION_COMPLETE` · `NOT_MERGED` · `NOT_RELEASED` · `PORTFOLIO_READY`
 
-The external A/B release decision is **`INPUT_BLOCKED`**, not `PASS`. Candidate RAG revision B exposes the required
-harness contract, while frozen baseline revision A does not. A symmetric formal A/B run was therefore not executed;
-quality, latency, cost, failure-rate deltas and bootstrap intervals were not fabricated. Real human review also remains
-pending with zero submitted reviews.
+`FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`
 
-## Frozen identities
+The 18-case Final Pair suite is deterministic cross-repository contract/mechanism evidence. It is not a formal baseline/candidate quality experiment. Do not infer quality improvement, human-review agreement, Shadow PASS, production readiness, or atomic PostgreSQL/object-storage transactions.
 
-| Item | Identity / result |
-| --- | --- |
-| EvalOps implementation source | `ecb3c664609deca909fc8927036d1087857eacd1` |
-| Successful main CI | [`32489399266`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32489399266) |
-| RAG baseline A | `909a9710932c6c4744c462db0e33ed0d222ecb1a` |
-| RAG candidate B | `e848d8e6090267b28d351758fe8d3cb557dcd586` |
-| Contract dataset | 9 mechanism cases; canonical JSON SHA-256 `08ccad71d7c96cdd2d558018b480a1e421abd3781527a828793aa4430d517d11` |
-| Automated A/B status | `INPUT_BLOCKED` |
-| Human-review status | `PENDING`; 0 reviewers; 0 reviewed cases |
-| Shadow-gate status | `INPUT_BLOCKED` |
+## Required reading order
 
-## What was implemented and executed
+1. [Final cross-repository review entry](FINAL_CROSS_REPO_REVIEW_ENTRY.md)
+2. [Machine cross-repository manifest](FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json)
+3. [Final Pair result manifest](evidence/final_pair_2065e571_4040fa1d/result-manifest.json)
+4. [Final Pair case manifest](evidence/final_pair_2065e571_4040fa1d/case-manifest.json)
+5. [Current project status](../../PROJECT_STATUS.md)
+6. [Project evidence map](../handoffs/PROJECT_EVIDENCE_MAP.md)
+7. [Known limitations](../external_harness/KNOWN_LIMITATIONS.md)
+8. [Resume-safe claims](../external_harness/RESUME_SAFE_CLAIMS.md)
 
-- Inspect AI interoperability using pinned optional dependency `inspect-ai==0.3.259`; a real deterministic
-  `inspect_ai.eval()` task was executed and its official `EvalLog` was converted into the framework-neutral artifact.
-- A bounded cross-repository RAG harness client with strict JSON, timeout/output limits, exact producer SHA, case and
-  W3C trace identity checks.
-- Candidate RAG CLI interoperability was executed successfully, including tool events, policy decisions, trajectory
-  events and propagated trace identity.
-- Deterministic paired-bootstrap and common-case accounting utilities were implemented and tested, but not used to
-  invent A/B metrics without comparable baseline input.
-- A fail-closed shadow gate distinguishes `PASS`, `FAIL`, `HUMAN_REVIEW_PENDING`, and `INPUT_BLOCKED`.
-- A two-reviewer blinded review kit and validation path were implemented; no synthetic review rows count as completion.
-- The first Linux CI run exposed a Windows CRLF versus Linux LF evidence-hash mismatch. Dataset identity was corrected to
-  canonical parsed JSON and regression-tested for formatting and line-ending independence.
-- Final local non-integration regression recorded 845 passed and 37 deselected; Ruff and mypy passed. Exact-source main
-  CI subsequently passed all workflow jobs, including external-service integration and Compose smoke.
+## Independent audit checklist
 
-## Required evidence reading order
+1. Confirm both exact SHAs exist on the named remote branches and both cited CI runs completed successfully for the exact SHA.
+2. Recompute every digest in `file_digests[]` and the self-excluding case/result manifest digests.
+3. Verify the outer envelope rejects single-field and projection tampering, including re-sealed outer digests.
+4. Verify `evaluate_shadow_gate()` only accepts `FormalEvidenceDecision` and that contract-only evidence yields `INPUT_BLOCKED`, never Shadow PASS.
+5. Verify the Audit Dispatcher claims globally with system identity, uses lease/version fencing, and remains able to deliver history after API-key revocation.
+6. Distinguish implementation tests, Final Pair mechanism evidence, historical negative scaling evidence, and unexecuted formal quality/human-review work.
 
-1. [Repository overview](../../README.md)
-2. [Current cross-layer status](../../PROJECT_STATUS.md)
-3. [Detailed external-harness execution log](../external_harness/EXECUTION_LOG.md)
-4. [Machine-readable automated result](../external_harness/AUTOMATED_RESULTS.json)
-5. [Automated-result explanation](../external_harness/AUTOMATED_RESULTS.md)
-6. [Dataset provenance and limits](../external_harness/DATASET_PROVENANCE.md)
-7. [Human-review result](../external_harness/HUMAN_REVIEW_RESULTS.md)
-8. [Shadow release gate](../external_harness/SHADOW_GATE.md)
-9. [Inspect integration](../external_harness/INSPECT_INTEGRATION.md)
-10. [Trace correlation](../external_harness/TRACE_CORRELATION.md)
-11. [Production-failure matrix](../external_harness/PRODUCTION_FAILURE_MATRIX.md)
-12. [Resume-safe external-harness claims](../external_harness/RESUME_SAFE_CLAIMS.md)
-13. [Final-hardening report](../final_hardening/FINAL_HARDENING_REPORT.md)
-14. [Project-wide claim-to-proof map](../handoffs/PROJECT_EVIDENCE_MAP.md)
-15. [Forbidden resume claims](../handoffs/resume_package/FORBIDDEN_CLAIMS.md)
-16. [Machine-readable review manifest](FINAL_EVIDENCE_MANIFEST.json)
-
-## Independent-review instructions
-
-Review code and evidence rather than accepting this summary as proof.
-
-1. Confirm commit `ecb3c664609deca909fc8927036d1087857eacd1` exists in `main` history and CI run `32489399266`
-   targets that exact SHA with both jobs successful.
-2. Trace each positive claim to concrete code, tests, migrations, or immutable evidence. Mark unsupported claims clearly.
-3. Treat `INPUT_BLOCKED`, `PENDING`, `NOT_RUN`, and missing metrics as honest negative/incomplete evidence, not success.
-4. Check that baseline and candidate comparison inputs are symmetric before recommending any quality or performance claim.
-5. Separate mechanism tests from production evidence, and deterministic fixtures from live-runtime or scale evidence.
-6. Report findings by severity with file paths and line references, then list residual risks and the smallest justified next
-   steps.
-7. Produce a final claim table with `SAFE_NOW`, `SAFE_WITH_QUALIFIER`, `NOT_YET_SUPPORTED`, or `FORBIDDEN` for every
-   proposed README, portfolio, interview, or resume statement.
-
-## Claims that are safe now
-
-- Built durable multi-tenant asynchronous evaluation orchestration with explicit Run, Job and lease-bound Attempt state.
-- Implemented tested lease/heartbeat/version/Attempt fencing and selected crash/race recovery paths.
-- Built a framework-neutral immutable Agent trajectory artifact and seven deterministic metric extractors with explicit
-  reported/derived provenance; these are not seven independently verified evaluators.
-- Implemented common-case, coverage and sufficiency fail-closed regression evidence.
-- Added an authenticated local MCP stdio control plane with per-call credential revalidation.
-- Built and executed an Inspect AI interoperability path plus a bounded cross-repository RAG harness client.
-- Built a preregistered scheduler evidence gate that correctly blocked a historical v0.1.0 release when scaling evidence
-  failed.
-
-## Claims that remain unsupported
-
-- Production-ready, production-scale, or enterprise-grade production deployment.
-- Exactly-once execution, universal zero data loss, universal fairness, starvation freedom, or deadlock freedom.
-- Linear Worker scaling, a solved scheduler bottleneck, or validated production capacity/SLOs.
-- Improved RAG quality, groundedness, safety, latency, cost, or failure rate.
-- A passed production release gate, completed human review, or any agreement/kappa result.
-- Formal 100–200 case evaluation or AgentDojo integration.
-- Support for every Agent framework, a live LangGraph performance benchmark, or seven verified evaluators.
-- Streamable HTTP/OAuth remote MCP security, atomic PostgreSQL/S3 commits, or complete production DB-role isolation.
+Report findings by severity with paths/lines, then classify every proposed claim as `SAFE_NOW`, `SAFE_WITH_QUALIFIER`, `NOT_YET_SUPPORTED`, or `FORBIDDEN`.
