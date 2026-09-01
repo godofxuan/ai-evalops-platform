@@ -55,8 +55,14 @@ def test_resume_entrypoints_separate_current_agent_evidence_from_history() -> No
     ledger = _read("docs/handoffs/RESUME_METRIC_LEDGER.md")
     bullets = _read("docs/handoffs/resume_package/BULLET_CANDIDATES.md")
 
+    for document in (handoff, ledger):
+        assert "default `main`" in document
+        assert "1c2f9d93b488cacf7d5f7c953c8cce906e0f9be6" in document
+        assert "33494481676" in document
+
+    assert "codex/final-evidence-hardening-v1" in bullets
+
     for document in (handoff, ledger, bullets):
-        assert "codex/final-evidence-hardening-v1" in document
         assert "CURRENT_POSITIVE_RESUME" in document
         assert "HISTORICAL_NEGATIVE" in document
         assert "FORBIDDEN" in document
