@@ -41,6 +41,10 @@ Run `python -m scripts.project_scorecard` to rehash the inputs and verify every 
 [scalability diagnosis](docs/review/SCALABILITY_DIAGNOSIS.md) records correlations and
 unresolved hypotheses without presenting them as a root cause.
 
+Scorecard implementation `0e66aed4d40ee33d3488605d536e6aaa4a299e78` passed exact-SHA
+[GitHub Actions run 33492703967](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33492703967),
+including PostgreSQL/Redis/MinIO integrations and Compose observability verification.
+
 > RAG / Agent Evaluation Infrastructure：将本地 Agent、RAG 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的多租户评测工作流。
 
 [![CI](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml?query=branch%3Amain)

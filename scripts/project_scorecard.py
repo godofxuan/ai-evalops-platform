@@ -270,6 +270,13 @@ def build_scorecard() -> dict[str, Any]:
         raise ScorecardEvidenceError("final evidence validation metadata is absent")
     if ci.get("status") != "completed" or ci.get("conclusion") != "success":
         raise ScorecardEvidenceError("bound EvalOps CI is not successful")
+    scorecard_source_sha = final_evidence.get("reviewed_source_sha")
+    if (
+        not isinstance(scorecard_source_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}", scorecard_source_sha) is None
+        or ci.get("head_sha") != scorecard_source_sha
+    ):
+        raise ScorecardEvidenceError("Scorecard source SHA and exact CI head do not match")
     evaluators = [descriptor.kind for descriptor in registered_agent_evaluators()]
     if len(evaluators) != 7:
         raise ScorecardEvidenceError("expected exactly seven built-in Agent evaluators")
@@ -306,8 +313,9 @@ def build_scorecard() -> dict[str, Any]:
         },
         "source_evidence": {
             "rag_sha": pair["rag_source_sha"],
-            "evalops_implementation_sha": pair["evalops_source_sha"],
-            "evalops_ci": ci.get("url"),
+            "final_pair_evalops_sha": pair["evalops_source_sha"],
+            "scorecard_source_sha": scorecard_source_sha,
+            "scorecard_ci": ci.get("url"),
             "scheduler_source_sha": scheduler["source_sha"],
             "final_pair": FINAL_PAIR_PATH.relative_to(PROJECT_ROOT).as_posix(),
             "scheduler_assessment": SCHEDULER_ASSESSMENT_PATH.relative_to(PROJECT_ROOT).as_posix(),

@@ -20,6 +20,12 @@ def test_project_scorecard_recomputes_authoritative_evidence() -> None:
         "release": "NOT_READY_NEGATIVE_SCALING_AND_QUALITY_INPUT_BLOCKED",
         "production": "NOT_VERIFIED",
     }
+    assert scorecard["source_evidence"]["final_pair_evalops_sha"] == (
+        "4040fa1db7cee6c8380ff8580fa21be17464435b"
+    )
+    assert scorecard["source_evidence"]["scorecard_source_sha"] == (
+        "0e66aed4d40ee33d3488605d536e6aaa4a299e78"
+    )
     categories = scorecard["categories"]
     assert categories["engineering_correctness"]["status"] == "VERIFIED_CONTROLLED"
     assert categories["agent_rag_quality"]["status"] == "QUALITY_EVIDENCE_INSUFFICIENT"

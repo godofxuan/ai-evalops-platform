@@ -14,6 +14,9 @@
 ## Executable scorecard update — 2026-09-01
 
 - Machine source: [`docs/review/PROJECT_SCORECARD.json`](docs/review/PROJECT_SCORECARD.json).
+- Scorecard implementation: `0e66aed4d40ee33d3488605d536e6aaa4a299e78`; exact CI
+  [`33492703967`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33492703967)
+  passed both `quality-and-integration` and `compose-smoke`.
 - Verifier: `python -m scripts.project_scorecard`; CI runs it after evidence-manifest verification.
 - Engineering correctness and controlled reliability: `VERIFIED_CONTROLLED`.
 - Agent/RAG quality and evidence sufficiency: `QUALITY_EVIDENCE_INSUFFICIENT` because no

@@ -49,4 +49,3 @@ manifest, the four `arms.csv` files and `assessment.json`.
   with the same workload identity, four repetitions, observer qualification before use, and
   PostgreSQL wait-event/transaction spans. It must produce new evidence and must not overwrite
   the frozen result.
-
