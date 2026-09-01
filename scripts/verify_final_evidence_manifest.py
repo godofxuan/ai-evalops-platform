@@ -20,6 +20,8 @@ PATTERNS = (
     "README.md",
     "PROJECT_STATUS.md",
     "docs/review/GPT_REVIEW_ENTRY.md",
+    "docs/review/FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json",
+    "docs/review/FINAL_CROSS_REPO_REVIEW_ENTRY.md",
     "docs/review/PROJECT_SCORECARD.json",
     "docs/review/PROJECT_SCORECARD.md",
     "docs/review/SCALABILITY_DIAGNOSIS.md",

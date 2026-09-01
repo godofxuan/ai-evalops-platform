@@ -1,14 +1,15 @@
 # AI EvalOps Platform — Current Portfolio and Release Status
 
-## Canonical final closeout snapshot — 2026-08-22
+## Canonical final closeout snapshot — 2026-09-01
 
-- Branch: `codex/final-resume-readiness-closeout-v1`.
+- Branch: default `main`.
 - Base/start SHA: `c323d56906a30b654d59fc7c847a0efffab0a452`.
 - RAG producer SHA: `2065e571d77439babf76a763ac459a618950f218`; exact CI [32555135411](https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/32555135411) succeeded.
 - EvalOps implementation SHA: `4040fa1db7cee6c8380ff8580fa21be17464435b`; exact CI [32558950596](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596) succeeded.
+- Default-main evidence baseline: `1c2f9d93b488cacf7d5f7c953c8cce906e0f9be6`; exact `main` CI [33494481676](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33494481676) succeeded.
 - Migration head: `20260822_0027`.
 - Final Pair Contract: `FINAL_PAIR_CONTRACT_VERIFIED`, 18 deterministic mechanism cases, 15 source/converted events, 0 dropped, 0 unmapped.
-- State: `IMPLEMENTATION_COMPLETE`, `EXACT_SHA_CI_REQUIRED` satisfied for the implementation SHA, `FINAL_PAIR_CONTRACT_REQUIRED` satisfied, `NOT_MERGED`, `NOT_RELEASED`, `PORTFOLIO_READY`.
+- State: `IMPLEMENTATION_COMPLETE`, `EXACT_SHA_CI_REQUIRED` satisfied for the implementation SHA, `FINAL_PAIR_CONTRACT_REQUIRED` satisfied, `MERGED_TO_DEFAULT_MAIN`, `EXACT_MAIN_SHA_CI_VERIFIED`, `NOT_RELEASED`, `PORTFOLIO_READY`.
 - Evidence limits: `FORMAL_AB_NOT_RUN`, `HUMAN_REVIEW_PENDING`, `SHADOW_RELEASE_NOT_PASSED`, `PRODUCTION_NOT_VERIFIED`.
 
 ## Executable scorecard update — 2026-09-01

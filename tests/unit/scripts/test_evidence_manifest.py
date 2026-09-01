@@ -19,4 +19,7 @@ def test_final_evidence_manifest_rehashes_all_scoped_files() -> None:
     assert all(len(entry["sha256"]) == 64 for entry in entries)
     assert all(entry["byte_size"] > 0 for entry in entries)
     assert all(len(entry["source_sha"]) == 40 for entry in entries)
-    assert "docs/review/FINAL_EVIDENCE_MANIFEST.json" not in {entry["path"] for entry in entries}
+    paths = {entry["path"] for entry in entries}
+    assert "docs/review/FINAL_EVIDENCE_MANIFEST.json" not in paths
+    assert "docs/review/FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json" in paths
+    assert "docs/review/FINAL_CROSS_REPO_REVIEW_ENTRY.md" in paths

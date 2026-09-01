@@ -2,9 +2,9 @@
 
 > 多租户异步 AI 评测与任务编排平台 · Agent Evaluation Infrastructure
 >
-> Final closeout status: `IMPLEMENTATION_COMPLETE` · `FINAL_PAIR_CONTRACT_VERIFIED` · `PORTFOLIO_READY` · `NOT_MERGED` · `NOT_RELEASED`
+> Final closeout status: `IMPLEMENTATION_COMPLETE` · `FINAL_PAIR_CONTRACT_VERIFIED` · `PORTFOLIO_READY` · `MERGED_TO_DEFAULT_MAIN` · `NOT_RELEASED`
 >
-> Status vocabulary: `IMPLEMENTATION_COMPLETE` · `EXACT_SHA_CI_REQUIRED` · `FINAL_PAIR_CONTRACT_REQUIRED` · `NOT_MERGED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`.
+> Status vocabulary: `IMPLEMENTATION_COMPLETE` · `EXACT_SHA_CI_REQUIRED` · `FINAL_PAIR_CONTRACT_REQUIRED` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`.
 
 本项目把 Agent/RAG 评测从一次性脚本提升为可提交、可恢复、可审计、可复现的后台系统：PostgreSQL 管理多租户 Run/Job/Attempt 状态，Worker 使用 lease、heartbeat 与 fencing 抵御迟到写入，Reaper 恢复失联任务；Agent 轨迹通过版本化 Artifact、内外两层 SHA-256 和 Projection 校验进入 EvalOps；审计事件由持久 Outbox 和独立 Dispatcher 异步投递。
 
@@ -15,6 +15,7 @@
 | RAG producer | `godofxuan/Attempt-of-enterprise-rag-copilot@2065e571d77439babf76a763ac459a618950f218` |
 | EvalOps consumer | `godofxuan/ai-evalops-platform@4040fa1db7cee6c8380ff8580fa21be17464435b` |
 | Implementation CI | [GitHub Actions 32558950596](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596) — exact SHA success |
+| Default `main` evidence baseline | `1c2f9d93b488cacf7d5f7c953c8cce906e0f9be6`; [GitHub Actions 33494481676](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33494481676) — exact `main` SHA success |
 | Final Pair Contract | 18/18 deterministic mechanism cases; 15/15 events converted; dropped 0; unmapped 0 |
 | Harness envelope | `enterprise.agent-harness-envelope/1.1`; outer digest plus answer/citation/terminal/policy/error/tool projections |
 | Evidence boundary | `FORMAL_AB_NOT_RUN`; `HUMAN_REVIEW_PENDING`; `SHADOW_RELEASE_NOT_PASSED`; `PRODUCTION_NOT_VERIFIED` |

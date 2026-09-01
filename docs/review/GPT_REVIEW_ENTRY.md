@@ -1,20 +1,22 @@
 # AI EvalOps Platform — independent review entry
 
-> Status vocabulary: `IMPLEMENTATION_COMPLETE` · `EXACT_SHA_CI_REQUIRED` · `FINAL_PAIR_CONTRACT_REQUIRED` · `NOT_MERGED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`.
+> Status vocabulary: `IMPLEMENTATION_COMPLETE` · `EXACT_SHA_CI_REQUIRED` · `FINAL_PAIR_CONTRACT_REQUIRED` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`.
 
 ## Review target
 
 - Repository: https://github.com/godofxuan/ai-evalops-platform
-- Branch: `codex/final-resume-readiness-closeout-v1`
+- Branch: default `main`
 - RAG producer: `2065e571d77439babf76a763ac459a618950f218`
 - RAG exact CI: https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/32555135411
 - EvalOps implementation: `4040fa1db7cee6c8380ff8580fa21be17464435b`
 - EvalOps implementation CI: https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596
+- Default-main evidence baseline: `1c2f9d93b488cacf7d5f7c953c8cce906e0f9be6`
+- Exact default-main CI: https://github.com/godofxuan/ai-evalops-platform/actions/runs/33494481676
 - Final Pair result: `FINAL_PAIR_CONTRACT_VERIFIED`
 
 ## Current status
 
-`IMPLEMENTATION_COMPLETE` · `NOT_MERGED` · `NOT_RELEASED` · `PORTFOLIO_READY`
+`IMPLEMENTATION_COMPLETE` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY`
 
 `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`
 
