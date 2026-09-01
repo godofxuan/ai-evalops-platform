@@ -86,6 +86,7 @@ def verify(*, prometheus_url: str, compose_file: Path, deadline_seconds: float) 
         "job_lease_expired_total",
         "mcp_audit_pending",
         "mcp_audit_dead_letter_count",
+        "mcp_audit_delivery_latency_seconds_count",
     ):
         _require_metric(prometheus_url, metric)
 

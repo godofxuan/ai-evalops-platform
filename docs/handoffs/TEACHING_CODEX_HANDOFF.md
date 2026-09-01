@@ -12,6 +12,21 @@ business-success/audit-delivery separation. See docs/integrity_remediation/EXECU
 Do not teach the nine-case dataset as a formal A/B result.
 # AI EvalOps Platform — Teaching Codex Handoff
 
+## 2026-09-01 scorecard teaching module
+
+Teach the Scorecard before teaching individual metrics:
+
+1. Run `python -m scripts.project_scorecard` and trace the Final Pair, root scheduler
+   Manifest, four `arms.csv` files and evaluator registry inputs.
+2. Explain why correctness, formal answer quality, scalability and production evidence are
+   non-substitutable gates rather than a weighted score.
+3. Recompute the 64 arms, 6,400 submitted/unique/terminal Jobs, protected-counter zero sum,
+   fairness position 2 versus 953 and all four 4→8 ratios.
+4. Use `docs/review/SCALABILITY_DIAGNOSIS.md` to distinguish observation, falsifiable
+   hypothesis and causal conclusion.
+5. Trace `mcp_audit_delivery_latency_seconds` from durable Outbox creation through fenced
+   acknowledgement, then explain how a future p95/p99 SLO would be formed.
+
 Updated: 2026-08-20 on `codex/final-evidence-hardening-v1`. This is the authoritative teaching entry. Demonstrate every
 answer with source, transaction boundary, test and evidence rather than memory. The original 2026-08-11 scheduler lessons
 below remain a historical deep dive; the current curriculum adds final-hardening Agent Evaluation Infrastructure.

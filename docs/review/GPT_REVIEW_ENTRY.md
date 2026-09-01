@@ -22,14 +22,17 @@ The 18-case Final Pair suite is deterministic cross-repository contract/mechanis
 
 ## Required reading order
 
-1. [Final cross-repository review entry](FINAL_CROSS_REPO_REVIEW_ENTRY.md)
-2. [Machine cross-repository manifest](FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json)
-3. [Final Pair result manifest](evidence/final_pair_2065e571_4040fa1d/result-manifest.json)
-4. [Final Pair case manifest](evidence/final_pair_2065e571_4040fa1d/case-manifest.json)
-5. [Current project status](../../PROJECT_STATUS.md)
-6. [Project evidence map](../handoffs/PROJECT_EVIDENCE_MAP.md)
-7. [Known limitations](../external_harness/KNOWN_LIMITATIONS.md)
-8. [Resume-safe claims](../external_harness/RESUME_SAFE_CLAIMS.md)
+1. [Executable project scorecard](PROJECT_SCORECARD.md)
+2. [Machine-readable scorecard](PROJECT_SCORECARD.json)
+3. [Scalability diagnosis](SCALABILITY_DIAGNOSIS.md)
+4. [Final cross-repository review entry](FINAL_CROSS_REPO_REVIEW_ENTRY.md)
+5. [Machine cross-repository manifest](FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json)
+6. [Final Pair result manifest](evidence/final_pair_2065e571_4040fa1d/result-manifest.json)
+7. [Final Pair case manifest](evidence/final_pair_2065e571_4040fa1d/case-manifest.json)
+8. [Current project status](../../PROJECT_STATUS.md)
+9. [Project evidence map](../handoffs/PROJECT_EVIDENCE_MAP.md)
+10. [Known limitations](../external_harness/KNOWN_LIMITATIONS.md)
+11. [Resume-safe claims](../external_harness/RESUME_SAFE_CLAIMS.md)
 
 ## Independent audit checklist
 
@@ -39,5 +42,7 @@ The 18-case Final Pair suite is deterministic cross-repository contract/mechanis
 4. Verify `evaluate_shadow_gate()` only accepts `FormalEvidenceDecision` and that contract-only evidence yields `INPUT_BLOCKED`, never Shadow PASS.
 5. Verify the Audit Dispatcher claims globally with system identity, uses lease/version fencing, and remains able to deliver history after API-key revocation.
 6. Distinguish implementation tests, Final Pair mechanism evidence, historical negative scaling evidence, and unexecuted formal quality/human-review work.
+7. Run `python -m scripts.project_scorecard` and reject any review that replaces its
+   non-substitutable gates with a subjective weighted total.
 
 Report findings by severity with paths/lines, then classify every proposed claim as `SAFE_NOW`, `SAFE_WITH_QUALIFIER`, `NOT_YET_SUPPORTED`, or `FORBIDDEN`.

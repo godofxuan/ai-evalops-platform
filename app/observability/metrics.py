@@ -178,6 +178,12 @@ class PlatformMetrics:
             "MCP audit sink delivery attempts that failed.",
             registry=self.registry,
         )
+        self._audit_delivery_latency = Histogram(
+            "mcp_audit_delivery_latency_seconds",
+            "Outbox creation to fenced successful MCP audit acknowledgement in seconds.",
+            buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 300),
+            registry=self.registry,
+        )
         self._audit_dead_letters = Counter(
             "mcp_audit_dead_letters",
             "MCP audit outcomes moved to the terminal dead-letter state.",
@@ -292,6 +298,9 @@ class PlatformMetrics:
     def record_audit_delivery_failure(self, count: int = 1) -> None:
         if count > 0:
             self._audit_delivery_failures.inc(count)
+
+    def observe_audit_delivery_latency(self, seconds: float) -> None:
+        self._audit_delivery_latency.observe(max(seconds, 0.0))
 
     def record_audit_dead_letter(self, count: int = 1) -> None:
         if count > 0:

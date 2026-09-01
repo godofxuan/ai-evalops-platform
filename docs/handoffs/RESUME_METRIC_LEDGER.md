@@ -13,6 +13,9 @@ Claim tiers: `CURRENT_POSITIVE_RESUME`, `JD_SPECIFIC_BACKUP`, `INTERVIEW_ONLY`, 
 
 | Metric / capability | Value | Scope and evidence | Boundary |
 | --- | --- | --- | --- |
+| Executable project Scorecard | self-digested machine JSON; six non-substitutable categories | `python -m scripts.project_scorecard`; CI-enforced | no subjective weighted total or release override |
+| Final Pair accounting | 18 mechanism cases; 15 source/converted events; 0 dropped/unmapped | exact RAG/EvalOps SHA contract | interoperability, not formal quality A/B |
+| Audit delivery latency | Prometheus histogram from Outbox creation to fenced successful acknowledgement | dispatcher unit tests plus Compose series check | enables future SLO; no current production p95/p99 |
 | Final-hardening identity | source `22fda896a1b24b0cf41cd1402ead521f74758ac6`; migration `20260820_0025` | successful CI `32282462281` | implementation baseline, not this later documentation commit |
 | Current non-integration suite | 826 non-integration tests | successful CI `32282462281`; Python 3.12 gate | test count, not production traffic or capacity |
 | Agent trajectory artifact kinds | exactly 7 deterministic kinds | schema/evaluator unit tests and Agent workflow integration | metrics are `reported` or `derived`, not authority-verified |

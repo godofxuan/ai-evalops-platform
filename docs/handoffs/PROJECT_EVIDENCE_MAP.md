@@ -13,6 +13,17 @@ docs/review/FINAL_EVIDENCE_MANIFEST.json. The material below remains historical 
 explicitly revalidated by the candidate branch. No release or production claim follows.
 # AI EvalOps Platform — Project Evidence Map
 
+## 2026-09-01 executable scorecard entry
+
+- Human entry: `docs/review/PROJECT_SCORECARD.md`.
+- Machine entry and self-digest: `docs/review/PROJECT_SCORECARD.json`.
+- Reproducer: `python -m scripts.project_scorecard`.
+- Performance interpretation: `docs/review/SCALABILITY_DIAGNOSIS.md`.
+- Current decision: Portfolio `READY_WITH_EXPLICIT_LIMITS`; release
+  `NOT_READY_NEGATIVE_SCALING_AND_QUALITY_INPUT_BLOCKED`; production `NOT_VERIFIED`.
+- New operational signal: `mcp_audit_delivery_latency_seconds` measures Outbox creation to
+  fenced successful acknowledgement without tenant/run/job labels.
+
 Revalidated: 2026-08-20 on `codex/final-evidence-hardening-v1`. Current implementation baseline:
 `22fda896a1b24b0cf41cd1402ead521f74758ac6`; migration head: `20260820_0025`; successful final-hardening workflow:
 [`32282462281`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32282462281).

@@ -69,6 +69,9 @@ jobs:
       - name: Verify final evidence file manifest
         run: uv run --no-sync python -m scripts.verify_final_evidence_manifest
 
+      - name: Verify evidence-backed project scorecard
+        run: uv run --no-sync python -m scripts.project_scorecard
+
       - name: Check formatting
         run: uv run --no-sync ruff format --check .
 

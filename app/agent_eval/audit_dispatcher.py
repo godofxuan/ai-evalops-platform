@@ -32,6 +32,7 @@ class ClaimedAudit:
     attempt_count: int
     max_attempts: int
     lease_version: int
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +155,7 @@ class SQLAlchemyAuditOutboxStore:
                         attempt_count=row.attempt_count,
                         max_attempts=row.max_attempts,
                         lease_version=row.lease_version,
+                        created_at=row.created_at,
                     )
                 )
         return tuple(claimed)
@@ -310,6 +312,7 @@ class AuditDispatcher:
         retry_base_seconds: float,
         retry_max_seconds: float,
         metrics: PlatformMetrics | None = None,
+        clock: Clock | None = None,
     ) -> None:
         if delivery_timeout_seconds <= 0:
             raise ValueError("audit delivery timeout must be positive")
@@ -324,6 +327,7 @@ class AuditDispatcher:
         self._retry_base_seconds = retry_base_seconds
         self._retry_max_seconds = retry_max_seconds
         self._metrics = metrics
+        self._clock = clock or SystemClock()
 
     async def dispatch_once(self, *, limit: int) -> AuditDispatchResult:
         claimed = await self._store.claim_batch(limit=limit)
@@ -367,7 +371,13 @@ class AuditDispatcher:
                     max_seconds=self._retry_max_seconds,
                 ),
             )
-        return "delivered" if await self._store.acknowledge(message) else "lease_lost"
+        if not await self._store.acknowledge(message):
+            return "lease_lost"
+        if self._metrics is not None:
+            self._metrics.observe_audit_delivery_latency(
+                (self._clock.now() - message.created_at).total_seconds()
+            )
+        return "delivered"
 
 
 class AuditDispatchIteration(Protocol):

@@ -32,6 +32,7 @@ def test_metrics_registry_exposes_required_platform_signals() -> None:
         metrics.observe_db_operation(operation=operation, duration_seconds=0.012)
     metrics.sse_connected()
     metrics.record_redis_publish_failure()
+    metrics.observe_audit_delivery_latency(0.75)
 
     rendered = metrics.render().decode("utf-8")
 
@@ -50,6 +51,7 @@ def test_metrics_registry_exposes_required_platform_signals() -> None:
         "db_operation_duration",
         "sse_connections",
         "redis_publish_failures_total",
+        "mcp_audit_delivery_latency_seconds",
     ):
         assert metric_name in rendered
     assert 'route="/health/live"' in rendered

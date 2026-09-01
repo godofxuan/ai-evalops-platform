@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.dialects import postgresql
@@ -21,6 +21,11 @@ TENANT_ID = UUID("00000000-0000-0000-0000-000000000102")
 API_KEY_ID = UUID("00000000-0000-0000-0000-000000000103")
 
 
+class FixedClock:
+    def now(self) -> datetime:
+        return NOW
+
+
 def _message(*, attempt_count: int = 1, max_attempts: int = 8) -> ClaimedAudit:
     return ClaimedAudit(
         outbox_id=OUTBOX_ID,
@@ -34,6 +39,7 @@ def _message(*, attempt_count: int = 1, max_attempts: int = 8) -> ClaimedAudit:
         attempt_count=attempt_count,
         max_attempts=max_attempts,
         lease_version=3,
+        created_at=NOW - timedelta(seconds=12.5),
     )
 
 
@@ -102,6 +108,7 @@ def _dispatcher(
         retry_base_seconds=2,
         retry_max_seconds=5,
         metrics=metrics,
+        clock=FixedClock(),
     )
 
 
@@ -142,6 +149,19 @@ async def test_successful_delivery_is_fenced_and_acknowledged() -> None:
     assert sink.delivered == [message]
     assert store.acknowledged == [message]
     assert store.failures == []
+
+
+async def test_successful_delivery_records_end_to_end_audit_latency() -> None:
+    message = _message()
+    store = RecordingStore((message,))
+    metrics = PlatformMetrics()
+
+    result = await _dispatcher(store, RecordingSink(), metrics=metrics).dispatch_once(limit=1)
+
+    assert result.delivered == 1
+    rendered = metrics.render().decode()
+    assert "mcp_audit_delivery_latency_seconds_count 1.0" in rendered
+    assert "mcp_audit_delivery_latency_seconds_sum 12.5" in rendered
 
 
 async def test_sink_failure_schedules_bounded_retry_and_records_metric() -> None:

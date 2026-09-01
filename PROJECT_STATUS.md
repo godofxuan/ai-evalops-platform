@@ -11,6 +11,22 @@
 - State: `IMPLEMENTATION_COMPLETE`, `EXACT_SHA_CI_REQUIRED` satisfied for the implementation SHA, `FINAL_PAIR_CONTRACT_REQUIRED` satisfied, `NOT_MERGED`, `NOT_RELEASED`, `PORTFOLIO_READY`.
 - Evidence limits: `FORMAL_AB_NOT_RUN`, `HUMAN_REVIEW_PENDING`, `SHADOW_RELEASE_NOT_PASSED`, `PRODUCTION_NOT_VERIFIED`.
 
+## Executable scorecard update — 2026-09-01
+
+- Machine source: [`docs/review/PROJECT_SCORECARD.json`](docs/review/PROJECT_SCORECARD.json).
+- Verifier: `python -m scripts.project_scorecard`; CI runs it after evidence-manifest verification.
+- Engineering correctness and controlled reliability: `VERIFIED_CONTROLLED`.
+- Agent/RAG quality and evidence sufficiency: `QUALITY_EVIDENCE_INSUFFICIENT` because no
+  formal A/B or completed human review exists.
+- Performance: `NEGATIVE_SCALING`; one of four frozen 4→8 workloads passed the 0.95 floor.
+- Security: `EXTERNAL_VALIDATION_REQUIRED`; mechanism tests do not replace an independent
+  assessment or production role-isolation proof.
+- Audit operations now expose end-to-end `mcp_audit_delivery_latency_seconds` alongside
+  pending age, delivery failures and dead letters, enabling a future p95/p99 SLO.
+
+The frozen evidence replay found contention/lock-pressure associations but no qualified causal
+root cause. See [`SCALABILITY_DIAGNOSIS.md`](docs/review/SCALABILITY_DIAGNOSIS.md).
+
 The final evidence commit and its own exact CI are an append-only second-stage attestation. Until that CI succeeds, this branch must not be described as fully closed. The cross-repository contract verifies interoperability/mechanisms only; it does not demonstrate answer-quality improvement or production capacity.
 
 ## What this closeout adds

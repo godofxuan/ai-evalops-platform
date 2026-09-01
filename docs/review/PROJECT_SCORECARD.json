@@ -1,0 +1,260 @@
+{
+  "schema_version": "ai-evalops-project-scorecard/v1",
+  "scoring_policy": {
+    "weighted_total": null,
+    "reason": "Mechanism, formal-quality, scalability, and production evidence are non-substitutable gates.",
+    "positive_statuses": [
+      "VERIFIED_CONTROLLED",
+      "MECHANISM_VERIFIED"
+    ],
+    "blocking_statuses": [
+      "QUALITY_EVIDENCE_INSUFFICIENT",
+      "NEGATIVE_SCALING",
+      "EXTERNAL_VALIDATION_REQUIRED"
+    ]
+  },
+  "source_evidence": {
+    "rag_sha": "2065e571d77439babf76a763ac459a618950f218",
+    "evalops_implementation_sha": "4040fa1db7cee6c8380ff8580fa21be17464435b",
+    "evalops_ci": "https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596",
+    "scheduler_source_sha": "91acdba9f5b5f1a84fb03640382c9e4871364afe",
+    "final_pair": "docs/review/evidence/final_pair_2065e571_4040fa1d/result-manifest.json",
+    "scheduler_assessment": "docs/results/release/v0.1.0/targeted-gh-31352270523-1/assessment.json"
+  },
+  "categories": {
+    "engineering_correctness": {
+      "status": "VERIFIED_CONTROLLED",
+      "metrics": {
+        "non_integration_tests_passed": 902,
+        "local_external_service_skips": 19,
+        "exact_sha_ci": "SUCCESS",
+        "scheduler_arms": 64,
+        "submitted_unique_terminal_jobs": [
+          6400,
+          6400,
+          6400
+        ],
+        "protected_counter_sum": 0
+      },
+      "scope": "local regression plus controlled CI/PostgreSQL scheduler evidence"
+    },
+    "agent_rag_quality": {
+      "status": "QUALITY_EVIDENCE_INSUFFICIENT",
+      "metrics": {
+        "registered_deterministic_evaluators": [
+          "task_success",
+          "tool_call_validity",
+          "trajectory_efficiency",
+          "grounding_citation",
+          "permission_boundary",
+          "terminal_state",
+          "cost_latency"
+        ],
+        "final_pair_cases": 18,
+        "formal_ab_executed": false,
+        "human_review_status": "PENDING",
+        "shadow_release_status": "INPUT_BLOCKED"
+      },
+      "scope": "exact-SHA interoperability only; no answer-quality delta"
+    },
+    "performance_scalability": {
+      "status": "NEGATIVE_SCALING",
+      "metrics": {
+        "required_4_to_8_ratio": 0.95,
+        "passed_workloads": 1,
+        "total_workloads": 4,
+        "workloads": [
+          {
+            "distribution": "single_tenant",
+            "throughput_4_jobs_per_second": 24.1900861045302,
+            "throughput_8_jobs_per_second": 18.929003760924335,
+            "throughput_8_to_4_ratio": 0.7825108054236899,
+            "required_minimum_ratio": 0.95,
+            "status": "NEGATIVE_SCALING"
+          },
+          {
+            "distribution": "balanced_multi_tenant",
+            "throughput_4_jobs_per_second": 44.75282480395374,
+            "throughput_8_jobs_per_second": 34.584871021476424,
+            "throughput_8_to_4_ratio": 0.7727974976547398,
+            "required_minimum_ratio": 0.95,
+            "status": "NEGATIVE_SCALING"
+          },
+          {
+            "distribution": "skew_20_to_1",
+            "throughput_4_jobs_per_second": 32.70025509361718,
+            "throughput_8_jobs_per_second": 26.03639590453747,
+            "throughput_8_to_4_ratio": 0.7962138469561836,
+            "required_minimum_ratio": 0.95,
+            "status": "NEGATIVE_SCALING"
+          },
+          {
+            "distribution": "many_small_tenants",
+            "throughput_4_jobs_per_second": 42.245795739203096,
+            "throughput_8_jobs_per_second": 42.83990494314398,
+            "throughput_8_to_4_ratio": 1.0140631557187019,
+            "required_minimum_ratio": 0.95,
+            "status": "VERIFIED"
+          }
+        ],
+        "diagnostic_signals": [
+          {
+            "distribution": "single_tenant",
+            "throughput_8_to_4_ratio": 0.7825108054236899,
+            "claim_latency_p95_multiplier": 4.338876644044714,
+            "reservation_latency_p95_multiplier": 1.5227260560976055,
+            "job_claim_latency_p95_multiplier": 1.4263912842155364,
+            "contention_retry_delta": 209.5,
+            "waiting_fallback_delta": 88.5,
+            "postgres_lock_wait_peak_delta": 3.5,
+            "worker_cpu_percentage_point_delta": 1.8927096562782566,
+            "worker_rss_ratio": 1.0031244102413555
+          },
+          {
+            "distribution": "balanced_multi_tenant",
+            "throughput_8_to_4_ratio": 0.7727974976547398,
+            "claim_latency_p95_multiplier": 2.71426759045192,
+            "reservation_latency_p95_multiplier": 2.5567255071902286,
+            "job_claim_latency_p95_multiplier": 1.0177408987380172,
+            "contention_retry_delta": 94.0,
+            "waiting_fallback_delta": 59.0,
+            "postgres_lock_wait_peak_delta": 0.0,
+            "worker_cpu_percentage_point_delta": -1.1812827887416404,
+            "worker_rss_ratio": 1.001074446763229
+          },
+          {
+            "distribution": "skew_20_to_1",
+            "throughput_8_to_4_ratio": 0.7962138469561836,
+            "claim_latency_p95_multiplier": 3.832841010986076,
+            "reservation_latency_p95_multiplier": 1.4960056585543529,
+            "job_claim_latency_p95_multiplier": 1.3346047159137304,
+            "contention_retry_delta": 165.5,
+            "waiting_fallback_delta": 82.0,
+            "postgres_lock_wait_peak_delta": 3.0,
+            "worker_cpu_percentage_point_delta": -0.3698480380283087,
+            "worker_rss_ratio": 1.0013685199558806
+          },
+          {
+            "distribution": "many_small_tenants",
+            "throughput_8_to_4_ratio": 1.0140631557187019,
+            "claim_latency_p95_multiplier": 5.598734137234082,
+            "reservation_latency_p95_multiplier": 8.299429169782192,
+            "job_claim_latency_p95_multiplier": 3.267113537818478,
+            "contention_retry_delta": 0.0,
+            "waiting_fallback_delta": 0.0,
+            "postgres_lock_wait_peak_delta": 1.5,
+            "worker_cpu_percentage_point_delta": -2.1030908428572417,
+            "worker_rss_ratio": 1.0004996302735976
+          }
+        ],
+        "fair_secondary_position": [
+          2
+        ],
+        "legacy_secondary_position": [
+          953
+        ]
+      },
+      "scope": "frozen q1000/sample100/batch1 controlled experiment",
+      "hypothesis_status": {
+        "hot_row_contention": "ASSOCIATED_NOT_CAUSALLY_PROVEN",
+        "postgres_lock_pressure": "ASSOCIATED_NOT_CAUSALLY_PROVEN",
+        "worker_coordination_overhead": "UNRESOLVED",
+        "measurement_perturbation": "NOT_RULED_OUT"
+      }
+    },
+    "reliability": {
+      "status": "VERIFIED_CONTROLLED",
+      "metrics": {
+        "protected_counters": {
+          "lost_count": 0,
+          "duplicate_durable_result_count": 0,
+          "stale_success_accepted_count": 0,
+          "stale_failure_accepted_count": 0,
+          "illegal_state_transition_count": 0,
+          "orphan_nonterminal_count": 0,
+          "attempt_sequence_mismatch_count": 0
+        },
+        "source_events": 15,
+        "converted_events": 15,
+        "dropped_events": 0,
+        "unmapped_events": 0,
+        "operational_metric_catalog": [
+          "job_queue_depth",
+          "job_lease_expired_total",
+          "worker_heartbeat_age",
+          "db_operation_duration_seconds",
+          "outbox_oldest_pending_age_seconds",
+          "mcp_audit_oldest_pending_age_seconds",
+          "mcp_audit_delivery_failures_total",
+          "mcp_audit_dead_letter_count",
+          "mcp_audit_delivery_latency_seconds"
+        ]
+      },
+      "scope": "bounded fault/concurrency and Final Pair contract evidence"
+    },
+    "security": {
+      "status": "EXTERNAL_VALIDATION_REQUIRED",
+      "metrics": {
+        "permission_boundary_evaluator": true,
+        "cross_tenant_and_revocation_mechanism_tests": "PRESENT",
+        "independent_security_assessment": "NOT_RUN",
+        "production_role_isolation": "NOT_VERIFIED"
+      },
+      "scope": "mechanism tests, not penetration test or production certification"
+    },
+    "evidence_sufficiency": {
+      "status": "QUALITY_EVIDENCE_INSUFFICIENT",
+      "metrics": {
+        "contract_result": "FINAL_PAIR_CONTRACT_VERIFIED",
+        "dataset_hash": "7a6705b94f31f2375677abcfd8e250c3c49d2e9c238f5fba44c130a6f50aecf4",
+        "formal_ab_executed": false,
+        "human_review_status": "PENDING",
+        "production_ready": false
+      },
+      "scope": "portfolio evidence is sufficient; formal quality/release evidence is not"
+    }
+  },
+  "overall_decision": {
+    "portfolio": "READY_WITH_EXPLICIT_LIMITS",
+    "release": "NOT_READY_NEGATIVE_SCALING_AND_QUALITY_INPUT_BLOCKED",
+    "production": "NOT_VERIFIED"
+  },
+  "next_measurement_gates": [
+    {
+      "gate": "formal_agent_quality_ab",
+      "status": "INPUT_REQUIRED",
+      "minimum_common_cases": 100,
+      "minimum_cases_per_category": 10,
+      "required_outputs": [
+        "task_success_delta",
+        "citation_correctness_delta",
+        "tool_error_rate_delta",
+        "latency_p95_delta",
+        "cost_delta",
+        "paired_bootstrap_95pct_ci"
+      ]
+    },
+    {
+      "gate": "human_review",
+      "status": "HUMAN_REVIEW_PENDING",
+      "required_outputs": [
+        "two_blinded_reviews",
+        "agreement",
+        "cohens_kappa"
+      ]
+    },
+    {
+      "gate": "production_readiness",
+      "status": "ENVIRONMENT_REQUIRED",
+      "required_outputs": [
+        "capacity",
+        "queue_wait_p95_p99",
+        "end_to_end_p95_p99",
+        "recovery_time",
+        "audit_delivery_latency",
+        "tenant_isolation_assessment"
+      ]
+    }
+  ],
+  "scorecard_sha256": "fa08932d6741092b5f28abb4f6df6afdb73d417f47f8b974068da7e115188e05"
+}

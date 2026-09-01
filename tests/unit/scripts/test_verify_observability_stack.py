@@ -34,11 +34,12 @@ def test_verify_requires_four_targets_metrics_and_three_span_roles(monkeypatch) 
         deadline_seconds=1,
     )
 
-    assert len(queries) == 8
+    assert len(queries) == 9
     assert any("api_request_total" in query for query in queries)
     assert any("job_retry_total" in query for query in queries)
     assert any("mcp_audit_pending" in query for query in queries)
     assert any("mcp_audit_dead_letter_count" in query for query in queries)
+    assert any("mcp_audit_delivery_latency_seconds_count" in query for query in queries)
 
 
 def test_metric_query_fails_closed_when_series_is_missing(monkeypatch) -> None:

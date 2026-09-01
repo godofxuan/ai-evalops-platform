@@ -12,6 +12,21 @@ release readiness, production readiness, formal external A/B completion, positiv
 scheduler scaling, or completed human review.
 # AI EvalOps Platform — Resume Codex Handoff
 
+## 2026-09-01 scorecard-safe resume update
+
+Use `docs/review/PROJECT_SCORECARD.json` as the metric authority. Safe wording:
+
+- Built an evidence-backed project Scorecard that rehashes exact RAG/EvalOps contract
+  artifacts and 64-arm scheduler evidence, preserving non-substitutable quality,
+  scalability, reliability and production gates.
+- Added low-cardinality audit delivery observability, including pending age, failures,
+  dead letters and end-to-end delivery latency suitable for future p95/p99 SLOs.
+- In interview only: explain that 6,400/6,400/6,400 controlled task accounting passed while
+  3/4 frozen 4→8 scaling workloads failed; the gate prevented a release claim.
+
+Do not convert the Scorecard into an 8.5/10 claim. Do not claim formal A/B, quality
+improvement, positive scaling, human agreement, Shadow PASS or production readiness.
+
 Updated: 2026-08-20. This is the authoritative entry for resume writing on
 `codex/final-evidence-hardening-v1`. Read `PROJECT_STATUS.md`, `RESUME_METRIC_LEDGER.md`,
 `docs/resume/AGENT_EVAL_RESUME_EVIDENCE.md`, `resume_package/`, then `RESUME_INTERVIEW_CONSISTENCY.md`.

@@ -21,6 +21,26 @@
 
 Start an independent review at [FINAL_CROSS_REPO_REVIEW_ENTRY.md](docs/review/FINAL_CROSS_REPO_REVIEW_ENTRY.md). The Final Pair result proves exact-version interoperability and fail-closed mechanisms; it is not a formal quality A/B, production benchmark, or release approval.
 
+## Executable project scorecard
+
+The [evidence-backed scorecard](docs/review/PROJECT_SCORECARD.md) is generated from the
+manifest-bound Final Pair and frozen scheduler evidence. It intentionally has no weighted
+numeric total: a mechanism contract cannot compensate for missing formal quality evidence or
+negative scaling. Current gate states are:
+
+| Category | State |
+| --- | --- |
+| Engineering correctness | `VERIFIED_CONTROLLED` |
+| Agent/RAG answer quality | `QUALITY_EVIDENCE_INSUFFICIENT` |
+| Performance scalability | `NEGATIVE_SCALING` |
+| Reliability | `VERIFIED_CONTROLLED` |
+| Security | `EXTERNAL_VALIDATION_REQUIRED` |
+| Production | `NOT_VERIFIED` |
+
+Run `python -m scripts.project_scorecard` to rehash the inputs and verify every value. The
+[scalability diagnosis](docs/review/SCALABILITY_DIAGNOSIS.md) records correlations and
+unresolved hypotheses without presenting them as a root cause.
+
 > RAG / Agent Evaluation Infrastructure：将本地 Agent、RAG 或 LLM 评测脚本，演进为可提交、可恢复、可审计、可复现的多租户评测工作流。
 
 [![CI](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/godofxuan/ai-evalops-platform/actions/workflows/ci.yml?query=branch%3Amain)
