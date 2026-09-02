@@ -112,6 +112,11 @@ async def test_demo_runs_120_paired_cases_and_preserves_claim_boundary(tmp_path:
     assert result.human_review_status == "PENDING"
     assert result.formal_quality_claim_allowed is False
     assert result.production_ready is False
+    assert result.source_identities["baseline"] == {
+        "repository": "demo://baseline",
+        "sha": "b" * 40,
+        "provider_type": "fixture",
+    }
     assert len(result.arms["baseline"].cases) == 120
     assert len(result.arms["candidate"].cases) == 120
 

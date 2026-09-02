@@ -61,6 +61,9 @@ def _policy() -> FormalQualityPolicy:
         tool_error_rate_ci_upper_max=0.02,
         latency_p95_relative_delta_max=0.25,
         cost_mean_relative_delta_max=0.25,
+        candidate_task_success_min=0.8,
+        candidate_citation_correctness_min=0.8,
+        candidate_tool_error_rate_max=0.05,
         require_exact_case_set=True,
     )
 
@@ -123,6 +126,25 @@ def test_formal_quality_gate_fails_closed_on_insufficient_or_drifting_inputs() -
             dataset_sha256="not-a-digest",
             cases=_arm(candidate=True).cases,
         )
+
+
+def test_formal_quality_gate_rejects_absolute_failure_even_when_arms_are_equal() -> None:
+    failed = _arm(candidate=False)
+    failed_candidate = failed.model_copy(update={"arm": "candidate", "source_sha": "b" * 40})
+
+    assessment = assess_formal_quality(
+        baseline=failed,
+        candidate=failed_candidate,
+        policy=_policy(),
+        evalops_sha="e" * 40,
+        trace_status="PASS",
+        failure_matrix_status="PASS",
+    )
+
+    assert assessment.status == "FAIL"
+    assert assessment.metrics["task_success_delta"].passed is False
+    assert assessment.metrics["citation_correctness_delta"].passed is False
+    assert assessment.metrics["tool_error_rate_delta"].passed is False
 
 
 def test_blinded_review_packet_hides_arm_identity_and_seals_mapping() -> None:

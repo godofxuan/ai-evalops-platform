@@ -89,6 +89,7 @@ class ProductExperimentResult(BaseModel):
     dataset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evalops_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     case_count: int = Field(ge=0)
+    source_identities: dict[str, dict[str, str]]
     arms: dict[str, FormalArmResult]
     automated_assessment: dict[str, Any]
     case_comparisons: list[CaseComparison]
@@ -204,6 +205,14 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
     cases = _load_dataset(str(loaded.dataset_path), spec.dataset.sha256)
     policy = FormalQualityPolicy.model_validate_json(loaded.policy_path.read_text(encoding="utf-8"))
     requirements = _input_requirements(spec.arms)
+    source_identities: dict[str, dict[str, str]] = {
+        arm.label: {
+            "repository": arm.source_repository,
+            "sha": arm.source_sha,
+            "provider_type": arm.provider.type,
+        }
+        for arm in spec.arms
+    }
     if requirements:
         return ProductExperimentResult(
             experiment_id=spec.experiment_id,
@@ -212,6 +221,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
             dataset_sha256=spec.dataset.sha256,
             evalops_sha=evalops_sha,
             case_count=len(cases),
+            source_identities=source_identities,
             arms={},
             automated_assessment={"status": "NOT_RUN"},
             case_comparisons=[],
@@ -294,6 +304,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
         dataset_sha256=spec.dataset.sha256,
         evalops_sha=evalops_sha,
         case_count=len(cases),
+        source_identities=source_identities,
         arms={"baseline": baseline, "candidate": candidate},
         automated_assessment=assessment.as_json(),
         case_comparisons=_comparisons(baseline, candidate),

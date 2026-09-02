@@ -18,6 +18,13 @@ def test_product_artifacts_have_hash_manifest_and_claim_boundary(tmp_path: Path)
         dataset_sha256="d" * 64,
         evalops_sha="e" * 40,
         case_count=120,
+        source_identities={
+            "baseline": {
+                "repository": "https://example.com/rag",
+                "sha": "b" * 40,
+                "provider_type": "fixture",
+            }
+        },
         arms={},
         automated_assessment={"status": "NOT_RUN"},
         case_comparisons=[],
@@ -52,6 +59,13 @@ def test_product_manifest_rejects_tampered_result(tmp_path: Path) -> None:
         dataset_sha256="d" * 64,
         evalops_sha="e" * 40,
         case_count=0,
+        source_identities={
+            "baseline": {
+                "repository": "demo://baseline",
+                "sha": "b" * 40,
+                "provider_type": "fixture",
+            }
+        },
         arms={},
         automated_assessment={"status": "PASS"},
         case_comparisons=[],

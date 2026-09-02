@@ -55,7 +55,13 @@ def verify_manifest(path: Path) -> dict[str, Any]:
     if not required.issubset(seen):
         raise ProductManifestError("manifest omits a required product artifact")
     result = json.loads((path.parent / "result.json").read_text(encoding="utf-8"))
-    for field in ("experiment_id", "status", "dataset_sha256", "evalops_sha"):
+    for field in (
+        "experiment_id",
+        "status",
+        "dataset_sha256",
+        "evalops_sha",
+        "source_identities",
+    ):
         if result.get(field) != manifest.get(field):
             raise ProductManifestError(f"manifest/result identity mismatch: {field}")
     return manifest

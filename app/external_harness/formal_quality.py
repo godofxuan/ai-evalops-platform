@@ -65,6 +65,9 @@ class FormalQualityPolicy(_StrictModel):
     tool_error_rate_ci_upper_max: float = Field(ge=-1.0, le=1.0)
     latency_p95_relative_delta_max: float = Field(ge=0.0)
     cost_mean_relative_delta_max: float = Field(ge=0.0)
+    candidate_task_success_min: float = Field(default=0.0, ge=0.0, le=1.0)
+    candidate_citation_correctness_min: float = Field(default=0.0, ge=0.0, le=1.0)
+    candidate_tool_error_rate_max: float = Field(default=1.0, ge=0.0, le=1.0)
     require_exact_case_set: bool = True
 
     @model_validator(mode="after")
@@ -304,18 +307,36 @@ def _metric_assessments(
     return {
         "task_success_delta": _with_rule(
             task,
-            passed=task.confidence_lower >= policy.task_success_ci_lower_min,
-            rule=f"confidence_lower >= {policy.task_success_ci_lower_min}",
+            passed=(
+                task.confidence_lower >= policy.task_success_ci_lower_min
+                and task.candidate_value >= policy.candidate_task_success_min
+            ),
+            rule=(
+                f"confidence_lower >= {policy.task_success_ci_lower_min} and "
+                f"candidate_value >= {policy.candidate_task_success_min}"
+            ),
         ),
         "citation_correctness_delta": _with_rule(
             citation,
-            passed=(citation.confidence_lower >= policy.citation_correctness_ci_lower_min),
-            rule=f"confidence_lower >= {policy.citation_correctness_ci_lower_min}",
+            passed=(
+                citation.confidence_lower >= policy.citation_correctness_ci_lower_min
+                and citation.candidate_value >= policy.candidate_citation_correctness_min
+            ),
+            rule=(
+                f"confidence_lower >= {policy.citation_correctness_ci_lower_min} and "
+                f"candidate_value >= {policy.candidate_citation_correctness_min}"
+            ),
         ),
         "tool_error_rate_delta": _with_rule(
             tool_error,
-            passed=tool_error.confidence_upper <= policy.tool_error_rate_ci_upper_max,
-            rule=f"confidence_upper <= {policy.tool_error_rate_ci_upper_max}",
+            passed=(
+                tool_error.confidence_upper <= policy.tool_error_rate_ci_upper_max
+                and tool_error.candidate_value <= policy.candidate_tool_error_rate_max
+            ),
+            rule=(
+                f"confidence_upper <= {policy.tool_error_rate_ci_upper_max} and "
+                f"candidate_value <= {policy.candidate_tool_error_rate_max}"
+            ),
         ),
         "latency_p95_delta": _with_rule(
             latency,

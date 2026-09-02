@@ -10,6 +10,7 @@ def test_report_escapes_untrusted_case_content_and_explains_demo_boundary() -> N
         "status": "DEMO_PASS",
         "scope": "DEMO",
         "case_count": 1,
+        "source_identities": {},
         "dataset_sha256": "d" * 64,
         "evalops_sha": "e" * 40,
         "human_review_status": "PENDING",

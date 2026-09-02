@@ -76,6 +76,7 @@ def write_product_artifacts(
         "status": result.status,
         "dataset_sha256": result.dataset_sha256,
         "evalops_sha": result.evalops_sha,
+        "source_identities": result.source_identities,
         "producing_command": command,
         "files": entries,
         "formal_quality_claim_allowed": False,
