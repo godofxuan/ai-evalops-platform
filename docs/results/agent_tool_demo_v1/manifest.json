@@ -1,0 +1,94 @@
+{
+  "agent_tool_use_assessment": {
+    "method": "exact-common-case descriptive means; formal bootstrap remains authoritative",
+    "metrics": {
+      "agent_task_completion": {
+        "baseline_mean": 0.8333333333333334,
+        "candidate_mean": 1.0,
+        "paired_delta": 0.16666666666666663,
+        "passed": true,
+        "rule": "candidate_mean >= 0.95"
+      },
+      "policy_violation_rate": {
+        "baseline_mean": 0.16666666666666666,
+        "candidate_mean": 0.0,
+        "paired_delta": -0.16666666666666666,
+        "passed": true,
+        "rule": "candidate_mean <= 0.05"
+      },
+      "tool_argument_validity": {
+        "baseline_mean": 0.3333333333333333,
+        "candidate_mean": 1.0,
+        "paired_delta": 0.6666666666666667,
+        "passed": true,
+        "rule": "candidate_mean >= 0.95"
+      },
+      "tool_budget_violation_rate": {
+        "baseline_mean": 0.16666666666666666,
+        "candidate_mean": 0.0,
+        "paired_delta": -0.16666666666666666,
+        "passed": true,
+        "rule": "candidate_mean <= 0.05"
+      },
+      "tool_error_rate": {
+        "baseline_mean": 0.16666666666666666,
+        "candidate_mean": 0.0,
+        "paired_delta": -0.16666666666666666,
+        "passed": true,
+        "rule": "candidate_mean <= 0.05"
+      },
+      "tool_selection_accuracy": {
+        "baseline_mean": 0.5,
+        "candidate_mean": 1.0,
+        "paired_delta": 0.5,
+        "passed": true,
+        "rule": "candidate_mean >= 0.95"
+      }
+    },
+    "status": "PASS"
+  },
+  "dataset_sha256": "d6c10ec43c4f9194c3fc02ffaee2f7457adac0bf8510513761ac9134180d139b",
+  "evalops_sha": "475795c86bb1d66308bde8c3d1071b7d5cc41747",
+  "experiment_id": "agent-tool-use-product-demo-v1",
+  "files": [
+    {
+      "byte_size": 317744,
+      "path": "result.json",
+      "sha256": "dc69cba44e0d1205b69199ad04464a9c9b04c1ec4f0fa7822b98a65abfac84d1"
+    },
+    {
+      "byte_size": 146088,
+      "path": "report.html",
+      "sha256": "a01556abf82dd50dd5e0c3790946e33d626788d7cf2c830a1805523fb761b829"
+    },
+    {
+      "byte_size": 46238,
+      "path": "baseline.json",
+      "sha256": "e636ac89e66338434341e82a2b62f5ac45be83eb5052f67b6364b0d3e7a57e3c"
+    },
+    {
+      "byte_size": 46842,
+      "path": "candidate.json",
+      "sha256": "79bec323ed94dab4180c4914c1bf30ef7e8082b849cfec44d429934d943b8fcc"
+    }
+  ],
+  "formal_quality_claim_allowed": false,
+  "human_review_status": "PENDING",
+  "producing_command": "python -m scripts.run_product_experiment --spec benchmarks\\agent_tool_demo_v1\\experiment.json",
+  "production_ready": false,
+  "schema_version": "evalops.product-experiment-manifest/1.0",
+  "source_identities": {
+    "baseline": {
+      "provider_type": "fixture",
+      "repository": "demo://evalops/agent-baseline",
+      "sha": "2222222222222222222222222222222222222222"
+    },
+    "candidate": {
+      "provider_type": "fixture",
+      "repository": "demo://evalops/agent-candidate",
+      "sha": "3333333333333333333333333333333333333333"
+    }
+  },
+  "status": "DEMO_PASS",
+  "task_type": "AGENT_TOOL_USE"
+}

@@ -37,6 +37,14 @@ See the [Agent tool-use tutorial](docs/learning/AGENT_TOOL_USE_EVALUATION.md) an
 [decision/execution log](docs/reviews/agent_tool_use_eval_execution_log.md). This is deterministic
 workflow evidence (`DEMO_PASS`), not a claim that a real deployed Agent improved.
 
+Exact implementation `475795c86bb1d66308bde8c3d1071b7d5cc41747` passed
+[GitHub Actions 33606884799](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33606884799).
+The deterministic candidate moved task completion `83.33% → 100%`, exact tool selection
+`50% → 100%`, exact arguments `33.33% → 100%`, and policy/budget/tool-error rates from
+`16.67% → 0%`. These fixture metrics prove evaluator behavior only. Inspect the
+[portable Agent report](docs/results/agent_tool_demo_v1/report.html) and rehash its
+[manifest](docs/results/agent_tool_demo_v1/manifest.json).
+
 The demo deliberately contains known baseline misses and deterministic candidate repairs so a
 reader can inspect the complete product loop without an API key or model bill. Its result is
 `DEMO_PASS`, never `FORMAL_AB_COMPLETE`: it proves the runner, evaluator, statistics, identity

@@ -3,6 +3,10 @@
 Date: 2026-09-02  
 Branch: `codex/agent-tool-use-eval-v1`
 
+Implementation: `475795c86bb1d66308bde8c3d1071b7d5cc41747`
+
+Exact implementation CI: `33606884799` — success
+
 ## Decisions
 
 1. Preserved the existing 120-case formal sufficiency floor instead of weakening it to make the
@@ -22,6 +26,8 @@ Branch: `codex/agent-tool-use-eval-v1`
 | `uv` command unavailable | no global executable in this shell | used repository `.venv` | no system mutation |
 | First Agent runner returned all failures | strict Pydantic fixture validation rejected JSON lists for tuple `tool_calls` | made runtime calls a strict list while expected calls remain immutable tuples | fixture and HTTP-shaped JSON share a valid envelope |
 | Timing was measured instead of fixture latency | provider validation exception entered fail-closed fallback | fixed the envelope, retained fallback | declared fixture latency/cost is preserved; exceptions still become failed cases |
+| First remote CI failed formatting | CI runs `ruff format --check` in addition to lint | formatted four changed modules and reran focused checks | replacement exact-SHA CI passed |
+| First evidence generation used a mistyped expanded SHA | a short SHA was manually expanded | rejected the uncommitted output and regenerated using `git rev-parse HEAD` | committed evidence binds the exact implementation SHA |
 
 ## Achieved behavior
 
