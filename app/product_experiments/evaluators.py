@@ -87,8 +87,7 @@ class ToolErrorRateEvaluator:
     def evaluate(self, case: CaseView, result: ResultView) -> float:
         del case
         call_error = any(
-            getattr(call, "status", None) == "error"
-            for call in getattr(result, "tool_calls", ())
+            getattr(call, "status", None) == "error" for call in getattr(result, "tool_calls", ())
         )
         return float(result.tool_error or call_error)
 

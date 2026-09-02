@@ -96,8 +96,7 @@ def build_cases() -> list[dict[str, object]]:
 
 def encoded_cases() -> bytes:
     return (
-        json.dumps(build_cases(), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        + "\n"
+        json.dumps(build_cases(), ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n"
     ).encode("utf-8")
 
 

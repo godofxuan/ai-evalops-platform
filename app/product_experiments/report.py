@@ -34,9 +34,9 @@ def render_experiment_html(result: Mapping[str, Any]) -> str:
     agent_section = ""
     if result.get("task_type") == "AGENT_TOOL_USE":
         agent_rows = "".join(_agent_row(row) for row in rows)
-        agent_section = f'''<h2>Agent tool-use trace</h2>
+        agent_section = f"""<h2>Agent tool-use trace</h2>
 <section class="table-wrap"><table><thead><tr><th>Case</th><th>Baseline calls</th><th>Candidate calls</th><th>Baseline metrics</th><th>Candidate metrics</th></tr></thead>
-<tbody>{agent_rows}</tbody></table></section>'''
+<tbody>{agent_rows}</tbody></table></section>"""
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>

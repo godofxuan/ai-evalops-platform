@@ -245,9 +245,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
     cases = _load_dataset(str(loaded.dataset_path), spec.dataset.sha256)
     if spec.task_type == "AGENT_TOOL_USE":
         invalid = [
-            case.case_id
-            for case in cases
-            if not case.allowed_tools or case.max_tool_calls is None
+            case.case_id for case in cases if not case.allowed_tools or case.max_tool_calls is None
         ]
         if invalid:
             raise DatasetIntegrityError(
@@ -405,9 +403,7 @@ def _measurement(
     task_type: Literal["QA", "AGENT_TOOL_USE"],
 ) -> FormalCaseMeasurement:
     task_score = (
-        scores["reference_answer"]
-        if task_type == "QA"
-        else scores["agent_task_completion"]
+        scores["reference_answer"] if task_type == "QA" else scores["agent_task_completion"]
     )
     return FormalCaseMeasurement(
         case_id=case.case_id,
@@ -508,14 +504,10 @@ def _comparisons(
                 for call in provider_results["candidate"][case_id].tool_calls
             ],
             baseline_agent_metrics=(
-                score_results["baseline"][case_id]
-                if task_type == "AGENT_TOOL_USE"
-                else {}
+                score_results["baseline"][case_id] if task_type == "AGENT_TOOL_USE" else {}
             ),
             candidate_agent_metrics=(
-                score_results["candidate"][case_id]
-                if task_type == "AGENT_TOOL_USE"
-                else {}
+                score_results["candidate"][case_id] if task_type == "AGENT_TOOL_USE" else {}
             ),
         )
         for case_id in sorted(left)
