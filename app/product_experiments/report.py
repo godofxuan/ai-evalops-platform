@@ -24,10 +24,19 @@ def render_experiment_html(result: Mapping[str, Any]) -> str:
     raw_rows = result.get("case_comparisons", [])
     rows: Sequence[object] = raw_rows if isinstance(raw_rows, list) else []
     table_rows = "".join(_case_row(row) for row in rows)
-    metrics = result.get("automated_assessment", {})
+    metrics = {
+        "formal_core": result.get("automated_assessment", {}),
+        "agent_tool_use": result.get("agent_tool_use_assessment"),
+    }
     metrics_json = json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True)
     requirements = result.get("input_requirements", [])
     requirements_json = json.dumps(requirements, ensure_ascii=False, indent=2, sort_keys=True)
+    agent_section = ""
+    if result.get("task_type") == "AGENT_TOOL_USE":
+        agent_rows = "".join(_agent_row(row) for row in rows)
+        agent_section = f'''<h2>Agent tool-use trace</h2>
+<section class="table-wrap"><table><thead><tr><th>Case</th><th>Baseline calls</th><th>Candidate calls</th><th>Baseline metrics</th><th>Candidate metrics</th></tr></thead>
+<tbody>{agent_rows}</tbody></table></section>'''
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -64,6 +73,7 @@ th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Cod
 <h2>逐条对比</h2>
 <section class="table-wrap"><table><thead><tr><th>Case</th><th>Category</th><th>Baseline answer</th><th>Candidate answer</th><th>Success B→C</th><th>Citation B→C</th><th>Tool error B→C</th><th>Latency B→C</th><th>Cost B→C</th><th>Trace B / C</th></tr></thead>
 <tbody>{table_rows}</tbody></table></section>
+{agent_section}
 <h2>机器评估</h2><pre>{_escape(metrics_json)}</pre>
 </main></body></html>"""
 
@@ -81,6 +91,18 @@ def _case_row(raw: object) -> str:
         f"{row.get('baseline_latency_ms', '')} → {row.get('candidate_latency_ms', '')} ms",
         f"{row.get('baseline_cost_usd', '')} → {row.get('candidate_cost_usd', '')} USD",
         f"{row.get('baseline_trace_id', '')} / {row.get('candidate_trace_id', '')}",
+    )
+    return "<tr>" + "".join(f"<td>{_escape(value)}</td>" for value in values) + "</tr>"
+
+
+def _agent_row(raw: object) -> str:
+    row = raw if isinstance(raw, Mapping) else {}
+    values = (
+        row.get("case_id", ""),
+        json.dumps(row.get("baseline_tool_calls", []), ensure_ascii=False, sort_keys=True),
+        json.dumps(row.get("candidate_tool_calls", []), ensure_ascii=False, sort_keys=True),
+        json.dumps(row.get("baseline_agent_metrics", {}), ensure_ascii=False, sort_keys=True),
+        json.dumps(row.get("candidate_agent_metrics", {}), ensure_ascii=False, sort_keys=True),
     )
     return "<tr>" + "".join(f"<td>{_escape(value)}</td>" for value in values) + "</tr>"
 

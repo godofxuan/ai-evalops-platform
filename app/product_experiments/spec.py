@@ -64,17 +64,41 @@ class ExperimentSpec(_StrictModel):
         pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$",
     )
     scope: Literal["DEMO", "FORMAL"]
+    task_type: Literal["QA", "AGENT_TOOL_USE"] = "QA"
     dataset: DatasetReference
     policy_path: str = Field(min_length=1, max_length=1_024)
     arms: tuple[ExperimentArm, ExperimentArm]
-    evaluators: tuple[Literal["reference_answer", "citation_correctness", "tool_error_rate"], ...]
+    evaluators: tuple[
+        Literal[
+            "reference_answer",
+            "citation_correctness",
+            "agent_task_completion",
+            "tool_selection_accuracy",
+            "tool_argument_validity",
+            "policy_violation_rate",
+            "tool_budget_violation_rate",
+            "tool_error_rate",
+        ],
+        ...,
+    ]
     max_concurrency: int = Field(default=8, ge=1, le=64)
 
     @model_validator(mode="after")
     def validate_pair_and_evaluators(self) -> ExperimentSpec:
         if [arm.label for arm in self.arms] != ["baseline", "candidate"]:
             raise ValueError("arms must contain baseline and candidate in that order")
-        required = {"reference_answer", "citation_correctness", "tool_error_rate"}
+        required = (
+            {"reference_answer", "citation_correctness", "tool_error_rate"}
+            if self.task_type == "QA"
+            else {
+                "agent_task_completion",
+                "tool_selection_accuracy",
+                "tool_argument_validity",
+                "policy_violation_rate",
+                "tool_budget_violation_rate",
+                "tool_error_rate",
+            }
+        )
         if set(self.evaluators) != required or len(self.evaluators) != len(required):
             raise ValueError(f"evaluators must contain exactly {sorted(required)}")
         return self

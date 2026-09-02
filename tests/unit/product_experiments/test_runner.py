@@ -101,6 +101,38 @@ def _experiment(tmp_path: Path, *, scope: str = "DEMO") -> Path:
     return spec_path
 
 
+def _agent_experiment(tmp_path: Path) -> Path:
+    spec_path = _experiment(tmp_path)
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    cases = json.loads((tmp_path / "cases.json").read_text(encoding="utf-8"))
+    for index, case in enumerate(cases):
+        expected = {"name": "search", "arguments": {"query": f"item-{index}"}}
+        case["expected_citation_ids"] = []
+        case["expected_tool_calls"] = [expected]
+        case["allowed_tools"] = ["search"]
+        case["max_tool_calls"] = 1
+        for label in ("baseline", "candidate"):
+            fixture = case["metadata"]["fixture_profiles"][label]
+            fixture["terminal_state"] = "completed"
+            fixture["tool_calls"] = [expected]
+        if index % 5 == 0:
+            case["metadata"]["fixture_profiles"]["baseline"]["tool_calls"] = [
+                {"name": "admin_delete", "arguments": {}, "status": "success"}
+            ]
+    spec["task_type"] = "AGENT_TOOL_USE"
+    spec["evaluators"] = [
+        "agent_task_completion",
+        "tool_selection_accuracy",
+        "tool_argument_validity",
+        "policy_violation_rate",
+        "tool_budget_violation_rate",
+        "tool_error_rate",
+    ]
+    spec["dataset"]["sha256"] = _write_json(tmp_path / "cases.json", cases)
+    _write_json(spec_path, spec)
+    return spec_path
+
+
 @pytest.mark.asyncio
 async def test_demo_runs_120_paired_cases_and_preserves_claim_boundary(tmp_path: Path) -> None:
     result = await run_experiment(_experiment(tmp_path), evalops_sha="e" * 40)
@@ -123,6 +155,21 @@ async def test_demo_runs_120_paired_cases_and_preserves_claim_boundary(tmp_path:
     assert len(result.arms["candidate"].cases) == 120
     assert result.case_comparisons[0].baseline_trace_id == "demo-baseline-000"
     assert result.case_comparisons[0].candidate_trace_id == "demo-candidate-000"
+
+
+@pytest.mark.asyncio
+async def test_agent_demo_compares_tool_traces_and_gates_agent_metrics(tmp_path: Path) -> None:
+    result = await run_experiment(_agent_experiment(tmp_path), evalops_sha="e" * 40)
+
+    assert result.status == "DEMO_PASS"
+    assert result.task_type == "AGENT_TOOL_USE"
+    assert result.agent_tool_use_assessment is not None
+    assert result.agent_tool_use_assessment["status"] == "PASS"
+    first = result.case_comparisons[0]
+    assert first.baseline_agent_metrics["policy_violation_rate"] == 1.0
+    assert first.candidate_agent_metrics["policy_violation_rate"] == 0.0
+    assert first.baseline_tool_calls[0]["name"] == "admin_delete"
+    assert first.candidate_tool_calls[0]["name"] == "search"
 
 
 @pytest.mark.asyncio

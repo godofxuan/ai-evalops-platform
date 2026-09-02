@@ -34,6 +34,21 @@ class DatasetIntegrityError(ValueError):
     """The dataset bytes do not match the preregistered identity."""
 
 
+class ToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: str = Field(min_length=1, max_length=200)
+    arguments: dict[str, JsonValue] = Field(default_factory=dict)
+    status: Literal["success", "error"] = "success"
+
+
+class ExpectedToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    name: str = Field(min_length=1, max_length=200)
+    arguments: dict[str, JsonValue] = Field(default_factory=dict)
+
+
 class ExperimentCase(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -42,6 +57,9 @@ class ExperimentCase(BaseModel):
     prompt: str = Field(min_length=1, max_length=20_000)
     reference_answer: str = Field(max_length=100_000)
     expected_citation_ids: tuple[str, ...] = ()
+    expected_tool_calls: tuple[ExpectedToolCall, ...] = ()
+    allowed_tools: tuple[str, ...] = ()
+    max_tool_calls: int | None = Field(default=None, ge=0, le=100)
     metadata: dict[str, JsonValue] = Field(default_factory=dict)
 
 
@@ -54,6 +72,9 @@ class ProviderResult(BaseModel):
     cost_usd: float = Field(ge=0)
     trace_id: str | None = None
     tool_error: bool = False
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    terminal_state: Literal["completed", "failed", "blocked"] | None = None
+    budget_exhausted: bool = False
 
 
 class Provider(Protocol):
@@ -83,6 +104,10 @@ class CaseComparison(BaseModel):
     cost_delta_usd: float
     baseline_trace_id: str | None
     candidate_trace_id: str | None
+    baseline_tool_calls: list[dict[str, JsonValue]] = Field(default_factory=list)
+    candidate_tool_calls: list[dict[str, JsonValue]] = Field(default_factory=list)
+    baseline_agent_metrics: dict[str, float] = Field(default_factory=dict)
+    candidate_agent_metrics: dict[str, float] = Field(default_factory=dict)
 
 
 class ProductExperimentResult(BaseModel):
@@ -99,12 +124,14 @@ class ProductExperimentResult(BaseModel):
         "INPUT_REQUIRED",
     ]
     scope: Literal["DEMO", "FORMAL"]
+    task_type: Literal["QA", "AGENT_TOOL_USE"] = "QA"
     dataset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evalops_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     case_count: int = Field(ge=0)
     source_identities: dict[str, dict[str, str]]
     arms: dict[str, FormalArmResult]
     automated_assessment: dict[str, Any]
+    agent_tool_use_assessment: dict[str, Any] | None = None
     case_comparisons: list[CaseComparison]
     human_review_status: Literal["PENDING"] = "PENDING"
     formal_quality_claim_allowed: Literal[False] = False
@@ -216,6 +243,16 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
     loaded = load_experiment_spec(Path(cast(str | Path, spec_path)))
     spec = loaded.spec
     cases = _load_dataset(str(loaded.dataset_path), spec.dataset.sha256)
+    if spec.task_type == "AGENT_TOOL_USE":
+        invalid = [
+            case.case_id
+            for case in cases
+            if not case.allowed_tools or case.max_tool_calls is None
+        ]
+        if invalid:
+            raise DatasetIntegrityError(
+                "agent cases require allowed_tools and max_tool_calls: " + ", ".join(invalid[:5])
+            )
     policy = FormalQualityPolicy.model_validate_json(loaded.policy_path.read_text(encoding="utf-8"))
     requirements = _input_requirements(spec.arms)
     source_identities: dict[str, dict[str, str]] = {
@@ -231,6 +268,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
             experiment_id=spec.experiment_id,
             status="INPUT_REQUIRED",
             scope=spec.scope,
+            task_type=spec.task_type,
             dataset_sha256=spec.dataset.sha256,
             evalops_sha=evalops_sha,
             case_count=len(cases),
@@ -251,7 +289,9 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
     evaluators = registered_evaluators(spec.evaluators)
     semaphore = asyncio.Semaphore(spec.max_concurrency)
 
-    async def measure(arm: ExperimentArm, case: ExperimentCase) -> FormalCaseMeasurement:
+    async def measure(
+        arm: ExperimentArm, case: ExperimentCase
+    ) -> tuple[FormalCaseMeasurement, ProviderResult, dict[str, float]]:
         async with semaphore:
             started = time.perf_counter()
             try:
@@ -265,13 +305,25 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
                     cost_usd=0.0,
                     tool_error=True,
                 )
-            return _measurement(case, result, evaluators=evaluators)
+            scores = _scores(case, result, evaluators=evaluators)
+            return (
+                _measurement(case, result, scores=scores, task_type=spec.task_type),
+                result,
+                scores,
+            )
 
     measurements: dict[str, list[FormalCaseMeasurement]] = {}
+    provider_results: dict[str, dict[str, ProviderResult]] = {}
+    score_results: dict[str, dict[str, dict[str, float]]] = {}
     for arm in spec.arms:
-        measurements[arm.label] = list(
-            await asyncio.gather(*(measure(arm, case) for case in cases))
-        )
+        rows = list(await asyncio.gather(*(measure(arm, case) for case in cases)))
+        measurements[arm.label] = [row[0] for row in rows]
+        provider_results[arm.label] = {
+            case.case_id: row[1] for case, row in zip(cases, rows, strict=True)
+        }
+        score_results[arm.label] = {
+            case.case_id: row[2] for case, row in zip(cases, rows, strict=True)
+        }
     baseline_arm, candidate_arm = spec.arms
     baseline = FormalArmResult(
         schema_version="formal-agent-quality-arm/1.0",
@@ -296,6 +348,12 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
         failure_matrix_status="PASS",
         formal_ab_eligible=spec.scope == "FORMAL",
     )
+    agent_assessment = (
+        _agent_assessment(score_results) if spec.task_type == "AGENT_TOOL_USE" else None
+    )
+    automated_pass = assessment.status == "PASS" and (
+        agent_assessment is None or agent_assessment["status"] == "PASS"
+    )
     status: Literal[
         "DEMO_PASS",
         "DEMO_FAIL",
@@ -304,8 +362,8 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
         "INSUFFICIENT_EVIDENCE",
     ]
     if spec.scope == "DEMO":
-        status = "DEMO_PASS" if assessment.status == "PASS" else "DEMO_FAIL"
-    elif assessment.status == "PASS":
+        status = "DEMO_PASS" if automated_pass else "DEMO_FAIL"
+    elif automated_pass:
         status = "AUTOMATED_PASS_HUMAN_REVIEW_PENDING"
     elif assessment.status == "INSUFFICIENT_EVIDENCE":
         status = "INSUFFICIENT_EVIDENCE"
@@ -315,13 +373,21 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
         experiment_id=spec.experiment_id,
         status=status,
         scope=spec.scope,
+        task_type=spec.task_type,
         dataset_sha256=spec.dataset.sha256,
         evalops_sha=evalops_sha,
         case_count=len(cases),
         source_identities=source_identities,
         arms={"baseline": baseline, "candidate": candidate},
         automated_assessment=assessment.as_json(),
-        case_comparisons=_comparisons(baseline, candidate),
+        agent_tool_use_assessment=agent_assessment,
+        case_comparisons=_comparisons(
+            baseline,
+            candidate,
+            provider_results=provider_results,
+            score_results=score_results,
+            task_type=spec.task_type,
+        ),
     )
 
 
@@ -335,15 +401,20 @@ def _measurement(
     case: ExperimentCase,
     result: ProviderResult,
     *,
-    evaluators: tuple[CaseEvaluator, ...],
+    scores: dict[str, float],
+    task_type: Literal["QA", "AGENT_TOOL_USE"],
 ) -> FormalCaseMeasurement:
-    scores = {evaluator.name: evaluator.evaluate(case, result) for evaluator in evaluators}
+    task_score = (
+        scores["reference_answer"]
+        if task_type == "QA"
+        else scores["agent_task_completion"]
+    )
     return FormalCaseMeasurement(
         case_id=case.case_id,
         category=case.category,
         prompt=case.prompt,
-        task_success=scores["reference_answer"],
-        citation_correctness=scores["citation_correctness"],
+        task_success=task_score,
+        citation_correctness=scores.get("citation_correctness", 1.0),
         tool_error_rate=scores["tool_error_rate"],
         latency_ms=result.latency_ms,
         cost_usd=result.cost_usd,
@@ -353,9 +424,57 @@ def _measurement(
     )
 
 
+def _scores(
+    case: ExperimentCase,
+    result: ProviderResult,
+    *,
+    evaluators: tuple[CaseEvaluator, ...],
+) -> dict[str, float]:
+    return {evaluator.name: evaluator.evaluate(case, result) for evaluator in evaluators}
+
+
+def _agent_assessment(
+    results: dict[str, dict[str, dict[str, float]]],
+) -> dict[str, Any]:
+    positive = {
+        "agent_task_completion": 0.95,
+        "tool_selection_accuracy": 0.95,
+        "tool_argument_validity": 0.95,
+    }
+    negative = {
+        "policy_violation_rate": 0.05,
+        "tool_budget_violation_rate": 0.05,
+        "tool_error_rate": 0.05,
+    }
+    metrics: dict[str, dict[str, float | bool | str]] = {}
+    for name, threshold in {**positive, **negative}.items():
+        baseline_values = [scores[name] for scores in results["baseline"].values()]
+        candidate_values = [scores[name] for scores in results["candidate"].values()]
+        baseline_mean = sum(baseline_values) / len(baseline_values)
+        candidate_mean = sum(candidate_values) / len(candidate_values)
+        passed = candidate_mean >= threshold if name in positive else candidate_mean <= threshold
+        operator = ">=" if name in positive else "<="
+        metrics[name] = {
+            "baseline_mean": baseline_mean,
+            "candidate_mean": candidate_mean,
+            "paired_delta": candidate_mean - baseline_mean,
+            "passed": passed,
+            "rule": f"candidate_mean {operator} {threshold}",
+        }
+    return {
+        "status": "PASS" if all(bool(item["passed"]) for item in metrics.values()) else "FAIL",
+        "method": "exact-common-case descriptive means; formal bootstrap remains authoritative",
+        "metrics": metrics,
+    }
+
+
 def _comparisons(
     baseline: FormalArmResult,
     candidate: FormalArmResult,
+    *,
+    provider_results: dict[str, dict[str, ProviderResult]],
+    score_results: dict[str, dict[str, dict[str, float]]],
+    task_type: Literal["QA", "AGENT_TOOL_USE"],
 ) -> list[CaseComparison]:
     left = {case.case_id: case for case in baseline.cases}
     right = {case.case_id: case for case in candidate.cases}
@@ -380,6 +499,24 @@ def _comparisons(
             cost_delta_usd=right[case_id].cost_usd - left[case_id].cost_usd,
             baseline_trace_id=left[case_id].trace_id,
             candidate_trace_id=right[case_id].trace_id,
+            baseline_tool_calls=[
+                call.model_dump(mode="json")
+                for call in provider_results["baseline"][case_id].tool_calls
+            ],
+            candidate_tool_calls=[
+                call.model_dump(mode="json")
+                for call in provider_results["candidate"][case_id].tool_calls
+            ],
+            baseline_agent_metrics=(
+                score_results["baseline"][case_id]
+                if task_type == "AGENT_TOOL_USE"
+                else {}
+            ),
+            candidate_agent_metrics=(
+                score_results["candidate"][case_id]
+                if task_type == "AGENT_TOOL_USE"
+                else {}
+            ),
         )
         for case_id in sorted(left)
     ]

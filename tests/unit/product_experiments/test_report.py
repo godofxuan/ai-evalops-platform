@@ -49,3 +49,48 @@ def test_report_escapes_untrusted_case_content_and_explains_demo_boundary() -> N
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
     assert "演示通过不等于正式质量提升" in rendered
     assert "trace-b / trace-c" in rendered
+
+
+def test_agent_report_escapes_tool_trace_and_renders_agent_metrics() -> None:
+    rendered = render_experiment_html(
+        {
+            "experiment_id": "agent-demo",
+            "task_type": "AGENT_TOOL_USE",
+            "status": "DEMO_PASS",
+            "scope": "DEMO",
+            "case_count": 1,
+            "case_comparisons": [
+                {
+                    "case_id": "agent-1",
+                    "category": "authorization",
+                    "baseline_answer": "done",
+                    "candidate_answer": "done",
+                    "baseline_task_success": 1,
+                    "candidate_task_success": 1,
+                    "baseline_citation_correctness": 1,
+                    "candidate_citation_correctness": 1,
+                    "baseline_tool_error_rate": 0,
+                    "candidate_tool_error_rate": 0,
+                    "baseline_latency_ms": 1,
+                    "candidate_latency_ms": 1,
+                    "baseline_cost_usd": 0,
+                    "candidate_cost_usd": 0,
+                    "baseline_trace_id": "b",
+                    "candidate_trace_id": "c",
+                    "baseline_tool_calls": [
+                        {"name": "<script>", "arguments": {}, "status": "success"}
+                    ],
+                    "candidate_tool_calls": [],
+                    "baseline_agent_metrics": {"policy_violation_rate": 1.0},
+                    "candidate_agent_metrics": {"policy_violation_rate": 0.0},
+                }
+            ],
+            "automated_assessment": {},
+            "input_requirements": [],
+        }
+    )
+
+    assert "Agent tool-use trace" in rendered
+    assert "&lt;script&gt;" in rendered
+    assert "policy_violation_rate" in rendered
+    assert "<script>" not in rendered

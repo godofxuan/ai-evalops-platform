@@ -22,6 +22,21 @@ machine-readable result, arm artifacts, and SHA-256 manifest:
 Start-Process artifacts/product-demo/report.html
 ```
 
+It is not limited to RAG. The same paired runner now has an Agent tool-use pack that compares
+ordered tool selection, exact arguments, authorization, call budget, error recovery and terminal
+completion across 120 frozen cases:
+
+```powershell
+./.venv/Scripts/python.exe -m scripts.run_product_experiment `
+  --spec benchmarks/agent_tool_demo_v1/experiment.json `
+  --output-dir artifacts/agent-tool-demo
+Start-Process artifacts/agent-tool-demo/report.html
+```
+
+See the [Agent tool-use tutorial](docs/learning/AGENT_TOOL_USE_EVALUATION.md) and
+[decision/execution log](docs/reviews/agent_tool_use_eval_execution_log.md). This is deterministic
+workflow evidence (`DEMO_PASS`), not a claim that a real deployed Agent improved.
+
 The demo deliberately contains known baseline misses and deterministic candidate repairs so a
 reader can inspect the complete product loop without an API key or model bill. Its result is
 `DEMO_PASS`, never `FORMAL_AB_COMPLETE`: it proves the runner, evaluator, statistics, identity
@@ -52,6 +67,7 @@ before any request is sent. Formal automated success remains
 | RAG input audit | [RAG_FORMAL_INPUT_AUDIT.md](docs/review/RAG_FORMAL_INPUT_AUDIT.md) |
 | External aggregate reference | [rag_r5_reference.json](benchmarks/external_evidence/rag_r5_reference.json) |
 | External aggregate verification | [verification.json](docs/results/rag_r5_external_evidence/verification.json) |
+| WixQA negative aggregate pin | [wixqa_reranker_negative_pin.json](benchmarks/external_evidence/wixqa_reranker_negative_pin.json) |
 | OSS design benchmark | [OPEN_SOURCE_PRODUCT_BENCHMARK.md](docs/review/OPEN_SOURCE_PRODUCT_BENCHMARK.md) |
 
 ### Verify real external aggregate evidence without inventing cases

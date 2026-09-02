@@ -72,3 +72,23 @@ def test_loader_resolves_paths_relative_to_spec_without_changing_cwd(tmp_path: P
 
     assert loaded.dataset_path == tmp_path / "cases.json"
     assert loaded.policy_path == tmp_path / "policy.json"
+
+
+def test_agent_task_type_requires_the_exact_safe_evaluator_set() -> None:
+    values = _values()
+    values["task_type"] = "AGENT_TOOL_USE"
+    values["evaluators"] = (
+        "agent_task_completion",
+        "tool_selection_accuracy",
+        "tool_argument_validity",
+        "policy_violation_rate",
+        "tool_budget_violation_rate",
+        "tool_error_rate",
+    )
+
+    spec = ExperimentSpec.model_validate(values)
+    assert spec.task_type == "AGENT_TOOL_USE"
+
+    values["evaluators"] = (*values["evaluators"], "uploaded_python")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError, match="uploaded_python"):
+        ExperimentSpec.model_validate(values)

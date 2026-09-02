@@ -1,0 +1,21 @@
+{
+  "schema_version": "formal-agent-quality-policy/1.0",
+  "minimum_common_cases": 120,
+  "minimum_cases_per_category": 20,
+  "required_categories": [
+    "single_tool",
+    "multi_tool",
+    "argument_validation",
+    "authorization",
+    "budget",
+    "recovery"
+  ],
+  "bootstrap_resamples": 10000,
+  "bootstrap_seed": 20260902,
+  "task_success_ci_lower_min": 0.05,
+  "citation_correctness_ci_lower_min": 0.0,
+  "tool_error_rate_ci_upper_max": -0.05,
+  "latency_p95_relative_delta_max": 0.1,
+  "cost_mean_relative_delta_max": 0.05,
+  "require_exact_case_set": true
+}
