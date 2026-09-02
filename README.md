@@ -78,6 +78,8 @@ before any request is sent. Formal automated success remains
 | WixQA negative aggregate pin | [wixqa_reranker_negative_pin.json](benchmarks/external_evidence/wixqa_reranker_negative_pin.json) |
 | WixQA BGE positive/uncertain pin | [wixqa_bge_reranker_positive_uncertain_pin.json](benchmarks/external_evidence/wixqa_bge_reranker_positive_uncertain_pin.json) |
 | WixQA BGE verification | [verification.json](docs/results/wixqa_bge_reranker_positive_uncertain_v1/verification.json) |
+| WixQA multi-chunk mixed-result pin | [wixqa_article_multi_chunk_positive_mixed_pin.json](benchmarks/external_evidence/wixqa_article_multi_chunk_positive_mixed_pin.json) |
+| WixQA multi-chunk verification | [verification.json](docs/results/wixqa_article_multi_chunk_positive_mixed_v1/verification.json) |
 | OSS design benchmark | [OPEN_SOURCE_PRODUCT_BENCHMARK.md](docs/review/OPEN_SOURCE_PRODUCT_BENCHMARK.md) |
 
 ### Verify real external aggregate evidence without inventing cases
@@ -111,6 +113,16 @@ tracked result remains `aggregate_only`, `FORMAL_CASE_RESULTS=INPUT_REQUIRED`,
 `formal_quality_claim_allowed=false`, and `production_ready=false`. The earlier MiniLM negative
 result remains valid; the BGE result adds a model-selection and GPU-optimization outcome rather
 than rewriting that history.
+
+The later two-chunk article representation is also consumed only as aggregate evidence. On the
+historically consumed ExpertWritten cohort, its fixed retrospective point estimates were
+Recall/nDCG/MRR `69.58% / 56.12% / 55.11%` versus Dense
+`66.42% / 52.16% / 49.61%`. Only the MRR paired 95% interval was above zero; Recall and nDCG
+intervals crossed zero, p95 reached `693.73 ms`, and multi-article completeness did not improve.
+The verifier binds the nested protocol digest and requires the structured allowed/forbidden claim
+boundary to match the producer reference exactly. This remains an experimental, fixed-cohort
+retrieval result—not a fresh blind test, answer-quality result, per-case EvalOps A/B, latency SLO,
+or production approval.
 
 ## Historical Final Pair cross-repository evidence
 

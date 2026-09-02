@@ -108,6 +108,46 @@ def _private_keys(value: object) -> set[str]:
     return found
 
 
+def _protocol_digests(payload: dict[str, Any]) -> set[str]:
+    digests = {
+        value
+        for key, value in payload.items()
+        if (key == "protocol_sha256" or key.endswith("_protocol_sha256")) and isinstance(value, str)
+    }
+    protocol = payload.get("protocol")
+    if isinstance(protocol, dict):
+        digest = protocol.get("sha256")
+        if isinstance(digest, str):
+            digests.add(digest)
+    return digests
+
+
+def _validated_claim_boundary(
+    payload: dict[str, Any], reference: ProducerAggregateReference
+) -> list[str] | dict[str, list[str]]:
+    boundary = payload.get("claim_boundary")
+    if isinstance(boundary, list):
+        if not boundary or not all(isinstance(item, str) and item for item in boundary):
+            raise ExternalEvidenceError("aggregate artifact has no usable claim boundary")
+        return boundary
+    if not isinstance(boundary, dict) or set(boundary) != {"allowed", "forbidden"}:
+        raise ExternalEvidenceError("aggregate artifact has no usable claim boundary")
+    allowed = boundary.get("allowed")
+    forbidden = boundary.get("forbidden")
+    if (
+        not isinstance(allowed, list)
+        or not allowed
+        or not all(isinstance(item, str) and item for item in allowed)
+        or not isinstance(forbidden, list)
+        or not forbidden
+        or not all(isinstance(item, str) and item for item in forbidden)
+    ):
+        raise ExternalEvidenceError("aggregate artifact has no usable claim boundary")
+    if tuple(allowed) != reference.allowed_claims or tuple(forbidden) != reference.forbidden_claims:
+        raise ExternalEvidenceError("aggregate claim boundary does not match producer reference")
+    return {"allowed": allowed, "forbidden": forbidden}
+
+
 def verify_aggregate_contract(
     pin: AggregateContractPin,
     *,
@@ -141,20 +181,9 @@ def verify_aggregate_contract(
         raise ExternalEvidenceError("aggregate artifact contains private/per-case payload")
     if payload.get("decision") != reference.decision:
         raise ExternalEvidenceError("aggregate decision does not match producer reference")
-    protocol_digests = {
-        value
-        for key, value in payload.items()
-        if (key == "protocol_sha256" or key.endswith("_protocol_sha256")) and isinstance(value, str)
-    }
-    if reference.protocol_sha256 not in protocol_digests:
+    if reference.protocol_sha256 not in _protocol_digests(payload):
         raise ExternalEvidenceError("aggregate protocol does not match producer reference")
-    boundary = payload.get("claim_boundary")
-    if (
-        not isinstance(boundary, list)
-        or not boundary
-        or not all(isinstance(item, str) and item for item in boundary)
-    ):
-        raise ExternalEvidenceError("aggregate artifact has no usable claim boundary")
+    boundary = _validated_claim_boundary(payload, reference)
     return {
         "schema_version": "evalops.aggregate-contract-verification/1.0",
         "status": "AGGREGATE_EVIDENCE_VERIFIED",

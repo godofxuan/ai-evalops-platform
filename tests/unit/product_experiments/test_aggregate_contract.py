@@ -133,3 +133,40 @@ def test_rejects_reference_protocol_absent_from_named_protocol_digests(
 
     with pytest.raises(ExternalEvidenceError, match="protocol"):
         verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+
+def test_accepts_nested_protocol_and_exact_structured_claim_boundary(tmp_path: Path) -> None:
+    pin, sha = _contract(tmp_path)
+    payload = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
+    payload["protocol"] = {"path": "protocol.json", "sha256": payload.pop("protocol_sha256")}
+    payload["claim_boundary"] = {
+        "allowed": ["candidate was rejected"],
+        "forbidden": ["candidate improved"],
+    }
+    artifact_sha = _write(tmp_path / "evidence.json", payload)
+    reference = json.loads((tmp_path / "reference.json").read_text(encoding="utf-8"))
+    reference["artifact_sha256"] = artifact_sha
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+
+    result = verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+    assert result["status"] == "AGGREGATE_EVIDENCE_VERIFIED"
+    assert result["source_claim_boundary"] == payload["claim_boundary"]
+    assert result["formal_case_result_status"] == "INPUT_REQUIRED"
+    assert "case_results" not in result
+
+
+def test_rejects_structured_claim_boundary_drift(tmp_path: Path) -> None:
+    pin, sha = _contract(tmp_path)
+    payload = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
+    payload["claim_boundary"] = {
+        "allowed": ["candidate was promoted"],
+        "forbidden": ["candidate improved"],
+    }
+    artifact_sha = _write(tmp_path / "evidence.json", payload)
+    reference = json.loads((tmp_path / "reference.json").read_text(encoding="utf-8"))
+    reference["artifact_sha256"] = artifact_sha
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+
+    with pytest.raises(ExternalEvidenceError, match="claim boundary"):
+        verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
