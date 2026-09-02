@@ -86,6 +86,16 @@ jobs:
           uv run --no-sync pytest -m "not integration"
           --junitxml=/tmp/junit-unit.xml
 
+      - name: Verify usable paired-evaluation product workflow
+        run: |
+          uv run --no-sync python -m scripts.build_product_demo_dataset --verify
+          uv run --no-sync python -m scripts.run_product_experiment \
+            --spec benchmarks/product_demo_v1/experiment.json \
+            --output-dir /tmp/evalops-product-demo \
+            --evalops-sha "$GITHUB_SHA"
+          uv run --no-sync python -m scripts.verify_product_experiment \
+            /tmp/evalops-product-demo/manifest.json
+
       - name: Validate external harness review state
         run: uv run --no-sync python -m human_review.validate_reviews --allow-pending
 

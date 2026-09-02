@@ -1,0 +1,36 @@
+{
+  "arms": [
+    {
+      "label": "baseline",
+      "provider": {
+        "profile": "baseline",
+        "type": "fixture"
+      },
+      "source_repository": "demo://evalops/product-baseline",
+      "source_sha": "0000000000000000000000000000000000000000"
+    },
+    {
+      "label": "candidate",
+      "provider": {
+        "profile": "candidate",
+        "type": "fixture"
+      },
+      "source_repository": "demo://evalops/product-candidate",
+      "source_sha": "1111111111111111111111111111111111111111"
+    }
+  ],
+  "dataset": {
+    "path": "cases.json",
+    "sha256": "563a5063ae06efcd8b4a49729bf3621887b9876ffe34bc66bf41c0b6b2bb916c"
+  },
+  "evaluators": [
+    "reference_answer",
+    "citation_correctness",
+    "tool_error_rate"
+  ],
+  "experiment_id": "paired-rag-product-demo-v1",
+  "max_concurrency": 8,
+  "policy_path": "../formal_agent_quality_v1/policy.json",
+  "schema_version": "evalops.experiment/1.0",
+  "scope": "DEMO"
+}
