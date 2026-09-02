@@ -1,0 +1,30 @@
+{
+  "schema_version": "evalops.external-evidence-reference/1.0",
+  "evidence_id": "enterprise-rag-r5-public-page-localization-v1",
+  "source_repository": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot",
+  "source_sha": "bd71cb3ca8de4e1899a4ea0e09d3c1c677c77a7e",
+  "source_ci": {
+    "run_id": 33588082333,
+    "url": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/33588082333",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "artifact_path": "docs/r5/evidence/uda_finance_r5_public_v1.json",
+  "artifact_sha256": "97aa582d996194171004964acfbda46732f685998dd3227b3730a8b778c404ce",
+  "artifact_schema": "uda_finance_r5_public_v1",
+  "evidence_scope": "fresh_known_report_page_localization",
+  "expected_case_count": 192,
+  "expected_decision": "PROMOTED_FINANCE_KNOWN_REPORT_DEFAULT",
+  "producing_code_sha": "507b7f7f7e50c4a43d96c8332bbaf290d9bce7eb",
+  "protocol_sha256": "23ba6ec6be272bf528736743f76b2f069ce93e203d7570b20a5f43e16d1674d5",
+  "allowed_claims": [
+    "On a frozen public-label fresh-company known-report page-localization queue, Hit@5 improved from 80.21% to 88.02% and nDCG@5 from 70.95% to 77.60%.",
+    "The public aggregate artifact and its claim boundary are byte-verified against the declared SHA-256."
+  ],
+  "forbidden_claims": [
+    "RAG answer accuracy is 88.02%.",
+    "The result is a blind or third-party benchmark.",
+    "EvalOps executed or reproduced the 192 per-case comparisons.",
+    "The RAG system or EvalOps is production-ready."
+  ]
+}

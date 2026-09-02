@@ -1,0 +1,120 @@
+{
+  "allowed_claims": [
+    "On a frozen public-label fresh-company known-report page-localization queue, Hit@5 improved from 80.21% to 88.02% and nDCG@5 from 70.95% to 77.60%.",
+    "The public aggregate artifact and its claim boundary are byte-verified against the declared SHA-256."
+  ],
+  "case_count": 192,
+  "decision": "PROMOTED_FINANCE_KNOWN_REPORT_DEFAULT",
+  "evidence_id": "enterprise-rag-r5-public-page-localization-v1",
+  "evidence_scope": "fresh_known_report_page_localization",
+  "forbidden_claims": [
+    "RAG answer accuracy is 88.02%.",
+    "The result is a blind or third-party benchmark.",
+    "EvalOps executed or reproduced the 192 per-case comparisons.",
+    "The RAG system or EvalOps is production-ready."
+  ],
+  "formal_ab_status": "NOT_RUN_BY_EVALOPS",
+  "formal_case_result_status": "INPUT_REQUIRED",
+  "formal_quality_claim_allowed": false,
+  "human_review_status": "PENDING",
+  "metrics": {
+    "baseline": {
+      "case_count": 192,
+      "embedding_calls": 192,
+      "latency_ms_mean": 116.64140572702308,
+      "latency_ms_p50": 118.19599999580532,
+      "latency_ms_p95": 130.03969995770603,
+      "macro_page_recall_at_5": 0.8020833333333334,
+      "page_hit_at_1": 0.5885416666666666,
+      "page_hit_at_3": 0.7708333333333334,
+      "page_hit_at_5": 0.8020833333333334,
+      "page_locator_coverage_at_5": 1.0,
+      "page_mrr_at_5": 0.6780381944444445,
+      "page_ndcg_at_5": 0.7095095413292195,
+      "schema_version": "uda_finance_page_summary_v1"
+    },
+    "candidate": {
+      "case_count": 192,
+      "embedding_calls": 192,
+      "latency_ms_mean": 124.47566718462137,
+      "latency_ms_p50": 125.19930000416934,
+      "latency_ms_p95": 137.601199967321,
+      "macro_page_recall_at_5": 0.8802083333333334,
+      "page_hit_at_1": 0.6510416666666666,
+      "page_hit_at_3": 0.8229166666666666,
+      "page_hit_at_5": 0.8802083333333334,
+      "page_locator_coverage_at_5": 1.0,
+      "page_mrr_at_5": 0.7410590277777779,
+      "page_ndcg_at_5": 0.7759681456558213,
+      "schema_version": "uda_finance_page_summary_v1"
+    },
+    "company_macro": {
+      "baseline_page_hit_at_5": 0.8156213704994194,
+      "baseline_page_ndcg_at_5": 0.7272411302189234,
+      "candidate_page_hit_at_5": 0.895876887340302,
+      "candidate_page_ndcg_at_5": 0.7901574983488664,
+      "company_count": 41,
+      "page_hit_at_5_delta": 0.0802555168408827,
+      "page_ndcg_at_5_delta": 0.06291636812994299
+    },
+    "p95_latency_multiplier": 1.0581476273174597,
+    "page_hit_at_5_cluster_interval": {
+      "estimate": 0.078125,
+      "lower_95": 0.041025641025641026,
+      "upper_95": 0.11979166666666667
+    },
+    "page_ndcg_at_5_cluster_interval": {
+      "estimate": 0.06645860432660154,
+      "lower_95": 0.033227371873705544,
+      "upper_95": 0.09932270935053637
+    },
+    "paired_outcomes": {
+      "baseline_misses": 38,
+      "baseline_only_hit": 0,
+      "both_hit": 154,
+      "both_miss": 23,
+      "candidate_misses": 23,
+      "candidate_only_hit": 15,
+      "case_count": 192,
+      "exact_mcnemar_two_sided_p": 6.103515625e-05,
+      "relative_miss_reduction": 0.39473684210526316
+    }
+  },
+  "private_or_per_case_payload_present": false,
+  "production_ready": false,
+  "schema_version": "evalops.external-evidence-verification/1.0",
+  "source": {
+    "artifact_path": "docs/r5/evidence/uda_finance_r5_public_v1.json",
+    "artifact_schema": "uda_finance_r5_public_v1",
+    "artifact_sha256": "97aa582d996194171004964acfbda46732f685998dd3227b3730a8b778c404ce",
+    "ci": {
+      "conclusion": "success",
+      "run_id": 33588082333,
+      "status": "completed",
+      "url": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/33588082333"
+    },
+    "ci_live_status": "REFERENCE_BOUND_REQUIRES_OUT_OF_BAND_VERIFICATION",
+    "producing_code_sha": "507b7f7f7e50c4a43d96c8332bbaf290d9bce7eb",
+    "protocol_sha256": "23ba6ec6be272bf528736743f76b2f069ce93e203d7570b20a5f43e16d1674d5",
+    "repository": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot",
+    "sha": "bd71cb3ca8de4e1899a4ea0e09d3c1c677c77a7e"
+  },
+  "source_claim_boundary": [
+    "One-shot confirmation on all remaining eligible UDA companies not used by prior UDA rounds.",
+    "Public-label company-disjoint evidence; not a blind or third-party benchmark.",
+    "Known-report page localization only; not answer accuracy or open-corpus document discovery.",
+    "Confidence intervals use company-cluster bootstrap to account for questions sharing reports.",
+    "Questions, answers, company IDs, document IDs, paths, and per-case failures are excluded."
+  ],
+  "source_gate_checks": {
+    "candidate_rescues_exceed_regressions": true,
+    "hit_cluster_bootstrap_lower_bound_positive": true,
+    "minimum_hit_delta": true,
+    "minimum_ndcg_delta": true,
+    "ndcg_cluster_bootstrap_lower_bound_positive": true,
+    "one_embedding_per_case_per_arm": true,
+    "p95_latency_within_budget": true
+  },
+  "status": "AGGREGATE_EVIDENCE_VERIFIED",
+  "verification_scope": "SOURCE_BYTES_AND_DECLARED_CLAIM_CONTRACT"
+}
