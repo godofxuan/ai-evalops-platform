@@ -68,3 +68,12 @@ provider/evaluator protocols, paired evidence code, and portable report generati
 concepts-only because of ELv2; Langfuse enterprise paths are excluded. Optional package adapters
 are deferred until a real metric justifies their dependency/model cost. The detailed adoption
 matrix and official links are in [`OPEN_SOURCE_PRODUCT_BENCHMARK.md`](../review/OPEN_SOURCE_PRODUCT_BENCHMARK.md).
+
+## 2026-09-02 external RAG evidence boundary
+
+The external-evidence feature references a public aggregate artifact from the project owner's
+separate RAG repository at exact SHA `bd71cb3ca8de4e1899a4ea0e09d3c1c677c77a7e`. No RAG source,
+private dataset, questions, answers, PDFs or per-case records are copied into EvalOps. The
+checked-in reference records provenance and expected SHA-256; the checked-in verification record
+contains only the already-public aggregate and explicit claim limits. This is evidence
+interoperability, not incorporation of the RAG implementation or its dataset.

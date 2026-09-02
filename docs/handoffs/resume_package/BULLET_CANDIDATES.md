@@ -67,3 +67,10 @@ remote/OAuth MCP, atomic PostgreSQL/object-store commit, complete tenant isolati
   HTML 报告和可重算 SHA-256 Manifest；缺凭据、正式数据集或真人复核时 fail-closed。
 
 - 不得把 120-case 确定性 `DEMO_PASS` 写成真实 RAG 质量提升、正式 A/B、双人盲审或生产验证。
+
+- 可作为配套能力写：增加外部聚合证据验证入口，绑定来源 Git SHA/CI、原始文件 SHA-256、
+  schema、协议、成对计数、指标算术和声明边界；真实 RAG R5 汇总可验证，但缺逐题载荷时明确
+  `FORMAL_CASE_RESULTS=INPUT_REQUIRED`，不伪造 `CaseResult`。
+
+- R5 的 `80.21% → 88.02%` 只能归属于 RAG 项目的 known-report page-localization Hit@5，
+  不能写成 EvalOps 自身提升或“RAG 准确率 88%”。

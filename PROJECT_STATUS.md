@@ -9,6 +9,8 @@
 - Default `main`: non-force fast-forwarded from `aea8044061e678fb8e0d5312222987c5499ea83d`
   to the same implementation SHA; exact-main CI [`33590045034`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33590045034)
   completed successfully for that exact SHA.
+- Product evidence commit `a57254b08c45c03d82cf60490aa48ca5d2a50670` also passed exact-main
+  CI [`33590971293`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33590971293).
 - Product demo: 120 paired deterministic cases, six required categories × 20, exact dataset
   SHA `563a5063ae06efcd8b4a49729bf3621887b9876ffe34bc66bf41c0b6b2bb916c`.
 - Demo result: `DEMO_PASS`; statistical calculations pass, but the evidence decision is
@@ -18,13 +20,22 @@
 - Historical release blocker remains `NEGATIVE_SCALING`; this product work does not change or
   rerun the frozen scaling experiment.
 - Production state remains `PRODUCTION_NOT_VERIFIED`.
+- Current external RAG main was re-audited at
+  `bd71cb3ca8de4e1899a4ea0e09d3c1c677c77a7e`; exact CI
+  [`33588082333`](https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/33588082333)
+  passed all four jobs. Its R5 public aggregate artifact was byte-verified at SHA-256
+  `97aa582d996194171004964acfbda46732f685998dd3227b3730a8b778c404ce`.
+- EvalOps can now import and validate that aggregate as `AGGREGATE_EVIDENCE_VERIFIED`, while
+  remaining fail-closed at `FORMAL_CASE_RESULTS=INPUT_REQUIRED`; no 192-row `CaseResult` set was
+  present or fabricated. Implementation `5f6aa5a996062d4423b94aa4f7c2a15c38fd41b3` passed
+  exact-main CI [`33592493933`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33592493933).
 
 This layer adds a strict experiment spec, code-registered evaluator plugins, SSRF-hardened HTTP
 provider, paired automatic quality/citation/tool-error/latency/cost analysis, portable HTML
 case drill-down, and a separately verifiable result manifest. The deterministic demo is a
 usability and mechanism proof, not evidence that the real RAG improved.
 
-## Canonical final closeout snapshot — 2026-09-01
+## Historical Final Pair closeout snapshot — 2026-09-01
 
 - Branch: default `main`.
 - Base/start SHA: `c323d56906a30b654d59fc7c847a0efffab0a452`.

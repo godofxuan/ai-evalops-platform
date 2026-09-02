@@ -50,14 +50,38 @@ before any request is sent. Formal automated success remains
 | Formal policy | [policy.json](benchmarks/formal_agent_quality_v1/policy.json) |
 | Product workflow tutorial | [PRODUCT_EXPERIMENT_WORKFLOW.md](docs/learning/PRODUCT_EXPERIMENT_WORKFLOW.md) |
 | RAG input audit | [RAG_FORMAL_INPUT_AUDIT.md](docs/review/RAG_FORMAL_INPUT_AUDIT.md) |
+| External aggregate reference | [rag_r5_reference.json](benchmarks/external_evidence/rag_r5_reference.json) |
+| External aggregate verification | [verification.json](docs/results/rag_r5_external_evidence/verification.json) |
 | OSS design benchmark | [OPEN_SOURCE_PRODUCT_BENCHMARK.md](docs/review/OPEN_SOURCE_PRODUCT_BENCHMARK.md) |
 
-## Final cross-repository evidence
+### Verify real external aggregate evidence without inventing cases
+
+The current RAG `main@bd71cb3ca8de4e1899a4ea0e09d3c1c677c77a7e` publishes a public
+R5 aggregate for 192-case known-report page localization. EvalOps validates the exact artifact
+bytes, schema, producer/protocol identity, paired accounting, metric arithmetic, confidence
+intervals, latency ratio, source gates and claim boundary:
+
+```powershell
+./.venv/Scripts/python.exe -m scripts.verify_external_aggregate_evidence `
+  benchmarks/external_evidence/rag_r5_reference.json `
+  <exact-rag-checkout>/docs/r5/evidence/uda_finance_r5_public_v1.json
+```
+
+Observed source result: Hit@5 `80.21% → 88.02%`, nDCG@5 `70.95% → 77.60%`,
+15 candidate-only rescues, zero baseline-only hits in that queue, and p95 latency `1.058x`.
+These are RAG R5 page-localization facts—not EvalOps quality uplift, answer accuracy, a blind
+benchmark or a production claim. Because the public aggregate omits per-case inputs/results,
+EvalOps emits `AGGREGATE_EVIDENCE_VERIFIED` together with
+`FORMAL_CASE_RESULTS=INPUT_REQUIRED` and never synthesizes 192 `CaseResult` rows.
+The verifier implementation `5f6aa5a996062d4423b94aa4f7c2a15c38fd41b3` passed exact-main
+[GitHub Actions 33592493933](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33592493933).
+
+## Historical Final Pair cross-repository evidence
 
 | Evidence | Exact result |
 | --- | --- |
-| RAG producer | `godofxuan/Attempt-of-enterprise-rag-copilot@2065e571d77439babf76a763ac459a618950f218` |
-| EvalOps consumer | `godofxuan/ai-evalops-platform@4040fa1db7cee6c8380ff8580fa21be17464435b` |
+| Historical RAG producer | `godofxuan/Attempt-of-enterprise-rag-copilot@2065e571d77439babf76a763ac459a618950f218` |
+| Historical EvalOps consumer | `godofxuan/ai-evalops-platform@4040fa1db7cee6c8380ff8580fa21be17464435b` |
 | Implementation CI | [GitHub Actions 32558950596](https://github.com/godofxuan/ai-evalops-platform/actions/runs/32558950596) — exact SHA success |
 | Default `main` evidence baseline | `1c2f9d93b488cacf7d5f7c953c8cce906e0f9be6`; [GitHub Actions 33494481676](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33494481676) — exact `main` SHA success |
 | Final Pair Contract | 18/18 deterministic mechanism cases; 15/15 events converted; dropped 0; unmapped 0 |

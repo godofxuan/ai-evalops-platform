@@ -94,8 +94,18 @@ Start-Process artifacts/product-demo/report.html
 6. 自动结果通过后，使用单独保存的 blinding key 生成 A/B 隐藏的评审包。
 7. 让两位真实、独立 reviewer 分别提交；未完成前保持 `HUMAN_REVIEW_PENDING`。
 
-目前 RAG 仓库已验证的是精确 SHA 合同和 5-case 机制 A/B，不是这 120-case 正式答案质量输入。
-具体缺项见 `docs/review/RAG_FORMAL_INPUT_AUDIT.md`。
+目前 RAG 当前 `main` 另有一份真实的 192 题 R5 公共聚合证据。它能被 EvalOps 做字节、
+身份、成对计数、指标和声明边界验证，但公开文件刻意不含逐题问题/答案/结果，所以不能转成
+这套 120-case 正式答案质量输入。运行：
+
+```powershell
+./.venv/Scripts/python.exe -m scripts.verify_external_aggregate_evidence `
+  benchmarks/external_evidence/rag_r5_reference.json `
+  <exact-rag-checkout>/docs/r5/evidence/uda_finance_r5_public_v1.json
+```
+
+验证成功的双状态是 `AGGREGATE_EVIDENCE_VERIFIED` + `FORMAL_CASE_RESULTS=INPUT_REQUIRED`。
+具体来源、指标限定和仍缺的正式输入见 `docs/review/RAG_FORMAL_INPUT_AUDIT.md`。
 
 ## 6. 这次实现中遇到的问题与判断
 

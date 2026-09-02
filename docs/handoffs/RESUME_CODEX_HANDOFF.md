@@ -3,6 +3,22 @@
 >
 > Status: `IMPLEMENTATION_COMPLETE` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`. Content below this notice that cites earlier branches/SHAs is historical, not the current fact source.
 <!-- FINAL-CROSS-REPO-CLOSEOUT:END -->
+# 2026-09-02 usable product and external-evidence update
+
+Current safe project-capability wording:
+
+- Built a declarative, exact Dataset/Git-SHA-bound RAG/Agent paired-evaluation workflow with
+  code-registered evaluators, paired bootstrap plus absolute quality gates, HTTPS/SSRF controls,
+  case-level trace/quality/latency/cost drill-down, and rehashable JSON/HTML outputs.
+- Added fail-closed external aggregate evidence verification binding source SHA/CI, raw artifact
+  SHA-256, schema/protocol identity, paired accounting, metric arithmetic and claim boundaries.
+
+The 120-case result is a deterministic product demo, not real RAG uplift. The separate RAG R5
+aggregate is a real source-side known-report page-localization result, but EvalOps did not execute
+or reconstruct its 192 per-case rows. Keep `FORMAL_CASE_RESULTS=INPUT_REQUIRED`, human review
+`PENDING`, negative scheduler scaling, and production `NOT_VERIFIED` visible. Never call R5
+Hit@5 `88.02%` “RAG accuracy” or an EvalOps improvement.
+
 # 2026-08-22 resume boundary update
 
 Safe only after final branch validation: implemented leased/CAS Artifact reconciliation,

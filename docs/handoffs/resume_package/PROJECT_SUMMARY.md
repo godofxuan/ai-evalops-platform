@@ -12,6 +12,11 @@ production claims. Exact implementation CI `33589528112` succeeded, and the same
 SHA was non-force fast-forwarded to default `main`; the scoped product implementation claim is
 therefore resume-safe while the synthetic metric values remain demo-only.
 
+The product also verifies a real external RAG R5 aggregate by exact source SHA/CI, artifact
+SHA-256, protocol, paired accounting, metric arithmetic and claim boundary. It records the
+source's bounded known-report page-localization result while keeping formal per-case evaluation
+`INPUT_REQUIRED`; no private 192-case rows are copied or reconstructed.
+
 Current branch: `codex/final-evidence-hardening-v1`; implementation baseline: `22fda896a1b24b0cf41cd1402ead521f74758ac6`;
 migration head: `20260820_0025`. Claim tiers are `CURRENT_POSITIVE_RESUME`, `JD_SPECIFIC_BACKUP`, `INTERVIEW_ONLY`,
 `HISTORICAL_NEGATIVE` and `FORBIDDEN`.

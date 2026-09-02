@@ -3,6 +3,20 @@
 >
 > Status: `IMPLEMENTATION_COMPLETE` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`. Content below this notice that cites earlier branches/SHAs is historical, not the current fact source.
 <!-- FINAL-CROSS-REPO-CLOSEOUT:END -->
+# 2026-09-02 product and evidence-boundary module
+
+Teach three different evidence classes without allowing substitution:
+
+1. `DEMO_PASS`: 120 deterministic fixture cases prove the EvalOps product workflow only.
+2. `AGGREGATE_EVIDENCE_VERIFIED`: the RAG R5 public JSON is real source evidence whose bytes,
+   identities, accounting, metric arithmetic and claim boundary can be verified.
+3. `FORMAL_CASE_RESULTS=INPUT_REQUIRED`: the public aggregate excludes per-case inputs/results,
+   so EvalOps cannot perform its own formal paired run or human-review packet.
+
+Exercise: change one paired count or add a top-level `cases` array to a copied R5 fixture and
+show the verifier fail. The learner must explain why a valid aggregate is still not a set of
+auditable `CaseResult` rows, and why Hit@5 `88.02%` is not answer accuracy.
+
 # 2026-08-22 teaching update
 
 Teach the integrity remediation through five invariants: database-leased Artifact

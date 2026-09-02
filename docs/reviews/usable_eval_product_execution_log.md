@@ -99,3 +99,36 @@ verifier's actual interface accepts the manifest path as its positional argument
 invocation exited at argument parsing before reading or changing evidence. It was corrected to
 `python -m scripts.verify_product_experiment docs/results/product_demo_v1/manifest.json`, which
 then verified experiment `paired-rag-product-demo-v1`, status `DEMO_PASS`, and all four files.
+
+## Current RAG re-audit and aggregate import
+
+After the first product closeout, the cross-project authority changed from the historical RAG
+Final Pair SHA `2065e571...` to current `main@bd71cb3...`. The audit was reopened rather than
+leaving a stale current-source claim. Read-only checks confirmed remote main, clean local
+alignment, exact CI `33588082333` with four successful jobs, and R5 public artifact SHA-256
+`97aa582d996194171004964acfbda46732f685998dd3227b3730a8b778c404ce`.
+
+The first inspection guessed `docs/r5/RESULTS.md` and `PROTOCOL.md`; those files did not exist.
+Enumerating the exact commit tree found the authoritative `ENGINEERING_JOURNAL.md` and two JSON
+evidence files. No RAG file, ref, worktree or index was changed.
+
+Because the real public R5 artifact contains aggregate metrics but intentionally omits per-case
+payload, EvalOps gained a separate external aggregate verifier. It validates byte identity,
+schema/source/protocol identity, paired-count arithmetic, Hit@5 derivation, interval estimates,
+latency ratio, source gates, and claim boundaries; it rejects digest drift, private/per-case
+keys, count drift, failed gates, and internally inconsistent outcomes. Focused validation passed
+six tests, and the real artifact produced `AGGREGATE_EVIDENCE_VERIFIED` together with the
+mandatory `FORMAL_CASE_RESULTS=INPUT_REQUIRED` boundary.
+
+The isolated implementation commit was
+`5f6aa5a996062d4423b94aa4f7c2a15c38fd41b3`. It was non-force fast-forwarded to `main`, and
+exact-main GitHub Actions `33592493933` completed successfully before the final documentation
+manifest was regenerated.
+
+Final post-regeneration validation passed with `925 passed, 39 deselected` in 238.84 seconds,
+Ruff format (`579 files already formatted`) and lint green, Mypy green for the 194-file formal
+scope plus the new unit test independently, compileall green, product artifact verification
+green, final evidence manifest verification green, and real R5 aggregate verification green.
+The earlier single full-suite failure was the intended stale-manifest guard on the modified
+`PROJECT_STATUS.md`; regenerating the manifest against the accepted implementation SHA resolved
+it without weakening or skipping the test.
