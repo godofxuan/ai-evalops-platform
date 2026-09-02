@@ -102,3 +102,17 @@ The common-path round-trip hypothesis is therefore insufficient. Per the preregi
 there is no second candidate or threshold change. `main`, release, production and resume-positive
 claims are unchanged. Detailed evidence and the next diagnosis boundary are in
 [`02_TARGETED_RESULT.md`](02_TARGETED_RESULT.md).
+
+## 2026-09-02 — Final documentation CI correction
+
+The first documentation commit `cd411a14fe60ef0a0dc66a04031f3be3329b852b` intentionally updated
+README, project status and the canonical teaching/resume handoffs. Its exact CI run
+[33585636644](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33585636644) failed only at
+`Verify final evidence file manifest`; Compose smoke passed. This was not a flaky concurrency or
+scheduler failure: those four edited surfaces are protected by `FINAL_EVIDENCE_MANIFEST.json`, so
+their byte digests correctly drifted.
+
+The fix is the repository's existing two-stage attestation procedure: treat `cd411a1...` as the
+evidence-source commit, regenerate the non-recursive Manifest with that exact SHA, verify it locally
+and commit the refreshed Manifest separately. No evidence conclusion, benchmark result or protected
+source file is changed during the attestation commit.
