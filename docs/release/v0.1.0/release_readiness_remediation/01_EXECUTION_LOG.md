@@ -86,3 +86,19 @@ q1000/sample100/batch1 repetitions. It has `contents: read`, writes output only 
 temporary directory and uploads a 90-day Artifact even when assessment fails. A final step fails
 the workflow only after upload, so a negative result remains inspectable and cannot cause a bot
 commit or an unreviewed branch mutation.
+
+## 2026-09-02 — Exact-SHA remote decision
+
+- Candidate source: `5687fbdfcd0835ffdf1f1884ddaa27f8c411eb51`.
+- Ordinary CI [33584967564](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33584967564): success, including both jobs.
+- Targeted run [33584967622](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33584967622): intentional failure after evidence upload.
+- All four repetitions, concurrency regressions, assessment, Artifact upload and cleanup succeeded.
+- Assessment: `NEGATIVE_SCALING`; ratios single `0.704519`, balanced `0.791907`, 20:1
+  `0.706258`, many-small `0.863996`, required floor `0.95`.
+- Artifact `release-readiness-targeted-33584967622-1` contains four repetitions and 598/598
+  top-level Manifest-bound files with matching size and SHA-256.
+
+The common-path round-trip hypothesis is therefore insufficient. Per the preregistered stop rule,
+there is no second candidate or threshold change. `main`, release, production and resume-positive
+claims are unchanged. Detailed evidence and the next diagnosis boundary are in
+[`02_TARGETED_RESULT.md`](02_TARGETED_RESULT.md).

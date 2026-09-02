@@ -130,6 +130,7 @@ and a SHA-256 manifest. An independent assessor rejects missing, stale or incons
 
 | I want to see… | Start here |
 | --- | --- |
+| I am the owner but do not yet understand the project | [One-page Chinese owner guide](docs/learning/OWNER_START_HERE.md) |
 | Current portfolio/release state | [Project status](PROJECT_STATUS.md) |
 | Independent GPT review and final evidence package | [GPT review entry](docs/review/GPT_REVIEW_ENTRY.md) |
 | Architecture and data flow | [Architecture](docs/01_architecture.md) |

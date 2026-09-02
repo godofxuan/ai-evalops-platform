@@ -1,5 +1,16 @@
 # AI EvalOps Platform — Current Portfolio and Release Status
 
+## Branch-only remediation experiment — 2026-09-02
+
+Branch `codex/release-readiness-remediation-v1` tested exactly one preregistered claim-first
+scheduler candidate at source `5687fbdfcd0835ffdf1f1884ddaa27f8c411eb51`. Exact ordinary CI
+[33584967564](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33584967564) passed; the
+source-bound targeted gate [33584967622](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33584967622)
+completed four repetitions and correctly returned `NEGATIVE_SCALING` with w8/w4 ratios
+`0.704519/0.791907/0.706258/0.863996`. The candidate is not merged and does not replace the default
+`main` snapshot below. Formal quality tooling was added, but real arm outputs and two real blinded
+reviewers remain input requirements. Portfolio/release/production states are unchanged.
+
 ## Canonical final closeout snapshot — 2026-09-01
 
 - Branch: default `main`.

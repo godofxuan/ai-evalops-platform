@@ -3,6 +3,19 @@
 >
 > Status: `IMPLEMENTATION_COMPLETE` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`. Content below this notice that cites earlier branches/SHAs is historical, not the current fact source.
 <!-- FINAL-CROSS-REPO-CLOSEOUT:END -->
+# 2026-09-02 release-readiness remediation teaching update
+
+Teach the branch-only candidate as a completed falsification, not a performance success. Source
+`5687fbdfcd0835ffdf1f1884ddaa27f8c411eb51` passed ordinary CI
+[33584967564](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33584967564). Targeted run
+[33584967622](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33584967622) executed all four
+repetitions and deliberately failed after Artifact upload: w8/w4 was
+`0.704519/0.791907/0.706258/0.863996`, all below `0.95`. The claim-first change removed one common-path
+round query in unit tests but was not sufficient at w8, so it is not merged and the one-candidate
+budget stops. Start a beginner with [`OWNER_START_HERE.md`](../learning/OWNER_START_HERE.md), then use
+[`02_TARGETED_RESULT.md`](../release/v0.1.0/release_readiness_remediation/02_TARGETED_RESULT.md) to
+separate a passing execution mechanism from a failing release decision.
+
 # 2026-08-22 teaching update
 
 Teach the integrity remediation through five invariants: database-leased Artifact

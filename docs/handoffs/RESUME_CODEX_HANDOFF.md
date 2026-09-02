@@ -3,6 +3,19 @@
 >
 > Status: `IMPLEMENTATION_COMPLETE` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`. Content below this notice that cites earlier branches/SHAs is historical, not the current fact source.
 <!-- FINAL-CROSS-REPO-CLOSEOUT:END -->
+# 2026-09-02 release-readiness resume boundary
+
+Do not add a positive throughput or scaling bullet from branch
+`codex/release-readiness-remediation-v1`. The exact candidate CI passed, but the complete frozen
+targeted gate returned `NEGATIVE_SCALING` for all four distributions
+(`0.704519/0.791907/0.706258/0.863996` versus `0.95`). The candidate is not merged into `main`.
+
+Interview-only safe story: preregistered one narrow database-round-trip hypothesis, implemented it
+test-first, ran 6,400 source-bound controlled Jobs, preserved a 598-file Artifact, rejected the
+hypothesis and stopped without threshold tuning. Existing positive Agent Evaluation Infrastructure
+bullets remain valid; formal quality improvement, human-review completion, positive scaling,
+release readiness and production readiness remain forbidden claims.
+
 # 2026-08-22 resume boundary update
 
 Safe only after final branch validation: implemented leased/CAS Artifact reconciliation,
