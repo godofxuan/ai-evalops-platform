@@ -320,6 +320,13 @@ class SQLAlchemyJobClaimer:
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
+        claims = await self._claim_active_scheduler_permit(
+            worker_id=worker_id,
+            eligible_at=eligible_at,
+            skip_locked=True,
+        )
+        if claims:
+            return claims
         if not await self._ensure_active_scheduler_round(eligible_at=eligible_at):
             return ()
         return await self._claim_active_scheduler_permit(
@@ -335,6 +342,13 @@ class SQLAlchemyJobClaimer:
         limit: int,
         eligible_at: datetime,
     ) -> tuple[ClaimedJob, ...]:
+        claims = await self._claim_active_scheduler_permit(
+            worker_id=worker_id,
+            eligible_at=eligible_at,
+            skip_locked=False,
+        )
+        if claims:
+            return claims
         if not await self._ensure_active_scheduler_round(eligible_at=eligible_at):
             return ()
         return await self._claim_active_scheduler_permit(

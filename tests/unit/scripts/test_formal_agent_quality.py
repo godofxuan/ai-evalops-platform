@@ -8,9 +8,7 @@ from scripts import formal_agent_quality
 from tests.unit.external_harness.test_formal_quality import _arm, _policy
 
 
-def test_cli_writes_assessment_and_separate_blinded_review_materials(
-    tmp_path, monkeypatch
-) -> None:
+def test_cli_writes_assessment_and_separate_blinded_review_materials(tmp_path, monkeypatch) -> None:
     baseline_path = tmp_path / "baseline.json"
     candidate_path = tmp_path / "candidate.json"
     policy_path = tmp_path / "policy.json"

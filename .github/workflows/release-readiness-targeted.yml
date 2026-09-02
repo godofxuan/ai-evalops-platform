@@ -1,0 +1,167 @@
+name: Release Readiness - Targeted Scheduler Gate
+
+on:
+  push:
+    branches:
+      - codex/release-readiness-remediation-v1
+    paths:
+      - .github/release-readiness-targeted-trigger.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-readiness-targeted-v1
+  cancel-in-progress: false
+
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      EVALOPS_ENVIRONMENT: test
+      EVALOPS_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
+      EVALOPS_EXPERIMENT_DATABASE_URL: postgresql+psycopg://evalops:evalops@127.0.0.1:5432/evalops
+      EVALOPS_REDIS_URL: redis://127.0.0.1:6379/0
+      EVALOPS_ARTIFACT_ROOT: /tmp/evalops-artifacts
+      EVALOPS_ALEMBIC_CONFIG_PATH: alembic.ini
+      EVALOPS_RUN_INTEGRATION: "1"
+      EVALOPS_SCHEDULER_DIAGNOSTIC_DIR: /tmp/evalops-release-readiness-scheduler
+    steps:
+      - name: Check out the exact candidate commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync locked dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Define immutable execution identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          execution_id="release-readiness-targeted-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          execution_root="$RUNNER_TEMP/$execution_id"
+          echo "TARGETED_EXECUTION_ID=$execution_id" >> "$GITHUB_ENV"
+          echo "TARGETED_EXECUTION_ROOT=$execution_root" >> "$GITHUB_ENV"
+          mkdir -p "$execution_root/environment"
+          {
+            echo "source_commit=$GITHUB_SHA"
+            echo "workflow_run_id=$GITHUB_RUN_ID"
+            echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "protocol=queue-1000;distributions=4;workers=1,2,4,8;batch=1;repetitions=4"
+            git status --short
+          } > "$execution_root/environment/source.txt"
+
+      - name: Start isolated PostgreSQL and Redis
+        run: >-
+          docker compose -f deploy/compose.yaml up --detach --wait
+          --wait-timeout 180 postgres redis
+
+      - name: Apply migrations
+        run: uv run --no-sync alembic upgrade head
+
+      - name: Run scheduler concurrency regressions
+        timeout-minutes: 20
+        run: >-
+          uv run --no-sync pytest
+          tests/unit/jobs/test_claim_fast_path.py
+          tests/concurrency/test_tenant_durable_fairness.py
+          tests/concurrency/test_tenant_claim_parallelism.py
+          tests/concurrency/test_tenant_fair_claiming.py
+          tests/concurrency/test_job_claiming.py
+
+      - name: Execute four preregistered repetitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repetition in 1 2 3 4; do
+            uv run --no-sync python -m scripts.run_fair_capacity_test \
+              --run-id "rep${repetition}" \
+              --source-commit "$GITHUB_SHA" \
+              --stage targeted \
+              --queue-sizes "1000" \
+              --sample-jobs 100 \
+              --output-root "$TARGETED_EXECUTION_ROOT"
+          done
+
+      - name: Preserve runner and Compose diagnostics
+        if: always() && env.TARGETED_EXECUTION_ROOT != ''
+        shell: bash
+        run: |
+          set +e
+          evidence_dir="$TARGETED_EXECUTION_ROOT/environment"
+          mkdir -p "$evidence_dir"
+          {
+            echo "github_run_id=$GITHUB_RUN_ID"
+            echo "github_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "github_sha=$GITHUB_SHA"
+            echo "runner_os=$RUNNER_OS"
+            uname -a
+            lscpu
+            free -b
+            df -B1 .
+            docker version
+            docker compose version
+          } > "$evidence_dir/runner.txt" 2>&1
+          docker compose -f deploy/compose.yaml ps --all \
+            > "$evidence_dir/compose-ps.txt" 2>&1
+          log_file="$RUNNER_TEMP/release-readiness-targeted-${GITHUB_RUN_ID}.log"
+          docker compose -f deploy/compose.yaml logs --no-color > "$log_file" 2>&1
+          original_bytes=$(wc -c < "$log_file")
+          tail -c 10485760 "$log_file" > "$evidence_dir/compose.log"
+          retained_bytes=$(wc -c < "$evidence_dir/compose.log")
+          {
+            echo "policy=retain_trailing_bytes"
+            echo "byte_limit=10485760"
+            echo "original_bytes=$original_bytes"
+            echo "retained_bytes=$retained_bytes"
+          } > "$evidence_dir/compose-log-policy.txt"
+          rm -f -- "$log_file"
+
+      - name: Assess frozen 4-to-8 worker gate
+        id: assess
+        if: always() && env.TARGETED_EXECUTION_ROOT != ''
+        continue-on-error: true
+        run: >-
+          uv run --no-sync python -m scripts.targeted_scheduler_evidence
+          --source-commit "$GITHUB_SHA"
+          --input-csv "$TARGETED_EXECUTION_ROOT/rep1/bundle/arms.csv"
+          --input-csv "$TARGETED_EXECUTION_ROOT/rep2/bundle/arms.csv"
+          --input-csv "$TARGETED_EXECUTION_ROOT/rep3/bundle/arms.csv"
+          --input-csv "$TARGETED_EXECUTION_ROOT/rep4/bundle/arms.csv"
+          --output "$TARGETED_EXECUTION_ROOT/assessment.json"
+          --manifest-root "$TARGETED_EXECUTION_ROOT"
+
+      - name: Upload immutable targeted evidence
+        if: always() && env.TARGETED_EXECUTION_ROOT != ''
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ${{ env.TARGETED_EXECUTION_ID }}
+          path: ${{ env.TARGETED_EXECUTION_ROOT }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Stop the isolated Compose topology
+        if: always()
+        run: docker compose -f deploy/compose.yaml down --volumes
+
+      - name: Enforce assessment result after evidence upload
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.assess.outcome }}" != "success" ]]; then
+            echo "The frozen scheduler assessment did not pass; evidence was preserved."
+            exit 1
+          fi

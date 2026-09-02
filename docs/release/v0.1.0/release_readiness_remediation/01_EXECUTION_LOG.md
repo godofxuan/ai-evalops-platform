@@ -55,3 +55,34 @@ pre-registered, uninstrumented candidate: remove the extra active-round existenc
 successful Claim common path by trying a pending permit first. This is a falsifiable transaction-
 overhead hypothesis, not a claimed root cause. The unchanged targeted gate remains the only remote
 performance decision.
+
+## 2026-09-02 — Single scheduler candidate implemented
+
+### Red test and observed cause
+
+Three new control-flow tests first failed because both non-blocking and waiting Claim paths emitted
+`ensure-round` before their first permit claim. This reproduced the exact extra round-trip described
+in the preregistration without relying on timing or a local PostgreSQL installation.
+
+### Minimal change
+
+Both paths now attempt to claim an already-created active permit first. Only an empty result enters
+the existing round-creation check and retries the same claim operation. No query definition, lock
+mode, ordering, state transition, retry policy, schema or benchmark threshold changed.
+
+### Local effect and validation
+
+- Existing-permit paths now emit one claim operation and no round-existence operation.
+- Missing-permit paths still emit claim, ensure-round and claim in that order.
+- Focused claiming/fair-round regression suite: 22 passed.
+- Full local non-integration suite: 913 passed, 39 external-service tests explicitly deselected.
+- Ruff and strict mypy: passed for the candidate and its tests.
+- Pytest still reports only the known workspace `.pytest_cache` permission warning.
+
+### Remote feedback-loop design
+
+A new branch-scoped workflow runs the real PostgreSQL concurrency suites and four unchanged
+q1000/sample100/batch1 repetitions. It has `contents: read`, writes output only beneath the runner
+temporary directory and uploads a 90-day Artifact even when assessment fails. A final step fails
+the workflow only after upload, so a negative result remains inspectable and cannot cause a bot
+commit or an unreviewed branch mutation.
