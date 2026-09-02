@@ -115,6 +115,7 @@ def assess_formal_quality(
     evalops_sha: str,
     trace_status: Literal["PASS", "FAIL"],
     failure_matrix_status: Literal["PASS", "FAIL"],
+    formal_ab_eligible: bool = True,
 ) -> FormalQualityAssessment:
     """Assess a source-bound paired A/B without hiding missing or drifting cases."""
 
@@ -139,9 +140,7 @@ def assess_formal_quality(
         if (left.prompt, left.category) != (right.prompt, right.category):
             raise ValueError(f"prompt/category drift for common case {case_id}")
 
-    category_by_case = {
-        case_id: baseline_by_id[case_id].category for case_id in common.common_ids
-    }
+    category_by_case = {case_id: baseline_by_id[case_id].category for case_id in common.common_ids}
     sufficiency = assess_evidence_sufficiency(
         {case_id: baseline_by_id[case_id].task_success for case_id in baseline_by_id},
         {case_id: candidate_by_id[case_id].task_success for case_id in candidate_by_id},
@@ -187,7 +186,7 @@ def assess_formal_quality(
         human_review_status="PENDING",
         trace_status=trace_status,
         failure_matrix_status=failure_matrix_status,
-        formal_ab_eligible=True,
+        formal_ab_eligible=formal_ab_eligible,
         evidence_sufficiency=sufficiency.status,
         required_segments_passed=required_segments_passed,
         contract_verified=False,
@@ -237,7 +236,7 @@ def build_blinded_review_packet(
         right = candidate_by_id[case_id]
         if (left.prompt, left.category) != (right.prompt, right.category):
             raise ValueError(f"prompt/category drift for common case {case_id}")
-        a_arm, b_arm = ((left, right) if case_id in baseline_as_a else (right, left))
+        a_arm, b_arm = (left, right) if case_id in baseline_as_a else (right, left)
         packet_cases.append(
             {
                 "case_id": case_id,
@@ -298,9 +297,7 @@ def _metric_assessments(
         )
 
     task = _bootstrap_metric(*values("task_success"), policy=policy, statistic="mean")
-    citation = _bootstrap_metric(
-        *values("citation_correctness"), policy=policy, statistic="mean"
-    )
+    citation = _bootstrap_metric(*values("citation_correctness"), policy=policy, statistic="mean")
     tool_error = _bootstrap_metric(*values("tool_error_rate"), policy=policy, statistic="mean")
     latency = _bootstrap_metric(*values("latency_ms"), policy=policy, statistic="p95")
     cost = _bootstrap_metric(*values("cost_usd"), policy=policy, statistic="mean")
@@ -312,9 +309,7 @@ def _metric_assessments(
         ),
         "citation_correctness_delta": _with_rule(
             citation,
-            passed=(
-                citation.confidence_lower >= policy.citation_correctness_ci_lower_min
-            ),
+            passed=(citation.confidence_lower >= policy.citation_correctness_ci_lower_min),
             rule=f"confidence_lower >= {policy.citation_correctness_ci_lower_min}",
         ),
         "tool_error_rate_delta": _with_rule(

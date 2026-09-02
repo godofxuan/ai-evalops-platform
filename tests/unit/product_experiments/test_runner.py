@@ -107,6 +107,8 @@ async def test_demo_runs_120_paired_cases_and_preserves_claim_boundary(tmp_path:
     assert result.scope == "DEMO"
     assert result.case_count == 120
     assert result.automated_assessment["status"] == "PASS"
+    assert result.automated_assessment["decision"]["formal_ab_eligible"] is False
+    assert result.automated_assessment["decision_outcome"] == "INPUT_BLOCKED"
     assert result.human_review_status == "PENDING"
     assert result.formal_quality_claim_allowed is False
     assert result.production_ready is False

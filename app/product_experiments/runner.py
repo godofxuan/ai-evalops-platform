@@ -270,6 +270,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
         evalops_sha=evalops_sha,
         trace_status="PASS",
         failure_matrix_status="PASS",
+        formal_ab_eligible=spec.scope == "FORMAL",
     )
     status: Literal[
         "DEMO_PASS",
