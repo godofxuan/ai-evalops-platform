@@ -62,7 +62,7 @@ th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Cod
 <section><div>Dataset SHA-256: <code>{_escape(result.get("dataset_sha256", ""))}</code></div>
 <div>EvalOps SHA: <code>{_escape(result.get("evalops_sha", ""))}</code></div></section>
 <h2>逐条对比</h2>
-<section class="table-wrap"><table><thead><tr><th>Case</th><th>Category</th><th>Baseline</th><th>Candidate</th><th>Δ success</th><th>Δ latency ms</th><th>Δ cost USD</th></tr></thead>
+<section class="table-wrap"><table><thead><tr><th>Case</th><th>Category</th><th>Baseline answer</th><th>Candidate answer</th><th>Success B→C</th><th>Citation B→C</th><th>Tool error B→C</th><th>Latency B→C</th><th>Cost B→C</th><th>Trace B / C</th></tr></thead>
 <tbody>{table_rows}</tbody></table></section>
 <h2>机器评估</h2><pre>{_escape(metrics_json)}</pre>
 </main></body></html>"""
@@ -70,22 +70,19 @@ th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Cod
 
 def _case_row(raw: object) -> str:
     row = raw if isinstance(raw, Mapping) else {}
-    return (
-        "<tr>"
-        + "".join(
-            f"<td>{_escape(row.get(field, ''))}</td>"
-            for field in (
-                "case_id",
-                "category",
-                "baseline_answer",
-                "candidate_answer",
-                "task_success_delta",
-                "latency_delta_ms",
-                "cost_delta_usd",
-            )
-        )
-        + "</tr>"
+    values = (
+        row.get("case_id", ""),
+        row.get("category", ""),
+        row.get("baseline_answer", ""),
+        row.get("candidate_answer", ""),
+        f"{row.get('baseline_task_success', '')} → {row.get('candidate_task_success', '')}",
+        f"{row.get('baseline_citation_correctness', '')} → {row.get('candidate_citation_correctness', '')}",
+        f"{row.get('baseline_tool_error_rate', '')} → {row.get('candidate_tool_error_rate', '')}",
+        f"{row.get('baseline_latency_ms', '')} → {row.get('candidate_latency_ms', '')} ms",
+        f"{row.get('baseline_cost_usd', '')} → {row.get('candidate_cost_usd', '')} USD",
+        f"{row.get('baseline_trace_id', '')} / {row.get('candidate_trace_id', '')}",
     )
+    return "<tr>" + "".join(f"<td>{_escape(value)}</td>" for value in values) + "</tr>"
 
 
 __all__ = ["render_experiment_html"]

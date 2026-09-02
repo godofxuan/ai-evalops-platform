@@ -68,9 +68,21 @@ class CaseComparison(BaseModel):
     category: str
     baseline_answer: str
     candidate_answer: str
+    baseline_task_success: float
+    candidate_task_success: float
     task_success_delta: float
+    baseline_citation_correctness: float
+    candidate_citation_correctness: float
+    baseline_tool_error_rate: float
+    candidate_tool_error_rate: float
+    baseline_latency_ms: float
+    candidate_latency_ms: float
     latency_delta_ms: float
+    baseline_cost_usd: float
+    candidate_cost_usd: float
     cost_delta_usd: float
+    baseline_trace_id: str | None
+    candidate_trace_id: str | None
 
 
 class ProductExperimentResult(BaseModel):
@@ -337,6 +349,7 @@ def _measurement(
         cost_usd=result.cost_usd,
         answer=result.answer,
         citations=result.citations,
+        trace_id=result.trace_id,
     )
 
 
@@ -352,9 +365,21 @@ def _comparisons(
             category=left[case_id].category,
             baseline_answer=left[case_id].answer,
             candidate_answer=right[case_id].answer,
+            baseline_task_success=left[case_id].task_success,
+            candidate_task_success=right[case_id].task_success,
             task_success_delta=right[case_id].task_success - left[case_id].task_success,
+            baseline_citation_correctness=left[case_id].citation_correctness,
+            candidate_citation_correctness=right[case_id].citation_correctness,
+            baseline_tool_error_rate=left[case_id].tool_error_rate,
+            candidate_tool_error_rate=right[case_id].tool_error_rate,
+            baseline_latency_ms=left[case_id].latency_ms,
+            candidate_latency_ms=right[case_id].latency_ms,
             latency_delta_ms=right[case_id].latency_ms - left[case_id].latency_ms,
+            baseline_cost_usd=left[case_id].cost_usd,
+            candidate_cost_usd=right[case_id].cost_usd,
             cost_delta_usd=right[case_id].cost_usd - left[case_id].cost_usd,
+            baseline_trace_id=left[case_id].trace_id,
+            candidate_trace_id=right[case_id].trace_id,
         )
         for case_id in sorted(left)
     ]

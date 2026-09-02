@@ -41,12 +41,14 @@ def _case(index: int) -> dict[str, object]:
                     "citations": [{"source_id": citation_id}],
                     "latency_ms": 40,
                     "cost_usd": 0.01,
+                    "trace_id": f"demo-baseline-{index:03d}",
                 },
                 "candidate": {
                     "answer": answer,
                     "citations": [{"source_id": citation_id}],
                     "latency_ms": 44,
                     "cost_usd": 0.011,
+                    "trace_id": f"demo-candidate-{index:03d}",
                 },
             }
         },
@@ -119,6 +121,8 @@ async def test_demo_runs_120_paired_cases_and_preserves_claim_boundary(tmp_path:
     }
     assert len(result.arms["baseline"].cases) == 120
     assert len(result.arms["candidate"].cases) == 120
+    assert result.case_comparisons[0].baseline_trace_id == "demo-baseline-000"
+    assert result.case_comparisons[0].candidate_trace_id == "demo-candidate-000"
 
 
 @pytest.mark.asyncio

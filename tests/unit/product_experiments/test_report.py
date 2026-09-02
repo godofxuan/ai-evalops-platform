@@ -23,9 +23,21 @@ def test_report_escapes_untrusted_case_content_and_explains_demo_boundary() -> N
                 "category": "basic",
                 "baseline_answer": "<script>alert(1)</script>",
                 "candidate_answer": "safe",
+                "baseline_task_success": 0.0,
+                "candidate_task_success": 1.0,
                 "task_success_delta": 0.0,
+                "baseline_citation_correctness": 0.0,
+                "candidate_citation_correctness": 1.0,
+                "baseline_tool_error_rate": 0.0,
+                "candidate_tool_error_rate": 0.0,
+                "baseline_latency_ms": 10.0,
+                "candidate_latency_ms": 11.0,
                 "latency_delta_ms": 1.0,
+                "baseline_cost_usd": 0.01,
+                "candidate_cost_usd": 0.01,
                 "cost_delta_usd": 0.0,
+                "baseline_trace_id": "trace-b",
+                "candidate_trace_id": "trace-c",
             }
         ],
         "input_requirements": [],
@@ -36,3 +48,4 @@ def test_report_escapes_untrusted_case_content_and_explains_demo_boundary() -> N
     assert "<script>alert(1)</script>" not in rendered
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
     assert "演示通过不等于正式质量提升" in rendered
+    assert "trace-b / trace-c" in rendered

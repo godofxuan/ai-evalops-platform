@@ -36,6 +36,7 @@ class FormalCaseMeasurement(_StrictModel):
     cost_usd: float = Field(ge=0.0)
     answer: str = Field(max_length=100_000)
     citations: list[dict[str, JsonValue]] = Field(default_factory=list)
+    trace_id: str | None = Field(default=None, max_length=256)
 
 
 class FormalArmResult(_StrictModel):
