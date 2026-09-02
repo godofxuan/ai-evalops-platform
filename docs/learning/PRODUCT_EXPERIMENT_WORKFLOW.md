@@ -42,9 +42,12 @@ Baseline 和 Candidate 必须回答完全相同的问题。每道题先计算 Ca
 - task success 的 95% CI 下界不低于 0；
 - citation correctness 的 95% CI 下界不低于 -0.02；
 - tool error rate 的 95% CI 上界不高于 0.02；
+- Candidate task success 和 citation correctness 的观测值均不得低于 0.80；
+- Candidate tool error rate 的观测值不得高于 0.05；
 - p95 latency 和 mean cost 的相对增加均不超过 25%。
 
-这是一组“Candidate 不可明显退化”的门槛，不表示任意通过者都获得了业务价值认证。
+相对差值和绝对下限必须同时满足，因此两个端点都完全失败时不能因为“0 对 0 无退化”而通过。
+这仍不表示任意通过者都获得了业务价值认证。
 
 ## 3. 配置合同
 
@@ -117,6 +120,16 @@ Evaluator 协议和后续适配空间，但先证明自己最小闭环。这个�
 
 RAG 工作区存在另一任务的未提交文件，且跨仓库收口合同明确要求 EvalOps 只读消费。审计全部使用
 远端 ref 的 `git show/grep/rev-parse`，没有 checkout、reset、worktree 或文件写入，避免污染用户工作。
+
+### 为什么演示统计通过但正式 Gate 是 INPUT_BLOCKED
+
+第一次完整演示暴露出一个语义冲突：顶层已经标记 `DEMO_PASS`，嵌套统计决策却仍继承
+`formal_ab_eligible=true`。这会误导只读取 JSON 内层的审核者。修复后 demo 仍可展示统计 PASS，但
+FormalEvidenceDecision 明确写入 `formal_ab_eligible=false`，其 decision outcome 为 `INPUT_BLOCKED`。
+
+随后又主动检查了“双端都失败”的边界：只做非劣比较时，0 分 baseline 和 0 分 candidate 的差值是
+0，可能错误通过。策略因此增加 Candidate 的绝对任务成功/引用正确下限与工具错误上限，并补了
+equal-total-failure 回归测试。
 
 ## 7. 当前可说与不可说
 

@@ -817,3 +817,12 @@ What evidence would justify reopening the project?
 The learner may use a resume bullet only if they can draw the entity flow, distinguish at-least-once from exactly-once,
 trace every fence, explain the false-empty interleaving, recalculate the scaling verdict, explain all three rejected
 measurement designs without inventing a cause, and state every forbidden claim.
+# 2026-09-02 required product-workflow module
+
+Add [`PRODUCT_EXPERIMENT_WORKFLOW.md`](../learning/PRODUCT_EXPERIMENT_WORKFLOW.md) to the required
+teaching path. The module explains why the existing control plane needed a thin product entry,
+how exact-case pairing and paired bootstrap prevent misleading averages, how provider secrets
+and SSRF are bounded, why deterministic demo success is not formal quality evidence, and how
+`INPUT_REQUIRED`/`HUMAN_REVIEW_PENDING` preserve honest state. The implementation/evidence SHA
+is `41de043f40c02c0d1349332c6bd19e9116202838`; exact implementation CI `33589528112` succeeded
+and the same SHA was non-force fast-forwarded to default `main`.

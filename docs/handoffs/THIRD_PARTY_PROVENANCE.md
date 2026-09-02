@@ -58,3 +58,13 @@ Safe wording:
 3. Confirm whether any contributors used copied or adapted public harness/example code not recorded in Git history.
 4. Add third-party notices only where the confirmed license/use mode requires them.
 5. Repeat the review whenever a live framework adapter or network MCP transport is added.
+# 2026-09-02 product-workflow research boundary
+
+The usable paired-evaluation layer was designed after reviewing official repositories for
+Langfuse (MIT outside separately marked `ee` paths), Phoenix (Elastic License 2.0), DeepEval
+(Apache-2.0), Ragas (Apache-2.0), Promptfoo (MIT), OpenAI Evals (MIT), and Temporal (MIT).
+No source from those projects was copied. The implementation uses original Pydantic contracts,
+provider/evaluator protocols, paired evidence code, and portable report generation. Phoenix is
+concepts-only because of ELv2; Langfuse enterprise paths are excluded. Optional package adapters
+are deferred until a real metric justifies their dependency/model cost. The detailed adoption
+matrix and official links are in [`OPEN_SOURCE_PRODUCT_BENCHMARK.md`](../review/OPEN_SOURCE_PRODUCT_BENCHMARK.md).

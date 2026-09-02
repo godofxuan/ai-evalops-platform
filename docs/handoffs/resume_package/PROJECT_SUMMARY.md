@@ -1,5 +1,17 @@
 # Project Summary
 
+## 2026-09-02 usable product candidate
+
+Branch `codex/usable-eval-product-v1`, implementation
+`41de043f40c02c0d1349332c6bd19e9116202838`, adds a runnable product loop on top of the durable
+control plane: strict declarative baseline/candidate specs, exact dataset/repository SHA binding,
+safe provider/evaluator registries, 120-case paired bootstrap, case-level JSON/HTML comparison,
+and rehashable output manifests. The tracked result is a deterministic `DEMO_PASS` whose formal
+decision remains `INPUT_BLOCKED`; it does not upgrade real RAG quality, human review, scaling, or
+production claims. Exact implementation CI `33589528112` succeeded, and the same implementation
+SHA was non-force fast-forwarded to default `main`; the scoped product implementation claim is
+therefore resume-safe while the synthetic metric values remain demo-only.
+
 Current branch: `codex/final-evidence-hardening-v1`; implementation baseline: `22fda896a1b24b0cf41cd1402ead521f74758ac6`;
 migration head: `20260820_0025`. Claim tiers are `CURRENT_POSITIVE_RESUME`, `JD_SPECIFIC_BACKUP`, `INTERVIEW_ONLY`,
 `HISTORICAL_NEGATIVE` and `FORBIDDEN`.

@@ -192,3 +192,20 @@ capacity`, `zero data loss universally`.
 
 AI EvalOps carries distributed backend/orchestration/fencing/release-evidence claims. The RAG project carries retrieval,
 grounding, citation, Agent/Guard and multi-document attribution claims. Never describe both as generic enterprise AI.
+# 2026-09-02 product-workflow candidate update
+
+The active candidate branch is `codex/usable-eval-product-v1`; product implementation SHA is
+`41de043f40c02c0d1349332c6bd19e9116202838`; exact implementation CI `33589528112` succeeded
+and the same SHA was fast-forwarded to default `main` without force push. It adds a strict declarative
+120-case paired RAG/Agent experiment workflow, exact dataset/source identity, automatic
+quality/citation/tool-error/latency/cost comparison, paired-bootstrap gates, portable HTML
+case drill-down, and machine-readable output manifests. Treat this as a candidate claim until
+the final evidence commit and its CI are appended.
+
+Safe wording after verification: “Built a declarative, exact-SHA-bound paired RAG/Agent
+evaluation workflow that fails closed on dataset drift or missing credentials and produces
+case-level quality, citation, tool-error, latency and cost evidence plus a portable dashboard.”
+
+Do not convert the deterministic `DEMO_PASS` into a real quality-uplift claim. Formal RAG A/B,
+two-person blind review, Shadow Gate, production readiness, and the historical negative scaling
+result retain their existing states.

@@ -40,3 +40,62 @@ is not rewritten by this product work.
 
 Final implementation SHA, demo result digest, full-suite totals, push result, and exact GitHub CI
 will be appended only after those events actually occur.
+
+## Implementation and demo evidence
+
+- Implementation SHA: `41de043f40c02c0d1349332c6bd19e9116202838`.
+- Implementation CI: `33589528112`, successful (`quality-and-integration` 7m28s;
+  `compose-smoke` 1m00s).
+- Main promotion: remote `main` was re-fetched at
+  `aea8044061e678fb8e0d5312222987c5499ea83d`, verified as an ancestor, then non-force
+  fast-forwarded to the same implementation SHA. Rejected scheduler candidate
+  `5687fbdfcd0835ffdf1f1884ddaa27f8c411eb51` was rechecked and is not an ancestor.
+- Exact-main CI: `33590045034`, completed successfully for exact SHA
+  `41de043f40c02c0d1349332c6bd19e9116202838`.
+- Dataset SHA-256: `563a5063ae06efcd8b4a49729bf3621887b9876ffe34bc66bf41c0b6b2bb916c`.
+- Result SHA-256: see `docs/results/product_demo_v1/manifest.json` (rehash-verified locally).
+- Cases: 120 exact paired cases; six categories × 20; left-only 0; right-only 0.
+- Demo metrics: task success `0.90 → 1.00`, citation correctness `0.90 → 1.00`,
+  tool error `0 → 0`, p95 latency `46 → 50 ms`, mean cost `$0.010 → $0.011`.
+- Task-success paired delta: `+0.10`; deterministic 95% interval `[+0.05, +0.1583]`.
+- Product status: `DEMO_PASS`; statistical status `PASS`; evidence decision `INPUT_BLOCKED`;
+  `formal_ab_eligible=false`; human review `PENDING`; production ready `false`.
+
+Additional review caught and fixed two false-positive paths before evidence was accepted:
+
+1. A demo's nested formal decision initially remained eligible. Eligibility is now an explicit
+   input to the statistical contract and demo results fail closed at the formal gate.
+2. A pure non-regression policy could accept two completely failed arms. The frozen policy now
+   combines paired-delta rules with candidate task/citation absolute minimums (`0.80`) and a
+   tool-error absolute maximum (`0.05`). A same-failure regression test proves the gate returns
+   `FAIL`.
+
+CI attempts `33588623313` and `33588682128` failed at formatting because a test file migrated
+from the earlier formal-quality commit did not match the current Ruff formatter. The repository
+was not allowed to bypass the check; the single file was formatted and the full repository now
+reports `576 files already formatted`.
+
+Browser-based visual QA was attempted through the Codex browser surface, but the host reported a
+missing browser runtime asset path before a browser session could start. This is recorded as an
+environment limitation. HTML safety and structure remain covered by automated escaping tests,
+the report is generated successfully, and the independent file manifest verifies its bytes.
+
+## Final evidence validation
+
+The final local gate was intentionally rerun after the main-CI result was written into the
+evidence documents:
+
+- non-integration suite: `919 passed, 39 deselected` in 276.96 seconds;
+- Ruff format and lint: passed (`576 files already formatted`);
+- Mypy: passed for 192 source files;
+- Python bytecode compilation: passed;
+- final evidence manifest rehash: passed;
+- product artifact manifest: `DEMO_PASS`, four files independently rehashed;
+- focused evidence and portfolio-documentation tests: `8 passed`;
+- `git diff --check`: passed, with only Git's expected CRLF-to-LF warning for the JSON manifest.
+
+One verification command was initially invoked with an incorrect `--result-dir` option. The
+verifier's actual interface accepts the manifest path as its positional argument. The incorrect
+invocation exited at argument parsing before reading or changing evidence. It was corrected to
+`python -m scripts.verify_product_experiment docs/results/product_demo_v1/manifest.json`, which
+then verified experiment `paired-rag-product-demo-v1`, status `DEMO_PASS`, and all four files.

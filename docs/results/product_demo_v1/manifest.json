@@ -1,0 +1,45 @@
+{
+  "dataset_sha256": "563a5063ae06efcd8b4a49729bf3621887b9876ffe34bc66bf41c0b6b2bb916c",
+  "evalops_sha": "41de043f40c02c0d1349332c6bd19e9116202838",
+  "experiment_id": "paired-rag-product-demo-v1",
+  "files": [
+    {
+      "byte_size": 217473,
+      "path": "result.json",
+      "sha256": "96704dd9221001746e418f3444b9e074ed626318194a640b110b93fed31e75b0"
+    },
+    {
+      "byte_size": 39593,
+      "path": "report.html",
+      "sha256": "1f35029c6def763eb291a4a0e9f17ce7fe3cf25fb974438bfb037b3b24668289"
+    },
+    {
+      "byte_size": 51829,
+      "path": "baseline.json",
+      "sha256": "1ae66f4efe78b4ac86cd213285a82a37ff400c953902a5d87824017c164af354"
+    },
+    {
+      "byte_size": 52719,
+      "path": "candidate.json",
+      "sha256": "0be405317d1f6e475b63749f084fbf9ed291260884cf1b93ed17e721998a77e2"
+    }
+  ],
+  "formal_quality_claim_allowed": false,
+  "human_review_status": "PENDING",
+  "producing_command": "python -m scripts.run_product_experiment --spec benchmarks\\product_demo_v1\\experiment.json",
+  "production_ready": false,
+  "schema_version": "evalops.product-experiment-manifest/1.0",
+  "source_identities": {
+    "baseline": {
+      "provider_type": "fixture",
+      "repository": "demo://evalops/product-baseline",
+      "sha": "0000000000000000000000000000000000000000"
+    },
+    "candidate": {
+      "provider_type": "fixture",
+      "repository": "demo://evalops/product-candidate",
+      "sha": "1111111111111111111111111111111111111111"
+    }
+  },
+  "status": "DEMO_PASS"
+}

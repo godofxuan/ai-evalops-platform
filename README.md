@@ -8,6 +8,50 @@
 
 本项目把 Agent/RAG 评测从一次性脚本提升为可提交、可恢复、可审计、可复现的后台系统：PostgreSQL 管理多租户 Run/Job/Attempt 状态，Worker 使用 lease、heartbeat 与 fencing 抵御迟到写入，Reaper 恢复失联任务；Agent 轨迹通过版本化 Artifact、内外两层 SHA-256 和 Projection 校验进入 EvalOps；审计事件由持久 Outbox 和独立 Dispatcher 异步投递。
 
+## Run the product workflow
+
+The repository now includes a usable paired-evaluation surface, not only backend primitives.
+The following command runs a frozen 120-case baseline/candidate experiment, applies the same
+paired-bootstrap policy used by the formal gate, and writes a portable HTML dashboard plus
+machine-readable result, arm artifacts, and SHA-256 manifest:
+
+```powershell
+./.venv/Scripts/python.exe -m scripts.run_product_experiment `
+  --spec benchmarks/product_demo_v1/experiment.json `
+  --output-dir artifacts/product-demo
+Start-Process artifacts/product-demo/report.html
+```
+
+The demo deliberately contains known baseline misses and deterministic candidate repairs so a
+reader can inspect the complete product loop without an API key or model bill. Its result is
+`DEMO_PASS`, never `FORMAL_AB_COMPLETE`: it proves the runner, evaluator, statistics, identity
+binding, and report—not real RAG quality uplift.
+
+Tracked demo evidence at implementation `41de043f40c02c0d1349332c6bd19e9116202838`:
+120/120 paired cases with 20 cases in each required category; baseline/candidate task success
+`0.90 → 1.00`; citation correctness `0.90 → 1.00`; p95 latency `46 → 50 ms` (`+8.70%`);
+mean cost `$0.010 → $0.011` (`+10%`); tool-error rate `0 → 0`. The paired task-success delta
+is `+0.10` with a deterministic 95% bootstrap interval `[+0.05, +0.1583]`. These numbers are
+synthetic workflow evidence only. Rehash them from
+[the product manifest](docs/results/product_demo_v1/manifest.json) and inspect the
+[portable report](docs/results/product_demo_v1/report.html).
+The exact implementation passed [GitHub Actions 33589528112](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33589528112)
+before a non-force fast-forward promoted it to the default `main` branch.
+
+To evaluate two real RAG/Agent versions, change the spec to `scope: FORMAL`, pin both exact Git
+SHAs, and use two HTTPS providers whose credentials are named by `auth_env_var`. Literal secrets
+and unknown configuration fields are rejected. Missing credentials produce `INPUT_REQUIRED`
+before any request is sent. Formal automated success remains
+`AUTOMATED_PASS_HUMAN_REVIEW_PENDING` until two real independent blinded reviews are completed.
+
+| Product surface | Entry |
+| --- | --- |
+| Declarative demo spec | [experiment.json](benchmarks/product_demo_v1/experiment.json) |
+| Formal policy | [policy.json](benchmarks/formal_agent_quality_v1/policy.json) |
+| Product workflow tutorial | [PRODUCT_EXPERIMENT_WORKFLOW.md](docs/learning/PRODUCT_EXPERIMENT_WORKFLOW.md) |
+| RAG input audit | [RAG_FORMAL_INPUT_AUDIT.md](docs/review/RAG_FORMAL_INPUT_AUDIT.md) |
+| OSS design benchmark | [OPEN_SOURCE_PRODUCT_BENCHMARK.md](docs/review/OPEN_SOURCE_PRODUCT_BENCHMARK.md) |
+
 ## Final cross-repository evidence
 
 | Evidence | Exact result |

@@ -1,5 +1,29 @@
 # AI EvalOps Platform — Current Portfolio and Release Status
 
+## Usable evaluation product candidate — 2026-09-02
+
+- Branch: `codex/usable-eval-product-v1`.
+- Clean starting point: `origin/main@aea8044061e678fb8e0d5312222987c5499ea83d`.
+- Product implementation: `41de043f40c02c0d1349332c6bd19e9116202838`.
+- Exact implementation CI: GitHub Actions [`33589528112`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33589528112), successful.
+- Default `main`: non-force fast-forwarded from `aea8044061e678fb8e0d5312222987c5499ea83d`
+  to the same implementation SHA; exact-main CI [`33590045034`](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33590045034)
+  completed successfully for that exact SHA.
+- Product demo: 120 paired deterministic cases, six required categories × 20, exact dataset
+  SHA `563a5063ae06efcd8b4a49729bf3621887b9876ffe34bc66bf41c0b6b2bb916c`.
+- Demo result: `DEMO_PASS`; statistical calculations pass, but the evidence decision is
+  `INPUT_BLOCKED` with `formal_ab_eligible=false`.
+- Formal RAG state: exact baseline/candidate serving inputs and a frozen unconsumed quality
+  dataset are still `INPUT_REQUIRED`; two-person human review is `PENDING`.
+- Historical release blocker remains `NEGATIVE_SCALING`; this product work does not change or
+  rerun the frozen scaling experiment.
+- Production state remains `PRODUCTION_NOT_VERIFIED`.
+
+This layer adds a strict experiment spec, code-registered evaluator plugins, SSRF-hardened HTTP
+provider, paired automatic quality/citation/tool-error/latency/cost analysis, portable HTML
+case drill-down, and a separately verifiable result manifest. The deterministic demo is a
+usability and mechanism proof, not evidence that the real RAG improved.
+
 ## Canonical final closeout snapshot — 2026-09-01
 
 - Branch: default `main`.

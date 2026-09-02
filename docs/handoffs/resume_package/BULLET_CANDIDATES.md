@@ -60,3 +60,10 @@ Canonical full wording: [`RESUME_CODEX_HANDOFF.md`](../RESUME_CODEX_HANDOFF.md).
 
 Production-ready/production-scale, exactly-once, universal fairness, linear scaling, verified Agent truth, live LangGraph,
 remote/OAuth MCP, atomic PostgreSQL/object-store commit, complete tenant isolation, SLO/on-call and released v0.1.0.
+# 2026-09-02 verified implementation — exact CI 33589528112 succeeded
+
+- 构建声明式、精确 Dataset/Git SHA 绑定的 RAG/Agent 配对评测工作流，以代码注册的安全评估器、
+  paired bootstrap 和绝对质量下限比较任务成功、引用、工具错误、p95 延迟与成本，并生成逐 case
+  HTML 报告和可重算 SHA-256 Manifest；缺凭据、正式数据集或真人复核时 fail-closed。
+
+- 不得把 120-case 确定性 `DEMO_PASS` 写成真实 RAG 质量提升、正式 A/B、双人盲审或生产验证。
