@@ -54,3 +54,14 @@ V2 协议和 FP16 优化协议，并将绑定字段命名为 `fp16_optimization_
 允许陈述的结果仅限：模拟配置选择集上的点估计、FP16 工程延迟优化，以及历史已消费
 ExpertWritten 集上的回顾性点估计。由于所有主要 paired 95% CI 均跨 0，不能陈述统计显著、
 盲测泛化、答案准确率提升或无条件生产就绪。旧 MiniLM 负结果继续保留，不被新结果覆盖。
+
+## 4. 验证过程中的问题
+
+首次全量运行得到 `933 passed, 39 skipped, 1 failed`。唯一失败来自最终证据 manifest 对
+README 字节漂移的主动检测；这是更新 README 后、重建 manifest 前应有的 fail-closed 行为，
+不是业务回归。处理方式是先提交实现得到精确 SHA
+`2b897a2f43890a8eb44f116b48eea799e8dac628`，再以该 SHA 重建最终证据 manifest，避免 manifest
+绑定一个尚不存在或循环变化的提交。
+
+39 个跳过项仍是需要真实 PostgreSQL、Redis 或 MinIO 开关的既有集成测试。本轮没有把跳过项
+计为通过，也没有因外部服务缺失而降低测试门槛。
