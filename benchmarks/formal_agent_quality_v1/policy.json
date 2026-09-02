@@ -1,0 +1,21 @@
+{
+  "bootstrap_resamples": 10000,
+  "bootstrap_seed": 20260902,
+  "citation_correctness_ci_lower_min": -0.02,
+  "cost_mean_relative_delta_max": 0.25,
+  "latency_p95_relative_delta_max": 0.25,
+  "minimum_cases_per_category": 20,
+  "minimum_common_cases": 120,
+  "require_exact_case_set": true,
+  "required_categories": [
+    "basic",
+    "semantic",
+    "completeness",
+    "conflicting_information",
+    "high_level",
+    "information_not_found"
+  ],
+  "schema_version": "formal-agent-quality-policy/1.0",
+  "task_success_ci_lower_min": 0.0,
+  "tool_error_rate_ci_upper_max": 0.02
+}
