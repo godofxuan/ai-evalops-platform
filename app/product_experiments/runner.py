@@ -20,6 +20,7 @@ from app.external_harness.formal_quality import (
     FormalQualityPolicy,
     assess_formal_quality,
 )
+from app.product_experiments.evaluators import CaseEvaluator, registered_evaluators
 from app.product_experiments.spec import (
     ExperimentArm,
     FixtureProviderSpec,
@@ -235,6 +236,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
         )
         for arm in spec.arms
     }
+    evaluators = registered_evaluators(spec.evaluators)
     semaphore = asyncio.Semaphore(spec.max_concurrency)
 
     async def measure(arm: ExperimentArm, case: ExperimentCase) -> FormalCaseMeasurement:
@@ -251,7 +253,7 @@ async def run_experiment(spec_path: object, *, evalops_sha: str) -> ProductExper
                     cost_usd=0.0,
                     tool_error=True,
                 )
-            return _measurement(case, result)
+            return _measurement(case, result, evaluators=evaluators)
 
     measurements: dict[str, list[FormalCaseMeasurement]] = {}
     for arm in spec.arms:
@@ -317,33 +319,25 @@ def _build_provider(arm: ExperimentArm, *, experiment_id: str) -> Provider:
     return _HTTPProvider(arm.provider, experiment_id=experiment_id, arm=arm.label)
 
 
-def _measurement(case: ExperimentCase, result: ProviderResult) -> FormalCaseMeasurement:
-    actual_ids = {
-        str(value)
-        for citation in result.citations
-        for key in ("source_id", "id")
-        if (value := citation.get(key)) is not None
-    }
-    expected_ids = set(case.expected_citation_ids)
-    citation_correctness = (
-        1.0 if not expected_ids else len(expected_ids & actual_ids) / len(expected_ids)
-    )
+def _measurement(
+    case: ExperimentCase,
+    result: ProviderResult,
+    *,
+    evaluators: tuple[CaseEvaluator, ...],
+) -> FormalCaseMeasurement:
+    scores = {evaluator.name: evaluator.evaluate(case, result) for evaluator in evaluators}
     return FormalCaseMeasurement(
         case_id=case.case_id,
         category=case.category,
         prompt=case.prompt,
-        task_success=float(_normalize(result.answer) == _normalize(case.reference_answer)),
-        citation_correctness=citation_correctness,
-        tool_error_rate=float(result.tool_error),
+        task_success=scores["reference_answer"],
+        citation_correctness=scores["citation_correctness"],
+        tool_error_rate=scores["tool_error_rate"],
         latency_ms=result.latency_ms,
         cost_usd=result.cost_usd,
         answer=result.answer,
         citations=result.citations,
     )
-
-
-def _normalize(value: str) -> str:
-    return " ".join(value.casefold().split())
 
 
 def _comparisons(
