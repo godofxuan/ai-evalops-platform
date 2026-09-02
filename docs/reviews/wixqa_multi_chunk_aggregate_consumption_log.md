@@ -62,3 +62,6 @@ blind 泛化、所有指标显著提升、答案准确率提升、生产延迟 S
 新增测试覆盖嵌套协议成功、结构化声明精确成功，以及声明漂移拒绝。已有错误发布者 SHA、私有
 字段、错误协议和 aggregate-only 边界测试继续保留。tracked verification 中不含
 `case_results`。
+
+最终本地验证：`936 passed, 39 skipped`；Ruff lint、Ruff format、mypy 和最终证据 manifest
+验证全部通过。39 个跳过项要求真实 PostgreSQL、Redis 或 MinIO 环境开关，没有被计为通过。
