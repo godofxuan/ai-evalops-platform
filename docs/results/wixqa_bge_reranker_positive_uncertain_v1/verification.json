@@ -1,0 +1,55 @@
+{
+  "allowed_claims": [
+    "On the 200-case simulated configuration-selection cohort, GPU FP16 bge-reranker-v2-m3 improved Recall@5 by 3.50pp and nDCG@5 by 2.47pp versus same-run Dense at a 3.33x retrieval-stage p95.",
+    "On the historically consumed 200-case ExpertWritten cohort, retrospective point estimates moved Recall@5 from 66.42% to 68.58%, nDCG@5 from 52.16% to 54.09%, and MRR@5 from 49.61% to 52.22%.",
+    "FP16 batch-10 inference preserved the FP32 validation ranking metrics while reducing reranker p95 from 624.67 ms to 133.04 ms."
+  ],
+  "case_count": 200,
+  "decision": "VALIDATION_GATE_PASSED_RETROSPECTIVE_POSITIVE_UNCERTAIN",
+  "evidence_id": "wixqa-bge-reranker-positive-uncertain-v1",
+  "forbidden_claims": [
+    "The ExpertWritten improvement is statistically significant.",
+    "The ExpertWritten cohort is a fresh blind holdout.",
+    "The experiment measured answer accuracy or citation quality.",
+    "The GPU reranker is the unconditional production default.",
+    "The aggregate artifact is equivalent to 200 formal per-case EvalOps CaseResults."
+  ],
+  "formal_ab_status": "NOT_RUN_BY_EVALOPS",
+  "formal_case_result_status": "INPUT_REQUIRED",
+  "formal_quality_claim_allowed": false,
+  "payload_granularity": "aggregate_only",
+  "private_or_per_case_payload_present": false,
+  "production_ready": false,
+  "publisher": {
+    "ci": {
+      "conclusion": "success",
+      "run_id": 33614494203,
+      "status": "completed",
+      "url": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/33614494203"
+    },
+    "repository": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot",
+    "sha": "5b7a7518b63993d1f21aed441966db5032435d4a"
+  },
+  "schema_version": "evalops.aggregate-contract-verification/1.0",
+  "source": {
+    "artifact_schema": "wixqa_bge_reranker_public_evidence_v1",
+    "artifact_sha256": "9ad53224685254303cd4af808dd762e5ad15e662717893987998ae923b1376c6",
+    "ci": {
+      "conclusion": "success",
+      "run_id": 33613059251,
+      "status": "completed",
+      "url": "https://github.com/godofxuan/Attempt-of-enterprise-rag-copilot/actions/runs/33613059251"
+    },
+    "protocol_sha256": "8622f0867871ab7ff403ba6344f925352a860d6a63335db2583e8bbc7133ebe2",
+    "reference_sha256": "540f30d52ddf0ded9e76cb573bfde1826aa0abbff86c9c0553a7284b83311e90",
+    "sha": "3b717f7731ba270cad66ad748550b4372d3da746"
+  },
+  "source_claim_boundary": [
+    "Article retrieval and ranking only; answer correctness and citation quality were not evaluated.",
+    "The 200-case simulated cohort was used for configuration selection and runtime optimization, not blind testing.",
+    "ExpertWritten is a historically consumed fixed public cohort and this run is retrospective.",
+    "ExpertWritten point estimates are positive, but every reported paired 95% interval crosses zero.",
+    "The optimized configuration requires a CUDA-capable GPU and is not the unconditional default runtime."
+  ],
+  "status": "AGGREGATE_EVIDENCE_VERIFIED"
+}

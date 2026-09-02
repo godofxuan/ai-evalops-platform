@@ -100,3 +100,36 @@ def test_rejects_wrong_publisher_and_private_payload(tmp_path: Path) -> None:
     pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
     with pytest.raises(ExternalEvidenceError, match="private/per-case"):
         verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+
+def test_accepts_named_protocol_digest_without_weakening_case_boundary(tmp_path: Path) -> None:
+    pin, sha = _contract(tmp_path)
+    payload = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
+    payload["fp16_optimization_protocol_sha256"] = payload.pop("protocol_sha256")
+    artifact_sha = _write(tmp_path / "evidence.json", payload)
+    reference = json.loads((tmp_path / "reference.json").read_text(encoding="utf-8"))
+    reference["artifact_sha256"] = artifact_sha
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+
+    result = verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+    assert result["status"] == "AGGREGATE_EVIDENCE_VERIFIED"
+    assert result["formal_case_result_status"] == "INPUT_REQUIRED"
+    assert result["formal_quality_claim_allowed"] is False
+    assert "case_results" not in result
+
+
+def test_rejects_reference_protocol_absent_from_named_protocol_digests(
+    tmp_path: Path,
+) -> None:
+    pin, sha = _contract(tmp_path)
+    payload = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
+    payload["fp16_optimization_protocol_sha256"] = "e" * 64
+    payload.pop("protocol_sha256")
+    artifact_sha = _write(tmp_path / "evidence.json", payload)
+    reference = json.loads((tmp_path / "reference.json").read_text(encoding="utf-8"))
+    reference["artifact_sha256"] = artifact_sha
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+
+    with pytest.raises(ExternalEvidenceError, match="protocol"):
+        verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)

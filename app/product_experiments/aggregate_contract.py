@@ -141,7 +141,12 @@ def verify_aggregate_contract(
         raise ExternalEvidenceError("aggregate artifact contains private/per-case payload")
     if payload.get("decision") != reference.decision:
         raise ExternalEvidenceError("aggregate decision does not match producer reference")
-    if payload.get("protocol_sha256") != reference.protocol_sha256:
+    protocol_digests = {
+        value
+        for key, value in payload.items()
+        if (key == "protocol_sha256" or key.endswith("_protocol_sha256")) and isinstance(value, str)
+    }
+    if reference.protocol_sha256 not in protocol_digests:
         raise ExternalEvidenceError("aggregate protocol does not match producer reference")
     boundary = payload.get("claim_boundary")
     if (

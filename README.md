@@ -76,6 +76,8 @@ before any request is sent. Formal automated success remains
 | External aggregate reference | [rag_r5_reference.json](benchmarks/external_evidence/rag_r5_reference.json) |
 | External aggregate verification | [verification.json](docs/results/rag_r5_external_evidence/verification.json) |
 | WixQA negative aggregate pin | [wixqa_reranker_negative_pin.json](benchmarks/external_evidence/wixqa_reranker_negative_pin.json) |
+| WixQA BGE positive/uncertain pin | [wixqa_bge_reranker_positive_uncertain_pin.json](benchmarks/external_evidence/wixqa_bge_reranker_positive_uncertain_pin.json) |
+| WixQA BGE verification | [verification.json](docs/results/wixqa_bge_reranker_positive_uncertain_v1/verification.json) |
 | OSS design benchmark | [OPEN_SOURCE_PRODUCT_BENCHMARK.md](docs/review/OPEN_SOURCE_PRODUCT_BENCHMARK.md) |
 
 ### Verify real external aggregate evidence without inventing cases
@@ -99,6 +101,16 @@ EvalOps emits `AGGREGATE_EVIDENCE_VERIFIED` together with
 `FORMAL_CASE_RESULTS=INPUT_REQUIRED` and never synthesizes 192 `CaseResult` rows.
 The verifier implementation `5f6aa5a996062d4423b94aa4f7c2a15c38fd41b3` passed exact-main
 [GitHub Actions 33592493933](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33592493933).
+
+The same fail-closed consumer also verifies the later RAG BGE reranker aggregate. On the
+simulated 200-case configuration-selection cohort, the selected GPU FP16 arm moved Recall@5
+`61.42% → 64.92%` and nDCG@5 `47.78% → 50.25%`, while FP16 batching reduced reranker p95
+`624.67 ms → 133.04 ms`. On the historically consumed ExpertWritten cohort, retrospective point
+estimates were positive, but all paired 95% confidence intervals crossed zero. Therefore the
+tracked result remains `aggregate_only`, `FORMAL_CASE_RESULTS=INPUT_REQUIRED`,
+`formal_quality_claim_allowed=false`, and `production_ready=false`. The earlier MiniLM negative
+result remains valid; the BGE result adds a model-selection and GPU-optimization outcome rather
+than rewriting that history.
 
 ## Historical Final Pair cross-repository evidence
 
