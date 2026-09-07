@@ -2,10 +2,11 @@
 
 ## Trustworthy evaluation product v2 — 2026-09-07
 
-Current work branch: `codex/trustworthy-evaluation-product-v2`. This round has not changed default `main`, RAG, prior resume attachments or historical links. S4/S5 implementation has reached the client, immutable export, independent recomputation and real process recovery; S6/S7 final closeout is still in progress.
+Current work branch: `codex/trustworthy-evaluation-product-v2`. This round has not changed default `main`, RAG, prior resume attachments or historical links. R1–R13 implementation and S4–S6 usability/fault qualification have passed the exact CODE CI. S7 uses a separate documentation/evidence commit whose exact SHA and CI must be checked after publication, without self-referential hashes in this file.
 
 - [Checkpoint 17 CI 34114567320](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34114567320) succeeded for exact SHA `799ba5acbacf5a529472caf8b27083542c5d23b2`, covering earlier client/recovery work plus lost acknowledgements, cancellation races, atomic export death and bounded real HTTP streams.
-- New changes after that SHA include explicit Compose submission opt-in, safer wait recovery hints, clearer README navigation and full Agent parameterization of the durable fault path. They still require their own CI, not the checkpoint above.
+- Final CODE `abfab98056e5526af505551ebde9618b94698f3a` / [CI 34117962138](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34117962138) completed successfully, including explicit Compose opt-in and both QA/Agent durable fault paths. The earlier candidate CI 34116820987 failed a stale documentation file manifest; its failure remains recorded rather than relabeled.
+- Full local unit regression: 1121 passed, 1 Windows symlink-permission skip (305.60s). Clean CODE replay produced independently verified public QA/Agent fixtures, each 120 cases / 240 case-arm observations / DEMO_PASS; these are not real-model or formal quality results. See the [final review entry](docs/reviews/trustworthy-product-closeout.md).
 - Start with [current client instructions](docs/durable-experiment-client.md), [behavior-to-evidence map](docs/reviews/trustworthy-product-validation-map.md) and [execution/learning log](docs/reviews/trustworthy-product-execution-log.md).
 - Local fixed demos are not formal A/B. Formal quality, independent human approval and production readiness remain unverified. Frozen negative-scaling evidence is unchanged.
 

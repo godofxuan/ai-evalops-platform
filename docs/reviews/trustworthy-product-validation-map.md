@@ -1,6 +1,6 @@
 # 可信评测产品 v2：验收证据地图
 
-这是行为与证据的对应关系，不是测试数目排行榜。第十五至十七检查点各自精确 CI 已成功；新加入的 Agent 全路径和 Compose 显式启用仍待实现冻结后的 CI，不能借用上一提交的结果。
+这是行为与证据的对应关系，不是测试数目排行榜。最终 CODE `abfab98056e5526af505551ebde9618b94698f3a` 的 [CI 34117962138](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34117962138) completed/success，包含 Agent 全路径和 Compose 显式启用；各历史检查点保持其自身范围。
 
 ## 精确回执
 
@@ -26,7 +26,7 @@
 | R10 有界执行 | [spec](../../tests/unit/product_experiments/test_spec.py)、[submission](../../tests/unit/product_experiments/test_submission.py)、真实慢流、共享 claim admission 和总 deadline 回归；没有做容量/SLO 或硬美元保证 |
 | R11 身份 | 父实验/两组 Run/Job/Attempt 分离；同键同内容重放；[响应丢失测试](../../tests/product_controls_faults.py)返回原 UUID；恢复只绑定新 accepted attempt |
 | R12 比较目的 | [runner](../../tests/unit/product_experiments/test_runner.py)区分 qualification/non_regression，覆盖 100%→95% 退化和固定 seed 顺序；[diagnostics](../../tests/unit/product_experiments/test_diagnostics.py)展示缺失与切片 |
-| R13 零工具 | 空 allowlist、零预算、正确拒绝、越权与 bool/number 差异有定向回归；新完整 Agent 数据库路径使用合法零工具 case，待其自身 CI |
+| R13 零工具 | 空 allowlist、零预算、正确拒绝、越权与 bool/number 差异有定向回归；完整 Agent 数据库路径使用合法零工具 case，最终 CODE CI 已通过 |
 
 执行顺序边界：固定 seed 的平衡安排属于 local runner。durable 路径沿用既有调度器，记录实际 attempt 时间与身份，不保证跨两组的随机/平衡执行顺序；两种模式共享评分语义，不等于延迟实验条件完全相同。当前持久提交仅支持 DEMO，不用未控制顺序的数据发布正式延迟公平结论。
 
@@ -47,10 +47,10 @@
 | 导出进程被杀 | 真正 OS kill 于文件系统最终 rename 前；正式目录不存在，残锁不被其他 writer 删除；确认自身进程死亡后显式恢复 |
 | 租户隔离 | 新提交、查询、取消、公开/私有导出经过实际鉴权；跨租户隐藏对象存在性 |
 | 慢流与超限 | 真实 TCP 的首字节后停滞触发 timeout，超限触发 response_too_large；不靠耗尽内存验证 |
-| Agent 全流程 | 新参数化与 QA 采用同一公开提交/worker/恢复/报告流程，真实数据库验证待最新实现 CI；不提前写成功 |
+| Agent 全流程 | 与 QA 采用同一公开提交/worker/恢复/报告流程，最终 CODE 的真实数据库 CI 已通过 |
 
 这些证明受控条件下的工程机制，不证明全部公网部署、真实外部工具 exactly-once、独立盲评、生产容量或性能伸缩性。
 
-## 最终收口尚需
+## 最终收口与限制
 
-实现冻结 CODE_SHA 与自己的完整 CI；干净源状态的说明重放；单独文档/证据 DOC_SHA 与自己的 CI；远端、工作区、公开链接和跨任务回执核对。详见[执行计划](../plans/trustworthy-evaluation-product-execution-plan.md)和[逐步日志](trustworthy-product-execution-log.md)。
+实现冻结与完整 CODE CI、干净源状态的两类说明重放已完成。单独 DOC 提交不修改源码，其精确 SHA/CI 由发布后回执核对，不能递归预写自己的 SHA。公开证据、实际同步回执、历史链接检查与已知限制集中在[最终审核入口](trustworthy-product-closeout.md)。详见[执行计划](../plans/trustworthy-evaluation-product-execution-plan.md)和[逐步日志](trustworthy-product-execution-log.md)。

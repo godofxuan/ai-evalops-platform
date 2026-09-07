@@ -2,7 +2,7 @@
 
 > 对 QA / RAG / Agent 的两个版本运行同题评测，可靠执行任务，并输出可追溯、可复核的质量门禁。
 
-当前可信评测产品 v2 位于 `codex/trustworthy-evaluation-product-v2`。本轮没有修改默认 `main`、RAG 仓库或已投递简历的历史链接；最终发布收口尚在进行，不把历史版本的完成标签套到新一轮工作上。
+当前可信评测产品 v2 位于 `codex/trustworthy-evaluation-product-v2`，本轮工程实现已通过精确代码 CI；[最终审核入口](docs/reviews/trustworthy-product-closeout.md)集中提供版本、证据和限制。本轮没有修改默认 `main`、RAG 仓库或已投递简历的历史链接；这不是正式 A/B 或生产资格晋级。
 
 本项目把 Agent/RAG 评测从一次性脚本提升为可提交、可恢复、可审计、可复现的后台系统：PostgreSQL 管理多租户 Run/Job/Attempt 状态，Worker 使用 lease、heartbeat 与 fencing 抵御迟到写入，Reaper 恢复失联任务；Agent 轨迹通过版本化 Artifact、内外两层 SHA-256 和 Projection 校验进入 EvalOps；审计事件由持久 Outbox 和独立 Dispatcher 异步投递。
 
@@ -52,6 +52,7 @@ uv run --no-sync python -m scripts.run_product_experiment --spec benchmarks/agen
 
 ## 当前工程证据从哪里看
 
+- [最终审核入口与公开证据包](docs/reviews/trustworthy-product-closeout.md)：CODE `abfab98056e5526af505551ebde9618b94698f3a`、[完整 CI 34117962138](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34117962138) success；QA/Agent 可恢复持久主路径、故障恢复、Compose 显式配置与公开固定演示。DOC 提交的独立 CI 在其 GitHub 提交检查与交付回执中核对，不借用 CODE 结果。
 - [第十五检查点 CI](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34112208092)：精确提交 `a10c785f5e88d9c53c3348d037b3e78cf88c2c47`，持久 SDK/CLI、租户隔离、不可变导出与离线重算通过。
 - [第十六检查点 CI](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34113351106)：精确提交 `6d8e68dcc466fba181be96df0f7bfe5cb7d0a052`，真实 worker 强杀、实际租约回收、陈旧写入拒绝、已完成题不重复执行通过。目标走真实本机 TCP；公共 DNS/peer 元数据为明确的测试夹具，不冒称公网 TLS 认证。
 - [完整执行与学习记录](docs/reviews/trustworthy-product-execution-log.md)：每一步为什么改、失败尝试、验证效果和仍未覆盖的边界。

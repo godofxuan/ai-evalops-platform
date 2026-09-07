@@ -1,5 +1,15 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 S7：新冻结候选与文档证据收口
+
+- 修复后最终 CODE_SHA 为 abfab98056e5526af505551ebde9618b94698f3a，CI 34117962138 已核对精确 head_sha 并 completed/success；quality-and-integration、compose-smoke 均通过，Agent/QA 完整持久故障路径有最终回执。以下 DOC 只变更说明/公开产物，自己的提交 SHA/CI 在发布后回执确认，不假造自指 SHA。
+- 实际预检重放：普通 --validate-only 退出 0；formal 门禁退出 2；两次 NOT_RUN、输出目录不存在，未以 READY 冒充正式资格。历史清单与记分卡独立校验通过，生产/正式质量/NEGATIVE_SCALING 限制未升级。
+- 完整本地回归重新执行：1121 passed / 1 skipped，305.60 秒。唯一 skip 为 Windows 符号链接权限 1314；不是 PostgreSQL 假通过。原证据清单失败已不再出现。全仓 lint、640 文件格式检查、223 源文件 mypy 通过。
+- 生成前 git status --porcelain 为空；按 CODE_SHA 分别重放 QA/Agent 各 120 题固定 fixture；均 DEMO_PASS、0 执行错误、240 case-arms；两个公开 manifest 独立校验通过。产生期间源码 diff 为空，只有新公开证据；不包含私有逐题报告，不承诺真实模型提升。
+- 新增最终审核入口 trustworthy-product-closeout.md，集中放 CODE、证据 hash、使用流程、测试层级与已知限制。链接检查发现首次写入的 API 链接误用了不存在的 routes/experiments.py，核对实际 routes_product_experiments.py 后修正；不把初稿链接当成已验证地址。
+- 历史跨仓 evidence 及 Final Pair 入口相对于 main 无变化；仓库首页、main README、main 旧 GPT 审核入口三处实际 HTTP HEAD 均 200。只读核对当前简历指针仍 R12，不修改 PDF/投递附件。
+- 三任务完整同步已发送；简历实际回执规则 §16、共享同步 §27 已更新；教学实际回执事故训练规划已更新，用户本人没有被标记已掌握。投递任务仍在既有岗位工作，发送不等于落实。CODE 最终 CI 和 DOC SHA/CI 后续补发，避免反复轮询或把中间状态当收工。
+
 ## 2026-09-07 第十九检查点：完整门禁发现并修复证据清单漂移
 
 - 第十八候选 `87778965024f47c0a9c0dcb5be5fa786f3ad8005` 的 CI 34116820987 completed/failure，不能作为最终成功 CODE_SHA。具体失败为 Verify final evidence file manifest；Compose 与 atomic product experiment pairs（含 QA/Agent 的新增路径）步骤实际 success，但不以部分成功替代整个门禁。
