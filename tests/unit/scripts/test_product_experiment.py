@@ -18,6 +18,34 @@ write_product_artifacts = partial(export_product_artifacts, export_mode="private
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "field,value,reason",
+    [
+        ("dataset_sha256", "f" * 64, "dataset"),
+        ("source_sha", "f" * 40, "source"),
+    ],
+)
+async def test_export_rejects_arm_identity_drift_against_frozen_result(
+    tmp_path: Path, field: str, value: str, reason: str
+) -> None:
+    from app.product_experiments.runner import run_experiment
+
+    result = await run_experiment(
+        REPOSITORY_ROOT / "benchmarks/product_demo_v1/experiment.json", evalops_sha="e" * 40
+    )
+    setattr(result.arms["candidate"], field, value)
+    with pytest.raises(ProductManifestError, match=reason):
+        write_product_artifacts(result, output_dir=tmp_path / "invalid", command="test")
+
+
+def test_manifest_rejects_excessive_json_depth_before_schema_parsing(tmp_path: Path) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text('{"nested":' + "[" * 80 + "0" + "]" * 80 + "}", encoding="utf-8")
+    with pytest.raises(ProductManifestError, match="depth"):
+        verify_manifest(path)
+
+
+@pytest.mark.asyncio
 async def test_default_export_is_public_summary_without_private_payload(tmp_path: Path) -> None:
     from app.product_experiments.runner import run_experiment
 

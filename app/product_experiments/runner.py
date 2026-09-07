@@ -18,7 +18,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
 from app.datasets.validation import DEFAULT_JSONL_VALIDATION_LIMITS
-from app.domain.evaluation import EvaluationCase, ExecutionContext
+from app.domain.evaluation import EvaluationCase, ExecutionContext, TargetResult
 from app.external_harness.formal_quality import (
     FormalArmResult,
     FormalQualityPolicy,
@@ -254,42 +254,50 @@ class _HTTPProvider:
             ),
             context,
         )
-        usage = target_result.token_usage
-        trace = (
-            project_agent_trace(
-                target_result.trace, case_id=case.case_id, answer=target_result.answer
+        return normalize_product_observation(case, target_result, task_type=self._task_type)
+
+
+def normalize_product_observation(
+    case: ExperimentCase,
+    target_result: TargetResult,
+    *,
+    task_type: Literal["QA", "AGENT_TOOL_USE"],
+) -> ProviderResult:
+    """Use one response normalization contract in local and durable evaluation."""
+    usage = target_result.token_usage
+    trace = (
+        project_agent_trace(target_result.trace, case_id=case.case_id, answer=target_result.answer)
+        if task_type == "AGENT_TOOL_USE"
+        else target_result.trace
+    )
+    trace_id = trace.get("trace_id")
+    return ProviderResult.from_target(
+        {
+            "answer": target_result.answer or "",
+            "citations": list(target_result.citations),
+            "latency_ms": float(target_result.latency_ms),
+            "cost_usd": _reported_cost(trace, usage),
+            "trace_id": trace_id if isinstance(trace_id, str) else None,
+            "missing_fields": tuple(
+                name
+                for name in ("tool_error", "tool_calls", "terminal_state", "budget_exhausted")
+                if name not in trace or trace[name] is None
             )
-            if self._task_type == "AGENT_TOOL_USE"
-            else target_result.trace
-        )
-        trace_id = trace.get("trace_id")
-        return ProviderResult.from_target(
-            {
-                "answer": target_result.answer or "",
-                "citations": list(target_result.citations),
-                "latency_ms": float(target_result.latency_ms),
-                "cost_usd": _reported_cost(trace, usage),
-                "trace_id": trace_id if isinstance(trace_id, str) else None,
-                "missing_fields": tuple(
-                    name
-                    for name in ("tool_error", "tool_calls", "terminal_state", "budget_exhausted")
-                    if name not in trace or trace[name] is None
+            + tuple(trace.get("projection_missing_fields", ())),
+            **{
+                name: trace[name]
+                for name in (
+                    "tool_error",
+                    "tool_calls",
+                    "terminal_state",
+                    "budget_exhausted",
+                    "source_terminal_state",
+                    "artifact_sha256",
                 )
-                + tuple(trace.get("projection_missing_fields", ())),
-                **{
-                    name: trace[name]
-                    for name in (
-                        "tool_error",
-                        "tool_calls",
-                        "terminal_state",
-                        "budget_exhausted",
-                        "source_terminal_state",
-                        "artifact_sha256",
-                    )
-                    if name in trace
-                },
-            }
-        )
+                if name in trace
+            },
+        }
+    )
 
 
 def _reported_cost(trace: Mapping[str, Any], usage: object) -> float | None:
@@ -311,6 +319,11 @@ def _reported_cost(trace: Mapping[str, Any], usage: object) -> float | None:
 def _load_dataset(path: str, expected_sha256: str) -> list[ExperimentCase]:
     with open(path, "rb") as stream:
         payload = stream.read(DEFAULT_JSONL_VALIDATION_LIMITS.max_file_bytes + 1)
+    return parse_product_dataset(payload, expected_sha256=expected_sha256)
+
+
+def parse_product_dataset(payload: bytes, *, expected_sha256: str) -> list[ExperimentCase]:
+    """Validate the exact source bytes shared by local execution and durable mapping."""
     if len(payload) > DEFAULT_JSONL_VALIDATION_LIMITS.max_file_bytes:
         raise DatasetIntegrityError("dataset size limit exceeded")
     actual = hashlib.sha256(payload).hexdigest()
@@ -561,7 +574,7 @@ async def run_experiment(
                     }
                 )
                 return None
-            scores = _scores(case, result, evaluators=evaluators)
+            scores = score_product_case(case, result, evaluators=evaluators)
             return (
                 _measurement(case, result, scores=scores, task_type=spec.task_type),
                 result,
@@ -784,7 +797,7 @@ def _measurement(
     )
 
 
-def _scores(
+def score_product_case(
     case: ExperimentCase,
     result: ProviderResult,
     *,

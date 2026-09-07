@@ -243,6 +243,12 @@ jobs:
           uv run --no-sync pytest tests/integration/test_run_idempotency.py
           --junitxml=/tmp/junit-run-idempotency.xml
 
+      - name: Integration - atomic product experiment pairs
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/integration/test_product_experiment_persistence.py
+          --junitxml=/tmp/junit-product-experiment-persistence.xml
+
       - name: Migration - P2 downgrade and re-upgrade
         if: ${{ !cancelled() }}
         run: |

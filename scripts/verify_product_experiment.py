@@ -29,7 +29,27 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _decode(payload: bytes | str) -> Any:
-    return json.loads(payload, object_pairs_hook=_unique_object)
+    text = payload.decode("utf-8") if isinstance(payload, bytes) else payload
+    depth = 0
+    quoted = False
+    escaped = False
+    for character in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character in "[{":
+            depth += 1
+            if depth > 64:
+                raise ProductManifestError("JSON depth limit exceeded")
+        elif character in "]}":
+            depth -= 1
+    return json.loads(text, object_pairs_hook=_unique_object)
 
 
 def _read_bounded(path: Path, limit: int) -> bytes:
@@ -92,8 +112,8 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         raise ProductManifestError("manifest omits a required product artifact")
     try:
         result_payload = _read_bounded(path.parent / "result.json", 256 * 1024 * 1024)
-        ProductExperimentResult.model_validate_json(result_payload)
         result = _decode(result_payload)
+        ProductExperimentResult.model_validate_json(result_payload)
     except (ValueError, ValidationError, OSError):
         raise ProductManifestError("result schema is invalid") from None
     if result["schema_version"].rsplit("/", 1)[1] != manifest["schema_version"].rsplit("/", 1)[1]:
@@ -113,7 +133,12 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         if type(count) is not int or count < 2:
             raise ProductManifestError("invalid completed case count")
         paired_ids: set[str] | None = None
-        for arm in arms.values():
+        for label, arm in arms.items():
+            if arm.get("dataset_sha256") != result.get("dataset_sha256"):
+                raise ProductManifestError("arm/result dataset identity mismatch")
+            source = result.get("source_identities", {}).get(label, {})
+            if arm.get("source_sha") != source.get("sha"):
+                raise ProductManifestError("arm/result source identity mismatch")
             cases = arm.get("cases", [])
             identities = {case["case_id"] for case in cases}
             if len(cases) != count or len(identities) != count:

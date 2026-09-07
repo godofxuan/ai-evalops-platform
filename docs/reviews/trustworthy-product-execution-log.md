@@ -1,5 +1,19 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 后续切片：精确 CI 与持久实验基础
+
+第二检查点提交前：受影响集合 **252 passed, 1 symlink skipped in 33.81s**；随后补“产品 worker 不静默忽略评分覆盖参数”，反例先失败，限制配置为现有 max_attempts 后 evaluator/runs **37 passed**。全仓 lint、格式与 205 文件类型检查通过；0027→0028 的离线 SQL 成功生成并人工核对复合外键/幂等/RLS，未在本机执行 DDL。上述集合重叠，不相加。新数据库集成仍须等第二检查点精确 CI。
+
+- 工作分支检查点已提交并推送：`8cbad06f32f9a0e010c35da7aa97e68b08007e2f`。精确 [CI 34085325610](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34085325610) 已 completed/success，包含完整 quality-and-integration 与 Compose smoke。该结果只覆盖该提交，不覆盖下面的未提交修改。main 仍为 `50af0603ff76615f3cf2c54fba3230e1cee7647f`。
+- 证据继续收口：新增 64 层 JSON 解析前深度限制；新增 arm 与主结果的 dataset/source SHA 交叉验证。反例分别是深层 JSON 原本仅报未知 schema、两份文件彼此一致却与主身份冲突；修复后定向测试通过。
+- 数据映射：map_product_dataset 复用 local 的 parse_product_dataset，原始 JSON 字节摘要与规范化 JSONL 摘要分别记录，mapping_version 固定。目标可读上下文只从 public_context 复制；原 case/标签保存在 evalops_product_case 私有评测元数据中。显式零工具字段保留，不把缺字段补成已提供。mapper 与 runner 44 项通过。
+- 共用评分：从 HTTP provider 提取 normalize_product_observation，把 local 的评分入口命名为 score_product_case。worker 注册 product_qa_v2 / product_agent_v2 薄适配器调用同一实现，旧三个插件的 builtin-v1 不变。QA 来源 ID recall/precision、Agent 正确零工具拒绝得到回归；缺费用/缺观测不填零分或成功分。相关 evaluator/product 集合 90 项通过。它还不是从鉴权实验 API 到 worker 的 E2E 证明。
+- 事务基础：GREEN 状态机械提取 insert_run_and_jobs，保留旧 create_or_replay 的事务所有权和冲突处理，runs 26 项通过。新增 NewProductExperiment 的同租户/同数据集前置合同，以及 product_experiments 控制表、租户复合外键、幂等唯一约束、RLS 和 0028 增量迁移，不回填旧 Run。新 repository 在一个 begin 中插入两组及父记录，只有指定幂等唯一冲突允许查询重放。
+- 真实验收已编写并加入 CI：8 个并发重复提交只保留一对 Run/4 Jobs；不同请求冲突、跨租户查询隐藏；在第二组 ORM 插入边界注入错误，确认已处理过第一组后整体回滚，无新父记录或孤立 Run/Jobs。成功后仅删除测试专属租户对象；共享 blob 不盲删。当前本地仅 collection/类型检查与跳过，尚未获得这项新数据库测试的成功证据。
+- 本地模型/既有迁移/输入合同集合为 50 passed / 1 integration skipped；类型检查随新模块为 205 source files。一次测试遗漏独立 basetemp，触发既有 pytest 临时垃圾目录 77 条权限清理警告；未手工删除那些目录，后续恢复独立 basetemp。
+
+仍未完成：持久实验鉴权 API/CLI、共享全实验限额、取消/导出与固定快照、真正 worker E2E/进程故障、完整缺测与切片报告、最终双 SHA/两次精确 CI 收口。当前新增 repository 不能单独作为已发布产品入口宣传。
+
 ## 2026-09-07：恢复执行、证据读取与发布边界
 
 提交前受影响集合复测：product_experiments、CLI/证据、runs、HTTP target 共 **188 passed, 1 skipped in 28.34s**；全仓 ruff check、585 文件格式检查通过；mypy app/scripts/integration/concurrency 的 201 文件通过。历史 scorecard 与 final evidence manifest 只读校验通过。下一步为工作分支阶段提交/推送与精确 CI；不是 S7 最终代码/文档双提交收口。

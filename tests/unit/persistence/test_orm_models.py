@@ -81,6 +81,7 @@ def test_orm_metadata_has_current_tables_through_p2_1() -> None:
         "job_attempts",
         "mcp_audit_outbox",
         "progress_event_outbox",
+        "product_experiments",
         "run_metrics",
         "scheduler_coordination",
         "tenant_scheduler_states",

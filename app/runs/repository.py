@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
@@ -143,6 +144,53 @@ def build_get_dataset_version_source_statement(
     )
 
 
+async def insert_run_and_jobs(session: AsyncSession, new_run: NewRun) -> EvaluationRun:
+    """Insert into the caller-owned transaction; never commit an individual arm."""
+    run = EvaluationRun(
+        tenant_id=new_run.tenant_id,
+        dataset_version_id=new_run.dataset_version_id,
+        dataset_hash=new_run.dataset_hash,
+        idempotency_key=new_run.idempotency_key,
+        request_hash=new_run.request_hash,
+        target_type=new_run.target_type,
+        target_config_json=new_run.target_config,
+        target_config_hash=new_run.target_config_hash,
+        evaluator_type=new_run.evaluator_type,
+        evaluator_config_json=new_run.evaluator_config,
+        evaluator_config_hash=new_run.evaluator_config_hash,
+        target_version=new_run.target_version,
+        evaluator_version=new_run.evaluator_version,
+        source_commit=new_run.source_commit,
+        origin_traceparent=new_run.origin_traceparent,
+        status=RunStatus.QUEUED,
+        total_jobs=len(new_run.cases),
+        succeeded_jobs=0,
+        failed_jobs=0,
+        cancelled_jobs=0,
+        created_by=new_run.created_by,
+        version=1,
+    )
+    session.add(run)
+    await session.flush()
+    session.add_all(
+        [
+            EvaluationJob(
+                run_id=run.id,
+                case_id=str(case["case_id"]),
+                case_payload_json=case,
+                status=JobStatus.QUEUED,
+                priority=0,
+                attempt_count=0,
+                max_attempts=new_run.max_attempts,
+                version=1,
+            )
+            for case in new_run.cases
+        ]
+    )
+    await session.flush()
+    return run
+
+
 class SQLAlchemyRunRepository:
     def __init__(self, session_factory: AsyncSessionFactory) -> None:
         self._session_factory = session_factory
@@ -185,50 +233,9 @@ class SQLAlchemyRunRepository:
         )
 
     async def create_or_replay(self, new_run: NewRun) -> RunSnapshot:
-        run = EvaluationRun(
-            tenant_id=new_run.tenant_id,
-            dataset_version_id=new_run.dataset_version_id,
-            dataset_hash=new_run.dataset_hash,
-            idempotency_key=new_run.idempotency_key,
-            request_hash=new_run.request_hash,
-            target_type=new_run.target_type,
-            target_config_json=new_run.target_config,
-            target_config_hash=new_run.target_config_hash,
-            evaluator_type=new_run.evaluator_type,
-            evaluator_config_json=new_run.evaluator_config,
-            evaluator_config_hash=new_run.evaluator_config_hash,
-            target_version=new_run.target_version,
-            evaluator_version=new_run.evaluator_version,
-            source_commit=new_run.source_commit,
-            origin_traceparent=new_run.origin_traceparent,
-            status=RunStatus.QUEUED,
-            total_jobs=len(new_run.cases),
-            succeeded_jobs=0,
-            failed_jobs=0,
-            cancelled_jobs=0,
-            created_by=new_run.created_by,
-            version=1,
-        )
         try:
             async with self._session_factory.begin() as session:
-                session.add(run)
-                await session.flush()
-                session.add_all(
-                    [
-                        EvaluationJob(
-                            run_id=run.id,
-                            case_id=str(case["case_id"]),
-                            case_payload_json=case,
-                            status=JobStatus.QUEUED,
-                            priority=0,
-                            attempt_count=0,
-                            max_attempts=new_run.max_attempts,
-                            version=1,
-                        )
-                        for case in new_run.cases
-                    ]
-                )
-                await session.flush()
+                run = await insert_run_and_jobs(session, new_run)
         except IntegrityError as error:
             if _constraint_name(error) != "uq_evaluation_runs_tenant_id_idempotency_key":
                 raise

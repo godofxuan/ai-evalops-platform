@@ -12,11 +12,22 @@ from app.evaluators.retrieval_citation import RetrievalCitationEvaluator
 def test_registry_describes_deterministic_and_operational_plugins() -> None:
     descriptors = {item.kind: item for item in registered_evaluators()}
 
-    assert set(descriptors) == {"basic_answer", "execution", "retrieval_citation"}
+    assert set(descriptors) == {
+        "basic_answer",
+        "execution",
+        "retrieval_citation",
+        "product_qa_v2",
+        "product_agent_v2",
+    }
     assert descriptors["basic_answer"].category is EvaluatorCategory.DETERMINISTIC
     assert descriptors["retrieval_citation"].category is EvaluatorCategory.DETERMINISTIC
     assert descriptors["execution"].category is EvaluatorCategory.OPERATIONAL
-    assert all(item.implementation_version == "builtin-v1" for item in descriptors.values())
+    assert descriptors["product_qa_v2"].implementation_version == "product-v2"
+    assert descriptors["product_agent_v2"].implementation_version == "product-v2"
+    assert all(
+        descriptors[name].implementation_version == "builtin-v1"
+        for name in ("basic_answer", "execution", "retrieval_citation")
+    )
     assert all(item.llm_judge is False for item in descriptors.values())
 
 

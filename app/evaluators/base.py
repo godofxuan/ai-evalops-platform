@@ -43,9 +43,28 @@ class _EvaluatorRegistration:
 def _registry() -> dict[str, _EvaluatorRegistration]:
     from app.evaluators.basic_answer import BasicAnswerEvaluator
     from app.evaluators.execution import ExecutionEvaluator
+    from app.evaluators.product import ProductAgentEvaluator, ProductQAEvaluator
     from app.evaluators.retrieval_citation import RetrievalCitationEvaluator
 
     registrations = (
+        _EvaluatorRegistration(
+            descriptor=EvaluatorDescriptor(
+                kind="product_agent_v2",
+                implementation_version="product-v2",
+                category=EvaluatorCategory.DETERMINISTIC,
+                llm_judge=False,
+            ),
+            factory=ProductAgentEvaluator,
+        ),
+        _EvaluatorRegistration(
+            descriptor=EvaluatorDescriptor(
+                kind="product_qa_v2",
+                implementation_version="product-v2",
+                category=EvaluatorCategory.DETERMINISTIC,
+                llm_judge=False,
+            ),
+            factory=ProductQAEvaluator,
+        ),
         _EvaluatorRegistration(
             descriptor=EvaluatorDescriptor(
                 kind="basic_answer",
@@ -82,7 +101,8 @@ def registered_evaluators() -> tuple[EvaluatorDescriptor, ...]:
 
 
 def build_evaluator(kind: str, config: Mapping[str, Any]) -> Evaluator:
-    del config
+    if kind in {"product_qa_v2", "product_agent_v2"} and set(config) - {"max_attempts"}:
+        raise UnsupportedEvaluatorError("product evaluator config contains unsupported fields")
     try:
         registration = _registry()[kind]
     except KeyError:

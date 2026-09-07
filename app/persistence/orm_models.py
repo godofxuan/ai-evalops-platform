@@ -98,6 +98,51 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
+class ProductExperiment(Base):
+    __tablename__ = "product_experiments"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "idempotency_key", name="uq_product_experiments_tenant_key"),
+        ForeignKeyConstraint(
+            ["baseline_run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_product_experiments_baseline_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["candidate_run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_product_experiments_candidate_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["created_by", "tenant_id"],
+            ["api_keys.id", "api_keys.tenant_id"],
+            name="fk_product_experiments_actor_tenant",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("baseline_run_id <> candidate_run_id", name="distinct_arms"),
+        CheckConstraint("version > 0", name="version_positive"),
+        Index("ix_product_experiments_tenant_created", "tenant_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    baseline_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    candidate_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    cancel_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
     __table_args__ = (
