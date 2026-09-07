@@ -1,0 +1,102 @@
+{
+  "schema_version": "evalops.resume-closeout-public/1.0",
+  "decision": "READY_WITH_LIMITS",
+  "baseline_code_sha": "abfab98056e5526af505551ebde9618b94698f3a",
+  "baseline_doc_sha": "b122a6d7394146422c8c153e33531f81241c8280",
+  "new_code_sha": "c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997",
+  "runtime_source_sha256": "5e77c77373da893785c5105f3a94b116fb7ed32bff0e5be564bbe2a3c277697a",
+  "runtime_source_files": 485,
+  "branch": "codex/evalops-resume-closeout-20260907-215229",
+  "code_ci": {
+    "run_id": 34135369898,
+    "run_attempt": 1,
+    "head_sha": "c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997",
+    "url": "https://github.com/godofxuan/ai-evalops-platform/actions/runs/34135369898",
+    "status": "completed",
+    "conclusion": "success",
+    "artifact_zip_sha256": "b3d62ac1539f39add6ad705317bece08811b21e2e3880aedabbe834d0761cc99",
+    "artifact_id": 10024052803,
+    "artifact_download": "DOWNLOADED_IDENTITY_VERIFIED",
+    "nonintegration": {
+      "tests": 1219,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "integration": {
+      "tests": 40,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "product": {
+      "source_sha256": "b06dbf86f81cf7fe918a8bf5311fbe7a20b8633433d493b3dbf55dd81adbd017",
+      "verified_synthetic_phases": [
+        "SYNTHETIC_OBSERVATION_FAULT_VERIFIED task=AGENT_TOOL_USE fault=answer jobs=4 failed=1 accepted=3 attempts_each=1 private_recomputed=true",
+        "SYNTHETIC_OBSERVATION_FAULT_VERIFIED task=AGENT_TOOL_USE fault=terminal jobs=4 failed=1 accepted=3 attempts_each=1 private_recomputed=true",
+        "SYNTHETIC_OBSERVATION_FAULT_VERIFIED task=QA fault=answer jobs=4 failed=1 accepted=3 attempts_each=1 private_recomputed=true"
+      ],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "edbe2036df33ff40f713e26d80585dfa6f9ef905edc1cae1aeb3accd44fb33a6"
+    }
+  },
+  "doc_identity": "Final DOC SHA and its own CI are in the external FINAL_RECEIPT.json to avoid self-reference.",
+  "local": {
+    "python": "3.12.13",
+    "passed": 1218,
+    "skipped": 1,
+    "integration_deselected": 40,
+    "skip_reason": "Windows symbolic-link privilege 1314; Linux CI ran it.",
+    "lock_sha256": "1a83041db8aae7ac85020405733e1638efa89ae1f4fc8618184b9864f54ffee6"
+  },
+  "demos": [
+    {
+      "task": "qa",
+      "scope": "SYNTHETIC_FIXTURE",
+      "case_count": 120,
+      "execution_id": "23e92cc1-f26f-427b-b24d-f1da86117b11",
+      "quality_status": "DEMO_PASS",
+      "exit_code": 0,
+      "private_result_sha256": "b0674590aebe8977f7428da7db294a859059e0eb5dbe236d9a299589903c128a",
+      "verification_scope": "LOCAL_PRIVATE_STRUCTURE_ONLY",
+      "negative_demo": {
+        "scope": "SYNTHETIC_TARGET_FAULT",
+        "case_count": 2,
+        "status": "EXECUTION_FAILED",
+        "exit_code": 3,
+        "error_code": "target_answer_too_long"
+      }
+    },
+    {
+      "task": "agent",
+      "scope": "SYNTHETIC_FIXTURE",
+      "case_count": 120,
+      "execution_id": "80f17f94-447e-448e-8866-7f026685b871",
+      "quality_status": "DEMO_PASS",
+      "exit_code": 0,
+      "private_result_sha256": "8342c2a8ea92a68f00e8295dc736d86b26e54b95b7417437df9bf4e455babb01",
+      "verification_scope": "LOCAL_PRIVATE_STRUCTURE_ONLY",
+      "negative_demo": {
+        "scope": "SYNTHETIC_TARGET_FAULT",
+        "case_count": 2,
+        "status": "EXECUTION_FAILED",
+        "exit_code": 3,
+        "error_code": "target_agent_terminal_invalid"
+      }
+    }
+  ],
+  "durable_new_user_walkthrough": "NEEDS_REGISTERED_TARGET",
+  "durable_ci_harness": "REAL_APP_AUTH_POSTGRES_WORKER_REPORT; ASGI_CLIENT_TEST_DNS_PEER_NOT_PUBLIC_TLS",
+  "legacy_evidence": "Illegal old observations rejected by current code; old raw evidence remains untouched.",
+  "human_review": "NEEDS_HUMAN",
+  "formal_ab": "NOT_EVALUATED",
+  "production_ready": false,
+  "scaling": "HISTORICAL_NEGATIVE_SCALING_UNCHANGED",
+  "generated_at": "2026-09-07T15:06:26.7731726Z"
+}

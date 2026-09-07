@@ -12,3 +12,7 @@
 基线三个探针已在上述 3.12 锁定环境实际重跑。F1：worker OBSERVED，100001 字符，聚合 ValidationError，CLI 输入错误 2。F2：合法零工具输入，failed/answer 冲突得到 completion=1，100 条 candidate 仍 DEMO_PASS。F3：重签普通摘要后的 local 私有语义篡改仍接受。脚本退出 0 仅表示诊断完成。新测试使用正常 conftest，不关闭插件或跳过父配置。
 
 根因排序：共享答案合同缺失；终态映射和一致性分离；fixture 模型异常未在目标边界转换。每一项以真实行为负例先红后绿，不放大后段上限。F3 只披露范围，不建设 local 语义重算器。
+
+## 最终验收补记
+
+上表“初始验证”是开始时状态，不是最终待办。NEW_CODE c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997 的 CI 34135369898 / attempt 1 已完成并成功；下载的 JUnit 实际记录非集成 1219、集成 40、均无失败/跳过。A/B 两条本机路径、C 的真实 PG/worker/发布、D 的私有重算均已执行；范围仍有 ASGI 客户端及测试 DNS/peer，不是公网目标来源认证。具体正反例 ID 在 CI_KEY_TESTS.json，三种持久故障阶段在 CI_CODE_IDENTITY.json。对应外部日志：baseline-F1/F2/F3、F1-red/green、F2-red/green、legacy-red/green、F3-red/green、F1-F2-F3-F5-targeted、acceptance-local-nonintegration-1/2、candidate-c5dbeecaf5d0-qa/agent、negative-c5dbeecaf5d0-qa/agent。保留完整验收第 1 次错误码兼容失败及第 1 轮修正，不重写失败记录。

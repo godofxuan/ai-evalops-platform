@@ -113,8 +113,8 @@
         "path": "README.md",
         "sha256": "83dd58460de6694f928f8102acca576e8d4c9170f840a63c59d798458e43e460",
         "byte_size": 64268,
-        "source_sha": "abfab98056e5526af505551ebde9618b94698f3a",
-        "closeout_note": "Only README bytes updated in the new closeout worktree. source_sha is the prior audited base, NOT attestation for this update; new containing CODE will be pinned in the DOC receipt.",
+        "source_sha": "c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997",
+        "closeout_note": "This CODE contains the exact updated README bytes. Other historical file entries and source claims are unchanged.",
         "schema_version": "ai-evalops-evidence-file/v1",
         "generated_at": "2026-09-07T11:54:42.023516+00:00",
         "producing_command": "python -m scripts.verify_final_evidence_manifest --write --source-sha <evidence-source-sha>",
@@ -451,6 +451,16 @@
         "line_ending_normalization": "LF"
       }
     ]
+  },
+  "resume_release_closeout": {
+    "entry": "docs/reviews/resume-closeout-20260907/CLOSEOUT_RESULTS.md",
+    "summary": "docs/reviews/resume-closeout-20260907/PUBLIC_SUMMARY.json",
+    "code_sha": "c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997",
+    "code_ci_run_id": 34135369898,
+    "result": "READY_WITH_LIMITS",
+    "durable_new_user_walkthrough": "NEEDS_REGISTERED_TARGET",
+    "formal_ab_executed": false,
+    "production_ready": false
   },
   "final_cross_repository_closeout": {
     "entry": "docs/review/FINAL_CROSS_REPO_REVIEW_ENTRY.md",

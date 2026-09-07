@@ -1,0 +1,278 @@
+{
+  "schema_version": "evalops.ci-closeout-evidence/1.0",
+  "code_sha": "c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997",
+  "workflow": "CI",
+  "run_id": "34135369898",
+  "run_attempt": "1",
+  "job": "quality-and-integration",
+  "generated_at": "2026-09-07T23:02:19.050099+08:00",
+  "python": "3.12.13 (main, Jul 18 2026, 17:02:19) [Clang 22.1.3 ]",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "lock_sha256": "1a83041db8aae7ac85020405733e1638efa89ae1f4fc8618184b9864f54ffee6",
+  "commands": [
+    "uv run --no-sync pytest -m \"not integration\" --junitxml=/tmp/junit-unit.xml",
+    "uv run --no-sync pytest tests/integration/test_product_experiment_persistence.py -o junit_logging=system-out --junitxml=/tmp/junit-product-experiment-persistence.xml"
+  ],
+  "junit": {
+    "junit-agent-eval-workflow.xml": {
+      "source_sha256": "ac3e5ffdf3e1c73cd797672d6490ac5a3f35fc4091f19b9a48c01f32fa485dd2",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "fad5e7b02f6371f8642ed34f733225ce589ff19a1d16535b859fe52a993dadfb"
+    },
+    "junit-agent-http-minio.xml": {
+      "source_sha256": "4477d98c19c4b7476a2764fa93b7c6936009cc9ecfb4039df8669250e41b8550",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "22df2c6de7e48ae58f3b0798a26db2b0c37992cd653de9de6d1e9622e738a050"
+    },
+    "junit-artifact-reconciliation.xml": {
+      "source_sha256": "ece099206f4e2ec842feedf469835dfdda3ef5d6768dc8ca07af5a59ecf72b2f",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "d4288452b9c5f594274576612fe090ece704e70560abf6d74ec39d2da6ae9c3d"
+    },
+    "junit-artifact-references.xml": {
+      "source_sha256": "d3a5643d69a13d5c14ffb3ede80353f4881ab29b5f872fbfc482448b3270109f",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "f7f11724327bd576d50b689243e26582b8d9c4aeb9d6d2c95422844cdd732297"
+    },
+    "junit-human-reviews.xml": {
+      "source_sha256": "5cc7c778f6f5837040441906baea9e0c3a450d845a0c97fb7152447ddc6be0cc",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "46de0a7031b8d4ee047fcac90c6ba668d958eee024962960044ca5a9ad4b4cf9"
+    },
+    "junit-identity-datasets.xml": {
+      "source_sha256": "45b9b4043770b09fa3b6c8e981324bcc74538e016f3c47d60c495e7046e60e35",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "c0fe1947b1d598f89b9270b03a4a756f1f4318355918cf5490dacf07285b9d96"
+    },
+    "junit-job-claiming.xml": {
+      "source_sha256": "80b88ac0996bcf21cf1ed8c6520dcb9453b021c43b7d65849cdd5636e0ddedd4",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "bf7b040d60b9a9ab321bd7711a18328fd95b8bc9c02c2f37a7697f4ea5c672da"
+    },
+    "junit-mcp-stdio-auth.xml": {
+      "source_sha256": "28744b77beee4f5c510943a06291b5521bff670653886d842407affef09b9a30",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "43196aa29780ac17733cf21f80f82d9341e376b8c2d8006c8967625914e0729f"
+    },
+    "junit-minio-artifacts.xml": {
+      "source_sha256": "c3b2b5088a6af0b8cf12e0e770cb6fb4b76300dc5a4b39486efd01465d3edf58",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "692545daf8a0b5698862540be03b713fa3786c53512dee0297df66bb6c3ab52f"
+    },
+    "junit-postgres-telemetry.xml": {
+      "source_sha256": "fc67d30b1ee54cba6fb88369cdf8730f9b8b60686964eaa99cce74fd2f13a0fd",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "c3ea44bb8a5f75d829ead32dfea589755177eefbb05566f4ab9d0c4aea05d58e"
+    },
+    "junit-product-experiment-persistence.xml": {
+      "source_sha256": "b06dbf86f81cf7fe918a8bf5311fbe7a20b8633433d493b3dbf55dd81adbd017",
+      "verified_synthetic_phases": [
+        "SYNTHETIC_OBSERVATION_FAULT_VERIFIED task=AGENT_TOOL_USE fault=answer jobs=4 failed=1 accepted=3 attempts_each=1 private_recomputed=true",
+        "SYNTHETIC_OBSERVATION_FAULT_VERIFIED task=AGENT_TOOL_USE fault=terminal jobs=4 failed=1 accepted=3 attempts_each=1 private_recomputed=true",
+        "SYNTHETIC_OBSERVATION_FAULT_VERIFIED task=QA fault=answer jobs=4 failed=1 accepted=3 attempts_each=1 private_recomputed=true"
+      ],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "edbe2036df33ff40f713e26d80585dfa6f9ef905edc1cae1aeb3accd44fb33a6"
+    },
+    "junit-readiness.xml": {
+      "source_sha256": "1a7ac27eb2e91eb224789731376aa1c5526e05a41011a8dca6a6bc17d0c741c1",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "a75ca3761c891a3d9ed3d2377fa0891b5d1163f2367e2c34009cb9d797b14821"
+    },
+    "junit-redis-events.xml": {
+      "source_sha256": "8bdb78ee3c629762d608625e569481fec9d84f9d2b142476fbd7bcac2d24fc5f",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "ead6c3a0f64b40b86d7214617898224de0424fc6b0b83500764912c6d710e053"
+    },
+    "junit-run-idempotency.xml": {
+      "source_sha256": "618c6ef6c8153c6553e1fa9449f24b3c71acea6c1cca36f0514374c26e4322ba",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "31925bb7b64e817e7af9ec3f48f3441a5a1bdb7a26684a7117d9b0c8c40a1ce8"
+    },
+    "junit-tenant-claim-parallelism.xml": {
+      "source_sha256": "4de36d247e2ce15d8485a3aa96b74c8c4d35bb911d848715e39c0489d15fae5e",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "8ad1549d39667824106bdb224357557253257e6f9e52b6a20ab8157dfa99cbb9"
+    },
+    "junit-tenant-consistency.xml": {
+      "source_sha256": "f191c830d48acd40d844861fc2019d2780c19880c59d6ffea921b72a2d2cc265",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "566e9124ba3170f8a3bdeffd3f26a0c7331845bf71de8a3952aa6de4c4d98860"
+    },
+    "junit-tenant-durable-fairness.xml": {
+      "source_sha256": "8db8dc4d9e45e7825ed0545140250972ce9c9364f2dda5d93a6ba5c6874382c6",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "8673c2ca1e5d3d6a407100874813b0d7e47b4ed894b515ab1461d63f73cab776"
+    },
+    "junit-tenant-fair-claiming.xml": {
+      "source_sha256": "68fb8f18f9bba1c1893841737239ace48bb089564bd7c07c058549653a11cc30",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "461d3f327555f5a2a6a98427fb5c3738b4ab6a21eec1f9468b0ef704a7b0a2db"
+    },
+    "junit-tenant-rls.xml": {
+      "source_sha256": "ee5c9c9ae7b37aae5c2b7566bd0ed8c042af08e6d2ccf34711e5100e5c6fef21",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "b378b54c89bd42fe02b7d164b2398318c5a23d5254610297ccb3ac49f2d77ed1"
+    },
+    "junit-transactional-outbox.xml": {
+      "source_sha256": "c5560b94e38660979c350da8dae94bf6bbfb46013fa28accd3f21f42af27edc2",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "0e62bc26804ce20ee6a7e57d9f181dbffe9f97fefc7ade7aa165072140521e7c"
+    },
+    "junit-unit.xml": {
+      "source_sha256": "4904cc34851213949488923ff371ff681f00533f9b6c83e041c1ba0076cb61c7",
+      "verified_synthetic_phases": [],
+      "counts": {
+        "tests": 1219,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "state": "PASSED",
+      "retained_sha256": "43123882a57f317ffefb30ca03a5d4cab61323a7be4cdfb94932287ec3e08083"
+    }
+  },
+  "redaction": "Test IDs/outcomes and allowlisted synthetic fault phases only; no payloads.",
+  "scope": "Synthetic fixtures; real PostgreSQL/local TCP; test-only DNS/public peer.",
+  "formal_quality_claim_allowed": false,
+  "production_ready": false
+}
