@@ -5,7 +5,7 @@ import json
 import re
 from dataclasses import replace
 from datetime import timedelta
-from typing import Literal
+from typing import Literal, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -17,12 +17,12 @@ from app.core.clock import Clock, SystemClock
 from app.domain.evaluation import EvaluationCase
 from app.external_harness.formal_quality import FormalQualityPolicy
 from app.product_experiments.dataset_mapping import map_product_dataset
-from app.product_experiments.persistence import NewProductExperiment
+from app.product_experiments.persistence import NewProductExperiment, ProductExperimentSnapshot
 from app.product_experiments.spec import AgentComparisonPolicy, InputLimitError
 from app.runs.idempotency import canonical_request_hash
 from app.runs.repository import NewRun
 from app.runs.schemas import ComponentSpec, RunCreate
-from app.runs.service import RunInputIntegrityError, SQLAlchemyRunService
+from app.runs.service import IdempotencyConflictError, RunInputIntegrityError, SQLAlchemyRunService
 from app.targets.http_rag import project_request_input
 
 
@@ -100,7 +100,11 @@ async def prepare_durable_experiment(
     if started.tzinfo is None or started.utcoffset() is None:
         raise ValueError("execution clock must be timezone-aware")
     deadline = started + timedelta(seconds=request.execution_timeout_seconds)
-    mapped = map_product_dataset(dataset_payload, expected_sha256=request.source_dataset_sha256)
+    try:
+        mapped = map_product_dataset(dataset_payload, expected_sha256=request.source_dataset_sha256)
+    except ValueError:
+        # Limit translation to untrusted dataset decoding, not storage or database failures.
+        raise RunInputIntegrityError("invalid product dataset") from None
     count = mapped.dataset.case_count
     if count * request.policy.bootstrap_resamples > 2_000_000:
         raise InputLimitError("paired bootstrap computation limit exceeded")
@@ -195,3 +199,75 @@ async def retain_durable_source(
     if stored.sha256 != expected or stored.size_bytes != len(dataset_payload):
         raise RunInputIntegrityError("stored raw experiment source identity mismatch")
     return replace(pending, source_artifact=stored)
+
+
+class ExperimentSubmissionRepository(Protocol):
+    async def find_by_key(
+        self, *, tenant_id: UUID, idempotency_key: str
+    ) -> ProductExperimentSnapshot | None: ...
+
+    async def create_or_replay(
+        self, pending: NewProductExperiment
+    ) -> ProductExperimentSnapshot: ...
+
+
+class DurableExperimentSubmitter:
+    """Prepare once, retain the source, then atomically persist or replay the owning pair."""
+
+    def __init__(
+        self,
+        *,
+        repository: ExperimentSubmissionRepository,
+        run_service: SQLAlchemyRunService,
+        artifact_store: ArtifactStore,
+        evalops_sha: str,
+        clock: Clock | None = None,
+    ) -> None:
+        if not re.fullmatch(r"[0-9a-f]{40}", evalops_sha):
+            raise ValueError("server execution code identity is required")
+        self._repository = repository
+        self._run_service = run_service
+        self._artifact_store = artifact_store
+        self._evalops_sha = evalops_sha
+        self._clock = clock or SystemClock()
+
+    async def submit(
+        self,
+        *,
+        principal: Principal,
+        idempotency_key: str,
+        request: DurableExperimentRequest,
+        dataset_payload: bytes,
+    ) -> ProductExperimentSnapshot:
+        request = DurableExperimentRequest.model_validate_json(request.model_dump_json())
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", idempotency_key):
+            raise ValueError("invalid experiment idempotency key")
+        if (
+            len(dataset_payload) > 10 * 1024 * 1024
+            or hashlib.sha256(dataset_payload).hexdigest() != request.source_dataset_sha256
+        ):
+            raise RunInputIntegrityError("raw experiment source identity mismatch")
+        request_hash = canonical_request_hash(request.model_dump(mode="json"))
+        existing = await self._repository.find_by_key(
+            tenant_id=principal.tenant_id, idempotency_key=idempotency_key
+        )
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise IdempotencyConflictError
+            return existing
+        pending = await prepare_durable_experiment(
+            principal=principal,
+            idempotency_key=idempotency_key,
+            request=request,
+            dataset_payload=dataset_payload,
+            run_service=self._run_service,
+            evalops_sha=self._evalops_sha,
+            clock=self._clock,
+        )
+        retained = await retain_durable_source(
+            pending=pending, dataset_payload=dataset_payload, artifact_store=self._artifact_store
+        )
+        deadline = retained.baseline.execution_deadline_at
+        if deadline is None or self._clock.now() >= deadline:
+            raise InputLimitError("experiment deadline exhausted before persistence")
+        return await self._repository.create_or_replay(retained)

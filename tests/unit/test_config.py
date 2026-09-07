@@ -7,6 +7,18 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 
+def test_durable_submission_is_opt_in_and_requires_server_code_identity() -> None:
+    assert not Settings(_env_file=None).product_experiment_submission_enabled
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, product_experiment_submission_enabled=True)
+    enabled = Settings(
+        _env_file=None,
+        product_experiment_submission_enabled=True,
+        product_execution_code_sha="a" * 40,
+    )
+    assert enabled.product_execution_code_sha == "a" * 40
+
+
 def test_settings_load_prefixed_environment_without_exposing_secret_urls(
     monkeypatch,
     tmp_path: Path,

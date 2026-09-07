@@ -69,6 +69,7 @@ from app.persistence.database import create_database_engine, create_session_fact
 from app.persistence.redis import create_redis_client
 from app.product_experiments.persistence import SQLAlchemyProductExperimentRepository
 from app.product_experiments.service import ProductExperimentService
+from app.product_experiments.submission import DurableExperimentSubmitter
 from app.results.service import SQLAlchemyResultService
 from app.reviews.service import (
     ReviewConflictError,
@@ -142,9 +143,20 @@ def create_app(
             metrics=metrics,
             telemetry=telemetry,
         )
+        product_repository = SQLAlchemyProductExperimentRepository(session_factory)
         application.state.product_experiment_service = ProductExperimentService(
-            SQLAlchemyProductExperimentRepository(session_factory), application.state.run_service
+            product_repository, application.state.run_service
         )
+        if runtime_settings.product_experiment_submission_enabled:
+            code_sha = runtime_settings.product_execution_code_sha
+            if code_sha is None:
+                raise RuntimeError("experiment submission code identity is not configured")
+            application.state.product_experiment_submitter = DurableExperimentSubmitter(
+                repository=product_repository,
+                run_service=application.state.run_service,
+                artifact_store=artifact_store,
+                evalops_sha=code_sha,
+            )
         event_publisher = RedisEventPublisher(
             redis_client,
             metrics=metrics,
@@ -251,6 +263,7 @@ def create_app(
     application.state.dataset_service = None
     application.state.run_service = None
     application.state.product_experiment_service = None
+    application.state.product_experiment_submitter = None
     application.state.result_service = None
     application.state.review_service = None
     application.state.agent_artifact_service = None

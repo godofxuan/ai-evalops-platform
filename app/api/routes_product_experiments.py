@@ -1,13 +1,74 @@
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
+from pydantic import BaseModel
 
+from app.api.errors import APIError
+from app.api.product_submission_body import experiment_submission_schema, read_experiment_submission
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
 from app.product_experiments.service import ProductExperimentRead, ProductExperimentService
+from app.product_experiments.spec import InputLimitError
+from app.product_experiments.submission import DurableExperimentSubmitter
+from app.runs.service import RunInputIntegrityError
 
 router = APIRouter(prefix="/api/v1/experiments", tags=["product-experiments"])
+
+
+class ExperimentSubmissionAccepted(BaseModel):
+    id: UUID
+    baseline_run_id: UUID
+    candidate_run_id: UUID
+    status_url: str
+    formal_quality_claim_allowed: Literal[False] = False
+    production_ready: Literal[False] = False
+
+
+@router.post(
+    "",
+    response_model=ExperimentSubmissionAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": experiment_submission_schema()}},
+        }
+    },
+)
+async def submit_experiment(
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    ],
+) -> ExperimentSubmissionAccepted:
+    submitter = cast(
+        DurableExperimentSubmitter | None,
+        getattr(request.app.state, "product_experiment_submitter", None),
+    )
+    if submitter is None:
+        raise APIError(
+            503, "experiment_submission_unavailable", "Experiment submission is not enabled."
+        )
+    experiment_request, dataset_payload = await read_experiment_submission(request)
+    try:
+        experiment = await submitter.submit(
+            principal=principal,
+            idempotency_key=idempotency_key,
+            request=experiment_request,
+            dataset_payload=dataset_payload,
+        )
+    except (RunInputIntegrityError, InputLimitError):
+        raise APIError(
+            422, "invalid_experiment_input", "Experiment input validation failed."
+        ) from None
+    return ExperimentSubmissionAccepted(
+        id=experiment.id,
+        baseline_run_id=experiment.baseline_run_id,
+        candidate_run_id=experiment.candidate_run_id,
+        status_url=f"/api/v1/experiments/{experiment.id}",
+    )
 
 
 def _service(request: Request) -> ProductExperimentService:

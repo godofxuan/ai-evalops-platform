@@ -1,4 +1,7 @@
 import asyncio
+import base64
+import hashlib
+import json
 import os
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -7,6 +10,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, event, select
@@ -39,6 +43,7 @@ from app.persistence.orm_models import (
     ProductExperiment,
     Tenant,
 )
+from app.product_experiments.dataset_mapping import map_product_dataset
 from app.product_experiments.persistence import (
     NewProductExperiment,
     SQLAlchemyProductExperimentRepository,
@@ -62,6 +67,15 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         database_url=SecretStr(database_url),
         redis_url=SecretStr(os.environ["EVALOPS_REDIS_URL"]),
         artifact_root=tmp_path,
+        product_experiment_submission_enabled=True,
+        product_execution_code_sha="e" * 40,
+        http_target_registry={
+            label: {
+                "version": "v1",
+                "config": {"base_url": "https://rag.example.com", "endpoint": "/query"},
+            }
+            for label in ("baseline", "candidate")
+        },
         alembic_config_path=PROJECT_ROOT / "alembic.ini",
     )
     application = create_app(settings=settings)
@@ -277,6 +291,7 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
                 await service.get_run(principal=principal, run_id=run_id)
             ).status == RunStatus.CANCELLED
         await exercise_shared_admission(factory, repository, pending)
+        await exercise_authenticated_submission(application, dataset_id, headers, other_headers)
         async with factory.begin() as session:
             runs = list(
                 (
@@ -300,7 +315,7 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             await session.execute(delete(EvaluationJob).where(EvaluationJob.run_id.in_(runs)))
             await session.execute(delete(EvaluationRun).where(EvaluationRun.tenant_id == tenant_id))
             await session.execute(
-                delete(DatasetVersion).where(DatasetVersion.id == dataset_version)
+                delete(DatasetVersion).where(DatasetVersion.dataset_id == UUID(dataset_id))
             )
             await session.execute(delete(Dataset).where(Dataset.id == UUID(dataset_id)))
             await session.execute(
@@ -310,6 +325,106 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
             await session.execute(delete(APIKey).where(APIKey.id == other_key_id))
             await session.execute(delete(Tenant).where(Tenant.id == other_tenant_id))
+
+
+async def exercise_authenticated_submission(
+    application: FastAPI,
+    dataset_id: str,
+    headers: dict[str, str],
+    other_headers: dict[str, str],
+) -> None:
+    """Use real lifespan services, authentication, storage and PostgreSQL through HTTP."""
+    raw = json.dumps(
+        [
+            {
+                "case_id": str(index),
+                "category": "qa",
+                "prompt": "q",
+                "reference_answer": "private answer",
+                "expected_citation_ids": ["gold"],
+            }
+            for index in range(2)
+        ]
+    ).encode()
+    digest = hashlib.sha256(raw).hexdigest()
+    mapped = map_product_dataset(raw, expected_sha256=digest)
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        version = await client.post(
+            f"/api/v1/datasets/{dataset_id}/versions",
+            headers=headers,
+            files={"file": ("product.jsonl", mapped.dataset.content, "application/x-ndjson")},
+        )
+        assert version.status_code == 201
+        request = {
+            "schema_version": "evalops.durable-experiment-request/1.0",
+            "experiment_id": "http-pair",
+            "task_type": "QA",
+            "scope": "DEMO",
+            "dataset_version_id": version.json()["id"],
+            "source_dataset_sha256": digest,
+            "baseline": {
+                "target_id": "baseline",
+                "target_version": "v1",
+                "source_repository": "demo://baseline",
+                "source_sha": "b" * 40,
+            },
+            "candidate": {
+                "target_id": "candidate",
+                "target_version": "v1",
+                "source_repository": "demo://candidate",
+                "source_sha": "c" * 40,
+            },
+            "policy": {
+                "schema_version": "formal-agent-quality-policy/1.0",
+                "minimum_common_cases": 100,
+                "minimum_cases_per_category": 10,
+                "required_categories": ["qa"],
+                "bootstrap_resamples": 100,
+                "bootstrap_seed": 1,
+                "task_success_ci_lower_min": 0.0,
+                "citation_correctness_ci_lower_min": 0.0,
+                "tool_error_rate_ci_upper_max": 0.0,
+                "latency_p95_relative_delta_max": 1.0,
+                "cost_mean_relative_delta_max": 1.0,
+            },
+        }
+        payload = {"request": request, "dataset_base64": base64.b64encode(raw).decode()}
+        submit_headers = {**headers, "Idempotency-Key": "real-http-pair"}
+        outsider = await client.post(
+            "/api/v1/experiments",
+            json=payload,
+            headers={**other_headers, "Idempotency-Key": "outsider-pair"},
+        )
+        assert outsider.status_code == 404
+        responses = await wait_for_lock_sensitive(
+            asyncio.gather(
+                *(
+                    client.post("/api/v1/experiments", headers=submit_headers, json=payload)
+                    for _ in range(8)
+                )
+            ),
+            operation="authenticated concurrent product submissions",
+        )
+        assert all(response.status_code == 202 for response in responses)
+        accepted = responses[0].json()
+        assert all(response.json() == accepted for response in responses)
+        assert accepted["formal_quality_claim_allowed"] is False
+        assert "private answer" not in responses[0].text
+        status = await client.get(accepted["status_url"], headers=headers)
+        assert status.status_code == 200 and status.json()["state"] == "QUEUED"
+        hidden = await client.get(accepted["status_url"], headers=other_headers)
+        assert hidden.status_code == 404
+        altered = {**payload, "request": {**request, "max_active_jobs": 1}}
+        conflict = await client.post("/api/v1/experiments", headers=submit_headers, json=altered)
+        assert conflict.status_code == 409
+        cancelled = await client.post(accepted["status_url"] + "/cancel", headers=headers)
+        assert cancelled.status_code == 202 and cancelled.json()["state"] == "CANCELLED"
+        replay = await client.post("/api/v1/experiments", headers=submit_headers, json=payload)
+        assert replay.status_code == 202 and replay.json() == accepted
+        final = await client.get(accepted["status_url"], headers=headers)
+        assert final.json()["state"] == "CANCELLED"
 
 
 async def exercise_shared_admission(

@@ -4,11 +4,19 @@
 
 ## 先检查输入
 
+新增受鉴权的 `POST /api/v1/experiments`，默认关闭。服务器显式配置 `EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED=true` 与 `EVALOPS_PRODUCT_EXECUTION_CODE_SHA=<40 位代码 SHA>` 后才可用；未启用返回 503，启用但缺少 SHA 则启动配置失败。还需正常数据库/存储和 `http_target_registry`，不能在客户端请求中塞入上游 URL/令牌。
+
+请求使用 `Authorization: Bearer ...`、`Idempotency-Key`、`Content-Type: application/json`；正文为 `{"request": {...}, "dataset_base64": "..."}`。request 完整字段见 `/openapi.json` 的该 POST requestBody，schema_version 为 `evalops.durable-experiment-request/1.0`，scope 仅 DEMO。dataset_version_id 必须指向同租户按 product mapping 转换后的不可变 JSONL；dataset_base64 则保留转换前原始 JSON，source_dataset_sha256 对这些原始字节计算。二者不可混用。
+
+正文最大 16 MiB、读取 10 秒、原始数据最大 10 MiB、控制请求最大 1 MiB；禁止压缩、重复 JSON 键和非法 base64。202 返回稳定 ID 与 status_url，不代表执行完成。相同租户/键/请求重放原结果，不受当前 registry 改动影响，不复活已取消实验；不同请求返回 409。来源 SHA 仍为 CLIENT_DECLARED，服务器代码 SHA 是配置身份，不能据此声称独立部署证明。
+
+当前 CLI 仍是下面的 local 路径，尚未接入此持久提交接口；accepted-attempt 报告导出也尚未完成。新增 HTTP→真实 PostgreSQL 验证需以该检查点精确 CI 为准。
+
 原始 product JSON 现在可以由 retain_durable_source 保存到既有内容寻址存储；0032 将来源引用与父实验按 tenant 绑定，并随双 Run 原子登记。原始/规范化摘要保持独立，准备后字节变化拒绝发布。数据库失败可能留下未引用 blob，由既有清理机制处理；这不是自动公开原始数据，也不为历史实验回填来源。
 
 持久准备现在将 max_observation_bytes（默认 64 MiB，上限 256 MiB）静态平均预留到两组全部 Jobs，固定在 evaluator 配置中；最终归一化观测超过单 Job 上限时永久失败，不写成功结果。此处只限制 accepted normalized observation 的 UTF-8 字节总额，余量不重分配，不代表总磁盘/RSS/失败历史大小；与 local 共享累计池的分配策略不同。
 
-新实验的共享领取窗口通过 0031 迁移接入既有调度器：max_active_jobs（默认 4，1–64）统计两组的 RUNNING/CANCELLING Jobs，重试不另领一份额度。旧 Run 不回填；满额时不生成 attempt。它是数据库 active-claim 上限，不是失联外部调用的物理并发保证。该改动须等待本检查点精确 CI，公开持久提交入口仍未开放。
+新实验的共享领取窗口通过 0031 迁移接入既有调度器：max_active_jobs（默认 4，1–64）统计两组的 RUNNING/CANCELLING Jobs，重试不另领一份额度。旧 Run 不回填；满额时不生成 attempt。它是数据库 active-claim 上限，不是失联外部调用的物理并发保证。第八检查点真实八 worker 并发验收 CI 已成功，详细 SHA/CI 见执行记录。
 
 持久结果新增 0030 迁移：新成功结果直接关联 accepted_attempt_id，并通过复合外键绑定同一个 Job；旧结果保持 null，不猜测回填。提交同时检查 claim/Job/attempt 的尝试序号一致。它为后续只导出有效结果提供身份依据，但尚不代表完整 durable 导出已经开放。
 

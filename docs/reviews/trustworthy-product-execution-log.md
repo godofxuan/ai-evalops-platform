@@ -1,5 +1,20 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十一检查点：鉴权持久提交与严格 HTTP 输入
+
+第十检查点 `1af50403806a6b37d1bc08e6faeac24a9204a101` 的 [CI 34099588267](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34099588267) 已 completed/success。以下新代码本地扩大回归 199 passed / 1 PostgreSQL skipped，9.82 秒；全仓 lint、613 文件格式与 213 文件 mypy 通过。真实数据库新增断言仍待本检查点自己的 CI。
+
+- 为什么做：已有准备函数和原子仓库，但调用方尚不能经鉴权 HTTP 提交完整实验。新增 DurableExperimentSubmitter 统一请求指纹、租户幂等查询、准备、原始材料保存和原子双 Run 提交，不新增调度器。相同请求返回原实验，即使注册表已移除、服务器 SHA 已改变或实验已取消，也不重新创建任务；同键不同请求返回 409。
+- 公开接口：POST /api/v1/experiments 接收 Idempotency-Key、严格 request 与原始 JSON 的 dataset_base64。返回 202、实验/双 Run ID、status_url 和两个 false 资格字段；202 只表示接纳，不代表执行或质量通过。GET/cancel 复用已有控制路径。
+- 安全开放：新配置默认关闭；显式启用时必须配置 40 位 product_execution_code_sha，缺失即配置失败。目标仅使用服务器 registry ID/版本，客户端不能传 token 或任意 URL。服务器配置 SHA 是执行身份声明，不是独立运行时证明。当前 scope 仅 DEMO。
+- HTTP 限制：先鉴权，再读取正文；总正文最多 16 MiB，读取窗口 10 秒，解码来源最多 10 MiB、控制请求最多 1 MiB。实际流累计字节限制不依赖 Content-Length；压缩、重复 JSON 键、非有限数字及非法 base64 拒绝。不是进程 RSS 或反向代理全链路流量保证。
+- TDD 过程：提交路由最初 404，接入后默认 503，再配真实哈希鉴权和实际 mapper/RunService/store 后通过；OpenAPI 起初缺嵌套请求属性，改为内联受控无环模型，公开字段与运行时合同一致。数据库是本地测试唯一持久化替身，不 mock 产品准备和转换逻辑。
+- 审查发现并修复：正确 SHA 的非法数据对象仍触发未处理 Pydantic 异常。新增反例先失败，然后仅在不可信 dataset 解析边界转换为 RunInputIntegrityError，HTTP 返回通用 422，不回显合成秘密。不捕获所有数据库/存储错误来伪装输入错误。扩大回归由 198 增为 199 项。
+- 真实 PostgreSQL 测试扩展：实际 application lifespan、API key、数据集上传、内容存储、服务和仓库，经 HTTP 8 并发提交应返回同一对任务；其他租户借用 dataset version 为 404、同键变更为 409、取消后重放不复活。此前八 worker 共享窗口测试仍保留。本机不具备 PostgreSQL，不能把收集/skip 当执行证明。
+- 开发中两处测试行宽超限由格式器修正；新增 registry fixture 起初遗漏 endpoint，在执行前检查合同补齐。未放宽 SSRF 或允许私网访问。
+
+本节完成的是提交切片，不是整个 S4/S5：有效 attempt 冻结导出、持久 CLI、API→worker→报告闭环、故障矩阵和最终双 SHA 仍待完成。main、RAG、当前 R12 与历史简历链接不变。简历任务已反馈收录上一批公开证据至共享同步记录 §23/简历规则 §12，当前投递版未改。
+
 ## 2026-09-07 第十检查点：原始输入保留与租户所有权
 
 第九检查点 `dcf943b8aefbe93c46d8c3145fa1efd630d57b3d` 的 [CI 34098226540](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34098226540) 已 completed/success。本节新修改的本地回归为 215 passed / 1 real PostgreSQL skipped，7.58 秒；全仓 lint、612 文件格式、212 文件 mypy 与 diff --check 通过。

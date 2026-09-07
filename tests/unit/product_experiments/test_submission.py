@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 from dataclasses import replace
@@ -7,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from app.artifacts.storage import LocalArtifactStore
 from app.auth.principals import Principal
@@ -32,6 +34,36 @@ class DatasetBoundary:
 class FixedClock:
     def now(self) -> datetime:
         return datetime(2026, 9, 7, tzinfo=UTC)
+
+
+class PairDatabaseBoundary:
+    def __init__(self) -> None:
+        self.result: Any = None
+        self.key: tuple[Any, str] | None = None
+        self.created_count = 0
+
+    async def find_by_key(self, *, tenant_id: Any, idempotency_key: str) -> Any:
+        return self.result if (tenant_id, idempotency_key) == self.key else None
+
+    async def create_or_replay(self, pending: Any) -> Any:
+        from app.product_experiments.persistence import ProductExperimentSnapshot
+
+        assert pending.source_artifact is not None
+        assert self.result is None, "replay must not attempt another write"
+        self.created_count += 1
+        self.key = (pending.tenant_id, pending.idempotency_key)
+        self.result = ProductExperimentSnapshot(
+            id=uuid4(),
+            tenant_id=pending.tenant_id,
+            request_hash=pending.request_hash,
+            baseline_run_id=uuid4(),
+            candidate_run_id=uuid4(),
+            snapshot=pending.snapshot,
+            cancel_requested=False,
+            created_at=FixedClock().now(),
+            source_artifact_reference_id=uuid4(),
+        )
+        return self.result
 
 
 @pytest.fixture
@@ -121,6 +153,178 @@ async def submission_inputs(tmp_path: Path) -> dict[str, Any]:
         "evalops_sha": "e" * 40,
         "clock": FixedClock(),
     }
+
+
+@pytest.fixture
+async def authenticated_submission_setup(
+    submission_inputs: dict[str, Any],
+    tmp_path: Path,
+) -> dict[str, Any]:
+    from app.auth.api_keys import generate_api_key
+    from app.auth.service import APIKeyCandidate
+    from app.domain.enums import APIKeyStatus, TenantStatus
+    from app.main import create_app
+    from app.product_experiments.submission import DurableExperimentSubmitter
+    from tests.unit.auth.test_authentication import InMemoryAPIKeyLookup
+
+    application = create_app()
+    principal = submission_inputs["principal"]
+    credential = generate_api_key()
+    application.state.api_key_lookup = InMemoryAPIKeyLookup(
+        APIKeyCandidate(
+            api_key_id=principal.api_key_id,
+            tenant_id=principal.tenant_id,
+            key_prefix=credential.prefix,
+            key_hash=credential.key_hash,
+            api_key_status=APIKeyStatus.ACTIVE,
+            tenant_status=TenantStatus.ACTIVE,
+            expires_at=None,
+        )
+    )
+    repository = PairDatabaseBoundary()
+    application.state.product_experiment_submitter = DurableExperimentSubmitter(
+        repository=repository,
+        run_service=submission_inputs["run_service"],
+        artifact_store=LocalArtifactStore(tmp_path / "http-originals"),
+        evalops_sha="e" * 40,
+        clock=FixedClock(),
+    )
+    headers = {
+        "Authorization": f"Bearer {credential.plaintext.get_secret_value()}",
+        "Idempotency-Key": "pair",
+    }
+    payload = {
+        "request": submission_inputs["request"].model_dump(mode="json"),
+        "dataset_base64": base64.b64encode(submission_inputs["dataset_payload"]).decode("ascii"),
+    }
+    return {
+        "application": application,
+        "headers": headers,
+        "payload": payload,
+        "repository": repository,
+    }
+
+
+@pytest.mark.asyncio
+async def test_authenticated_http_submission_uses_real_preparer_and_replays_pair(
+    authenticated_submission_setup: dict[str, Any],
+) -> None:
+    application, headers, payload, repository = (
+        authenticated_submission_setup[key]
+        for key in ("application", "headers", "payload", "repository")
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/experiments", headers=headers, json=payload)
+        assert response.status_code == 202
+        replay = await client.post("/api/v1/experiments", headers=headers, json=payload)
+    assert response.json() == replay.json()
+    assert response.json()["id"] == str(repository.result.id)
+    assert response.json()["formal_quality_claim_allowed"] is False
+    assert "private answer" not in response.text and repository.created_count == 1
+
+
+@pytest.mark.parametrize(
+    "mode, expected",
+    [
+        ("duplicate", 422),
+        ("bad_base64", 422),
+        ("source_changed", 422),
+        ("invalid_dataset", 422),
+        ("unknown_secret", 422),
+        ("formal", 422),
+        ("compressed", 415),
+        ("declared_size", 413),
+        ("streamed_size", 413),
+        ("disabled", 503),
+    ],
+)
+async def test_invalid_http_submission_does_not_create_pair_or_echo_inputs(
+    authenticated_submission_setup: dict[str, Any],
+    mode: str,
+    expected: int,
+) -> None:
+    setup = authenticated_submission_setup
+    application, payload = setup["application"], setup["payload"]
+    headers = {**setup["headers"], "Content-Type": "application/json"}
+    canary = "PRIVATE_INPUT_MUST_NOT_APPEAR"
+    if mode == "bad_base64":
+        payload["dataset_base64"] = "!" + canary
+    elif mode == "source_changed":
+        payload["dataset_base64"] = base64.b64encode(canary.encode()).decode()
+    elif mode == "invalid_dataset":
+        raw = json.dumps({"invalid": canary}).encode()
+        payload["dataset_base64"] = base64.b64encode(raw).decode()
+        payload["request"]["source_dataset_sha256"] = hashlib.sha256(raw).hexdigest()
+    elif mode == "unknown_secret":
+        payload["request"]["baseline"]["token"] = canary
+    elif mode == "formal":
+        payload["request"]["scope"] = "FORMAL"
+    elif mode == "compressed":
+        headers["Content-Encoding"] = "gzip"
+    elif mode == "declared_size":
+        headers["Content-Length"] = str(16 * 1024 * 1024 + 1)
+    elif mode == "disabled":
+        application.state.product_experiment_submitter = None
+    body: Any = json.dumps(payload).encode()
+    if mode == "duplicate":
+        body = ('{"dataset_base64":"' + canary + '",' + body.decode()[1:]).encode()
+    if mode == "streamed_size":
+
+        async def large_stream():
+            yield b"x" * (8 * 1024 * 1024)
+            yield b"x" * (8 * 1024 * 1024)
+            yield b"x"
+
+        body = large_stream()
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/experiments", headers=headers, content=body)
+    assert response.status_code == expected
+    assert setup["repository"].created_count == 0
+    assert canary not in response.text
+
+
+@pytest.mark.asyncio
+async def test_submission_replays_frozen_pair_without_registry_or_storage_reexecution(
+    submission_inputs: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    from app.product_experiments.submission import DurableExperimentSubmitter
+    from app.runs.service import IdempotencyConflictError
+
+    repository = PairDatabaseBoundary()
+    submitter = DurableExperimentSubmitter(
+        repository=repository,
+        run_service=submission_inputs["run_service"],
+        artifact_store=LocalArtifactStore(tmp_path / "originals"),
+        evalops_sha="e" * 40,
+        clock=FixedClock(),
+    )
+    args = {
+        key: submission_inputs[key]
+        for key in ("principal", "idempotency_key", "request", "dataset_payload")
+    }
+    first = await submitter.submit(**args)
+    empty_store = LocalArtifactStore(tmp_path / "must-stay-empty")
+    replay_submitter = DurableExperimentSubmitter(
+        repository=repository,
+        run_service=SQLAlchemyRunService(
+            repository=DatasetBoundary(uuid4(), uuid4(), "0" * 64),
+            artifact_store=empty_store,
+            http_target_registry={},
+        ),
+        artifact_store=empty_store,
+        evalops_sha="f" * 40,
+        clock=FixedClock(),
+    )
+    assert await replay_submitter.submit(**args) == first
+    assert repository.created_count == 1 and not (tmp_path / "must-stay-empty").exists()
+    args["request"] = args["request"].model_copy(update={"max_active_jobs": 1})
+    with pytest.raises(IdempotencyConflictError):
+        await replay_submitter.submit(**args)
 
 
 @pytest.mark.asyncio
