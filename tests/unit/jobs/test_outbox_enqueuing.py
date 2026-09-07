@@ -11,9 +11,10 @@ from app.domain.evaluation import EvaluationResult, TargetResult
 from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.jobs.claiming import ClaimedJob
 from app.jobs.failures import SQLAlchemyFailureCommitter
-from app.jobs.results import SQLAlchemyResultCommitter
+from app.jobs.results import AttemptNotActiveError, SQLAlchemyResultCommitter
 from app.jobs.retry_policy import RetryPolicy
 from app.persistence.orm_models import (
+    CaseResult,
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
@@ -221,6 +222,37 @@ async def test_success_commits_progress_and_terminal_events_in_state_transaction
         "status": "succeeded",
     }
     assert events[1].payload_json == {"status": "succeeded"}
+    results = [item for item in session.added if isinstance(item, CaseResult)]
+    assert len(results) == 1
+    assert results[0].accepted_attempt_id == ATTEMPT_ID
+
+
+@pytest.mark.parametrize(("attempt_number", "job_attempt_count"), [(2, 1), (1, 2)])
+async def test_result_rejects_attempt_identity_not_matching_current_job(
+    attempt_number: int, job_attempt_count: int
+) -> None:
+    session = RecordingSession(
+        [
+            ScalarResult(TENANT_ID),
+            ScalarResult(RUN_ID),
+            RowResult((_job(attempt_count=job_attempt_count), _run())),
+            ScalarResult(_attempt(attempt_number=attempt_number)),
+        ]
+    )
+    committer = SQLAlchemyResultCommitter(
+        RecordingSessionFactory(session),  # type: ignore[arg-type]
+        clock=FixedClock(),
+    )
+    with pytest.raises(AttemptNotActiveError):
+        await committer.commit_success(
+            claim=_claim(),
+            lease_version=2,
+            target_result=TargetResult(
+                answer="answer", citations=(), sources=(), trace={}, token_usage=None, latency_ms=10
+            ),
+            evaluation_result=EvaluationResult(metrics={"score": 1.0}),
+        )
+    assert session.added == []
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,8 @@
 
 ## 先检查输入
 
+持久结果新增 0030 迁移：新成功结果直接关联 accepted_attempt_id，并通过复合外键绑定同一个 Job；旧结果保持 null，不猜测回填。提交同时检查 claim/Job/attempt 的尝试序号一致。它为后续只导出有效结果提供身份依据，但尚不代表完整 durable 导出已经开放。
+
 ```console
 python -m scripts.run_product_experiment --spec benchmarks/product_demo_v1/experiment.json --validate-only
 ```

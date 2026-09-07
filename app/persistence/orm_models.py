@@ -676,6 +676,7 @@ class EvaluationJob(Base):
 class JobAttempt(Base):
     __tablename__ = "job_attempts"
     __table_args__ = (
+        UniqueConstraint("id", "job_id", name="uq_job_attempts_id_job_id"),
         UniqueConstraint(
             "job_id",
             "attempt_number",
@@ -718,6 +719,13 @@ class CaseResult(Base):
     __tablename__ = "case_results"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["accepted_attempt_id", "job_id"],
+            ["job_attempts.id", "job_attempts.job_id"],
+            name="fk_case_results_accepted_attempt_job",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
             ["job_id", "run_id"],
             ["evaluation_jobs.id", "evaluation_jobs.run_id"],
             name="fk_case_results_job_id_run_id_evaluation_jobs",
@@ -758,6 +766,7 @@ class CaseResult(Base):
     )
     case_id: Mapped[str] = mapped_column(String(200), nullable=False)
     answer_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    accepted_attempt_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     input_tokens: Mapped[int | None] = mapped_column()

@@ -1,11 +1,13 @@
 import asyncio
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import delete, exists, func, select
+from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.auth.principals import Principal
 from app.core.config import Settings
@@ -18,7 +20,11 @@ from app.jobs.claiming import SQLAlchemyJobClaimer
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
 from app.jobs.reaper import SQLAlchemyJobReaper
-from app.jobs.results import SQLAlchemyResultCommitter, build_run_lock_for_completion_statement
+from app.jobs.results import (
+    AttemptNotActiveError,
+    SQLAlchemyResultCommitter,
+    build_run_lock_for_completion_statement,
+)
 from app.jobs.retry_policy import RetryPolicy
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.orm_models import (
@@ -261,6 +267,13 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
         )
         evaluation_result = EvaluationResult(metrics={"execution_success": True})
         second = claims[1]
+        with pytest.raises(AttemptNotActiveError):
+            await committer.commit_success(
+                claim=replace(second, attempt_number=second.attempt_number + 1),
+                lease_version=second.version,
+                target_result=target_result,
+                evaluation_result=evaluation_result,
+            )
         await wait_for_lock_sensitive(
             asyncio.gather(
                 committer.commit_success(
@@ -290,6 +303,22 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
                 select(func.count(CaseResult.id)).where(CaseResult.job_id == first.job_id)
             )
         assert result_count == 1
+        async with session_factory() as session:
+            accepted_id = await session.scalar(
+                select(CaseResult.accepted_attempt_id).where(CaseResult.job_id == first.job_id)
+            )
+        assert accepted_id == first.attempt_id
+        # This boundary mutation is confined to the isolated test tenant and must roll back.
+        with pytest.raises(IntegrityError):
+            async with session_factory.begin() as session:
+                await session.execute(
+                    update(CaseResult)
+                    .where(CaseResult.job_id == first.job_id)
+                    .values(accepted_attempt_id=second.attempt_id)
+                )
+        with pytest.raises(IntegrityError):
+            async with session_factory.begin() as session:
+                await session.execute(delete(JobAttempt).where(JobAttempt.id == first.attempt_id))
 
         expired_at = now + timedelta(seconds=31)
         retry_policy = RetryPolicy(
@@ -339,6 +368,37 @@ async def test_ten_workers_claim_each_job_once_and_stale_heartbeats_are_rejected
             )
         assert retry_wait_count == 98
         assert expired_attempt_count == 98
+
+        retry_clock = FixedClock(expired_at + timedelta(seconds=2))
+        retry_claimer = SQLAlchemyJobClaimer(
+            session_factory,
+            lease_policy=LeasePolicy(timedelta(seconds=30)),
+            clock=retry_clock,
+        )
+        retry_claim = (await retry_claimer.claim(worker_id="retry-worker", limit=1))[0]
+        assert retry_claim.attempt_number == 2
+        old_claim = next(claim for claim in claims if claim.job_id == retry_claim.job_id)
+        retry_committer = SQLAlchemyResultCommitter(session_factory, clock=retry_clock)
+        with pytest.raises(LeaseLostError):
+            await retry_committer.commit_success(
+                claim=old_claim,
+                lease_version=old_claim.version,
+                target_result=target_result,
+                evaluation_result=evaluation_result,
+            )
+        await retry_committer.commit_success(
+            claim=retry_claim,
+            lease_version=retry_claim.version,
+            target_result=target_result,
+            evaluation_result=evaluation_result,
+        )
+        async with session_factory() as session:
+            accepted_retry = await session.scalar(
+                select(CaseResult.accepted_attempt_id).where(
+                    CaseResult.job_id == retry_claim.job_id
+                )
+            )
+        assert accepted_retry == retry_claim.attempt_id != old_claim.attempt_id
 
         async with session_factory.begin() as session:
             session.add(

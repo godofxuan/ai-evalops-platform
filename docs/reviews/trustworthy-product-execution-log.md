@@ -1,5 +1,18 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第七检查点：有效结果的 attempt 直接关联
+
+第六检查点 `56163a62e96157e7d959c5bcabe5489b5b0ea3ec` 的 [CI 34095414644](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34095414644) 已 completed/success。第七检查点提交前扩大回归：303 passed / 2 skipped，56.19 秒；跳过分别为 Windows symlink 权限与未配置本地真实 PostgreSQL，均不算通过。
+
+- 先检查评分边界：citation_precision_min 与 agent_comparison_policy 是实验级比较阈值，local runner 在 assessment 阶段使用；逐题 worker 只输出同一评分公式的观测。没有把比较配置重复加入 evaluator，也没有把此处误报为评分缺陷。后续 durable 聚合仍必须使用冻结 request 中的比较阈值。
+- 确认需要补齐的事实：旧 CaseResult 仅绑定 tenant/run/job，成功 attempt 身份依赖审计关联，没有直接外键。新导出不能用“最近一次尝试”猜测哪条结果有效，所以新增 nullable accepted_attempt_id，并用 (accepted_attempt_id, job_id) → JobAttempt(id, job_id) 复合外键禁止串 Job。
+- 0029→0030 增量迁移先有失败测试，再实现；不回填旧数据、不修改历史证据。外键 DEFERRABLE INITIALLY DEFERRED：事务结束必须完整一致，同时允许原有整组 Job/result/attempt 清理在同一事务内完成，不依赖逐条删除次序。不是允许留下悬空引用。downgrade 仅供隔离环境，生产仍采用关闭入口或前向修复。
+- 成功提交测试先显示 accepted_attempt_id 为 None，再由原有租约/版本保护的 commit_success 保存实际锁定的 attempt.id，不新增另一条结果写路径。另加两种序号错配反例：原会继续进入结果聚合，现于任何新增结果/事件前抛 AttemptNotActiveError；正常 retry 和心跳版本语义不变。
+- ORM 回归最初因 job_id 新增外键目标而失败，更新预期以检查两条关联都存在，没有放宽数据库规则。定向 jobs/worker/persistence/runs 151 passed；一次测试行宽超限已由格式器修复。当前 211 文件 mypy、607 文件格式和全仓 lint 通过。
+- 扩展真实 PostgreSQL 并发测试：实际领取/成功后检查关联；错误 claim 序号拒绝；跨 Job 改绑及单独删除被引用 attempt 必须事务回滚；reaper 后实际领取 attempt 2，旧 lease 拒绝，新结果只绑定 attempt 2。本机没有真实 PostgreSQL，新增断言等待本检查点精确 CI，离线 SQL 与单元测试不能代替它。
+
+此项是 S4 accepted-attempt 导出的数据前提，不是完整导出接口。公开提交、实验共享并发/观测总量、不可变报告与完整故障 E2E 仍未完成，不修改 main、RAG 或旧简历链接。
+
 ## 2026-09-07 第六检查点：持久提交准备、总尝试预留与输入一致性
 
 提交前重新执行产品、Run、evaluator 与 CLI 回归：180 passed / 1 Windows symlink skipped，59.60 秒。上一轮完整输出未留存，所以重新运行而非推测结果。全仓 lint、605 文件格式检查、211 文件 mypy 与 git diff --check 通过。真实数据库预算断言仍待本检查点精确 CI。

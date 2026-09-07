@@ -158,7 +158,11 @@ class SQLAlchemyResultCommitter:
                         .with_for_update()
                     )
                 ).scalar_one_or_none()
-                if attempt is None:
+                if (
+                    attempt is None
+                    or attempt.attempt_number != claim.attempt_number
+                    or job.attempt_count != claim.attempt_number
+                ):
                     raise AttemptNotActiveError("claim does not reference an active attempt")
 
                 job.status = transition.current
@@ -177,6 +181,7 @@ class SQLAlchemyResultCommitter:
                 session.add(
                     CaseResult(
                         id=result_id,
+                        accepted_attempt_id=attempt.id,
                         job_id=claim.job_id,
                         run_id=claim.run_id,
                         tenant_id=claim.tenant_id,

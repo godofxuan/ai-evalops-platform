@@ -379,7 +379,11 @@ def test_run_and_job_constraints_encode_idempotency_and_one_job_per_case() -> No
 def test_case_result_is_unique_per_job_and_run_case() -> None:
     assert frozenset({"job_id"}) in unique_column_sets(CaseResult.__table__)
     assert frozenset({"run_id", "case_id"}) in unique_column_sets(CaseResult.__table__)
-    assert foreign_key_targets(CaseResult.__table__, "job_id") == {"evaluation_jobs.id"}
+    assert foreign_key_targets(CaseResult.__table__, "job_id") == {
+        "evaluation_jobs.id",
+        "job_attempts.job_id",
+    }
+    assert foreign_key_targets(CaseResult.__table__, "accepted_attempt_id") == {"job_attempts.id"}
     assert foreign_key_targets(CaseResult.__table__, "run_id") == {
         "evaluation_jobs.run_id",
         "evaluation_runs.id",
