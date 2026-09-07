@@ -10,6 +10,9 @@ from app.persistence.orm_models import CaseResult, EvaluationJob, JobAttempt
 from app.product_experiments.result_snapshot import freeze_durable_job
 from app.product_experiments.submission import prepare_durable_experiment
 from app.runs.idempotency import canonical_request_hash
+from tests.unit.product_experiments.test_submission import (
+    authenticated_submission_setup as authenticated_submission_setup,
+)
 from tests.unit.product_experiments.test_submission import submission_inputs as submission_inputs
 
 
@@ -124,6 +127,24 @@ async def test_durable_report_rebuilds_worker_metrics_without_target_calls(
     assert canonical_request_hash(unsigned) == digest
 
 
+@pytest.mark.parametrize("latencies", [(0, 0), (0, 1), (1, 0)])
+async def test_submillisecond_http_measurements_do_not_break_report_serialization(
+    durable_evidence, latencies
+) -> None:
+    from app.product_experiments.durable_report import build_durable_report
+    from app.product_experiments.export_service import encode_report
+
+    snapshot, raw = durable_evidence
+    for arm, latency in zip(("baseline", "candidate"), latencies, strict=True):
+        for row in snapshot["arms"][arm]["jobs"]:
+            row["metrics"]["product_observation"]["latency_ms"] = float(latency)
+    snapshot.pop("content_sha256")
+    snapshot["content_sha256"] = canonical_request_hash(snapshot)
+    report = build_durable_report(snapshot=snapshot, raw_dataset=raw)
+    assert report["result"]["status"] == "INSUFFICIENT_EVIDENCE"
+    assert encode_report(report)
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -199,3 +220,107 @@ async def test_one_failed_arm_case_cannot_be_dropped_to_create_quality_pass(
     assert result["case_comparisons"] == []
     assert result["execution_errors"][0]["error_code"] == "target_timeout"
     assert sum(len(rows) for rows in result["observations"].values()) == 3
+
+
+@pytest.mark.parametrize("mode", ["valid", "too_deep"])
+async def test_report_export_publishes_once_and_replays_without_source_or_result_reread(
+    durable_evidence, tmp_path, mode, authenticated_submission_setup
+) -> None:
+    import hashlib
+    from uuid import UUID
+
+    from app.artifacts.service import ArtifactAccessService, ArtifactReferenceLocation
+    from app.artifacts.storage import LocalArtifactStore
+    from app.auth.principals import Principal
+    from app.product_experiments.export_service import ProductReportExporter
+    from app.product_experiments.report_persistence import PublishedProductReport
+
+    snapshot, raw = durable_evidence
+    if mode == "too_deep":
+        nested = {}
+        for _ in range(70):
+            nested = {"nested": nested}
+        snapshot["arms"]["candidate"]["jobs"][0]["metrics"]["product_observation"]["citations"][0][
+            "extra"
+        ] = nested
+        snapshot.pop("content_sha256")
+        snapshot["content_sha256"] = canonical_request_hash(snapshot)
+    tenant_id = UUID(snapshot["tenant_id"])
+    experiment_id = UUID(snapshot["experiment_id"])
+    source_id = UUID(snapshot["source_artifact_reference_id"])
+    baseline_id = UUID(snapshot["arms"]["baseline"]["run_id"])
+    store = LocalArtifactStore(tmp_path / "objects")
+    source = await store.put_bytes(raw)
+    links = {(tenant_id, source_id, None): source.sha256}
+
+    class Gateway:
+        async def get_location(self, *, tenant_id, reference_id, run_id):
+            digest = links.get((tenant_id, reference_id, run_id))
+            return None if digest is None else ArtifactReferenceLocation(reference_id, digest)
+
+    class ResultDatabase:
+        calls = 0
+
+        async def read(self, **kwargs):
+            self.calls += 1
+            assert self.calls == 1, "published report replay must not reread live results"
+            return snapshot
+
+    class PublicationDatabase:
+        receipt = None
+
+        async def get(self, **kwargs):
+            return self.receipt
+
+        async def publish(self, *, principal, snapshot, stored):
+            assert self.receipt is None
+            reference_id = uuid4()
+            links[(tenant_id, reference_id, baseline_id)] = stored.sha256
+            self.receipt = PublishedProductReport(
+                experiment_id,
+                tenant_id,
+                baseline_id,
+                reference_id,
+                stored.sha256,
+                snapshot["content_sha256"],
+            )
+            return self.receipt
+
+    database = PublicationDatabase()
+    exporter = ProductReportExporter(
+        reader=ResultDatabase(),
+        repository=database,
+        artifact_access=ArtifactAccessService(gateway=Gateway(), store=store),
+        artifact_store=store,
+    )
+    principal = Principal(tenant_id=tenant_id, api_key_id=uuid4(), key_prefix="test")
+    if mode == "too_deep":
+        with pytest.raises(ValueError):
+            await exporter.export(principal=principal, experiment_id=experiment_id)
+        assert database.receipt is None, (
+            "unreadable report must never become the immutable publication"
+        )
+        return
+    first = await exporter.export(principal=principal, experiment_id=experiment_id)
+    links.pop((tenant_id, source_id, None))
+    second = await exporter.export(principal=principal, experiment_id=experiment_id)
+    assert second == first
+    assert hashlib.sha256(first.payload).hexdigest() == first.receipt.content_sha256
+    assert first.report["result"]["status"] == "INSUFFICIENT_EVIDENCE"
+    from httpx import ASGITransport, AsyncClient
+
+    application = authenticated_submission_setup["application"]
+    application.state.product_experiment_exporter = exporter
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        url = f"/api/v1/experiments/{experiment_id}/export"
+        headers = authenticated_submission_setup["headers"]
+        public = await client.post(url, headers=headers)
+        assert public.status_code == 200
+        assert public.json()["schema_version"] == "evalops.public-durable-report/1.0"
+        assert "private answer" not in public.text
+        assert "result_snapshot" not in public.json()
+        private = await client.post(url + "?include_private=true", headers=headers)
+        assert private.status_code == 200 and private.content == first.payload
+        assert private.headers["cache-control"] == "private, no-store"

@@ -1,5 +1,23 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十四检查点：报告原子发布与默认公共导出
+
+第十三检查点 `d6d196b36322af0913bdeb7c606a0740e82a68e2` 的 [CI 34105262335](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34105262335) 已 completed/success；已向简历、教学、投递三个任务补发此精确回执。简历侧反馈已记录上一批到规则 §13/共享同步 §24，当前 R12/PDF/指针/历史附件不变。本节为后续新修改，真实数据库断言仍待自己的 CI。
+
+- 为什么新增独立类型：实验的双组报告不同于单个 Run 的 SUMMARY_REPORT。新增 product_experiment_report 类型，复用既有 ArtifactReference/blob 生命周期；引用归属 baseline Run，但用途由独立类型和父实验报告字段明确区分，不覆盖旧 Run 摘要。
+- 0033 增量迁移：父实验增加 nullable report_artifact_reference_id/report_sha256/report_snapshot_sha256，三者必须一起存在或一起为空。复合 FK 同时绑定 reference ID、tenant、baseline Run 和精确 blob SHA，RESTRICT 保护发布引用。旧实验不回填报告。实际存储类型为 VARCHAR/CHECK，不是 PostgreSQL 原生枚举，检查后按现有 CHECK 迁移风格实施。downgrade 首先恢复旧类型约束，存在新报告时会失败并事务回滚，不自动 DELETE 证据；仅用于隔离库演练。
+- 发布顺序：在事务外读取原始材料、构建/验证/编码报告并保存 blob；事务内按 Tenant→Experiment→有序 Runs 取锁，复查输入/Run 版本与终态，再登记 artifact 引用及父实验发布指针。先复制调用方 snapshot，防止 await 期间被改。相同 snapshot/bytes 重放同一引用，不同内容拒绝覆盖；blob 写入与数据库不构成单一事务，失败可留未引用对象，由原生命周期清理，不盲删共享内容。
+- 幂等导出：首次需要完整结果快照和已授权原始材料；发布后只读同一报告对象，校验 bytes SHA/内部摘要/实验身份，不再读取活动结果、原始数据或重新调用目标。报告整体 artifact SHA、内部逻辑 content SHA、result snapshot SHA、公共 summary 的规范化内层结果 SHA 各有明确用途，不混为一个 hash。
+- 公开端点：POST /api/v1/experiments/{id}/export 默认返回 evalops.public-durable-report/1.0 允许字段摘要，不含逐题答案、tenant 或完整结果快照；include_private=true 才返回已发布私有报告的原始字节。两个响应模型进入 OpenAPI，均必须鉴权；Cache-Control 为 private, no-store。运行未终态返回 409，跨租户隐藏 404，证据不支持返回通用 422，不回显原始输入。
+- TDD 发现：70 层引用附加字段在包装成报告后超出严格读取深度，旧顺序先登记报告再读取失败，导致留下不可读的“不可变发布”。反例明确失败后，把最终序列化正文的深度/格式验证移到 blob 与数据库写入之前；修复后发布记录为空。没有增加允许深度来掩盖问题。
+- 本地测试：真正的 LocalArtifactStore、ArtifactAccessService、报告构建/投影和 API key 哈希鉴权；仅替换数据库边界。发布后移除测试来源读取映射，重放仍返回完全相同 bytes；默认公共响应不含合成 private answer。QA/Agent 重算、零毫秒延迟、篡改/失败病例及旧安全边界均保留。
+- 资源边界：进程内最多两个报告导出作业进入处理，CPU 构建离线运行在线程中，取消请求时等待不可中断的线程结束后才释放该作业名额。报告序列化正文最多 512 MiB，严格深度 64；不是 RSS/全部署并发或硬 CPU 截止保证。原始观测总额度另由之前的 worker 预算执行；这里不新增调度器。
+- 真实数据库验收已加入：八个相同报告发布者复用引用，其他租户无法读取，不同 blob 拒绝覆盖；公开提交经过实际 worker/claimer/lease heartbeat/成功提交/evaluator 后读取 READY_FOR_ASSESSMENT，再八路并发导出相同公共内容，私有 bytes 与公共 pin 对应、事件 Job ID 与实际请求头相同、导出不重调关闭的 target client。上游 HTTP/DNS/peer 是明确的受控传输夹具，不能称为真实 TCP/TLS、真实模型 A/B 或进程死亡恢复证明。
+- 实现过程中：存储工厂原返回标注只声明 ArtifactStore，但两个实际后端都实现删除/列举生命周期接口；将返回类型准确改为 DeletableArtifactStore，无运行行为变更。修复泛型语法、导入排序和迁移字符串行宽，不忽略 mypy/lint 错误。查找过个别不存在的猜测路径，均为只读失败，随后按文件清单确认实际路径。
+- 最后扩大回归：332 passed / 1 PostgreSQL skipped，16.17 秒；全仓 lint、623 文件格式和 219 文件 mypy 通过。真实 PostgreSQL、迁移及公开 API→worker→导出用例必须等待本检查点精确 CI。
+
+仍需 durable CLI（提交/等待/恢复/取消/导出）、独立 durable 包验证/易读报告与完整 S5 故障矩阵、S6 文档收口和 S7 双 SHA。当前没有正式 A/B、人评或 production-ready 结论，main/RAG/历史简历链接保持不变。
+
 ## 2026-09-07 第十三检查点：共享离线聚合与持久报告重算
 
 第十二检查点 `691ee9335e3ac413dae6e6f88a43fc58cc4ad951` 的 [CI 34102977779](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34102977779) 两项工作已 completed/success，包含真实 PostgreSQL 完整终态快照、重复读取摘要和租户隐藏。以下是其后的新代码，不借用上一个 CI 为本节背书。

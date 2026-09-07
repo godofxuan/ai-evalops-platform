@@ -102,6 +102,24 @@ class ProductExperiment(Base):
     __tablename__ = "product_experiments"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["report_artifact_reference_id", "tenant_id", "baseline_run_id", "report_sha256"],
+            [
+                "artifact_references.id",
+                "artifact_references.tenant_id",
+                "artifact_references.run_id",
+                "artifact_references.blob_sha256",
+            ],
+            name="fk_product_experiments_report_identity",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(report_artifact_reference_id IS NULL AND report_sha256 IS NULL "
+            "AND report_snapshot_sha256 IS NULL) OR "
+            "(report_artifact_reference_id IS NOT NULL AND report_sha256 IS NOT NULL "
+            "AND report_snapshot_sha256 IS NOT NULL)",
+            name="report_publication_complete",
+        ),
+        ForeignKeyConstraint(
             ["source_artifact_reference_id", "tenant_id"],
             ["artifact_references.id", "artifact_references.tenant_id"],
             name="fk_product_experiments_source_reference_tenant",
@@ -144,6 +162,9 @@ class ProductExperiment(Base):
     snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     max_active_jobs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_artifact_reference_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    report_artifact_reference_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    report_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    report_snapshot_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     baseline_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     candidate_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     cancel_requested: Mapped[bool] = mapped_column(

@@ -36,6 +36,8 @@ from app.api.routes_product_experiments import router as product_experiments_rou
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
+from app.artifacts.repository import SQLAlchemyArtifactReferenceGateway
+from app.artifacts.service import ArtifactAccessService
 from app.artifacts.storage import build_artifact_store
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
@@ -67,7 +69,10 @@ from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.observability.metrics import PlatformMetrics
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
+from app.product_experiments.export_service import ProductReportExporter
 from app.product_experiments.persistence import SQLAlchemyProductExperimentRepository
+from app.product_experiments.report_persistence import SQLAlchemyProductReportRepository
+from app.product_experiments.result_snapshot import SQLAlchemyProductResultReader
 from app.product_experiments.service import ProductExperimentService
 from app.product_experiments.submission import DurableExperimentSubmitter
 from app.results.service import SQLAlchemyResultService
@@ -144,6 +149,15 @@ def create_app(
             telemetry=telemetry,
         )
         product_repository = SQLAlchemyProductExperimentRepository(session_factory)
+        application.state.product_experiment_exporter = ProductReportExporter(
+            reader=SQLAlchemyProductResultReader(session_factory),
+            repository=SQLAlchemyProductReportRepository(session_factory),
+            artifact_store=artifact_store,
+            artifact_access=ArtifactAccessService(
+                gateway=SQLAlchemyArtifactReferenceGateway(session_factory),
+                store=artifact_store,
+            ),
+        )
         application.state.product_experiment_service = ProductExperimentService(
             product_repository, application.state.run_service
         )
@@ -264,6 +278,7 @@ def create_app(
     application.state.run_service = None
     application.state.product_experiment_service = None
     application.state.product_experiment_submitter = None
+    application.state.product_experiment_exporter = None
     application.state.result_service = None
     application.state.review_service = None
     application.state.agent_artifact_service = None

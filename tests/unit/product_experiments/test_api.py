@@ -26,7 +26,7 @@ async def test_product_experiment_submission_requires_authentication() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method,suffix", [("GET", ""), ("POST", "/cancel")])
+@pytest.mark.parametrize("method,suffix", [("GET", ""), ("POST", "/cancel"), ("POST", "/export")])
 async def test_product_experiment_controls_require_authentication(method: str, suffix: str) -> None:
     application = create_app()
     async with AsyncClient(

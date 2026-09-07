@@ -539,7 +539,7 @@ def _is_s3_missing(error: Exception) -> bool:
     return status_code == 404 or error_code in {"404", "NoSuchKey", "NotFound"}
 
 
-def build_artifact_store(settings: Settings) -> ArtifactStore:
+def build_artifact_store(settings: Settings) -> DeletableArtifactStore:
     if settings.artifact_backend == "local":
         settings.artifact_root.mkdir(parents=True, exist_ok=True)
         return LocalArtifactStore(settings.artifact_root)

@@ -18,6 +18,7 @@ class ArtifactType(StrEnum):
     SUMMARY_REPORT = "summary_report"
     HUMAN_REVIEW_PACKET = "human_review_packet"
     AGENT_EXECUTION = "agent_execution"
+    PRODUCT_EXPERIMENT_REPORT = "product_experiment_report"
 
 
 class RunStatus(StrEnum):

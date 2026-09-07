@@ -1,19 +1,70 @@
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 from pydantic import BaseModel
 
 from app.api.errors import APIError
 from app.api.product_submission_body import experiment_submission_schema, read_experiment_submission
 from app.auth.dependencies import get_principal
 from app.auth.principals import Principal
+from app.product_experiments.export_schemas import (
+    PrivateDurableReport,
+    PublicDurableReport,
+    project_public_durable_report,
+)
+from app.product_experiments.export_service import ProductReportExporter, encode_report
+from app.product_experiments.report_persistence import ReportPublicationConflictError
+from app.product_experiments.result_snapshot import ExperimentNotTerminalError
 from app.product_experiments.service import ProductExperimentRead, ProductExperimentService
 from app.product_experiments.spec import InputLimitError
 from app.product_experiments.submission import DurableExperimentSubmitter
 from app.runs.service import RunInputIntegrityError
 
 router = APIRouter(prefix="/api/v1/experiments", tags=["product-experiments"])
+
+
+@router.post("/{experiment_id}/export", response_model=PublicDurableReport | PrivateDurableReport)
+async def export_experiment(
+    experiment_id: UUID,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+    include_private: bool = False,
+) -> Response:
+    exporter = cast(
+        ProductReportExporter | None,
+        getattr(request.app.state, "product_experiment_exporter", None),
+    )
+    if exporter is None:
+        raise APIError(503, "experiment_export_unavailable", "Experiment export is not available.")
+    try:
+        exported = await exporter.export(principal=principal, experiment_id=experiment_id)
+        payload = (
+            exported.payload
+            if include_private
+            else encode_report(project_public_durable_report(exported).model_dump(mode="json"))
+        )
+    except ExperimentNotTerminalError:
+        raise APIError(409, "experiment_not_terminal", "Experiment is still executing.") from None
+    except ReportPublicationConflictError:
+        raise APIError(
+            409, "experiment_report_conflict", "A different immutable report is already published."
+        ) from None
+    except ValueError:
+        raise APIError(
+            422, "experiment_export_invalid", "Experiment evidence cannot support this export."
+        ) from None
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": 'attachment; filename="experiment-private.json"'
+            if include_private
+            else 'attachment; filename="experiment-public.json"',
+        },
+    )
 
 
 class ExperimentSubmissionAccepted(BaseModel):

@@ -3,15 +3,16 @@ import base64
 import hashlib
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 from pydantic import SecretStr
 from sqlalchemy import delete, event, select
 from sqlalchemy.engine import Connection
@@ -26,8 +27,11 @@ from app.core.config import Settings
 from app.domain.enums import RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult
 from app.jobs.claiming import SQLAlchemyJobClaimer
+from app.jobs.failures import SQLAlchemyFailureCommitter
+from app.jobs.heartbeat import SQLAlchemyHeartbeatService
 from app.jobs.lease import LeasePolicy
 from app.jobs.results import SQLAlchemyResultCommitter
+from app.jobs.retry_policy import RetryPolicy
 from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
@@ -48,6 +52,10 @@ from app.product_experiments.persistence import (
     NewProductExperiment,
     SQLAlchemyProductExperimentRepository,
 )
+from app.product_experiments.report_persistence import (
+    ReportPublicationConflictError,
+    SQLAlchemyProductReportRepository,
+)
 from app.product_experiments.result_snapshot import (
     ExperimentNotTerminalError,
     SQLAlchemyProductResultReader,
@@ -55,6 +63,9 @@ from app.product_experiments.result_snapshot import (
 from app.runs.idempotency import canonical_request_hash
 from app.runs.schemas import RunCreate
 from app.runs.service import IdempotencyConflictError, SQLAlchemyRunService
+from app.targets.http_rag import HTTPRAGTarget
+from app.workers.lease_runner import LeaseHeartbeatRunner
+from app.workers.worker import EvaluationWorker
 from tests.postgres_test_support import wait_for_lock_sensitive
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -298,7 +309,7 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             assert (
                 await service.get_run(principal=principal, run_id=run_id)
             ).status == RunStatus.CANCELLED
-        await exercise_shared_admission(factory, repository, pending)
+        await exercise_shared_admission(factory, repository, pending, artifact_store)
         await exercise_authenticated_submission(application, dataset_id, headers, other_headers)
         async with factory.begin() as session:
             runs = list(
@@ -422,6 +433,10 @@ async def exercise_authenticated_submission(
         assert "private answer" not in responses[0].text
         status = await client.get(accepted["status_url"], headers=headers)
         assert status.status_code == 200 and status.json()["state"] == "QUEUED"
+        not_ready = await client.post(accepted["status_url"] + "/export", headers=headers)
+        assert not_ready.status_code == 409
+        hidden_export = await client.post(accepted["status_url"] + "/export", headers=other_headers)
+        assert hidden_export.status_code == 404
         hidden = await client.get(accepted["status_url"], headers=other_headers)
         assert hidden.status_code == 404
         altered = {**payload, "request": {**request, "max_active_jobs": 1}}
@@ -433,12 +448,114 @@ async def exercise_authenticated_submission(
         assert replay.status_code == 202 and replay.json() == accepted
         final = await client.get(accepted["status_url"], headers=headers)
         assert final.json()["state"] == "CANCELLED"
+        cancelled_report = await client.post(accepted["status_url"] + "/export", headers=headers)
+        assert cancelled_report.status_code == 200
+        assert cancelled_report.json()["summary"]["status"] == "EXECUTION_FAILED"
+        assert "private answer" not in cancelled_report.text
+        await exercise_worker_to_export(application, client, headers, other_headers, payload)
+
+
+async def exercise_worker_to_export(
+    application: FastAPI,
+    client: AsyncClient,
+    headers: dict[str, str],
+    other_headers: dict[str, str],
+    payload: dict[str, Any],
+) -> None:
+    """Actual API/worker/PostgreSQL/artifacts; only upstream HTTP/DNS/peer are fixtures."""
+    submitted = await client.post(
+        "/api/v1/experiments",
+        json=payload,
+        headers={**headers, "Idempotency-Key": "worker-export-pair"},
+    )
+    assert submitted.status_code == 202
+    accepted = submitted.json()
+    observed_requests: list[tuple[str, str]] = []
+
+    class Resolver:
+        async def resolve(self, hostname: str) -> tuple[str, ...]:
+            assert hostname == "rag.example.com"
+            return ("93.184.216.34",)
+
+    class Peer:
+        def get_extra_info(self, name: str) -> object:
+            return ("93.184.216.34", 443) if name == "server_addr" else None
+
+    def upstream(request: Request) -> Response:
+        # Labels and private answers must never be included in the target request.
+        assert json.loads(request.content) == {"question": "q"}
+        observed_requests.append(
+            (request.headers["x-evalops-job-id"], request.headers["x-evalops-attempt"])
+        )
+        return Response(
+            200,
+            json={
+                "answer": "private answer",
+                "citations": [{"source_id": "gold"}],
+                "trace": {"cost_usd": 0.01},
+            },
+            extensions={"network_stream": Peer()},
+        )
+
+    factory = cast(AsyncSessionFactory, application.state.session_factory)
+    async with AsyncClient(transport=MockTransport(upstream)) as upstream_client:
+
+        def target_factory(kind: str, config: Mapping[str, Any]) -> HTTPRAGTarget:
+            assert kind == "http_rag"
+            return HTTPRAGTarget(config, client=upstream_client, resolver=Resolver())
+
+        worker = EvaluationWorker(
+            claimer=SQLAlchemyJobClaimer(factory, lease_policy=LeasePolicy(timedelta(seconds=60))),
+            result_committer=SQLAlchemyResultCommitter(factory),
+            failure_committer=SQLAlchemyFailureCommitter(factory, retry_policy=RetryPolicy()),
+            lease_runner=LeaseHeartbeatRunner(
+                heartbeat_service=SQLAlchemyHeartbeatService(
+                    factory, lease_duration=timedelta(seconds=60)
+                ),
+                heartbeat_interval_seconds=5,
+            ),
+            target_factory=target_factory,
+        )
+        for _ in range(4):
+            assert await worker.process_one(worker_id="product-export-worker")
+        assert not await worker.process_one(worker_id="product-export-worker")
+    assert len(observed_requests) == 4 and len({job for job, _ in observed_requests}) == 4
+    assert all(attempt == "1" for _, attempt in observed_requests)
+    status = await client.get(accepted["status_url"], headers=headers)
+    assert status.status_code == 200 and status.json()["state"] == "READY_FOR_ASSESSMENT"
+    exports = await wait_for_lock_sensitive(
+        asyncio.gather(
+            *(client.post(accepted["status_url"] + "/export", headers=headers) for _ in range(8))
+        ),
+        operation="concurrent authenticated report export",
+    )
+    assert all(response.status_code == 200 for response in exports)
+    assert all(response.content == exports[0].content for response in exports)
+    public = exports[0].json()
+    assert public["summary"]["status"] == "INSUFFICIENT_EVIDENCE"
+    assert "private answer" not in exports[0].text
+    private = await client.post(
+        accepted["status_url"] + "/export?include_private=true", headers=headers
+    )
+    assert private.status_code == 200
+    assert hashlib.sha256(private.content).hexdigest() == public["private_report_sha256"]
+    result = private.json()["result"]
+    assert len(result["case_comparisons"]) == 2
+    assert {event["job_id"] for event in result["execution_events"]} == {
+        job for job, _ in observed_requests
+    }
+    assert len(observed_requests) == 4  # Export did not recall the closed target client.
+    hidden = await client.post(
+        accepted["status_url"] + "/export?include_private=true", headers=other_headers
+    )
+    assert hidden.status_code == 404
 
 
 async def exercise_shared_admission(
     factory: AsyncSessionFactory,
     repository: SQLAlchemyProductExperimentRepository,
     pending: NewProductExperiment,
+    artifact_store: DeletableArtifactStore,
 ) -> None:
     """Real eight-worker waves: each pair shares one slot; neither blocks the other."""
     pairs = [
@@ -505,3 +622,40 @@ async def exercise_shared_admission(
         unsigned = dict(frozen)
         digest = unsigned.pop("content_sha256")
         assert canonical_request_hash(unsigned) == digest
+        report_repository = SQLAlchemyProductReportRepository(factory)
+        # This is an artifact transaction fixture, not a product quality report.
+        stored = await artifact_store.put_bytes(
+            json.dumps({"publication_fixture": digest}).encode()
+        )
+        principal = Principal(
+            tenant_id=pending.tenant_id, api_key_id=pending.created_by, key_prefix="test"
+        )
+        published = await asyncio.gather(
+            *(
+                report_repository.publish(principal=principal, snapshot=frozen, stored=stored)
+                for _ in range(8)
+            )
+        )
+        assert all(item == published[0] for item in published)
+        receipt = published[0]
+        assert receipt.content_sha256 == stored.sha256
+        assert receipt.snapshot_sha256 == digest
+        assert (
+            await report_repository.get(tenant_id=pending.tenant_id, experiment_id=pair.id)
+            == receipt
+        )
+        assert await report_repository.get(tenant_id=uuid4(), experiment_id=pair.id) is None
+        access = ArtifactAccessService(
+            gateway=SQLAlchemyArtifactReferenceGateway(factory), store=artifact_store
+        )
+        assert (
+            await access.read_bytes(
+                tenant_id=pending.tenant_id,
+                reference_id=receipt.artifact_reference_id,
+                run_id=pair.baseline_run_id,
+            )
+            == json.dumps({"publication_fixture": digest}).encode()
+        )
+        different = await artifact_store.put_bytes(b"different-publication-fixture")
+        with pytest.raises(ReportPublicationConflictError):
+            await report_repository.publish(principal=principal, snapshot=frozen, stored=different)

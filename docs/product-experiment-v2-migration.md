@@ -4,13 +4,23 @@
 
 ## 先检查输入
 
+### 持久报告导出（新增，等待本检查点精确 CI）
+
+终态实验可调用 `POST /api/v1/experiments/{id}/export`，必须带原租户 API key。默认只有允许字段公共摘要；只有显式 `?include_private=true` 才返回完整私有 JSON，包含逐题答案/观测，不能直接公开真实业务材料。所有下载禁止缓存。仍执行中的实验返回 409，跨租户对象隐藏为 404。
+
+报告首次在原有内容寻址存储发布，0033 将独立 product_experiment_report 引用与父实验原子绑定；后续请求读同一原始 bytes，不重跑 target。公共外层 private_report_sha256 指向完整私有 artifact，result_snapshot_sha256 指向冻结结果集合，summary.private_result_sha256 则指向以本项目 encode_report 编码的内层 result JSON；三者不可互换。
+
+新私有包 schema 为 `evalops.durable-experiment-report/1.0`，公共包为 `evalops.public-durable-report/1.0`，不冒充旧 local manifest。旧 `verify_product_experiment` 与下面的 local CLI 目前还不能作为 durable 包验证器或持久客户端使用。报告构建/原子发布/鉴权导出的详细验证和限制见执行记录第十四检查点；真实 socket、进程故障与完整持久 CLI 仍待完成。
+
+### 持久提交
+
 新增受鉴权的 `POST /api/v1/experiments`，默认关闭。服务器显式配置 `EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED=true` 与 `EVALOPS_PRODUCT_EXECUTION_CODE_SHA=<40 位代码 SHA>` 后才可用；未启用返回 503，启用但缺少 SHA 则启动配置失败。还需正常数据库/存储和 `http_target_registry`，不能在客户端请求中塞入上游 URL/令牌。
 
 请求使用 `Authorization: Bearer ...`、`Idempotency-Key`、`Content-Type: application/json`；正文为 `{"request": {...}, "dataset_base64": "..."}`。request 完整字段见 `/openapi.json` 的该 POST requestBody，schema_version 为 `evalops.durable-experiment-request/1.0`，scope 仅 DEMO。dataset_version_id 必须指向同租户按 product mapping 转换后的不可变 JSONL；dataset_base64 则保留转换前原始 JSON，source_dataset_sha256 对这些原始字节计算。二者不可混用。
 
 正文最大 16 MiB、读取 10 秒、原始数据最大 10 MiB、控制请求最大 1 MiB；禁止压缩、重复 JSON 键和非法 base64。202 返回稳定 ID 与 status_url，不代表执行完成。相同租户/键/请求重放原结果，不受当前 registry 改动影响，不复活已取消实验；不同请求返回 409。来源 SHA 仍为 CLIENT_DECLARED，服务器代码 SHA 是配置身份，不能据此声称独立部署证明。
 
-当前 CLI 仍是下面的 local 路径，尚未接入此持久提交接口；accepted-attempt 报告导出也尚未完成。新增 HTTP→真实 PostgreSQL 验证需以该检查点精确 CI 为准。
+当前 CLI 仍是下面的 local 路径，尚未接入此持久提交接口。鉴权提交的真实 PostgreSQL 并发验收已通过第十一检查点精确 CI；后续报告发布/导出尚待第十四检查点精确 CI，不混用证明。
 
 原始 product JSON 现在可以由 retain_durable_source 保存到既有内容寻址存储；0032 将来源引用与父实验按 tenant 绑定，并随双 Run 原子登记。原始/规范化摘要保持独立，准备后字节变化拒绝发布。数据库失败可能留下未引用 blob，由既有清理机制处理；这不是自动公开原始数据，也不为历史实验回填来源。
 
