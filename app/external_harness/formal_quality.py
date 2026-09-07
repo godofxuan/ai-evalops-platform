@@ -291,21 +291,45 @@ def _metric_assessments(
     candidate: list[FormalCaseMeasurement],
     policy: FormalQualityPolicy,
 ) -> dict[str, FormalMetricAssessment]:
+    fields = ("task_success", "citation_correctness", "tool_error_rate", "latency_ms", "cost_usd")
+    return assess_paired_numeric_metrics(
+        baseline=[{field: getattr(case, field) for field in fields} for case in baseline],
+        candidate=[{field: getattr(case, field) for field in fields} for case in candidate],
+        policy=policy,
+    )
+
+
+def assess_paired_numeric_metrics(
+    *,
+    baseline: list[dict[str, float | None]],
+    candidate: list[dict[str, float | None]],
+    policy: FormalQualityPolicy,
+    include_citations: bool = True,
+) -> dict[str, FormalMetricAssessment]:
+    """Reuse paired statistics without inventing values for excluded task metrics."""
     if len(baseline) < 2:
         raise ValueError("formal metric assessment requires at least two common cases")
 
     def values(field: str) -> tuple[list[float], list[float]]:
+        def valid(rows: list[dict[str, float | None]]) -> list[float]:
+            observed = [row.get(field) for row in rows]
+            if any(
+                value is None or isinstance(value, bool) or not math.isfinite(value)
+                for value in observed
+            ):
+                raise ValueError("paired statistics require complete finite observations")
+            return [float(value) for value in observed if value is not None]
+
         return (
-            [float(getattr(case, field)) for case in baseline],
-            [float(getattr(case, field)) for case in candidate],
+            valid(baseline),
+            valid(candidate),
         )
 
     task = _bootstrap_metric(*values("task_success"), policy=policy, statistic="mean")
-    citation = _bootstrap_metric(*values("citation_correctness"), policy=policy, statistic="mean")
     tool_error = _bootstrap_metric(*values("tool_error_rate"), policy=policy, statistic="mean")
     latency = _bootstrap_metric(*values("latency_ms"), policy=policy, statistic="p95")
     cost = _bootstrap_metric(*values("cost_usd"), policy=policy, statistic="mean")
-    return {
+    metrics = {
         "task_success_delta": _with_rule(
             task,
             passed=(
@@ -315,17 +339,6 @@ def _metric_assessments(
             rule=(
                 f"confidence_lower >= {policy.task_success_ci_lower_min} and "
                 f"candidate_value >= {policy.candidate_task_success_min}"
-            ),
-        ),
-        "citation_correctness_delta": _with_rule(
-            citation,
-            passed=(
-                citation.confidence_lower >= policy.citation_correctness_ci_lower_min
-                and citation.candidate_value >= policy.candidate_citation_correctness_min
-            ),
-            rule=(
-                f"confidence_lower >= {policy.citation_correctness_ci_lower_min} and "
-                f"candidate_value >= {policy.candidate_citation_correctness_min}"
             ),
         ),
         "tool_error_rate_delta": _with_rule(
@@ -356,6 +369,22 @@ def _metric_assessments(
             rule=f"relative_delta <= {policy.cost_mean_relative_delta_max}",
         ),
     }
+    if include_citations:
+        citation = _bootstrap_metric(
+            *values("citation_correctness"), policy=policy, statistic="mean"
+        )
+        metrics["citation_correctness_delta"] = _with_rule(
+            citation,
+            passed=(
+                citation.confidence_lower >= policy.citation_correctness_ci_lower_min
+                and citation.candidate_value >= policy.candidate_citation_correctness_min
+            ),
+            rule=(
+                f"confidence_lower >= {policy.citation_correctness_ci_lower_min} and "
+                f"candidate_value >= {policy.candidate_citation_correctness_min}"
+            ),
+        )
+    return metrics
 
 
 def _bootstrap_metric(

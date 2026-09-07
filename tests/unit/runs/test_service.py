@@ -178,6 +178,26 @@ def make_run_request() -> RunCreate:
     )
 
 
+async def test_prepare_run_validates_inputs_without_persisting_jobs() -> None:
+    content = (
+        b'{"case_id":"case-1","question":"q1","expected_answer":"a1","metadata":{}}\n'
+        b'{"case_id":"case-2","question":"q2","expected_answer":"a2","metadata":{}}\n'
+    )
+    digest = hashlib.sha256(content).hexdigest()
+    repository = RecordingRunRepository(digest)
+    service = SQLAlchemyRunService(
+        repository=repository, artifact_store=StaticArtifactStore(content)
+    )
+    prepared = await service.prepare_run(
+        principal=PRINCIPAL, idempotency_key="create-rag-v1", request=make_run_request()
+    )
+    assert prepared.tenant_id == TENANT_ID
+    assert prepared.dataset_hash == digest
+    assert len(prepared.cases) == 2
+    assert prepared.target_version == "target-v1"
+    assert repository.new_run is None
+
+
 async def test_create_run_snapshots_validated_cases_and_reproducibility_hashes() -> None:
     content = b"\n".join(
         json.dumps(

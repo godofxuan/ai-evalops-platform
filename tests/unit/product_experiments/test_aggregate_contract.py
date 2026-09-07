@@ -73,6 +73,62 @@ def _contract(tmp_path: Path) -> tuple[AggregateContractPin, str]:
     return pin, "c" * 40
 
 
+@pytest.mark.parametrize(
+    "field,value", [("schema_version", "unexpected_schema"), ("case_count", 1)]
+)
+def test_rehashed_aggregate_must_match_declared_schema_and_count(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    pin, sha = _contract(tmp_path)
+    payload = json.loads((tmp_path / "evidence.json").read_text())
+    payload[field] = value
+    reference = json.loads((tmp_path / "reference.json").read_text())
+    reference["artifact_sha256"] = _write(tmp_path / "evidence.json", payload)
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+    with pytest.raises(ExternalEvidenceError, match="schema|case.count"):
+        verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+
+def test_v2_aggregate_has_strict_structure_without_claiming_online_or_privacy_audit(
+    tmp_path: Path,
+) -> None:
+    pin, sha = _contract(tmp_path)
+    reference = json.loads((tmp_path / "reference.json").read_text())
+    payload = {
+        "schema_version": "evalops.aggregate-summary/2.0",
+        "source_repository": reference["source_repository"],
+        "source_sha": reference["source_sha"],
+        "producing_code_sha": reference["producing_code_sha"],
+        "protocol_sha256": reference["protocol_sha256"],
+        "evidence_scope": reference["evidence_scope"],
+        "case_count": 200,
+        "decision": "REJECTED",
+        "claim_boundary": {
+            "allowed": reference["allowed_claims"],
+            "forbidden": reference["forbidden_claims"],
+        },
+        "metrics": {"recall": 0.5},
+    }
+    reference["artifact_schema"] = payload["schema_version"]
+    reference["artifact_sha256"] = _write(tmp_path / "evidence.json", payload)
+    pin_values = pin.model_dump(mode="json")
+    pin_values.update(
+        schema_version="evalops.aggregate-contract-pin/2.0",
+        reference_sha256=_write(tmp_path / "reference.json", reference),
+    )
+    pin = AggregateContractPin.model_validate_json(json.dumps(pin_values))
+    result = verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+    assert result["verification_level"] == "STRICT_AGGREGATE_SCHEMA"
+    assert result["online_verification_status"] == "NOT_RUN"
+    assert result["privacy_assurance"] == "STRUCTURE_ONLY_NOT_CONTENT_AUDIT"
+    assert "private_or_per_case_payload_present" not in result
+    payload["metrics"]["unknown_nested"] = {"opaque": "hidden case content"}
+    reference["artifact_sha256"] = _write(tmp_path / "evidence.json", payload)
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+    with pytest.raises(ExternalEvidenceError, match="schema"):
+        verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+
 def test_verifies_native_negative_contract_without_synthesizing_case_results(
     tmp_path: Path,
 ) -> None:

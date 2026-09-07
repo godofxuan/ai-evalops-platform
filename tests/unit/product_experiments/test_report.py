@@ -1,6 +1,46 @@
 from __future__ import annotations
 
+import pytest
+
 from app.product_experiments.report import render_experiment_html
+
+
+@pytest.mark.parametrize(
+    "status,tone",
+    [
+        ("DEMO_FAIL", "failure"),
+        ("EXECUTION_FAILED", "failure"),
+        ("INPUT_REQUIRED", "pending"),
+        ("UNKNOWN", "pending"),
+        ("DEMO_PASS", "success"),
+    ],
+)
+def test_report_status_style_does_not_color_failures_as_success(status: str, tone: str) -> None:
+    rendered = render_experiment_html({"status": status, "scope": "DEMO"})
+    assert f'class="status {tone}"' in rendered
+
+
+def test_v2_report_distinguishes_recall_precision_and_unavailable_values() -> None:
+    rendered = render_experiment_html(
+        {
+            "schema_version": "evalops.experiment-result/2.0",
+            "scope": "DEMO",
+            "case_comparisons": [
+                {
+                    "case_id": "q",
+                    "baseline_citation_recall": 1.0,
+                    "candidate_citation_recall": 1.0,
+                    "baseline_citation_precision": 1.0,
+                    "candidate_citation_precision": 0.5,
+                    "baseline_cost_usd": None,
+                    "candidate_cost_usd": 0.0,
+                }
+            ],
+        }
+    )
+    assert "Citation recall" in rendered and "Citation precision" in rendered
+    assert "未提供/不适用 → 0.0 USD" in rendered
+    assert "None →" not in rendered
 
 
 def test_report_escapes_untrusted_case_content_and_explains_demo_boundary() -> None:

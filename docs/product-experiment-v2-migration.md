@@ -1,0 +1,92 @@
+# 产品实验 v2：当前实现与迁移说明
+
+这是 `codex/trustworthy-evaluation-product-v2` 的阶段说明，不是完整方案的发布公告。主方案仍以 `docs/plans/trustworthy-evaluation-product-execution-plan.md` 为准；持久实验接入、完整指标升级和严格证据包收口尚未完成。
+
+## 先检查输入
+
+```console
+python -m scripts.run_product_experiment --spec benchmarks/product_demo_v1/experiment.json --validate-only
+```
+
+该命令共享运行入口的本地输入校验，不执行目标、不创建 Run 或输出目录。READY 只表示目前已实施的本地预检通过，不代表远端可连接、正式资格或生产资格通过。当前 v1 spec 没有独立验证来源材料的输入合同，因此 FORMAL 返回 INPUT_REQUIRED；fixture 返回 FORMAL_FIXTURE_NOT_ELIGIBLE，HTTP 返回 FORMAL_PROVENANCE_CONTRACT_REQUIRED。仅换标签或传输方式不能解除限制。
+
+## 执行与退出码
+
+```console
+python -m scripts.run_product_experiment --spec benchmarks/product_demo_v1/experiment.json --output-dir artifacts/product-experiment-v2
+```
+
+| 自动门禁结果 | 退出码 |
+| --- | --- |
+| DEMO_PASS 或自动通过 | 0 |
+| DEMO_FAIL / AUTOMATED_FAIL | 1 |
+| 输入错误、缺输入、测量不足 | 2 |
+| 执行失败、内部或导出异常 | 3 |
+
+`--gate formal` 对演示/待人审结果返回 2，对已确定的质量失败仍返回 1。CLI 不打印 Pydantic 输入值或原始异常全文；库调用方仍应在受控环境处理异常。KeyboardInterrupt 在命令边界返回 130；该回归不等于真实 worker 崩溃恢复验证。
+
+## HTTP 输入隔离
+
+默认 `include_metadata=false`，只发送题目。若开启，必须将明确允许目标读取的上下文放在 `metadata.public_context` 对象中：
+
+```json
+{
+  "public_context": {"locale": "zh-CN"},
+  "fixture_profiles": {"candidate": {"answer": "仅评测端使用"}}
+}
+```
+
+发给目标的 metadata 只有 public_context 内的内容。没有这个显式对象的旧整包转发配置会被拒绝；请迁移，不要把参考答案、标签或凭据放入 public_context。此机制是允许列表分区，不是任意秘密检测器。
+
+## Agent 响应与缺测
+
+支持旧平铺观测字段，以及已有 `agent-run-artifact/v1` 的受限投影。平铺 Agent 观测需要显式给出 `tool_calls`（可为空）、`tool_error`、`terminal_state` 和 `budget_exhausted`。工具调用状态缺失不是成功。
+
+既有 artifact 投影保留原始终态和 artifact hash；调用/结果需要明确 step ID、工具名和唯一对应结果。参数缺失或结果配对歧义会产生证据不足，不补造参数。目标自报 artifact/hash 不等于独立来源认证。
+
+HTTP 错误、超时、无效响应进入 execution_errors，不转换成差答案或工具质量分。有效的工具错误仍是可评分观测。原始观测保存在执行结果的 observations 中；只有显式 private 导出才写入完整材料，该模式禁止直接公开真实业务内容。
+
+## 费用与版本
+
+新结果为 `evalops.experiment-result/2.0`，manifest 为 2.0。现有 v1 文件不改写，也不因为能读取而获得新语义认证。严格包完整性校验仍待后续完成，当前 verifier 通过不代表完整新合同通过。
+
+目标未报告费用时为 null，不是零；仅有 token 数且没有固定适用价格表，也仍是未知。当前完整成本门禁在缺测时返回 INSUFFICIENT_EVIDENCE，不将缺失补成 0 送入旧统计。显式非负有限数值才可作为报告费用；bool、字符串、负数、NaN 和 Infinity 为响应错误。自报美元费用仍不是独立账单核验。
+
+## 安全预算与身份
+
+| 边界 | 当前值/行为 |
+| --- | --- |
+| spec / policy 文件 | 各最多 1 MiB，限量读取 |
+| dataset | 最多 10 MiB，2–10,000 题 |
+| bootstrap | 最多 10,000 resamples，题数 × resamples 不超过 2,000,000 |
+| HTTP 响应 | 默认 2 MiB，可设 max_response_bytes，最大 16 MiB |
+| 压缩响应 | 请求 identity；拒绝压缩响应，不支持自动解压 |
+| 单 HTTP 调用 | timeout_seconds 覆盖 DNS、连接和流读取 |
+| 实验目标执行阶段 | execution_timeout_seconds 默认 3,600 秒，最大 86,400 秒 |
+| 待执行任务 | 固定消费者窗口，最多 max_concurrency（1–64） |
+
+这些是安全预算，不是实测容量或硬美元预算。实验执行超时会取消等待任务、保留已收到的观测，并为未完成题记录原因；它不表示外部服务已经撤销产生的副作用。同步解析/统计依赖输入和计算预算限制，不宣称拥有可抢占的 CPU 硬 deadline。
+
+每次 local 运行都有新 execution UUID；run/job/attempt 标识由本次执行派生。相同名称重新运行不会复用旧身份。local 尚无持久恢复/重试；HTTP 头部标识本身也不保证目标服务实现幂等。
+
+## 尚未完成的内容
+
+严格快照绑定、持久 Run/Job 接入、真实故障恢复验收、最终精确 SHA/CI 和教学/简历任务同步仍未完成。公开/私有导出的基本分离已实现，真实进程中断恢复等验收仍待完成。
+
+## 新增的比较与证据行为
+
+QA 分别报告来源 ID recall 与 precision；不能把它们解释为答案语义忠实度。Agent 的引用指标为不适用。工具参数使用类型敏感结构匹配（true 不等于 1，1 与 1.0 数值等价）；显式空 allowlist 和零预算合法。expected_terminal_state 可指定正确拒绝，耗尽预算不自动算超限。
+
+agent_comparison_policy 支持 qualification、non_regression 或 both，分别记录绝对达标和退化结论。order_seed 固定逐题平衡的两组先后顺序，execution_schedule 与 execution_events 保存安排和实际时间；不声称控制了服务端缓存。每个 case 最大 1 MiB；max_observation_bytes 默认 64 MiB，最大 256 MiB，超过后停止新增调用并保留已有观测，不伪造质量评分。
+
+证据导出使用临时 staging，先验证再发布，不覆盖已有非空目录。manifest 拒绝重复 JSON 字段、额外未知文件和符号链接，并限制读取大小。强杀留下的锁及完整快照合同仍待收口，因此当前 verifier 通过不是最终发布资格。
+
+## 默认公开摘要与受控私有导出
+
+CLI 和 write_product_artifacts 默认 export_mode=public。公开产物采用独立的 evalops.public-experiment-summary/1.0 合同，只包含受限状态、计数、执行 UUID 与摘要身份，不包含逐题题目、答案、工具参数、内部 URL、原始命令或原实验名称。名称转为 SHA-256 标识；这不是数学意义的匿名化，已知值的 hash 仍可被猜测关联。
+
+```console
+python -m scripts.run_product_experiment --spec benchmarks/product_demo_v1/experiment.json --output-dir artifacts/private-debug --export-mode private
+```
+
+private 显式保留原完整 result、两组逐题材料和报告。公开摘要保存 private_result_sha256，但不会把私有材料自动永久存储；需要复核时应在受控环境保存同次执行的 private 导出，不可重新运行冒充同一次材料。当前公开摘要校验范围为 PUBLIC_PROJECTION_ONLY，不证明审核者已访问原始证据，也不证明质量提升。公开 HTML 必须由受限摘要确定性生成，重算文件 hash 也不能夹带额外文字。

@@ -94,6 +94,35 @@ class SQLAlchemyRunService:
                 raise IdempotencyConflictError
             return _to_run_read(existing)
 
+        new_run = await self.prepare_run(
+            principal=principal, idempotency_key=idempotency_key, request=request
+        )
+        if self._telemetry is None:
+            snapshot = await self._repository.create_or_replay(new_run)
+        else:
+            with self._telemetry.start_as_current_span(
+                "run.create.database_transaction",
+                attributes={"tenant.id": str(principal.tenant_id)},
+            ):
+                snapshot = await self._repository.create_or_replay(new_run)
+        if snapshot.request_hash != request_hash:
+            raise IdempotencyConflictError
+        if snapshot.created_now and self._metrics is not None:
+            self._metrics.record_run_created()
+        return _to_run_read(snapshot)
+
+    async def prepare_run(
+        self,
+        *,
+        principal: Principal,
+        idempotency_key: str,
+        request: RunCreate,
+    ) -> NewRun:
+        """Authorize and load inputs without creating a Run or opening its write transaction.
+
+        The caller owns persistence and idempotency. This is not an HTTP submission API.
+        """
+        request_hash = canonical_request_hash(request.model_dump(mode="json", exclude_none=False))
         target_config, target_version = _resolve_target(
             request,
             http_target_registry=self._http_target_registry,
@@ -115,7 +144,7 @@ class SQLAlchemyRunService:
         origin_traceparent = (
             None if self._telemetry is None else self._telemetry.capture_traceparent()
         )
-        new_run = NewRun(
+        return NewRun(
             tenant_id=principal.tenant_id,
             created_by=principal.api_key_id,
             dataset_version_id=request.dataset_version_id,
@@ -135,19 +164,6 @@ class SQLAlchemyRunService:
             cases=tuple(case.model_dump(mode="json") for case in validated.cases),
             origin_traceparent=origin_traceparent,
         )
-        if self._telemetry is None:
-            snapshot = await self._repository.create_or_replay(new_run)
-        else:
-            with self._telemetry.start_as_current_span(
-                "run.create.database_transaction",
-                attributes={"tenant.id": str(principal.tenant_id)},
-            ):
-                snapshot = await self._repository.create_or_replay(new_run)
-        if snapshot.request_hash != request_hash:
-            raise IdempotencyConflictError
-        if snapshot.created_now and self._metrics is not None:
-            self._metrics.record_run_created()
-        return _to_run_read(snapshot)
 
     async def get_run(
         self,

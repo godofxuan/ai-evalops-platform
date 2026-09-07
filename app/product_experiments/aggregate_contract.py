@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -24,7 +24,9 @@ def _safe_path(value: str) -> str:
 
 
 class AggregateContractPin(_StrictModel):
-    schema_version: Literal["evalops.aggregate-contract-pin/1.0"]
+    schema_version: Literal[
+        "evalops.aggregate-contract-pin/1.0", "evalops.aggregate-contract-pin/2.0"
+    ]
     publisher_repository: str = Field(min_length=1, max_length=500)
     publisher_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     publisher_ci: SourceCIReference
@@ -63,6 +65,38 @@ class ProducerAggregateReference(_StrictModel):
         if not self.source_ci.url.endswith(f"/{self.source_ci.run_id}"):
             raise ValueError("source CI run ID does not match its URL")
         return self
+
+
+class AggregateMetricsV2(_StrictModel):
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    recall: float | None = Field(default=None, ge=0, le=1)
+    precision: float | None = Field(default=None, ge=0, le=1)
+    mrr: float | None = Field(default=None, ge=0, le=1)
+    hit_rate: float | None = Field(default=None, ge=0, le=1)
+    latency_p95_ms: float | None = Field(default=None, ge=0)
+    cost_usd: float | None = Field(default=None, ge=0)
+
+
+class AggregateClaimBoundaryV2(_StrictModel):
+    allowed: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
+        min_length=1, max_length=20
+    )
+    forbidden: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
+        min_length=1, max_length=20
+    )
+
+
+class AggregateSummaryV2(_StrictModel):
+    schema_version: Literal["evalops.aggregate-summary/2.0"]
+    source_repository: str = Field(min_length=1, max_length=500)
+    source_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    producing_code_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    protocol_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_scope: str = Field(min_length=1, max_length=500)
+    case_count: int = Field(gt=0, le=10_000_000)
+    decision: Literal["ACCEPTED", "REJECTED", "INCONCLUSIVE"]
+    claim_boundary: AggregateClaimBoundaryV2
+    metrics: AggregateMetricsV2
 
 
 _PRIVATE_KEYS = {
@@ -176,6 +210,21 @@ def verify_aggregate_contract(
         raise ExternalEvidenceError("producer aggregate artifact is invalid JSON") from error
     if not isinstance(payload, dict):
         raise ExternalEvidenceError("producer aggregate artifact must be an object")
+    if payload.get("schema_version") != reference.artifact_schema:
+        raise ExternalEvidenceError("aggregate schema does not match producer reference")
+    if "case_count" in payload and (
+        type(payload["case_count"]) is not int or payload["case_count"] != reference.case_count
+    ):
+        raise ExternalEvidenceError("aggregate case-count does not match producer reference")
+    strict_v2 = pin.schema_version == "evalops.aggregate-contract-pin/2.0"
+    if strict_v2:
+        try:
+            summary = AggregateSummaryV2.model_validate_json(artifact_bytes)
+        except ValueError:
+            raise ExternalEvidenceError("aggregate v2 restricted schema is invalid") from None
+        for field in ("source_repository", "source_sha", "producing_code_sha", "evidence_scope"):
+            if getattr(summary, field) != getattr(reference, field):
+                raise ExternalEvidenceError(f"aggregate source identity mismatch: {field}")
     private = _private_keys(payload)
     if private:
         raise ExternalEvidenceError("aggregate artifact contains private/per-case payload")
@@ -184,8 +233,10 @@ def verify_aggregate_contract(
     if reference.protocol_sha256 not in _protocol_digests(payload):
         raise ExternalEvidenceError("aggregate protocol does not match producer reference")
     boundary = _validated_claim_boundary(payload, reference)
-    return {
-        "schema_version": "evalops.aggregate-contract-verification/1.0",
+    result = {
+        "schema_version": "evalops.aggregate-contract-verification/2.0"
+        if strict_v2
+        else "evalops.aggregate-contract-verification/1.0",
         "status": "AGGREGATE_EVIDENCE_VERIFIED",
         "evidence_id": reference.evidence_id,
         "publisher": {
@@ -213,6 +264,16 @@ def verify_aggregate_contract(
         "formal_quality_claim_allowed": False,
         "production_ready": False,
     }
+    result["verification_level"] = (
+        "STRICT_AGGREGATE_SCHEMA" if strict_v2 else "LEGACY_HASH_AND_PARTIAL_FIELDS"
+    )
+    result["online_verification_status"] = "NOT_RUN"
+    result["privacy_assurance"] = (
+        "STRUCTURE_ONLY_NOT_CONTENT_AUDIT" if strict_v2 else "KEY_SCREENING_ONLY"
+    )
+    if strict_v2:
+        result.pop("private_or_per_case_payload_present")
+    return result
 
 
 __all__ = ["AggregateContractPin", "ProducerAggregateReference", "verify_aggregate_contract"]

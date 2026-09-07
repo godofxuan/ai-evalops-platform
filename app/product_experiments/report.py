@@ -16,6 +16,11 @@ def _escape(value: object) -> str:
 def render_experiment_html(result: Mapping[str, Any]) -> str:
     scope = str(result.get("scope", "UNKNOWN"))
     status = str(result.get("status", "UNKNOWN"))
+    tone = "pending"
+    if status in {"DEMO_FAIL", "AUTOMATED_FAIL", "EXECUTION_FAILED"}:
+        tone = "failure"
+    elif status in {"DEMO_PASS", "AUTOMATED_PASS_HUMAN_REVIEW_PENDING"}:
+        tone = "success"
     boundary = (
         "演示通过不等于正式质量提升；它只证明配置、执行、统计和报告链路可重复。"
         if scope == "DEMO"
@@ -25,7 +30,7 @@ def render_experiment_html(result: Mapping[str, Any]) -> str:
     rows: Sequence[object] = raw_rows if isinstance(raw_rows, list) else []
     table_rows = "".join(_case_row(row) for row in rows)
     metrics = {
-        "formal_core": result.get("automated_assessment", {}),
+        "automated_metrics": result.get("automated_assessment", {}),
         "agent_tool_use": result.get("agent_tool_use_assessment"),
     }
     metrics_json = json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True)
@@ -52,13 +57,13 @@ main{{max-width:1180px;margin:0 auto;padding:36px 22px}}h1{{font-size:32px;margi
 .value{{font-size:21px;font-weight:700}}.boundary{{border-left:5px solid var(--accent);background:#eef3ff}}
 .table-wrap{{overflow:auto}}table{{width:100%;border-collapse:collapse;min-width:900px}}th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}}
 th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Code,Consolas,monospace}}pre{{overflow:auto;background:#101828;color:#e6edf7;padding:16px;border-radius:10px}}
-.status{{color:var(--ok)}}
+.status.success{{color:var(--ok)}}.status.failure{{color:#b42318}}.status.pending{{color:#946200}}
 </style>
 </head>
 <body><main>
 <p class="sub">AI EvalOps Platform · paired experiment report</p>
 <h1>{_escape(result.get("experiment_id", "experiment"))}</h1>
-<p class="status"><strong>{_escape(status)}</strong></p>
+<p class="status {tone}"><strong>{_escape(status)}</strong></p>
 <div class="cards">
   <div class="card"><div class="sub">Scope</div><div class="value">{_escape(scope)}</div></div>
   <div class="card"><div class="sub">Paired cases</div><div class="value">{_escape(result.get("case_count", 0))}</div></div>
@@ -71,11 +76,15 @@ th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Cod
 <section><div>Dataset SHA-256: <code>{_escape(result.get("dataset_sha256", ""))}</code></div>
 <div>EvalOps SHA: <code>{_escape(result.get("evalops_sha", ""))}</code></div></section>
 <h2>逐条对比</h2>
-<section class="table-wrap"><table><thead><tr><th>Case</th><th>Category</th><th>Baseline answer</th><th>Candidate answer</th><th>Success B→C</th><th>Citation B→C</th><th>Tool error B→C</th><th>Latency B→C</th><th>Cost B→C</th><th>Trace B / C</th></tr></thead>
+<section class="table-wrap"><table><thead><tr><th>Case</th><th>Category</th><th>Baseline answer</th><th>Candidate answer</th><th>Success B→C</th><th>Citation recall B→C</th><th>Citation precision B→C</th><th>Tool error B→C</th><th>Latency B→C</th><th>Cost B→C</th><th>Trace B / C</th></tr></thead>
 <tbody>{table_rows}</tbody></table></section>
 {agent_section}
 <h2>机器评估</h2><pre>{_escape(metrics_json)}</pre>
 </main></body></html>"""
+
+
+def _display(value: object) -> object:
+    return "未提供/不适用" if value is None else value
 
 
 def _case_row(raw: object) -> str:
@@ -86,10 +95,11 @@ def _case_row(raw: object) -> str:
         row.get("baseline_answer", ""),
         row.get("candidate_answer", ""),
         f"{row.get('baseline_task_success', '')} → {row.get('candidate_task_success', '')}",
-        f"{row.get('baseline_citation_correctness', '')} → {row.get('candidate_citation_correctness', '')}",
+        f"{_display(row.get('baseline_citation_recall', row.get('baseline_citation_correctness')))} → {_display(row.get('candidate_citation_recall', row.get('candidate_citation_correctness')))}",
+        f"{_display(row.get('baseline_citation_precision'))} → {_display(row.get('candidate_citation_precision'))}",
         f"{row.get('baseline_tool_error_rate', '')} → {row.get('candidate_tool_error_rate', '')}",
         f"{row.get('baseline_latency_ms', '')} → {row.get('candidate_latency_ms', '')} ms",
-        f"{row.get('baseline_cost_usd', '')} → {row.get('candidate_cost_usd', '')} USD",
+        f"{_display(row.get('baseline_cost_usd'))} → {_display(row.get('candidate_cost_usd'))} USD",
         f"{row.get('baseline_trace_id', '')} / {row.get('candidate_trace_id', '')}",
     )
     return "<tr>" + "".join(f"<td>{_escape(value)}</td>" for value in values) + "</tr>"
