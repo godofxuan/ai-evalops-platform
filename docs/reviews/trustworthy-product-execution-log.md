@@ -1,5 +1,19 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十二检查点：有效结果的完整只读快照
+
+第十一检查点 `95462c2b778f5950e40b477840db7481f3b39a32` 的 [CI 34101869013](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34101869013) 两项工作均 completed/success，包含 workflow 显式执行的真实 product persistence 测试。鉴权提交、8 路并发幂等和跨租户隐藏断言已获得该精确 CI 支持，不再仅为本地替身验证。
+
+- 为什么修改：导出不能按“最新 attempt”猜测有效结果，也不能多次 READ COMMITTED 查询后拼接不同时间的 Run/Job 状态。新增 SQLAlchemyProductResultReader，在首条语句设置 REPEATABLE READ、READ ONLY，随后在同一 MVCC 快照内读取父实验、两个 Run、全部 Job 和 CaseResult 指定的 accepted attempt。无目标调用、无写事务、无行锁；并非已经发布的不可变 artifact。
+- 身份校验：成功 Job 必须具备结果和 accepted attempt；Job/Run/Case ID、attempt ID/Job/序号一致，attempt 成功且开始/完成时间有效。旧 null accepted ID 不推测回填。快照深拷贝 metrics，数据库对象后续内存变化不改变已返回数据。
+- 完整性：未终态拒绝；失败/取消病例保留占位，不删除后只评成功交集。实际病例总数与 Run 三类终态计数一致、两组 case IDs 完整一致；校验输入 snapshot 的 canonical hash。每组最多 10,000 Jobs，查询最多 20,001 行用于检出超限。只读取需要的 Job/attempt/metrics 字段，不额外加载原始 evidence、case payload 和私有异常正文；这不是内存硬上限保证。
+- 失败诊断：最初快照没有 error_code，反例出现 KeyError；加入既有 last_error_code，保留 target_timeout 等原因，同时明确不导出 last_error_message。测试使用合成 canary，没有真实秘密。
+- TDD 与验证：入口缺失先失败，再实现；17 个定向反例覆盖旧/错绑/未完成 attempt、各 Job 状态、结果缺失及副本隔离。扩大集合为 216 passed / 1 PostgreSQL skipped，9.86 秒；全仓 lint、615 文件格式、214 文件 mypy 通过。真实数据库新增读快照断言需等本检查点自己的精确 CI。
+- 数据库验收扩展：QUEUED 实验拒绝最终读取；既有真实八 worker 完成两组后，重复读取应完全一致，每组两题均保留实际 accepted ID/序号，其他租户得到 None，整体摘要可独立重算。没有把测试收集时缺入口的 ImportError 或本机 skip 当数据库 RED/GREEN 证明。
+- 开发记录：一次追加测试补丁因格式器已换行而未应用，随后使用实际行重新应用并复现；那次仅 deselected，不计通过。只读查找个别不存在的旧文件名没有修改仓库，后续以实际路径为准。
+
+下一步仍是将此完整快照绑定原始输入，复用现有评分/比较生成可重复报告，再接租户所有权与公开导出、CLI 和故障 E2E。此检查点不宣称质量 PASS、完整 S4/S5 或最终双 SHA 已完成。
+
 ## 2026-09-07 第十一检查点：鉴权持久提交与严格 HTTP 输入
 
 第十检查点 `1af50403806a6b37d1bc08e6faeac24a9204a101` 的 [CI 34099588267](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34099588267) 已 completed/success。以下新代码本地扩大回归 199 passed / 1 PostgreSQL skipped，9.82 秒；全仓 lint、613 文件格式与 213 文件 mypy 通过。真实数据库新增断言仍待本检查点自己的 CI。

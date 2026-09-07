@@ -48,6 +48,10 @@ from app.product_experiments.persistence import (
     NewProductExperiment,
     SQLAlchemyProductExperimentRepository,
 )
+from app.product_experiments.result_snapshot import (
+    ExperimentNotTerminalError,
+    SQLAlchemyProductResultReader,
+)
 from app.runs.idempotency import canonical_request_hash
 from app.runs.schemas import RunCreate
 from app.runs.service import IdempotencyConflictError, SQLAlchemyRunService
@@ -166,6 +170,10 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         results = await asyncio.gather(*(repository.create_or_replay(pending) for _ in range(8)))
         assert len({result.id for result in results}) == 1
         pair = results[0]
+        with pytest.raises(ExperimentNotTerminalError):
+            await SQLAlchemyProductResultReader(factory).read(
+                tenant_id=tenant_id, experiment_id=pair.id
+            )
         assert pair.source_artifact_reference_id is not None
         source_access = ArtifactAccessService(
             gateway=SQLAlchemyArtifactReferenceGateway(factory), store=artifact_store
@@ -484,3 +492,16 @@ async def exercise_shared_admission(
         accepted_jobs.update(claim.job_id for claim in claims)
     assert len(accepted_jobs) == 8
     assert await claimer.claim(worker_id="all-pairs-done", limit=1) == ()
+    reader = SQLAlchemyProductResultReader(factory)
+    for pair in pairs:
+        frozen = await reader.read(tenant_id=pending.tenant_id, experiment_id=pair.id)
+        assert frozen is not None
+        assert await reader.read(tenant_id=pending.tenant_id, experiment_id=pair.id) == frozen
+        assert await reader.read(tenant_id=uuid4(), experiment_id=pair.id) is None
+        for arm in frozen["arms"].values():
+            assert len(arm["jobs"]) == 2
+            assert all(job["accepted_attempt_number"] == 1 for job in arm["jobs"])
+            assert all(job["accepted_attempt_id"] is not None for job in arm["jobs"])
+        unsigned = dict(frozen)
+        digest = unsigned.pop("content_sha256")
+        assert canonical_request_hash(unsigned) == digest
