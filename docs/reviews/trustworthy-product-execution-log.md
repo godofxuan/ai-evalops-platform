@@ -1,5 +1,31 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十五检查点进行中：可恢复客户端与命令行
+
+第十四检查点 `d3a1e573c0fd40d85515915f29a2243cda6bc8d6` 的 [CI 34108307000](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34108307000) 已 completed/success。该结果覆盖上一节新增的真实数据库集成，不代表本节未提交代码已有远端 CI。
+
+- 修改原因：仅有 API 不能方便地让用户退出后继续操作。新增 ProductAPIClient 及 `python -m scripts.product_experiment_client`，先实现 get/cancel/wait，固定使用服务端实验 UUID；不是另建实验或另建调度器。
+- 网络边界：HTTPS 默认；明文 HTTP 仅接受 localhost/127.0.0.1/::1，拒绝凭据、查询串、fragment 和路径基址。自有 HTTP 客户端关闭环境代理继承；所有请求显式禁止重定向，即使注入的客户端默认开启重定向也不跟随。Authorization 使用 Bearer，与实际服务端合同一致。客户端注入仅用于外部网络边界测试。
+- 资源和隐私：单次请求总时间上限包含正文读取，响应逐块限制，拒绝压缩响应，复用严格 JSON 深度/重复键/非有限数校验，再验证类型及实验 ID。错误仅输出固定安全码，不回显服务器正文、URL 或令牌。CLI 从指定环境变量取令牌，不接受令牌参数。
+- 等待语义：READY_FOR_ASSESSMENT 只是执行完成可评估，不等于质量 PASS。wait 超时返回退出码 4 和原实验 ID；Ctrl+C 返回 130，均不发送取消操作。get/cancel/wait 成功返回 0 只表示操作成功，不能替代质量门禁退出码。提交及报告下载仍待后续接入。
+- TDD 过程：首次客户端模块不存在，测试收集失败；最小实现后 5 项通过。取消操作反例失败于缺少方法；同轮正常查询反例另发现测试把 Run 小写 queued 错写成实验层大写 QUEUED，核对实际枚举后只修测试。新增 wait 先明确失败于缺少方法，再实现。最后等待超时测试确认网络只出现 GET。
+- CLI 验证：缺令牌测试先失败于入口不存在，实现后安全退出 2。另以独立 Python 子进程连接真实本机 ThreadingHTTPServer，验证 get/cancel/wait 的方法、路径、鉴权与输出不含令牌；三项真实 socket 测试通过。这里不是 worker 进程崩溃恢复测试，不替代 S5。
+- 验证记录：中间产品实验模块 163 passed（10.17s）；之后客户端定向 11 passed（0.83s），CLI 4 passed（6.24s），存在重叠，不相加。新增客户端和 CLI mypy 通过。初次 lint 发现长行及嵌套 context manager，格式化并合并后定向 lint 通过。后续扩大回归和本检查点精确 CI 仍待执行。
+- 路径核对问题：一次尝试 `tests/product_experiments` 不存在，改由 rg --files 定位实际 `tests/unit/product_experiments`；没有因此修改目录结构。
+
+本检查点后续进展：
+
+- submit/export 已接入 SDK 与 CLI；提交响应模型移到共享 service 合同，API 类名与字段保持兼容，禁止额外响应字段。原始数据 SHA、控制请求 1 MiB/原始数据 10 MiB/提交 envelope 16 MiB 在请求前检查；同键重放保留精确原始字节。缺方法反例先失败，实现后提交/API 回归 37 passed。CLI 超限文件反例先失败于没有 submit 命令，再实现限量读取；不是先全部 read_bytes 后比较大小。
+- 离线验证器区分 PUBLIC_PROJECTION_ONLY / PRIVATE_SOURCE_REQUIRED / PRIVATE_RECOMPUTED。校验报告字节 pin、内部内容 hash、结果快照 hash 和实验身份；有原始输入时重新运行 shared aggregation 并比较完整规范化内容。修改质量状态再重签报告 hash 仍被拒绝。QA/Agent、缺原始材料和公共边界共 4 项定向通过。重算自洽不等于来源认证，报告中的 CLIENT_DECLARED 仍不升级为独立认证。
+- 新 evalops.durable-bundle/1.0 与旧 local manifest 明确分开：固定 report.json/report.html/manifest.json，私有包必须再有 dataset.json；不允许偷偷缺源变成完整私有包。不覆盖现有目录，使用本次专有临时目录和排他锁，验证后 rename；拒绝符号链接/junction、未知文件、文件 hash/大小不符，并重生成 HTML 比对。不清理其他 writer 锁；进程强杀残锁仍待 S5 专门验收。
+- CLI 新增 export 和无需 API/令牌的 verify。真实本机 HTTP + 子进程下载私有报告，离线重算成功但两题样本的质量仍为 INSUFFICIENT_EVIDENCE，export 正确返回 2；verify 返回 0 仅表示完整性。该新增路径及原操作共 8 passed（11.01s）。异步测试中直接 subprocess.run 触发 lint，改为 asyncio.to_thread，不阻塞测试事件循环。
+- 真实数据库集成追加 SDK 按 ID wait/public/private export、跨租户 404、精确私有 report SHA 与原始数据独立重算，确认目标请求数未增加。该新增断言仍待本检查点自己的 CI；未因第十四检查点 CI 已绿而提前写通过。
+- 扩大回归 232 passed、2 skipped（66.77s）：Windows 不允许创建 symlink 的旧 local 测试明确 skip，隔离 PostgreSQL 本地不可用明确 skip。631 文件格式检查、全仓 lint、223 源文件 mypy 通过；后续又追加 HTML+manifest 同时篡改的重签拒绝断言，提交前需再运行定向验证。各轮结果有重叠，不能相加。
+- 新操作指南 docs/durable-experiment-client.md 说明真实前置条件、两种 dataset SHA、环境变量鉴权、恢复、可见性、退出码、预算和外部 hash 锚点；原迁移文档旧阶段文字保留但标明不是当前功能状态。没有新增原始数据下载接口：私有完整包使用操作者原有原始输入，避免扩大敏感数据读取面。
+- 第十四检查点已向简历、教学、投递三个任务全部成功同步。简历回执：FUTURE_RESUME_EVALOPS_RULES_20260902.md §14、PROJECT_SYNC_RAG_EVALOPS_20260902.md §25 已记录；R12/PDF/指针/历史附件均不变。同步消息也明确本检查点未提交、S5/S6/S7 未完成。
+- 提交前最终检查：含重签 HTML 反例的定向集合 50 passed（16.22s）；全仓 lint、632 文件 format check、223 源文件 mypy 和 git diff --check 通过。接下来提交本检查点获取自己的精确 CI，仍不是 S7 最终双 SHA 发布。
+
+
 ## 2026-09-07 第十四检查点：报告原子发布与默认公共导出
 
 第十三检查点 `d6d196b36322af0913bdeb7c606a0740e82a68e2` 的 [CI 34105262335](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34105262335) 已 completed/success；已向简历、教学、投递三个任务补发此精确回执。简历侧反馈已记录上一批到规则 §13/共享同步 §24，当前 R12/PDF/指针/历史附件不变。本节为后续新修改，真实数据库断言仍待自己的 CI。

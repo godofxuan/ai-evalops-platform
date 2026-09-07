@@ -95,7 +95,9 @@ HTTP 错误、超时、无效响应进入 execution_errors，不转换成差答�
 
 每次 local 运行都有新 execution UUID；run/job/attempt 标识由本次执行派生。相同名称重新运行不会复用旧身份。local 尚无持久恢复/重试；HTTP 头部标识本身也不保证目标服务实现幂等。
 
-## 尚未完成的内容
+## 早期阶段记录（非当前功能状态）
+
+以下保留早期实施说明，不能据此判断当前 API 是否存在。后续已增加公开提交、不可变报告导出及客户端；当前操作见 [持久实验客户端](durable-experiment-client.md)，各检查点的实际 CI 见执行记录。最终 S5/S7 验收仍独立进行。
 
 持久提交准备函数 prepare_durable_experiment 已接好原始 JSON→规范化 dataset 的身份核对、两组 registry 配置、同 policy、共同绝对 deadline 和总 attempt 预留。它只读准备两组 NewRun，不持久写入，不是新公开 POST API。请求合同仅支持 DEMO，source SHA 标为 CLIENT_DECLARED。原始 JSON 字节不会因准备过程自动永久留存。
 

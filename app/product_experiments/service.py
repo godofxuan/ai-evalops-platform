@@ -16,6 +16,16 @@ ProductState = Literal[
 ]
 
 
+class ExperimentSubmissionAccepted(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    baseline_run_id: UUID
+    candidate_run_id: UUID
+    status_url: str
+    formal_quality_claim_allowed: Literal[False] = False
+    production_ready: Literal[False] = False
+
+
 class ProductExperimentRead(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: UUID

@@ -2,7 +2,7 @@
 
 制定日期：2026-09-05。修订：v2，已合并第二轮定向审查；这是唯一主执行方案，不需要另行执行一套平行计划。
 
-状态：**已获准实施，S0 完成基线检查，S1 进行中**。实际进度与 RED/GREEN 证据见 `docs/reviews/trustworthy-product-execution-log.md`。本文件的未勾选验收仍是目标，不代表修复、推送、正式 A/B 或生产验收已经完成。
+状态：**已获准实施，已推进至 S4 持久客户端及 S5 故障验证**。实际进度与 RED/GREEN 证据见 `docs/reviews/trustworthy-product-execution-log.md`。本文件的未勾选验收仍是目标，不代表修复、推送、正式 A/B 或生产验收已经完成。
 
 依据：第一轮 `artifacts/audit-20260905/REVIEW.md` 与第二轮 `docs/reviews/2026-09-05-extended-product-audit.md`。代码基线为 `50af0603ff76615f3cf2c54fba3230e1cee7647f`。第二轮额外运行 67 项相关单元测试全部通过，并完成合成边界复现；没有重跑全套测试或远端 CI，两轮测试有重叠，不能累加为独立测试数。业务源码未修改。
 

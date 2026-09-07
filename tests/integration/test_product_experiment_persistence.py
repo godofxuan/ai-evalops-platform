@@ -47,7 +47,9 @@ from app.persistence.orm_models import (
     ProductExperiment,
     Tenant,
 )
+from app.product_experiments.client import ProductAPIClient, ProductAPIError
 from app.product_experiments.dataset_mapping import map_product_dataset
+from app.product_experiments.durable_verification import verify_durable_report
 from app.product_experiments.persistence import (
     NewProductExperiment,
     SQLAlchemyProductExperimentRepository,
@@ -549,6 +551,32 @@ async def exercise_worker_to_export(
         accepted["status_url"] + "/export?include_private=true", headers=other_headers
     )
     assert hidden.status_code == 404
+
+    experiment_id = UUID(accepted["id"])
+    async with ProductAPIClient(
+        "https://evalops.example", headers["Authorization"].removeprefix("Bearer "), http=client
+    ) as sdk:
+        recovered = await sdk.wait(experiment_id, wait_seconds=5)
+        assert recovered.state == "READY_FOR_ASSESSMENT"
+        assert await sdk.export(experiment_id) == exports[0].content
+        downloaded = await sdk.export(experiment_id, include_private=True)
+        assert downloaded == private.content
+        verified = verify_durable_report(
+            downloaded,
+            raw_dataset=base64.b64decode(payload["dataset_base64"], validate=True),
+            expected_sha256=public["private_report_sha256"],
+            experiment_id=experiment_id,
+        )
+        assert verified.verification_scope == "PRIVATE_RECOMPUTED"
+        assert verified.quality_status == "INSUFFICIENT_EVIDENCE"
+    async with ProductAPIClient(
+        "https://evalops.example",
+        other_headers["Authorization"].removeprefix("Bearer "),
+        http=client,
+    ) as outsider:
+        with pytest.raises(ProductAPIError, match="^api_http_404$"):
+            await outsider.export(experiment_id, include_private=True)
+    assert len(observed_requests) == 4
 
 
 async def exercise_shared_admission(

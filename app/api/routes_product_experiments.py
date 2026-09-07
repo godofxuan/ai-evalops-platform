@@ -1,8 +1,7 @@
-from typing import Annotated, Literal, cast
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
-from pydantic import BaseModel
 
 from app.api.errors import APIError
 from app.api.product_submission_body import experiment_submission_schema, read_experiment_submission
@@ -16,7 +15,11 @@ from app.product_experiments.export_schemas import (
 from app.product_experiments.export_service import ProductReportExporter, encode_report
 from app.product_experiments.report_persistence import ReportPublicationConflictError
 from app.product_experiments.result_snapshot import ExperimentNotTerminalError
-from app.product_experiments.service import ProductExperimentRead, ProductExperimentService
+from app.product_experiments.service import (
+    ExperimentSubmissionAccepted,
+    ProductExperimentRead,
+    ProductExperimentService,
+)
 from app.product_experiments.spec import InputLimitError
 from app.product_experiments.submission import DurableExperimentSubmitter
 from app.runs.service import RunInputIntegrityError
@@ -65,15 +68,6 @@ async def export_experiment(
             else 'attachment; filename="experiment-public.json"',
         },
     )
-
-
-class ExperimentSubmissionAccepted(BaseModel):
-    id: UUID
-    baseline_run_id: UUID
-    candidate_run_id: UUID
-    status_url: str
-    formal_quality_claim_allowed: Literal[False] = False
-    production_ready: Literal[False] = False
 
 
 @router.post(
