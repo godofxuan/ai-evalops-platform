@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.strict_json import decode_evidence_json
 from app.product_experiments.external_evidence import ExternalEvidenceError, SourceCIReference
 
 
@@ -116,7 +116,7 @@ _PRIVATE_KEYS = {
 }
 
 
-def _read_inside(root: Path, relative: str) -> bytes:
+def _read_inside(root: Path, relative: str, *, byte_limit: int) -> bytes:
     resolved_root = root.resolve()
     path = (resolved_root / Path(*PurePosixPath(relative).parts)).resolve()
     try:
@@ -124,9 +124,13 @@ def _read_inside(root: Path, relative: str) -> bytes:
     except ValueError as error:
         raise ExternalEvidenceError("aggregate contract path escapes producer root") from error
     try:
-        return path.read_bytes()
+        with path.open("rb") as stream:
+            payload = stream.read(byte_limit + 1)
     except OSError as error:
         raise ExternalEvidenceError("aggregate contract file is unreadable") from error
+    if len(payload) > byte_limit:
+        raise ExternalEvidenceError("aggregate contract file exceeds size limit")
+    return payload
 
 
 def _private_keys(value: object) -> set[str]:
@@ -190,23 +194,26 @@ def verify_aggregate_contract(
 ) -> dict[str, Any]:
     if observed_publisher_sha != pin.publisher_sha:
         raise ExternalEvidenceError("producer checkout SHA does not match pinned publisher SHA")
-    reference_bytes = _read_inside(producer_root, pin.reference_path)
+    reference_bytes = _read_inside(producer_root, pin.reference_path, byte_limit=1024 * 1024)
     reference_digest = hashlib.sha256(reference_bytes).hexdigest()
     if reference_digest != pin.reference_sha256:
         raise ExternalEvidenceError("producer aggregate reference SHA-256 mismatch")
     try:
+        decode_evidence_json(reference_bytes)
         reference = ProducerAggregateReference.model_validate_json(reference_bytes)
     except ValueError as error:
-        raise ExternalEvidenceError("producer aggregate reference is invalid") from error
+        raise ExternalEvidenceError("producer aggregate reference JSON is invalid") from error
     if reference.source_repository != pin.publisher_repository:
         raise ExternalEvidenceError("producer repository identity mismatch")
-    artifact_bytes = _read_inside(producer_root, reference.artifact_path)
+    artifact_bytes = _read_inside(
+        producer_root, reference.artifact_path, byte_limit=16 * 1024 * 1024
+    )
     artifact_digest = hashlib.sha256(artifact_bytes).hexdigest()
     if artifact_digest != reference.artifact_sha256:
         raise ExternalEvidenceError("producer aggregate artifact SHA-256 mismatch")
     try:
-        payload = json.loads(artifact_bytes)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        payload = decode_evidence_json(artifact_bytes)
+    except ValueError as error:
         raise ExternalEvidenceError("producer aggregate artifact is invalid JSON") from error
     if not isinstance(payload, dict):
         raise ExternalEvidenceError("producer aggregate artifact must be an object")

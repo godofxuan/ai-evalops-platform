@@ -18,6 +18,72 @@ write_product_artifacts = partial(export_product_artifacts, export_mode="private
 
 
 @pytest.mark.asyncio
+async def test_export_rejects_changed_policy_inside_frozen_snapshot(tmp_path: Path) -> None:
+    from app.product_experiments.runner import run_experiment
+
+    result = await run_experiment(
+        REPOSITORY_ROOT / "benchmarks/product_demo_v1/experiment.json", evalops_sha="e" * 40
+    )
+    assert result.input_snapshot is not None
+    result.input_snapshot["policy"]["bootstrap_seed"] += 1
+    with pytest.raises(ProductManifestError, match="snapshot"):
+        write_product_artifacts(result, output_dir=tmp_path / "invalid", command="test")
+
+
+@pytest.mark.asyncio
+async def test_export_rejects_rehashed_snapshot_with_wrong_dataset(tmp_path: Path) -> None:
+    from app.external_harness.harness_envelope import canonical_sha256
+    from app.product_experiments.runner import run_experiment
+
+    result = await run_experiment(
+        REPOSITORY_ROOT / "benchmarks/product_demo_v1/experiment.json", evalops_sha="e" * 40
+    )
+    snapshot = result.input_snapshot
+    assert snapshot is not None
+    snapshot["dataset_sha256"] = "f" * 64
+    snapshot["configuration"]["dataset"]["sha256"] = "f" * 64
+    snapshot["content_sha256"] = canonical_sha256(
+        {"configuration": snapshot["configuration"], "policy": snapshot["policy"]}
+    )
+    with pytest.raises(ProductManifestError, match="snapshot"):
+        write_product_artifacts(result, output_dir=tmp_path / "invalid", command="test")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mutation", ["version", "unknown", "configuration", "source", "scope", "missing"]
+)
+async def test_export_requires_known_snapshot_schema_and_identity(
+    tmp_path: Path, mutation: str
+) -> None:
+    from app.external_harness.harness_envelope import canonical_sha256
+    from app.product_experiments.runner import run_experiment
+
+    result = await run_experiment(
+        REPOSITORY_ROOT / "benchmarks/product_demo_v1/experiment.json", evalops_sha="e" * 40
+    )
+    snapshot = result.input_snapshot
+    assert snapshot is not None
+    if mutation == "version":
+        snapshot["schema_version"] = "evalops.experiment-input-snapshot/999"
+    elif mutation == "unknown":
+        snapshot["undeclared_field"] = "unsupported"
+    elif mutation == "configuration":
+        snapshot["configuration"]["unregistered_override"] = True
+    elif mutation == "source":
+        snapshot["configuration"]["arms"][0]["source_sha"] = "f" * 40
+    elif mutation == "scope":
+        snapshot["configuration"]["scope"] = "FORMAL"
+    else:
+        result.input_snapshot = None
+    snapshot["content_sha256"] = canonical_sha256(
+        {"configuration": snapshot["configuration"], "policy": snapshot["policy"]}
+    )
+    with pytest.raises(ProductManifestError, match="snapshot"):
+        write_product_artifacts(result, output_dir=tmp_path / "invalid", command="test")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("field", ["arm", "prompt", "category"])
 async def test_export_rejects_semantically_mismatched_pair(tmp_path: Path, field: str) -> None:
     from app.product_experiments.runner import run_experiment
@@ -64,6 +130,7 @@ def test_manifest_rejects_excessive_json_depth_before_schema_parsing(tmp_path: P
 
 @pytest.mark.asyncio
 async def test_default_export_is_public_summary_without_private_payload(tmp_path: Path) -> None:
+    from app.external_harness.harness_envelope import canonical_sha256
     from app.product_experiments.runner import run_experiment
 
     result = await run_experiment(
@@ -73,7 +140,16 @@ async def test_default_export_is_public_summary_without_private_payload(tmp_path
     result.experiment_id = secret
     result.case_comparisons[0].baseline_answer = secret
     result.arms["baseline"].cases[0].answer = secret
-    result.input_snapshot = {"internal_url": "https://" + secret + ".internal"}
+    assert result.input_snapshot is not None
+    internal_url = "https://" + secret + ".internal"
+    result.input_snapshot["configuration"]["arms"][0]["source_repository"] = internal_url
+    result.source_identities["baseline"]["repository"] = internal_url
+    result.input_snapshot["content_sha256"] = canonical_sha256(
+        {
+            "configuration": result.input_snapshot["configuration"],
+            "policy": result.input_snapshot["policy"],
+        }
+    )
     export_product_artifacts(result, output_dir=tmp_path, command=secret)
     for filename in ("result.json", "report.html", "manifest.json"):
         assert secret not in (tmp_path / filename).read_text(encoding="utf-8")

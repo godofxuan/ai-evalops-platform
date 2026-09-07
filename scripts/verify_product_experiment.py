@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.core.strict_json import decode_evidence_json
+from app.product_experiments.input_snapshot import ExperimentInputSnapshot
 from app.product_experiments.public_summary import PublicExperimentSummary
 from app.product_experiments.report import render_experiment_html
 from app.product_experiments.runner import ProductExperimentResult
@@ -19,37 +21,13 @@ class ProductManifestError(ValueError):
     """A product result manifest is malformed, incomplete, or stale."""
 
 
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ProductManifestError("duplicate JSON field")
-        result[key] = value
-    return result
-
-
 def _decode(payload: bytes | str) -> Any:
-    text = payload.decode("utf-8") if isinstance(payload, bytes) else payload
-    depth = 0
-    quoted = False
-    escaped = False
-    for character in text:
-        if quoted:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == '"':
-                quoted = False
-        elif character == '"':
-            quoted = True
-        elif character in "[{":
-            depth += 1
-            if depth > 64:
-                raise ProductManifestError("JSON depth limit exceeded")
-        elif character in "]}":
-            depth -= 1
-    return json.loads(text, object_pairs_hook=_unique_object)
+    try:
+        return decode_evidence_json(payload)
+    except (json.JSONDecodeError, UnicodeError):
+        raise ProductManifestError("evidence JSON is unreadable") from None
+    except ValueError as error:
+        raise ProductManifestError(str(error)) from None
 
 
 def _read_bounded(path: Path, limit: int) -> bytes:
@@ -118,12 +96,20 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         raise ProductManifestError("result schema is invalid") from None
     if result["schema_version"].rsplit("/", 1)[1] != manifest["schema_version"].rsplit("/", 1)[1]:
         raise ProductManifestError("manifest/result schema versions differ")
+    snapshot = result.get("input_snapshot")
+    if snapshot is not None:
+        try:
+            ExperimentInputSnapshot.model_validate(snapshot).validate_result_binding(result)
+        except (ValueError, TypeError, KeyError):
+            raise ProductManifestError("snapshot schema or result binding is invalid") from None
     if result.get("status") in {
         "DEMO_PASS",
         "DEMO_FAIL",
         "AUTOMATED_PASS_HUMAN_REVIEW_PENDING",
         "AUTOMATED_FAIL",
     }:
+        if result["schema_version"] == "evalops.experiment-result/2.0" and snapshot is None:
+            raise ProductManifestError("completed v2 experiment requires an input snapshot")
         if not {"baseline.json", "candidate.json"}.issubset(seen):
             raise ProductManifestError("completed experiment omits required arm artifacts")
         arms = result.get("arms", {})

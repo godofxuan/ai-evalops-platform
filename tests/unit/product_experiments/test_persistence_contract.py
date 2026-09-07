@@ -44,3 +44,11 @@ def test_paired_experiment_rejects_cross_tenant_or_mismatched_dataset_before_wri
         replace(pair, candidate=replace(candidate, tenant_id=uuid4()))
     with pytest.raises(ValueError, match="dataset"):
         replace(pair, candidate=replace(candidate, dataset_version_id=uuid4()))
+    with pytest.raises(ValueError, match="actor"):
+        replace(pair, candidate=replace(candidate, created_by=uuid4()))
+    with pytest.raises(ValueError, match="cases"):
+        replace(pair, candidate=replace(candidate, cases=({"case_id": "different"},)))
+    with pytest.raises(ValueError, match="evaluator"):
+        replace(pair, candidate=replace(candidate, evaluator_version="different"))
+    with pytest.raises(ValueError, match="evaluator"):
+        replace(pair, candidate=replace(candidate, evaluator_config={"override": True}))

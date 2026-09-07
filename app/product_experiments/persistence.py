@@ -17,6 +17,7 @@ from app.jobs.cancellation import (
 )
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import EvaluationRun, ProductExperiment
+from app.runs.idempotency import canonical_request_hash
 from app.runs.repository import NewRun, insert_run_and_jobs
 from app.runs.service import IdempotencyConflictError
 
@@ -34,11 +35,24 @@ class NewProductExperiment:
     def __post_init__(self) -> None:
         if any(arm.tenant_id != self.tenant_id for arm in (self.baseline, self.candidate)):
             raise ValueError("experiment arms must share the owning tenant")
+        if any(arm.created_by != self.created_by for arm in (self.baseline, self.candidate)):
+            raise ValueError("experiment arms must share the submitting actor")
         if (
             self.baseline.dataset_version_id != self.candidate.dataset_version_id
             or self.baseline.dataset_hash != self.candidate.dataset_hash
         ):
             raise ValueError("experiment arms must share the frozen dataset")
+        if canonical_request_hash({"cases": self.baseline.cases}) != canonical_request_hash(
+            {"cases": self.candidate.cases}
+        ):
+            raise ValueError("experiment arms must share identical ordered cases")
+        if (
+            self.baseline.evaluator_type != self.candidate.evaluator_type
+            or self.baseline.evaluator_version != self.candidate.evaluator_version
+            or canonical_request_hash(self.baseline.evaluator_config)
+            != canonical_request_hash(self.candidate.evaluator_config)
+        ):
+            raise ValueError("experiment arms must share the evaluator and scoring policy")
 
 
 @dataclass(frozen=True, slots=True)

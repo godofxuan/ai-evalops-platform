@@ -1,5 +1,20 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第四检查点：固定输入与聚合解析边界
+
+提交前验证：product_experiments 与产品 CLI/证据集合 132 passed、1 Windows symlink skipped（51.65 秒）；mypy 210 个文件、ruff check 和 600 文件格式检查通过。已把第三检查点精确 CI 和本节待推送内容、未完成项发给简历/教学/投递三个任务，请其思考资料改进，不改已投简历及链接；发送成功不等于对方已完成材料调整。
+
+第三检查点 `28a2b9da9b97bdc0a1e5955069e6cf1b7230ccf5` 已推送，精确 [CI 34089484214](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34089484214) 的 quality-and-integration 和 compose-smoke 均 completed/success。本地提交前 161 passed / 1 Windows symlink skipped，598 文件格式与 208 文件类型检查通过；不与以前计数相加。
+
+- 提交合同：同一 dataset ID/hash 不保证内部 DTO 携带同样题目。复现后增加同 actor、规范化 JSON 摘要相同的有序 cases、相同 evaluator 类型/版本/配置约束。不比较 Python 的宽松 bool/number 相等性。此合同仍不是已开放的提交 API。
+- 快照反例：修改 policy 而不改摘要、重算摘要后换 dataset、未知 schema/字段、改 source/scope、直接删除完成结果快照，原导出均接受。逐步增加内容摘要、严格已知模型、数据集/来源/任务/范围交叉绑定；完成的 v2 必须有快照。v1 和尚未开始的 INPUT_REQUIRED 包不被误称具有此保证。
+- 兼容修复：原公开隐私测试用任意 internal_url 字典替代快照，现在被正确拒绝。改为在合法 source_repository 中植入相同秘密标记，并同步模拟身份/摘要，保留原有答案、命令、内部 URL 不出现在公开包的断言；不是放宽验证器让错误夹具通过。
+- 保证范围：原 spec/policy 字节未包含在本快照中，无法独立重算它们的原始字节 hash；配置内容 hash 可复核但不是签名或独立来源认证。没有伪造原文件，也没有用新代码重写旧证据。
+- 聚合读取：重复 decision 字段即使 hash 正确也必须拒绝，反例先失败后通过。抽出共用 decode_evidence_json，拒绝重复字段、非有限常量和超过 64 层嵌套，产品 verifier 复用同一规则。聚合 reference 限 1 MiB、artifact 限 16 MiB，均最多读上限加一字节；1 MiB 空白填充反例已复现/修复。不是内存 RSS 或恶意文件系统并发替换的完整保证。
+- RAG 通知其真实模型测量结束，本轮仅确认协调解除。其 runtime-service-contracts/1 和 runtime-delivery-evidence/1 不冒充 enterprise.agent-run/1.0，不把聚合数字拆成虚构逐题结果。仍不修改 RAG 仓库。
+
+本节改动尚需独立提交/精确 CI，第三检查点 CI 不覆盖它们。剩余重点仍为持久提交/共享预算/结果导出与 worker 故障验收；不能因证据验证加固而宣布整个计划完成。
+
 ## 2026-09-07 第三检查点：控制接口、缺测诊断与兼容性
 
 第二检查点 `90ff44a9562191e9f55024d73e395c278eb8be10` 已推送，其精确 [CI 34086968459](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34086968459) completed/success，包含真实 PostgreSQL 原子双 Run 幂等/回滚集成及 Compose smoke。这不能作为本节新修改的 CI 证明。

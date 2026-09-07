@@ -73,6 +73,28 @@ def _contract(tmp_path: Path) -> tuple[AggregateContractPin, str]:
     return pin, "c" * 40
 
 
+def test_aggregate_rejects_duplicate_keys_even_when_hashes_match(tmp_path: Path) -> None:
+    pin, sha = _contract(tmp_path)
+    path = tmp_path / "evidence.json"
+    payload = b'{"decision":"ACCEPTED",' + path.read_bytes()[1:]
+    path.write_bytes(payload)
+    reference = json.loads((tmp_path / "reference.json").read_text())
+    reference["artifact_sha256"] = hashlib.sha256(payload).hexdigest()
+    pin.reference_sha256 = _write(tmp_path / "reference.json", reference)
+    with pytest.raises(ExternalEvidenceError, match="JSON"):
+        verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+
+def test_aggregate_reference_read_has_a_byte_limit(tmp_path: Path) -> None:
+    pin, sha = _contract(tmp_path)
+    path = tmp_path / "reference.json"
+    payload = path.read_bytes() + b" " * (1024 * 1024)
+    path.write_bytes(payload)
+    pin.reference_sha256 = hashlib.sha256(payload).hexdigest()
+    with pytest.raises(ExternalEvidenceError, match="size limit"):
+        verify_aggregate_contract(pin, producer_root=tmp_path, observed_publisher_sha=sha)
+
+
 @pytest.mark.parametrize(
     "field,value", [("schema_version", "unexpected_schema"), ("case_count", 1)]
 )

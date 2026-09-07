@@ -79,6 +79,10 @@ worker 新插件 product_qa_v2 / product_agent_v2 要求 evaluator_version=produ
 
 严格快照绑定、持久 Run/Job 接入、真实故障恢复验收、最终精确 SHA/CI 和教学/简历任务同步仍未完成。公开/私有导出的基本分离已实现，真实进程中断恢复等验收仍待完成。
 
+快照校验已推进：完成的 v2 私有包须有已知版本输入快照，规范化配置与 policy 的内容摘要必须匹配，并与主结果的 dataset、两组来源、scope 和 task_type 交叉一致。它不证明原 spec/policy 字节已公开，也不证明服务端运行代码已独立认证。旧 v1 不自动升级保证。
+
+聚合证据读取现在要求无重复字段、无 NaN/Infinity 常量、JSON 深度不超过 64；reference 最大 1 MiB、聚合 artifact 最大 16 MiB。超限时应减小聚合合同，而不是塞入逐题私有内容。聚合校验仍保留离线 NOT_RUN 在线核验状态。
+
 ## 新增的比较与证据行为
 
 QA 分别报告来源 ID recall 与 precision；不能把它们解释为答案语义忠实度。Agent 的引用指标为不适用。工具参数使用类型敏感结构匹配（true 不等于 1，1 与 1.0 数值等价）；显式空 allowlist 和零预算合法。expected_terminal_state 可指定正确拒绝，耗尽预算不自动算超限。
