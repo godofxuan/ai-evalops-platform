@@ -5,7 +5,7 @@
 ## 前置条件
 
 - 服务端 PostgreSQL 已迁移至 0033，API、既有 worker、Redis 和 artifact store 可用。
-- 管理者显式启用 `EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED` 并配置 `EVALOPS_PRODUCT_EXPERIMENT_CODE_SHA`；两组 HTTP 目标必须预先注册。客户端不能提供任意被测 URL 或目标令牌。
+- 管理者显式启用 `EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED` 并配置 `EVALOPS_PRODUCT_EXECUTION_CODE_SHA`；两组 HTTP 目标必须预先注册。客户端不能提供任意被测 URL 或目标令牌。
 - 使用当前租户的 API key，放入环境变量 `EVALOPS_API_KEY`，不写进命令参数、请求文件或 Git。客户端 API 地址通常用 HTTPS；仅本机 localhost/127.0.0.1/::1 支持 HTTP。
 - `request.json` 使用 `evalops.durable-experiment-request/1.0`，不是 local experiment spec。合同可在 API `/docs` 查看；包括 dataset_version_id、原始 JSON 的 source_dataset_sha256、两组 registered target ID/version、来源声明、固定 policy 和预算。
 - dataset_version_id 必须属于当前租户，指向 `map_product_dataset` 产生的规范化 JSONL 版本。通过既有 `POST /api/v1/datasets` 创建数据集，再通过 `POST /api/v1/datasets/{id}/versions` 的 `file` multipart 字段上传规范化内容（application/jsonl）。原始 `cases.json` 的 SHA 与规范化 JSONL 的 SHA 不同，不能互换。原始数据应受控保存；此 CLI 暂不自动创建/上传数据集。

@@ -69,6 +69,7 @@ from app.targets.http_rag import HTTPRAGTarget
 from app.workers.lease_runner import LeaseHeartbeatRunner
 from app.workers.worker import EvaluationWorker
 from tests.postgres_test_support import wait_for_lock_sensitive
+from tests.product_process_recovery import exercise_product_process_recovery
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -455,6 +456,7 @@ async def exercise_authenticated_submission(
         assert cancelled_report.json()["summary"]["status"] == "EXECUTION_FAILED"
         assert "private answer" not in cancelled_report.text
         await exercise_worker_to_export(application, client, headers, other_headers, payload)
+        await exercise_product_process_recovery(application, client, headers, payload)
 
 
 async def exercise_worker_to_export(

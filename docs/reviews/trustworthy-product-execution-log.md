@@ -1,5 +1,19 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十六检查点：真实网络与 worker 强杀恢复（CI 待验证）
+
+第十五检查点 `a10c785f5e88d9c53c3348d037b3e78cf88c2c47` 的 [CI 34112208092](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34112208092) 已 completed/success，包含 SDK→真实 API/数据库→不可变报告下载→原始数据独立重算与跨租户拒绝。
+
+- 先核对 S5 缺口：上一检查点客户端真实 HTTP 不等于目标服务真实 HTTP；MockTransport 的 worker 集成也不等于进程死亡恢复。因此新增仅 tests 下的网络/进程夹具，生产 HTTP 目标、SSRF 策略、worker、调度器、租约和 reaper 代码均不改。
+- 真实网络夹具：ThreadingHTTPServer 仅绑定 127.0.0.1 动态端口，AsyncHTTPTransport 真正通过 TCP 收发。仅注入测试 transport 将固定公共 fixture IP 的 /query 请求映射到该端口，并先检查真实物理 peer 为本机端口，再提供模拟公共 peer 元数据；DNS 身份也明确是夹具。该证据不证明真实公网 TLS/DNS/peer 认证，不能抹掉这个限制。
+- 网络 RED/GREEN：初始缺少 fixture 模块导致收集失败；实现后发现测试配置遗漏必填 target_id，严格构造器正确拒绝。核对实际配置模型，补测试字段而不放宽生产策略；随后真实目标 HTTP 1 passed（0.73s），断言 Agent 终态/工具/费用与实际 job/attempt 头保留、gold 不外发、显式 public_context 仍转发。
+- 真实进程场景：每个场景从公开鉴权 API 创建双组实验，先用既有 worker 完成一题；spawn 独立 worker，分别在 committed claim 后/执行前，以及真实 HTTP 完成后/结果提交前，通过本进程 Pipe 屏障通知父测试。父测试只 kill 自己创建的精确子进程，不杀未知 PID，不把协程取消冒充 OS 进程死亡。
+- 恢复断言：实际 1 秒租约、0.2 秒心跳；杀进程后按真实到期状态轮询现有 reaper，使用 0.01 秒固定退避，不改数据库时间、不伪造租约。恢复其余三题，原已完成题不能再被调用。claim 前执行屏障应总计 4 个服务请求；HTTP 完成后屏障应总计 5 次（同 Job attempt 1/2 各一次），明确暴露外部重复副作用风险，不宣称 exactly-once。
+- 结果断言：重放死亡 worker 的旧 claim 写入 stale poison 必须 LeaseLostError；最终报告恰有 4 个不同 result，恢复 Job 只绑定新 accepted attempt 2，其余为 attempt 1。服务关闭后仍可公开 API 导出同一私有报告并用原始数据重算；两题仍 INSUFFICIENT_EVIDENCE，不伪造质量 PASS。
+- 本地检查：72 passed、1 PostgreSQL skip（2.31s），覆盖实际网络及原目标安全回归；全仓 lint、636 文件 format check、CI 同款 mypy 223 源文件通过。真实进程+数据库场景仅确认可收集，仍须本检查点自己的 CI。直接同时把 tests 辅助文件和集成入口传给 mypy 曾造成相同模块双路径错误，改回现有 CI 的 app/scripts/tests/integration/tests/concurrency 入口通过；未修改包结构或屏蔽错误。
+- 文档修正：按 Settings 实际字段把新指南错误的 EVALOPS_PRODUCT_EXPERIMENT_CODE_SHA 改为 EVALOPS_PRODUCT_EXECUTION_CODE_SHA。该错误在后续代码核对中发现，不是已观察到的部署失败。下次发布须包含更正，避免照文档启动失败。
+
+
 ## 2026-09-07 第十五检查点进行中：可恢复客户端与命令行
 
 第十四检查点 `d3a1e573c0fd40d85515915f29a2243cda6bc8d6` 的 [CI 34108307000](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34108307000) 已 completed/success。该结果覆盖上一节新增的真实数据库集成，不代表本节未提交代码已有远端 CI。
