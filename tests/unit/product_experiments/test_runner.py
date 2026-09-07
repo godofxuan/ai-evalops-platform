@@ -24,6 +24,29 @@ CATEGORIES = (
 )
 
 
+@pytest.mark.parametrize("source", ["spec", "policy", "dataset"])
+def test_preflight_rejects_duplicate_json_fields_before_execution(
+    tmp_path: Path, source: str
+) -> None:
+    spec_path = _experiment(tmp_path)
+    spec = json.loads(spec_path.read_bytes())
+    if source == "spec":
+        spec_path.write_bytes(b'{"scope":"FORMAL",' + spec_path.read_bytes()[1:])
+    elif source == "policy":
+        path = tmp_path / "policy.json"
+        path.write_bytes(b'{"bootstrap_seed":0,' + path.read_bytes()[1:])
+    else:
+        path = tmp_path / spec["dataset"]["path"]
+        payload = path.read_bytes()
+        changed = payload.replace(b'"prompt":', b'"prompt":"hidden-first-value","prompt":', 1)
+        assert changed != payload
+        path.write_bytes(changed)
+        spec["dataset"]["sha256"] = hashlib.sha256(changed).hexdigest()
+        _write_json(spec_path, spec)
+    with pytest.raises(ValueError, match="duplicate JSON"):
+        preflight_experiment(spec_path)
+
+
 @pytest.mark.asyncio
 async def test_experiment_deadline_preserves_partial_observations(tmp_path: Path) -> None:
     path = _experiment(tmp_path)

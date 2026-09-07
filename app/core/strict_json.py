@@ -1,6 +1,7 @@
 """Unambiguous bounded-depth JSON parsing for untrusted evidence."""
 
 import json
+import math
 from typing import Any
 
 
@@ -15,6 +16,13 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _reject_constant(value: str) -> None:
     raise ValueError("non-finite JSON constant")
+
+
+def _finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError("non-finite JSON number")
+    return parsed
 
 
 def decode_evidence_json(payload: bytes | str) -> Any:
@@ -39,4 +47,9 @@ def decode_evidence_json(payload: bytes | str) -> Any:
                 raise ValueError("JSON depth limit exceeded")
         elif character in "]}":
             depth -= 1
-    return json.loads(text, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    return json.loads(
+        text,
+        object_pairs_hook=_unique_object,
+        parse_constant=_reject_constant,
+        parse_float=_finite_float,
+    )

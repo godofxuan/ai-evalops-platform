@@ -17,6 +17,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
+from app.core.strict_json import decode_evidence_json
 from app.datasets.validation import DEFAULT_JSONL_VALIDATION_LIMITS
 from app.domain.evaluation import EvaluationCase, ExecutionContext, TargetResult
 from app.external_harness.formal_quality import (
@@ -339,6 +340,7 @@ def parse_product_dataset(payload: bytes, *, expected_sha256: str) -> list[Exper
         raise DatasetIntegrityError(
             f"dataset SHA-256 mismatch: expected {expected_sha256}, computed {actual}"
         )
+    decode_evidence_json(payload)
     cases = TypeAdapter(list[ExperimentCase]).validate_json(payload)
     if not 2 <= len(cases) <= DEFAULT_JSONL_VALIDATION_LIMITS.max_cases:
         raise DatasetIntegrityError("dataset case count must be between 2 and 10000")
@@ -399,6 +401,7 @@ def _prepare_experiment(
                 + ", ".join(invalid[:5])
             )
     policy_payload = read_bounded_config(loaded.policy_path)
+    decode_evidence_json(policy_payload)
     policy = FormalQualityPolicy.model_validate_json(policy_payload)
     if policy.bootstrap_resamples > 10_000 or len(cases) * policy.bootstrap_resamples > 2_000_000:
         raise InputLimitError("bootstrap work limit exceeded")

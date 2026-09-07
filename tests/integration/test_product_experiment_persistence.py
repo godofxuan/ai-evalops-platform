@@ -34,6 +34,7 @@ from app.product_experiments.persistence import (
     NewProductExperiment,
     SQLAlchemyProductExperimentRepository,
 )
+from app.runs.idempotency import canonical_request_hash
 from app.runs.schemas import RunCreate
 from app.runs.service import IdempotencyConflictError, SQLAlchemyRunService
 
@@ -134,7 +135,18 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         results = await asyncio.gather(*(repository.create_or_replay(pending) for _ in range(8)))
         assert len({result.id for result in results}) == 1
         pair = results[0]
+        assert pair.snapshot["attempt_budget"] == {
+            "schema_version": "evalops.static-attempt-budget/1.0",
+            "max_total_attempts": 20_000,
+            "reserved_target_attempts": 12,
+            "enforcement": "EXISTING_PER_JOB_ATTEMPT_LIMITS",
+            "model_internal_calls_bounded": False,
+            "hard_currency_budget": False,
+        }
         assert pair.baseline_run_id != pair.candidate_run_id
+        frozen_snapshot = dict(pair.snapshot)
+        snapshot_digest = frozen_snapshot.pop("content_sha256")
+        assert canonical_request_hash(frozen_snapshot) == snapshot_digest
         async with factory() as session:
             deadlines = (
                 (

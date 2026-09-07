@@ -1,5 +1,7 @@
+import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -41,6 +43,8 @@ def test_paired_experiment_rejects_cross_tenant_or_mismatched_dataset_before_wri
         candidate=candidate,
     )
     assert pair.baseline.dataset_version_id == pair.candidate.dataset_version_id
+    with pytest.raises(ValueError, match="attempt budget"):
+        replace(pair, max_total_attempts=3)
     with pytest.raises(ValueError, match="tenant"):
         replace(pair, candidate=replace(candidate, tenant_id=uuid4()))
     with pytest.raises(ValueError, match="dataset"):
@@ -58,3 +62,12 @@ def test_paired_experiment_rejects_cross_tenant_or_mismatched_dataset_before_wri
             pair,
             candidate=replace(candidate, execution_deadline_at=datetime(2030, 1, 1, tzinfo=UTC)),
         )
+    # Frozen dataclasses still contain mutable case dictionaries. Revalidate before I/O.
+    from app.product_experiments.persistence import SQLAlchemyProductExperimentRepository
+
+    mutable_cases = tuple(dict(case) for case in candidate.cases)
+    pending = replace(pair, candidate=replace(candidate, cases=mutable_cases))
+    mutable_cases[0]["case_id"] = "changed-after-validation"
+    repository = SQLAlchemyProductExperimentRepository(cast(Any, None))
+    with pytest.raises(ValueError, match="cases"):
+        asyncio.run(repository.create_or_replay(pending))

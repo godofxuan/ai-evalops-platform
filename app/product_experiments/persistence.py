@@ -1,6 +1,7 @@
 """Tenant-consistent inputs for an atomic pair of existing Run/Job records."""
 
 import hashlib
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
@@ -31,8 +32,18 @@ class NewProductExperiment:
     snapshot: dict[str, Any]
     baseline: NewRun
     candidate: NewRun
+    max_total_attempts: int = 20_000
 
     def __post_init__(self) -> None:
+        if type(self.max_total_attempts) is not int or not 1 <= self.max_total_attempts <= 200_000:
+            raise ValueError("experiment attempt budget must be within [1, 200000]")
+        if any(
+            type(arm.max_attempts) is not int or not 1 <= arm.max_attempts <= 10
+            for arm in (self.baseline, self.candidate)
+        ):
+            raise ValueError("experiment per-job attempt budget must be within [1, 10]")
+        if self.reserved_target_attempts > self.max_total_attempts:
+            raise ValueError("experiment attempt budget cannot cover both arms and retries")
         if any(arm.tenant_id != self.tenant_id for arm in (self.baseline, self.candidate)):
             raise ValueError("experiment arms must share the owning tenant")
         if any(arm.created_by != self.created_by for arm in (self.baseline, self.candidate)):
@@ -55,6 +66,24 @@ class NewProductExperiment:
             raise ValueError("experiment arms must share the evaluator and scoring policy")
         if self.baseline.execution_deadline_at != self.candidate.execution_deadline_at:
             raise ValueError("experiment arms must share the absolute deadline")
+
+    @property
+    def reserved_target_attempts(self) -> int:
+        return sum(len(arm.cases) * arm.max_attempts for arm in (self.baseline, self.candidate))
+
+    def snapshot_with_attempt_budget(self) -> dict[str, Any]:
+        snapshot = deepcopy(self.snapshot)
+        snapshot.pop("content_sha256", None)
+        snapshot["attempt_budget"] = {
+            "schema_version": "evalops.static-attempt-budget/1.0",
+            "max_total_attempts": self.max_total_attempts,
+            "reserved_target_attempts": self.reserved_target_attempts,
+            "enforcement": "EXISTING_PER_JOB_ATTEMPT_LIMITS",
+            "model_internal_calls_bounded": False,
+            "hard_currency_budget": False,
+        }
+        snapshot["content_sha256"] = canonical_request_hash(snapshot)
+        return snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +184,13 @@ class SQLAlchemyProductExperimentRepository:
             return None if row is None else _snapshot(row)
 
     async def create_or_replay(self, pending: NewProductExperiment) -> ProductExperimentSnapshot:
+        # Capture nested inputs and rerun invariants before the first await.
+        pending = replace(
+            pending,
+            baseline=deepcopy(pending.baseline),
+            candidate=deepcopy(pending.candidate),
+            snapshot=deepcopy(pending.snapshot),
+        )
         existing = await self.find_by_key(
             tenant_id=pending.tenant_id, idempotency_key=pending.idempotency_key
         )
@@ -180,7 +216,7 @@ class SQLAlchemyProductExperimentRepository:
                     created_by=pending.created_by,
                     idempotency_key=pending.idempotency_key,
                     request_hash=pending.request_hash,
-                    snapshot_json=pending.snapshot,
+                    snapshot_json=pending.snapshot_with_attempt_budget(),
                     baseline_run_id=baseline.id,
                     candidate_run_id=candidate.id,
                 )

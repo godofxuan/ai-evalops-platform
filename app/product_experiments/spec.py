@@ -9,6 +9,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.strict_json import decode_evidence_json
+
 
 class InputLimitError(ValueError):
     """Local experiment input exceeds the declared safety budget."""
@@ -169,6 +171,7 @@ class LoadedExperimentSpec:
 def load_experiment_spec(path: Path) -> LoadedExperimentSpec:
     resolved = path.resolve()
     payload = read_bounded_config(resolved)
+    decode_evidence_json(payload)
     spec = ExperimentSpec.model_validate_json(payload)
     return LoadedExperimentSpec(
         spec_path=resolved,

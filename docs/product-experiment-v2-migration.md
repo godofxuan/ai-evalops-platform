@@ -71,6 +71,10 @@ HTTP 错误、超时、无效响应进入 execution_errors，不转换成差答�
 
 ## 尚未完成的内容
 
+持久提交准备函数 prepare_durable_experiment 已接好原始 JSON→规范化 dataset 的身份核对、两组 registry 配置、同 policy、共同绝对 deadline 和总 attempt 预留。它只读准备两组 NewRun，不持久写入，不是新公开 POST API。请求合同仅支持 DEMO，source SHA 标为 CLIENT_DECLARED。原始 JSON 字节不会因准备过程自动永久留存。
+
+总预算按 sum(每组题数 × 每 Job max_attempts) 保守预分配，默认最大 20000 次，可声明 1–200000 次；并非两组各得到一份。它约束既有平台 target attempt 上限，不计费、不控制目标内部模型调用，也尚未完成共享并发和观测体积限制。
+
 持久化基础已增加 product_experiments 表及 0028 迁移，两组现有 Run/Job 与父记录原子创建。阶段性控制接口为鉴权 GET /api/v1/experiments/{id} 和 POST /api/v1/experiments/{id}/cancel；跨租户对象按不存在处理。取消共用旧 Run 状态机，不保证撤销目标服务副作用。两组执行成功仅为 READY_FOR_ASSESSMENT，不能解释为质量通过。目前还没有公开实验提交/结果导出入口，不建议绕过服务手工组装数据库对象。
 
 worker 新插件 product_qa_v2 / product_agent_v2 要求 evaluator_version=product-v2；数据须由 map_product_dataset 映射并保留私有 evalops_product_case。原始 JSON SHA 与规范化 JSONL SHA 含义不同，不能互换。缺少评分标签或映射不一致时在创建任务前拒绝。旧插件版本语义不变。

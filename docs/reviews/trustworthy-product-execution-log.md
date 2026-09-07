@@ -1,5 +1,22 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第六检查点：持久提交准备、总尝试预留与输入一致性
+
+提交前重新执行产品、Run、evaluator 与 CLI 回归：180 passed / 1 Windows symlink skipped，59.60 秒。上一轮完整输出未留存，所以重新运行而非推测结果。全仓 lint、605 文件格式检查、211 文件 mypy 与 git diff --check 通过。真实数据库预算断言仍待本检查点精确 CI。
+
+第五检查点 `52ab9c7d3eee524fce590fa11e6d327efb8bbeb1` 已推送，精确 [CI 34092870938](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34092870938) 的 quality-and-integration 与 compose-smoke 均 completed/success，包含新 deadline 数据库往返与迁移验证。本节是此后的新修改。
+
+- 持久提交准备：新增严格 DurableExperimentRequest 和 prepare_durable_experiment，只准备、不写 Run/Job、不调用目标。接收同租户不可变 dataset version、原始 product JSON 的 SHA、两组 registry target_id/版本、policy 与尝试/时间额度。逐项复用原 mapper、LocalArtifactStore/RunService、产品评分标签预检与目标输入投影，在数据库写事务外完成。测试通过真实 mapper、文件存储与 RunService，仅替换数据库边界。
+- 原始与规范化身份：原始 JSON 字节先验 SHA 校验，再映射 JSONL；两组准备的已授权 dataset hash 必须等于映射产物。篡改 prompt 并重算原始 SHA 仍因存量版本不匹配拒绝，未知 registry version 拒绝。来源 SHA 明确 CLIENT_DECLARED，server evalops SHA 是配置身份而非独立运行认证。原始字节不自动永久保留，这仍不是独立原始数据公开复核。
+- 固定配置：使用独立 durable-experiment-input/1.0 快照，保留规范化 request、mapping 版本、两种数据摘要、组件配置摘要/版本与共同绝对 deadline，不伪装成 local snapshot。来源字段不允许 URL 用户信息、query 或 fragment。接口初版只允许 DEMO，不能通过 FORMAL 标签绕开来源资格。
+- 总尝试预算：默认 max_total_attempts=20000，可声明 1–200000；每 Job 的最大尝试保持 1–10。两组所有 Jobs 的最大尝试数一次性求和，超总额拒绝。用既有每 Job 的 retry/reaper 上限执行，不新增第二计数/调度循环，不允许两组各领取一份总额度。保守预留不回收未使用额度，不代表实际消费、模型内部调用数或硬美元预算。
+- 检查中纠正一个断言：集成用例有 4 Jobs，但 Run 默认 max_attempts=3，所以应预留 12 次而非 4 次；单元夹具 max_attempts=1 时才是 4。没有修改既有策略去迎合错误计数。数据库预算与完整快照 hash 断言待本检查点 CI。
+- 嵌套可变性：frozen dataclass 不会冻结内部字典。构造后改单组 case 的反例原会先访问数据库；repository 现在在首次 await 前复制两组与 snapshot，并再次触发合同验证。预算注入与完整 snapshot hash 统一由同一函数生成，避免新增字段后沿用旧 hash。
+- 解析一致性：spec、policy 和原始 dataset 原会接受重复 scope/bootstrap_seed/prompt 的最后一个值。3 个反例先失败，输入端复用严格 JSON 后通过；原始字节 hash 算法不变。聚合数字 1e999 原会解析为 Infinity 绕过常量检查，现也拒绝解析后非有限值。
+- 定向验证：上述新准备入口 4 passed，连同持久合同 5 passed；此前产品/Run/evaluator/CLI 集合 176 passed / 1 symlink skipped。集合有重叠，不相加。当前 mypy 211 文件通过。测试函数一行过长导致 lint/格式检查失败，已使用格式器修复，未降低检查规则。
+
+仍未开放公开实验提交入口：共享并发窗口、观测总量和最终 accepted-attempt 导出必须接好并验证后再开放。本准备函数是 S4 内部前置能力，不能当作 API→worker→报告 E2E 已完成。继续保留原计划的故障矩阵、最终双 SHA 与跨任务最终同步要求。
+
 ## 2026-09-07 第五检查点：类别诊断与持久截止时间
 
 提交前受影响集合：281 passed / 1 Windows symlink skipped（51.67 秒），210 文件类型检查、603 文件格式与 lint 通过。测试覆盖产品/CLI、Run、worker、Job 与迁移。真实 PostgreSQL 新断言仍等待本检查点精确 CI，不能用定向单元测试替代。
