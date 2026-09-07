@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
+from pydantic import ValidationError
+
 from app.core.strict_json import decode_evidence_json
 from app.product_experiments.durable_report import build_durable_report
 from app.product_experiments.export_schemas import PrivateDurableReport, PublicDurableReport
@@ -46,7 +48,10 @@ def verify_durable_report(
         quality_status = public.summary.status
         scope = "PUBLIC_PROJECTION_ONLY"
     else:
-        private = PrivateDurableReport.model_validate_json(payload)
+        try:
+            private = PrivateDurableReport.model_validate_json(payload)
+        except ValidationError:
+            raise ValueError("evidence_invalid_for_current_code") from None
         unsigned = dict(report)
         if unsigned.pop("content_sha256") != canonical_request_hash(unsigned):
             raise ValueError("report_content_hash_mismatch")

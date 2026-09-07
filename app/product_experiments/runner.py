@@ -15,7 +15,15 @@ from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 
 from app.core.strict_json import decode_evidence_json
 from app.datasets.validation import DEFAULT_JSONL_VALIDATION_LIMITS
@@ -36,6 +44,11 @@ from app.product_experiments.evaluators import (
     citation_evidence_scores,
 )
 from app.product_experiments.measurements import ProductArmResult, ProductCaseMeasurement
+from app.product_experiments.observation_contract import (
+    MAX_PRODUCT_ANSWER_CHARS,
+    InvalidCoarseTerminalError,
+    validate_terminal_pair,
+)
 from app.product_experiments.spec import (
     AgentComparisonPolicy,
     ExperimentArm,
@@ -97,7 +110,7 @@ class ExperimentCase(BaseModel):
 class ProviderResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    answer: str
+    answer: str = Field(max_length=MAX_PRODUCT_ANSWER_CHARS)
     citations: list[dict[str, JsonValue]] = Field(default_factory=list)
     latency_ms: float = Field(ge=0)
     cost_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
@@ -110,8 +123,24 @@ class ProviderResult(BaseModel):
     source_terminal_state: str | None = None
     artifact_sha256: str | None = None
 
+    @model_validator(mode="after")
+    def terminal_contract(self) -> ProviderResult:
+        validate_terminal_pair(self.terminal_state, self.source_terminal_state)
+        return self
+
     @classmethod
     def from_target(cls, values: Mapping[str, Any]) -> ProviderResult:
+        answer = values.get("answer")
+        if isinstance(answer, str) and len(answer) > MAX_PRODUCT_ANSWER_CHARS:
+            raise TargetInvalidResponseError("target_answer_too_long")
+        try:
+            validate_terminal_pair(
+                values.get("terminal_state"), values.get("source_terminal_state")
+            )
+        except InvalidCoarseTerminalError:
+            raise TargetInvalidResponseError("target_agent_observation_invalid") from None
+        except ValueError:
+            raise TargetInvalidResponseError("target_agent_terminal_invalid") from None
         try:
             return cls.model_validate(dict(values))
         except ValidationError:
@@ -211,8 +240,9 @@ class ProductExperimentResult(BaseModel):
 
 
 class _FixtureProvider:
-    def __init__(self, profile: str) -> None:
+    def __init__(self, profile: str, *, task_type: str = "QA") -> None:
         self._profile = profile
+        self._task_type = task_type
 
     async def execute(self, case: ExperimentCase) -> ProviderResult:
         profiles = case.metadata.get("fixture_profiles")
@@ -221,7 +251,14 @@ class _FixtureProvider:
         raw = profiles.get(self._profile)
         if not isinstance(raw, dict):
             raise ValueError(f"case {case.case_id} has no fixture profile {self._profile}")
-        return ProviderResult.model_validate(raw)
+        result = ProviderResult.from_target(raw)
+        if self._task_type == "AGENT_TOOL_USE" and result.terminal_state is None:
+            result = result.model_copy(
+                update={
+                    "missing_fields": tuple(sorted(set(result.missing_fields) | {"terminal_state"}))
+                }
+            )
+        return result
 
 
 class _HTTPProvider:
@@ -665,7 +702,7 @@ def _build_provider(
     host_resolver: HostResolver | None = None,
 ) -> Provider:
     if isinstance(arm.provider, FixtureProviderSpec):
-        return _FixtureProvider(arm.provider.profile)
+        return _FixtureProvider(arm.provider.profile, task_type=task_type)
     return _HTTPProvider(
         arm.provider,
         experiment_id=experiment_id,

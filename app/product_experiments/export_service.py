@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import UUID
 
+from pydantic import ValidationError
+
 from app.artifacts.service import ArtifactAccessService
 from app.artifacts.storage import ArtifactStore, StoredArtifact
 from app.auth.principals import Principal
@@ -77,9 +79,12 @@ def _read_published(payload: bytes, receipt: PublishedProductReport) -> dict[str
         or report.get("result_snapshot_sha256") != receipt.snapshot_sha256
     ):
         raise ResultSnapshotIntegrityError("published report binding mismatch")
-    result = ProductExperimentResult.model_validate_json(
-        json.dumps(report["result"], allow_nan=False)
-    )
+    try:
+        result = ProductExperimentResult.model_validate_json(
+            json.dumps(report["result"], allow_nan=False)
+        )
+    except ValidationError:
+        raise ResultSnapshotIntegrityError("evidence_invalid_for_current_code") from None
     if (
         result.execution_id != receipt.experiment_id
         or report.get("formal_quality_claim_allowed") is not False

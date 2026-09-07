@@ -2,7 +2,7 @@
 
 > 对 QA / RAG / Agent 的两个版本运行同题评测，可靠执行任务，并输出可追溯、可复核的质量门禁。
 
-当前可信评测产品 v2 位于 `codex/trustworthy-evaluation-product-v2`，本轮工程实现已通过精确代码 CI；[最终审核入口](docs/reviews/trustworthy-product-closeout.md)集中提供版本、证据和限制。本轮没有修改默认 `main`、RAG 仓库或已投递简历的历史链接；这不是正式 A/B 或生产资格晋级。
+本分支是固定 v2 基线上的独立审核修复与简历收口；[本轮修复、验收与限制](docs/reviews/resume-closeout-20260907/CLOSEOUT_RESULTS.md)、[完整演示](docs/reviews/resume-closeout-20260907/DEMO_GUIDE.md)、[简历与答辩稿](docs/reviews/resume-closeout-20260907/RESUME_AND_DEFENSE.md)集中说明当前状态。[上一轮 v2 证据](docs/reviews/trustworthy-product-closeout.md)只背书其固定历史 SHA，不替代新提交 CI。默认 main、RAG 与历史简历链接未修改；本轮不是正式 A/B 或生产资格晋级。
 
 本项目把 Agent/RAG 评测从一次性脚本提升为可提交、可恢复、可审计、可复现的后台系统：PostgreSQL 管理多租户 Run/Job/Attempt 状态，Worker 使用 lease、heartbeat 与 fencing 抵御迟到写入，Reaper 恢复失联任务；Agent 轨迹通过版本化 Artifact、内外两层 SHA-256 和 Projection 校验进入 EvalOps；审计事件由持久 Outbox 和独立 Dispatcher 异步投递。
 
@@ -13,7 +13,7 @@
 | 比较两个 QA / RAG 版本 | 固定同一题集、输入版本与 policy，比较任务成功、引用来源 ID、延迟和费用 | 引用 ID 命中不等于答案语义忠实；未知费用不是零 |
 | 比较两个工具调用 Agent | 检查工具选择、参数类型、权限、预算、错误和终态；区分绝对达标与配对退化 | 确定性工具用例不等于真实危险工具安全审计 |
 | 把实验交给后台执行 | 鉴权提交、幂等重放、跨两组的活动任务限制、重试/取消、worker 失联恢复 | 外部服务不保证 exactly-once；内部模型调用和账单不由平台硬控 |
-| 将报告交给别人审核 | 默认公共摘要；显式私有包可离线重算；报告与 accepted attempt、原始输入和精确字节绑定 | 哈希自洽不等于来源认证、正式 A/B、人评或生产验收 |
+| 将报告交给别人审核 | 默认公共摘要；durable 私有完整包带原始输入可离线重算；local 私有包仅结构验证 | 哈希自洽不等于来源认证、正式 A/B、人评或生产验收 |
 
 RAG 是一个被测对象，不是本平台的依赖项目。平台不会替你实现检索器或 Agent，也不会为了得到 PASS 填补缺失测量。
 
@@ -46,7 +46,7 @@ uv run --no-sync python -m scripts.run_product_experiment --spec benchmarks/agen
 | --- | --- |
 | READY_FOR_ASSESSMENT | 两组执行结束，可以评估；不是质量通过 |
 | DEMO_PASS / DEMO_FAIL / INSUFFICIENT_EVIDENCE | 固定门禁的演示质量结果；失败或证据不足产生非零 export 退出码 |
-| PRIVATE_RECOMPUTED / PUBLIC_PROJECTION_ONLY | 完整私有材料重算一致，或仅验证公共摘要；不是正式质量结论 |
+| PRIVATE_RECOMPUTED / PUBLIC_PROJECTION_ONLY / LOCAL_PRIVATE_STRUCTURE_ONLY | durable 私有材料重算一致、公共投影校验或 local 私有结构校验；三者不能互换 |
 
 正式 A/B 未完成，人评仍待完成，Shadow/生产资格未验证。已有调度性能证据仍保留 `NEGATIVE_SCALING` 限制；本轮恢复与证据改进不能冲抵性能问题。
 

@@ -145,6 +145,29 @@ async def test_submillisecond_http_measurements_do_not_break_report_serializatio
     assert encode_report(report)
 
 
+@pytest.mark.parametrize("bad", ["answer", "terminal"])
+async def test_legacy_bad_success_is_bounded_evidence_invalid_without_rewriting_snapshot(
+    durable_evidence, bad
+):
+    import copy
+
+    from app.product_experiments.durable_report import build_durable_report
+    from app.product_experiments.result_snapshot import ResultSnapshotIntegrityError
+
+    snapshot, raw = durable_evidence
+    observation = snapshot["arms"]["candidate"]["jobs"][0]["metrics"]["product_observation"]
+    if bad == "answer":
+        observation["answer"] = "SECRET_SYNTHETIC" * 10000
+    else:
+        observation.update(terminal_state="failed", source_terminal_state="answer")
+    snapshot.pop("content_sha256")
+    snapshot["content_sha256"] = canonical_request_hash(snapshot)
+    original = copy.deepcopy(snapshot)
+    with pytest.raises(ResultSnapshotIntegrityError, match="evidence_invalid_for_current_code"):
+        build_durable_report(snapshot=snapshot, raw_dataset=raw)
+    assert snapshot == original
+
+
 @pytest.mark.parametrize(
     "change",
     [

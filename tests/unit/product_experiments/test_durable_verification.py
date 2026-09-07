@@ -54,3 +54,24 @@ async def test_public_report_is_only_a_projection_even_if_raw_source_is_supplied
     verification = verify_durable_report(public.model_dump_json().encode(), raw_dataset=raw)
     assert verification.verification_scope == "PUBLIC_PROJECTION_ONLY"
     assert verification.formal_quality_claim_allowed is False
+
+
+async def test_rehashed_derived_score_tamper_is_rejected(durable_evidence):
+    snapshot, raw = durable_evidence
+    report = build_durable_report(snapshot=snapshot, raw_dataset=raw)
+    report["result"]["case_comparisons"][0]["candidate_task_success"] = 0.125
+    report.pop("content_sha256")
+    report["content_sha256"] = canonical_request_hash(report)
+    with pytest.raises(ValueError, match="report_recomputation_mismatch"):
+        verify_durable_report(encode_report(report), raw_dataset=raw)
+
+
+async def test_legacy_invalid_private_report_returns_safe_code(durable_evidence):
+    snapshot, raw = durable_evidence
+    report = build_durable_report(snapshot=snapshot, raw_dataset=raw)
+    observation = next(iter(report["result"]["observations"]["candidate"].values()))
+    observation.update(terminal_state="failed", source_terminal_state="answer")
+    report.pop("content_sha256")
+    report["content_sha256"] = canonical_request_hash(report)
+    with pytest.raises(ValueError, match="^evidence_invalid_for_current_code$"):
+        verify_durable_report(encode_report(report), raw_dataset=raw)

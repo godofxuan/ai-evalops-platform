@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections.abc import Callable
 from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Event, Thread
@@ -54,7 +55,12 @@ class LoopbackTargetTransport(httpx.AsyncBaseTransport):
 
 
 class LoopbackTargetService:
-    def __init__(self, *, stall_body: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        stall_body: bool = False,
+        response_for: Callable[[int], dict[str, Any]] | None = None,
+    ) -> None:
         self.requests: list[dict[str, Any]] = []
         self.body_started = Event()
         self._release_body = Event()
@@ -74,19 +80,20 @@ class LoopbackTargetService:
                         "attempt": self.headers.get("X-EvalOps-Attempt"),
                     }
                 )
-                payload = json.dumps(
-                    {
-                        "answer": "private answer",
-                        "citations": [{"source_id": "gold"}],
-                        "trace": {
-                            "cost_usd": 0.01,
-                            "tool_calls": [],
-                            "tool_error": False,
-                            "terminal_state": "completed",
-                            "budget_exhausted": False,
-                        },
-                    }
-                ).encode()
+                response = {
+                    "answer": "private answer",
+                    "citations": [{"source_id": "gold"}],
+                    "trace": {
+                        "cost_usd": 0.01,
+                        "tool_calls": [],
+                        "tool_error": False,
+                        "terminal_state": "completed",
+                        "budget_exhausted": False,
+                    },
+                }
+                if response_for is not None:
+                    response = response_for(len(owner.requests))
+                payload = json.dumps(response).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))

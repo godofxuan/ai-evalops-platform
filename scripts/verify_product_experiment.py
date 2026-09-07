@@ -1,4 +1,4 @@
-"""Verify every product-experiment file against its manifest."""
+"""Verify local structure or public projection, NOT quality recomputation or provenance."""
 
 from __future__ import annotations
 
@@ -231,8 +231,21 @@ def main() -> int:
         print(f"product experiment verification failed: {error}")
         return 1
     print(
-        f"product experiment verified: {manifest['experiment_id']} "
-        f"status={manifest['status']} files={len(manifest['files'])}"
+        json.dumps(
+            {
+                "verified": True,
+                "verification_scope": "PUBLIC_PROJECTION_ONLY"
+                if manifest.get("export_mode") == "public"
+                else "LOCAL_PRIVATE_STRUCTURE_ONLY",
+                "reported_quality_status": manifest["status"],
+                "quality_recomputed": False,
+                "experiment_id": manifest["experiment_id"],
+                "file_count": len(manifest["files"]),
+                "formal_quality_claim_allowed": False,
+                "production_ready": False,
+            },
+            sort_keys=True,
+        )
     )
     return 0
 

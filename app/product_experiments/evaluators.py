@@ -6,6 +6,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.product_experiments.observation_contract import terminal_matches_expected
+
 
 class CaseView(Protocol):
     @property
@@ -97,12 +99,12 @@ class AgentTaskCompletionEvaluator:
     name: str = "agent_task_completion"
 
     def evaluate(self, case: CaseView, result: ResultView) -> float:
-        observed = getattr(result, "source_terminal_state", None) or result.terminal_state
-        if observed == "answer":
-            observed = "completed"
         expected = getattr(case, "expected_terminal_state", "completed")
         return float(
-            observed == expected and _normalize(result.answer) == _normalize(case.reference_answer)
+            terminal_matches_expected(
+                result.terminal_state, getattr(result, "source_terminal_state", None), expected
+            )
+            and _normalize(result.answer) == _normalize(case.reference_answer)
         )
 
 

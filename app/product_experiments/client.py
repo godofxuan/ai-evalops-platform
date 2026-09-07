@@ -13,6 +13,7 @@ from uuid import UUID
 import httpx
 
 from app.core.strict_json import decode_evidence_json
+from app.datasets.schemas import DatasetCreate, DatasetRead, DatasetVersionRead
 from app.product_experiments.durable_verification import verify_durable_report
 from app.product_experiments.service import (
     ExperimentSubmissionAccepted,
@@ -87,6 +88,40 @@ class ProductAPIClient:
 
     async def get(self, experiment_id: UUID) -> ProductExperimentRead:
         return await self._control(experiment_id, "GET", "", 200)
+
+    async def create_dataset(self, *, name: str) -> DatasetRead:
+        request = DatasetCreate(name=name)
+        body = await self._request(
+            "POST",
+            "/api/v1/datasets",
+            201,
+            content=request.model_dump_json().encode(),
+            extra_headers={"Content-Type": "application/json"},
+        )
+        try:
+            return DatasetRead.model_validate_json(body)
+        except ValueError:
+            raise ProductAPIError("api_dataset_response_invalid") from None
+
+    async def upload_dataset_version(self, dataset_id: UUID, payload: bytes) -> DatasetVersionRead:
+        if not isinstance(dataset_id, UUID) or not 0 < len(payload) <= 10 * 1024 * 1024:
+            raise ValueError("invalid_dataset_upload")
+        body = await self._request(
+            "POST",
+            f"/api/v1/datasets/{dataset_id}/versions",
+            201,
+            files={"file": ("normalized.jsonl", payload, "application/x-ndjson")},
+        )
+        try:
+            version = DatasetVersionRead.model_validate_json(body)
+        except ValueError:
+            raise ProductAPIError("api_dataset_response_invalid") from None
+        if (
+            version.dataset_id != dataset_id
+            or version.sha256 != hashlib.sha256(payload).hexdigest()
+        ):
+            raise ProductAPIError("api_dataset_identity")
+        return version
 
     async def submit(
         self, *, request: DurableExperimentRequest, dataset_payload: bytes, idempotency_key: str
@@ -191,6 +226,7 @@ class ProductAPIClient:
         *,
         content: bytes | None = None,
         extra_headers: dict[str, str] | None = None,
+        files: dict[str, tuple[str, bytes, str]] | None = None,
     ) -> bytes:
         try:
             async with asyncio.timeout(self._timeout):
@@ -203,6 +239,7 @@ class ProductAPIClient:
                         **(extra_headers or {}),
                     },
                     content=content,
+                    files=files,
                     follow_redirects=False,
                     timeout=self._timeout,
                 ) as response:

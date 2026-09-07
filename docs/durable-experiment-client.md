@@ -1,5 +1,7 @@
 # 持久实验客户端：提交后可以退出，再用 ID 恢复
 
+从原始 cases 到真实 dataset/version ID 的完整 PowerShell 教程见 [发布演示](reviews/resume-closeout-20260907/DEMO_GUIDE.md)。小型助手 `scripts.prepare_product_client_demo` 复用既有 API 和 SDK，捕获真实 ID；不重试非幂等创建、不自动注册目标。该助手输出目录是受控私有输入，不能公开。
+
 本页对应 `scripts.product_experiment_client`，不是本地一次性 `run_product_experiment`。当前实现仅支持 DEMO；工程运行成功不会自动获得正式质量或生产资格。阶段验证进度见 [执行记录](reviews/trustworthy-product-execution-log.md)。
 
 ## 前置条件

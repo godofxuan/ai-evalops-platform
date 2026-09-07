@@ -68,8 +68,10 @@ from app.runs.service import IdempotencyConflictError, SQLAlchemyRunService
 from app.targets.http_rag import HTTPRAGTarget
 from app.workers.lease_runner import LeaseHeartbeatRunner
 from app.workers.worker import EvaluationWorker
+from scripts.prepare_product_client_demo import prepare_dataset
 from tests.postgres_test_support import wait_for_lock_sensitive
 from tests.product_controls_faults import exercise_product_control_faults
+from tests.product_observation_faults import exercise_product_observation_faults
 from tests.product_process_recovery import exercise_product_process_recovery
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -87,7 +89,9 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         redis_url=SecretStr(os.environ["EVALOPS_REDIS_URL"]),
         artifact_root=tmp_path,
         product_experiment_submission_enabled=True,
-        product_execution_code_sha="e" * 40,
+        product_execution_code_sha=os.getenv(
+            "GITHUB_SHA", os.getenv("EVALOPS_TEST_CODE_SHA", "e" * 40)
+        ),
         http_target_registry={
             label: {
                 "version": "v1",
@@ -341,9 +345,13 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             await session.execute(delete(EvaluationJob).where(EvaluationJob.run_id.in_(runs)))
             await session.execute(delete(EvaluationRun).where(EvaluationRun.tenant_id == tenant_id))
             await session.execute(
-                delete(DatasetVersion).where(DatasetVersion.dataset_id == UUID(dataset_id))
+                delete(DatasetVersion).where(
+                    DatasetVersion.dataset_id.in_(
+                        select(Dataset.id).where(Dataset.tenant_id == tenant_id)
+                    )
+                )
             )
-            await session.execute(delete(Dataset).where(Dataset.id == UUID(dataset_id)))
+            await session.execute(delete(Dataset).where(Dataset.tenant_id == tenant_id))
             await session.execute(
                 delete(ArtifactReference).where(ArtifactReference.tenant_id == tenant_id)
             )
@@ -385,18 +393,24 @@ async def exercise_authenticated_submission(
     async with AsyncClient(
         transport=ASGITransport(app=application), base_url="http://test"
     ) as client:
-        version = await client.post(
-            f"/api/v1/datasets/{dataset_id}/versions",
-            headers=headers,
-            files={"file": ("product.jsonl", mapped.dataset.content, "application/x-ndjson")},
-        )
-        assert version.status_code == 201
+        async with ProductAPIClient(
+            "https://evalops.example", headers["Authorization"].removeprefix("Bearer "), http=client
+        ) as sdk:
+            version = await prepare_dataset(
+                sdk,
+                raw_dataset=raw,
+                expected_sha256=digest,
+                output_dir=Path(application.state.settings.artifact_root)
+                / f"client-prepare-{task_type}",
+                name=f"client-{task_type}",
+            )
+        assert version.sha256 == mapped.dataset.sha256 and version.case_count == 2
         request = {
             "schema_version": "evalops.durable-experiment-request/1.0",
             "experiment_id": "http-pair",
             "task_type": task_type,
             "scope": "DEMO",
-            "dataset_version_id": version.json()["id"],
+            "dataset_version_id": str(version.id),
             "source_dataset_sha256": digest,
             "baseline": {
                 "target_id": "baseline",
@@ -470,6 +484,7 @@ async def exercise_authenticated_submission(
         await exercise_worker_to_export(application, client, headers, other_headers, payload)
         await exercise_product_process_recovery(application, client, headers, payload)
         await exercise_product_control_faults(application, client, headers, payload)
+        await exercise_product_observation_faults(application, client, headers, payload)
 
 
 async def exercise_worker_to_export(

@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from app.product_experiments.observation_contract import MAX_PRODUCT_ANSWER_CHARS
+
 
 class ProductCaseMeasurement(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
@@ -18,7 +20,7 @@ class ProductCaseMeasurement(BaseModel):
     tool_error_rate: float = Field(ge=0, le=1)
     latency_ms: float = Field(ge=0)
     cost_usd: float = Field(ge=0)
-    answer: str = Field(max_length=100_000)
+    answer: str = Field(max_length=MAX_PRODUCT_ANSWER_CHARS)
     citations: list[dict[str, JsonValue]] = Field(default_factory=list)
     trace_id: str | None = None
 

@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from pydantic import ValidationError
+
 from app.evaluators.product import (
     ProductAgentEvaluator,
     ProductQAEvaluator,
@@ -170,9 +172,12 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
                 or metrics["product_task_type"] != request.task_type
             ):
                 raise ResultSnapshotIntegrityError("worker observation schema or task mismatch")
-            observation = ProviderResult.model_validate_json(
-                json.dumps(metrics["product_observation"], allow_nan=False)
-            )
+            try:
+                observation = ProviderResult.model_validate_json(
+                    json.dumps(metrics["product_observation"], allow_nan=False)
+                )
+            except ValidationError:
+                raise ResultSnapshotIntegrityError("evidence_invalid_for_current_code") from None
             if product_observation_bytes(observation) > per_job_bytes:
                 raise ResultSnapshotIntegrityError("accepted observation exceeds frozen budget")
             missing = product_input_requirements(by_case[identity], task_type=request.task_type)

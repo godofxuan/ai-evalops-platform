@@ -7,6 +7,11 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.agent_eval.schema import AgentRunArtifact, TrajectoryEvent, artifact_content_sha256
+from app.product_experiments.observation_contract import (
+    COARSE_TERMINAL_BY_SOURCE,
+    InvalidCoarseTerminalError,
+    validate_terminal_pair,
+)
 from app.targets.base import TargetInvalidResponseError
 
 
@@ -19,6 +24,14 @@ def project_agent_trace(
     if "schema_version" not in trace:
         # Legacy flat observations remain readable, but carry no artifact provenance.
         values = dict(trace)
+        try:
+            validate_terminal_pair(
+                values.get("terminal_state"), values.get("source_terminal_state")
+            )
+        except InvalidCoarseTerminalError:
+            raise TargetInvalidResponseError("target_agent_observation_invalid") from None
+        except ValueError:
+            raise TargetInvalidResponseError("target_agent_terminal_invalid") from None
         flat_calls = values.get("tool_calls")
         if isinstance(flat_calls, list) and any(
             isinstance(call, dict) and "status" not in call for call in flat_calls
@@ -71,13 +84,7 @@ def project_agent_trace(
     terminal = artifact.terminal.state
     values = {
         "trace_id": artifact.session_id,
-        "terminal_state": "completed"
-        if terminal == "answer"
-        else (
-            "blocked"
-            if terminal in {"refusal", "permission_denied", "budget_exhausted"}
-            else "failed"
-        ),
+        "terminal_state": COARSE_TERMINAL_BY_SOURCE[terminal],
         "source_terminal_state": terminal,
         "artifact_sha256": artifact_content_sha256(artifact),
         "tool_calls": calls,

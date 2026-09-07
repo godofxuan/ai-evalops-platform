@@ -247,7 +247,23 @@ jobs:
         if: ${{ !cancelled() }}
         run: >-
           uv run --no-sync pytest tests/integration/test_product_experiment_persistence.py
+          -o junit_logging=system-out
           --junitxml=/tmp/junit-product-experiment-persistence.xml
+
+      - name: Retain product and regression CI evidence
+        if: ${{ always() }}
+        run: >-
+          uv run --no-sync python -m scripts.product_ci_evidence
+          --output-dir /tmp/evalops-product-ci-evidence
+
+      - name: Upload product and regression CI evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: product-ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/evalops-product-ci-evidence
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Migration - P2 downgrade and re-upgrade
         if: ${{ !cancelled() }}
@@ -285,6 +301,7 @@ jobs:
           /tmp/junit-redis-events.xml
           /tmp/junit-transactional-outbox.xml
           /tmp/junit-run-idempotency.xml
+          /tmp/junit-product-experiment-persistence.xml
 
       - name: Stop MinIO integration service
         if: always()
