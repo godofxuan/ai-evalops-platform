@@ -2,8 +2,9 @@
 
 import asyncio
 import json
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Event, Thread
 from types import TracebackType
 from typing import Any
 
@@ -53,8 +54,10 @@ class LoopbackTargetTransport(httpx.AsyncBaseTransport):
 
 
 class LoopbackTargetService:
-    def __init__(self) -> None:
+    def __init__(self, *, stall_body: bool = False) -> None:
         self.requests: list[dict[str, Any]] = []
+        self.body_started = Event()
+        self._release_body = Event()
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -88,7 +91,15 @@ class LoopbackTargetService:
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
-                self.wfile.write(payload)
+                with suppress(BrokenPipeError, ConnectionResetError):
+                    if stall_body:
+                        self.wfile.write(payload[:1])
+                        self.wfile.flush()
+                        owner.body_started.set()
+                        owner._release_body.wait(timeout=5)
+                        self.wfile.write(payload[1:])
+                    else:
+                        self.wfile.write(payload)
 
             def log_message(self, format: str, *args: object) -> None:
                 pass
@@ -107,6 +118,7 @@ class LoopbackTargetService:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        self._release_body.set()
         await asyncio.to_thread(self._server.shutdown)
         self._server.server_close()
         await asyncio.to_thread(self._thread.join, 5)

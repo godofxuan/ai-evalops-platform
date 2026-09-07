@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import multiprocessing
 import os
 import subprocess
 import sys
@@ -13,6 +14,7 @@ import pytest
 from app.product_experiments.durable_bundle import verify_durable_bundle, write_durable_bundle
 from app.product_experiments.durable_report import build_durable_report
 from app.product_experiments.export_service import encode_report
+from tests.product_bundle_process import run_bundle_crash
 from tests.unit.product_experiments.test_durable_report import durable_evidence as durable_evidence
 from tests.unit.product_experiments.test_submission import submission_inputs as submission_inputs
 
@@ -122,3 +124,45 @@ async def test_private_export_preserves_quality_exit_and_reproducible_bundle(
     assert json.loads(process.stdout)["verification_scope"] == "PRIVATE_RECOMPUTED"
     assert verify_durable_bundle(output).quality_status == "INSUFFICIENT_EVIDENCE"
     assert paths == [f"/api/v1/experiments/{snapshot['experiment_id']}/export?include_private=true"]
+
+
+async def test_killed_exporter_does_not_publish_partial_bundle_or_erase_another_lock(
+    durable_evidence, tmp_path: Path
+):
+    snapshot, raw = durable_evidence
+    payload = encode_report(build_durable_report(snapshot=snapshot, raw_dataset=raw))
+    output = tmp_path / "crash-output"
+    context = multiprocessing.get_context("spawn")
+    receiving, sending = context.Pipe(duplex=False)
+    process = context.Process(
+        target=run_bundle_crash, args=(payload, raw, str(output), sending), daemon=True
+    )
+    try:
+        process.start()
+        sending.close()
+        assert await asyncio.to_thread(receiving.poll, 20), (
+            "exporter did not reach publication barrier"
+        )
+        assert receiving.recv() == "before_atomic_publish"
+        assert process.is_alive()
+        process.kill()
+        await asyncio.to_thread(process.join, 10)
+        assert not process.is_alive() and process.exitcode != 0
+    finally:
+        if process.pid is not None:
+            if process.is_alive():
+                process.kill()
+            await asyncio.to_thread(process.join, 10)
+            process.close()
+        receiving.close()
+        sending.close()
+    assert not output.exists()
+    lock_path = tmp_path / ".crash-output.export.lock"
+    assert lock_path.is_file()
+    with pytest.raises(FileExistsError):
+        write_durable_bundle(payload, output_dir=output, raw_dataset=raw)
+    assert lock_path.is_file(), "a new writer must not delete the old writer's lock"
+    # Explicit recovery of this test's own lock, after its exact process is confirmed dead.
+    lock_path.unlink()
+    write_durable_bundle(payload, output_dir=output, raw_dataset=raw)
+    assert verify_durable_bundle(output).verification_scope == "PRIVATE_RECOMPUTED"

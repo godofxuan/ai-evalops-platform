@@ -1,5 +1,20 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十七检查点：故障矩阵剩余控制边界（CI 待验证）
+
+第十六检查点 `6d8e68dcc466fba181be96df0f7bfe5cb7d0a052` 的 [CI 34113351106](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34113351106) 已 completed/success。两处真实 worker 强杀、真实 HTTP、实际租约回收、旧 attempt 拒绝与最终独立重算已通过自己的 PostgreSQL CI，不再只是待执行测试。
+
+- 存储确认丢失：在实际 LocalArtifactStore 外部边界包装一次故障，先写 blob 再抛 OSError。首次没有发布引用，重试创建同一精确报告后稳定重放。现有实现直接通过新增断言，无需改动业务代码；定向报告测试 18 passed（2.81s）。该场景模拟对象存储确认丢失，不声称是真实云服务故障演练。
+- 导出真实强杀：独立 spawn 导出进程，利用该子进程内的文件系统 audit hook 在最终 os.rename 之前同步通知父测试并停住；父测试只 kill 自己创建的子进程。正式目录不存在，遗留锁仍存在，新 writer 拒绝操作且不得删除它。确认该进程死亡后，测试显式清理自己这一把锁，再导出可重算的完整包。4 项 bundle 测试通过（5.71s），不是协程取消替代进程死亡。
+- 强杀测试补丁曾因格式化后的单行断言匹配失败，辅助文件已创建但测试未插入。随后读取真实文件状态并补齐测试；没有把那次失败的补丁当成完整实现。
+- 提交响应丢失：新增 ASGI 网络边界夹具，先让真实 API 完整处理并取得 202/实验 UUID，再抛 ReadError 模拟客户端未收到确认。SDK 用原键与原始字节重放必须返回被丢弃响应中的原 UUID，而不是新实验；随后取消该测试实验。该断言待自己的数据库 CI。
+- 父实验取消竞争：新公开提交后，真实 claimer 取得一题，固定目标观测经真实 evaluator 评分；父实验 cancel 与 owned result commit 并发。遵守既有 Run 的协作式取消规则：已运行题允许完成，其余三题取消，父实验最终 CANCELLED，报告保留 1 个 accepted result + 3 个取消缺失并输出 EXECUTION_FAILED，不把成功交集变成 PASS。目标观测在此特定竞争测试中是确定性 fixture，不冒称又一次真实 HTTP 场景；真实 HTTP 已由第十六检查点覆盖。该新增竞争待自己的数据库 CI。
+- 慢流/体积：新增真实目标 HTTP 超限与部分正文停滞测试。fixture 不支持新参数时两个反例先失败；实现首字节 flush + threading.Event 屏障，不用任意 sleep 碰竞争。超限得到 target_response_too_large；已实际发送首字节后停滞得到 target_timeout。初版 0.2 秒超时的三项定向测试通过（1.75s），之后调为 1 秒给 CI 启动抖动留余量，不改变生产限制；提交前再验证。
+- 中间扩大回归 240 passed、1 PostgreSQL skip（23.04s），包含导出强杀与存储故障，但早于慢流测试；不把后添加测试混算进该数字。全仓 lint、638 文件 format check、223 源文件 CI 同款 mypy 通过。最终提交前检查另记。
+- 第十五检查点已向简历、教学、投递三任务全部成功同步。简历回执：规则 §15、共享同步 §26 已记录，候选叙事为“提交后可恢复→同一不可变报告→离线证据复核”；R12/PDF/指针/哈希/历史链接未改。第十六检查点新成功回执待补发。
+- 提交前最终定向回归：38 passed、1 PostgreSQL skip（9.97s），已包含调整到 1 秒的真实停滞响应与导出强杀。全仓 lint、638 文件格式检查、223 源文件 mypy、git diff --check 通过。继续推送本检查点获取新增控制竞争的精确数据库 CI；此时还没有宣布 S5/S7 全部完成。
+
+
 ## 2026-09-07 第十六检查点：真实网络与 worker 强杀恢复（CI 待验证）
 
 第十五检查点 `a10c785f5e88d9c53c3348d037b3e78cf88c2c47` 的 [CI 34112208092](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34112208092) 已 completed/success，包含 SDK→真实 API/数据库→不可变报告下载→原始数据独立重算与跨租户拒绝。

@@ -222,7 +222,7 @@ async def test_one_failed_arm_case_cannot_be_dropped_to_create_quality_pass(
     assert sum(len(rows) for rows in result["observations"].values()) == 3
 
 
-@pytest.mark.parametrize("mode", ["valid", "too_deep"])
+@pytest.mark.parametrize("mode", ["valid", "too_deep", "store_retry"])
 async def test_report_export_publishes_once_and_replays_without_source_or_result_reread(
     durable_evidence, tmp_path, mode, authenticated_submission_setup
 ) -> None:
@@ -263,7 +263,9 @@ async def test_report_export_publishes_once_and_replays_without_source_or_result
 
         async def read(self, **kwargs):
             self.calls += 1
-            assert self.calls == 1, "published report replay must not reread live results"
+            assert self.calls <= (2 if mode == "store_retry" else 1), (
+                "published report replay must not reread live results"
+            )
             return snapshot
 
     class PublicationDatabase:
@@ -286,12 +288,29 @@ async def test_report_export_publishes_once_and_replays_without_source_or_result
             )
             return self.receipt
 
+    class TransientStoreBoundary:
+        failed = False
+
+        async def put_bytes(self, content):
+            stored = await store.put_bytes(content)
+            if mode == "store_retry" and not self.failed:
+                self.failed = True
+                # The blob may exist even though the remote acknowledgement was lost.
+                raise OSError("synthetic_blob_acknowledgement_lost")
+            return stored
+
+        async def get_bytes(self, sha256):
+            return await store.get_bytes(sha256)
+
+        async def check_ready(self):
+            return await store.check_ready()
+
     database = PublicationDatabase()
     exporter = ProductReportExporter(
         reader=ResultDatabase(),
         repository=database,
         artifact_access=ArtifactAccessService(gateway=Gateway(), store=store),
-        artifact_store=store,
+        artifact_store=TransientStoreBoundary(),
     )
     principal = Principal(tenant_id=tenant_id, api_key_id=uuid4(), key_prefix="test")
     if mode == "too_deep":
@@ -301,6 +320,10 @@ async def test_report_export_publishes_once_and_replays_without_source_or_result
             "unreadable report must never become the immutable publication"
         )
         return
+    if mode == "store_retry":
+        with pytest.raises(OSError, match="synthetic_blob_acknowledgement_lost"):
+            await exporter.export(principal=principal, experiment_id=experiment_id)
+        assert database.receipt is None, "lost blob acknowledgement must not publish a success"
     first = await exporter.export(principal=principal, experiment_id=experiment_id)
     links.pop((tenant_id, source_id, None))
     second = await exporter.export(principal=principal, experiment_id=experiment_id)
