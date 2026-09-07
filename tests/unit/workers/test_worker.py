@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
@@ -17,6 +19,7 @@ from app.domain.evaluation import (
 from app.jobs.claiming import ClaimedJob
 from app.jobs.retry_policy import classify_failure
 from app.observability.metrics import PlatformMetrics
+from app.product_experiments.dataset_mapping import map_product_dataset
 from app.targets.base import TargetHTTPError
 from app.workers.worker import EvaluationWorker
 
@@ -151,6 +154,55 @@ async def test_expired_experiment_deadline_is_not_reset_by_retry(
     assert not success.committed and failure.failure is not None
     classified = classify_failure(failure.failure)
     assert classified.error_code == "experiment_deadline_exceeded"
+    assert classified.retryable is False
+
+
+@pytest.mark.parametrize("attempt", [1, 2])
+async def test_worker_does_not_retry_or_commit_an_over_budget_product_observation(
+    attempt: int,
+) -> None:
+    raw = json.dumps(
+        [
+            {
+                "case_id": str(index),
+                "category": "qa",
+                "prompt": "q",
+                "reference_answer": "a",
+                "expected_citation_ids": ["gold"],
+            }
+            for index in range(2)
+        ]
+    ).encode()
+    mapped = map_product_dataset(raw, expected_sha256=hashlib.sha256(raw).hexdigest())
+    claim = ClaimedJob(
+        job_id=JOB_ID,
+        run_id=RUN_ID,
+        tenant_id=TENANT_ID,
+        case_id="0",
+        case_payload=mapped.dataset.cases[0].model_dump(),
+        attempt_id=ATTEMPT_ID,
+        attempt_number=attempt,
+        worker_id="worker-1",
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=30),
+        version=2,
+        target_type="mock",
+        target_config={"answer": "a", "trace": {"cost_usd": 0.0}},
+        target_version="v1",
+        evaluator_type="product_qa_v2",
+        evaluator_config={"max_observation_bytes_per_case": 1},
+        evaluator_version="product-v2",
+    )
+    success, failure = RecordingCommitter(), RecordingFailureCommitter()
+    worker = EvaluationWorker(
+        claimer=SingleClaimer(claim),
+        result_committer=success,
+        failure_committer=failure,
+        lease_runner=PassThroughLeaseRunner(),
+    )
+    assert await worker.process_one(worker_id="worker-1")
+    assert not success.committed and failure.failure is not None
+    classified = classify_failure(failure.failure)
+    assert classified.error_code == "experiment_observation_budget_exceeded"
     assert classified.retryable is False
 
 

@@ -37,7 +37,7 @@ class EvaluatorDescriptor:
 @dataclass(frozen=True, slots=True)
 class _EvaluatorRegistration:
     descriptor: EvaluatorDescriptor
-    factory: Callable[[], Evaluator]
+    factory: Callable[[Mapping[str, Any]], Evaluator]
 
 
 def _registry() -> dict[str, _EvaluatorRegistration]:
@@ -54,7 +54,9 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
                 category=EvaluatorCategory.DETERMINISTIC,
                 llm_judge=False,
             ),
-            factory=ProductAgentEvaluator,
+            factory=lambda config: ProductAgentEvaluator(
+                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case")
+            ),
         ),
         _EvaluatorRegistration(
             descriptor=EvaluatorDescriptor(
@@ -63,7 +65,9 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
                 category=EvaluatorCategory.DETERMINISTIC,
                 llm_judge=False,
             ),
-            factory=ProductQAEvaluator,
+            factory=lambda config: ProductQAEvaluator(
+                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case")
+            ),
         ),
         _EvaluatorRegistration(
             descriptor=EvaluatorDescriptor(
@@ -72,7 +76,7 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
                 category=EvaluatorCategory.DETERMINISTIC,
                 llm_judge=False,
             ),
-            factory=BasicAnswerEvaluator,
+            factory=lambda _config: BasicAnswerEvaluator(),
         ),
         _EvaluatorRegistration(
             descriptor=EvaluatorDescriptor(
@@ -81,7 +85,7 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
                 category=EvaluatorCategory.OPERATIONAL,
                 llm_judge=False,
             ),
-            factory=ExecutionEvaluator,
+            factory=lambda _config: ExecutionEvaluator(),
         ),
         _EvaluatorRegistration(
             descriptor=EvaluatorDescriptor(
@@ -90,7 +94,7 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
                 category=EvaluatorCategory.DETERMINISTIC,
                 llm_judge=False,
             ),
-            factory=RetrievalCitationEvaluator,
+            factory=lambda _config: RetrievalCitationEvaluator(),
         ),
     )
     return {registration.descriptor.kind: registration for registration in registrations}
@@ -101,10 +105,15 @@ def registered_evaluators() -> tuple[EvaluatorDescriptor, ...]:
 
 
 def build_evaluator(kind: str, config: Mapping[str, Any]) -> Evaluator:
-    if kind in {"product_qa_v2", "product_agent_v2"} and set(config) - {"max_attempts"}:
-        raise UnsupportedEvaluatorError("product evaluator config contains unsupported fields")
+    if kind in {"product_qa_v2", "product_agent_v2"}:
+        if set(config) - {"max_attempts", "max_observation_bytes_per_case"}:
+            raise UnsupportedEvaluatorError("product evaluator config contains unsupported fields")
+        if "max_observation_bytes_per_case" in config:
+            limit = config["max_observation_bytes_per_case"]
+            if type(limit) is not int or not 1 <= limit <= 256 * 1024 * 1024:
+                raise UnsupportedEvaluatorError("product observation budget config is invalid")
     try:
         registration = _registry()[kind]
     except KeyError:
         raise UnsupportedEvaluatorError(f"unsupported evaluator type: {kind}") from None
-    return registration.factory()
+    return registration.factory(config)

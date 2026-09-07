@@ -6,11 +6,18 @@ import pytest
 from app.domain.evaluation import EvaluationCase, TargetResult
 from app.evaluators.base import UnsupportedEvaluatorError, build_evaluator
 from app.product_experiments.dataset_mapping import map_product_dataset
+from app.targets.base import TargetExecutionError
 
 
 def test_product_worker_does_not_silently_ignore_scoring_policy_overrides() -> None:
     with pytest.raises(UnsupportedEvaluatorError, match="config"):
         build_evaluator("product_qa_v2", {"citation_precision_min": 0.0})
+
+
+@pytest.mark.parametrize("limit", [True, 0, -1, 1.5, None, 256 * 1024 * 1024 + 1])
+def test_product_worker_rejects_invalid_observation_quota(limit: object) -> None:
+    with pytest.raises(UnsupportedEvaluatorError, match="config"):
+        build_evaluator("product_qa_v2", {"max_observation_bytes_per_case": limit})
 
 
 def test_worker_product_agent_scores_correct_zero_tool_refusal_without_citations() -> None:
@@ -81,3 +88,17 @@ def test_worker_product_qa_uses_source_id_scores_and_preserves_observation() -> 
     assert result.metrics["product_scores"]["citation_recall"] == 1.0
     assert result.metrics["product_scores"]["citation_precision"] == 0.5
     assert result.metrics["product_observation"]["cost_usd"] == 0.0
+    encoded_size = len(
+        json.dumps(
+            result.metrics["product_observation"], ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+    )
+    limited = build_evaluator("product_qa_v2", {"max_observation_bytes_per_case": encoded_size})
+    assert limited.evaluate(case, target, attempt_number=1).metrics["product_status"] == "OBSERVED"
+    too_small = build_evaluator(
+        "product_qa_v2", {"max_observation_bytes_per_case": encoded_size - 1}
+    )
+    with pytest.raises(TargetExecutionError) as caught:
+        too_small.evaluate(case, target, attempt_number=2)
+    assert caught.value.code == "experiment_observation_budget_exceeded"
+    assert caught.value.retryable is False

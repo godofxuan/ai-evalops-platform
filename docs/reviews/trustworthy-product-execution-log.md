@@ -1,5 +1,18 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第九检查点：静态总观测额度与 worker 永久失败
+
+提交前产品/evaluator/worker/Run/CLI 扩大回归：204 passed / 1 Windows symlink skipped，58.10 秒。第八检查点 `4db8878ac6d7c629943ac0ff8ba7f01ffc20116d` 的 [CI 34097285147](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34097285147) 已 completed/success，包含八 worker 双实验各一槽的真实验收与旧调度回归；不是第九检查点预算的 CI 证明。
+
+- 口径先明确：预算计算复用 local runner 的 ProviderResult.model_dump_json UTF-8 字节，提取 product_observation_bytes 供 local/worker 共用；不是 HTTP 原始响应长度、JSONB 物理占用、审计/失败历史或进程 RSS。HTTP 自身仍执行原响应大小限制。
+- 持久模式采用保守静态预留：max_observation_bytes 默认 64 MiB、最大 256 MiB，除以两组全部 Jobs 数量得到每 Job 上限，余数与未用额度不借给其他 Job。4097 字节/4 Jobs 的反例确认每个 1024、合计 4096，不因 max_attempts=2 再领取一份总额。每 Job 唯一 CaseResult 及 accepted attempt 关联保证最终被接纳的归一化观测最多保留一份。这与 local 顺序累计共享池的分配策略不同，必须在 snapshot 中显式区分，不能承诺同一额度下接纳相同题集。
+- 严格执行：两组 product-v2 evaluator 配置记录 max_observation_bytes_per_case 和配置 hash；DTO 校验两组配置实际执行该额度，不能只在请求中声明预算。旧内部 basic evaluator 实验未声明此额度时不伪造预算；正式 durable preparer 总是声明并绑定。
+- TDD：原 registry 拒绝该新预算字段，先得到失败；接入后恰好等于字节上限可评分，少一字节在评分/成功提交前抛不可重试 experiment_observation_budget_exceeded。错误文本固定，不回显答案。布尔值、非整数、非正数、null 与超过上限均拒绝。
+- worker 回归使用实际注册 mock target、实际产品 evaluator 和原 EvaluationWorker，仅替换数据库/lease 边界：attempt 1/2 超额都不提交成功结果，走原永久失败分类，不重试到偶然通过。这个单元测试不冒充真实 HTTP/数据库 E2E。
+- 定向验证 evaluator/Run/runner 85 passed；准备/合同/evaluator 18 passed；worker/evaluator/准备 33 passed，集合重叠不相加。212 文件 mypy、610 文件格式与 lint 通过。完整回归结果另记。
+
+仍需公开持久提交、原始输入保留、按 accepted attempt 冻结导出、CLI 恢复与完整故障 E2E。
+
 ## 2026-09-07 第八检查点：两组与重试共享的数据库领取窗口
 
 提交前扩大回归 306 passed / 2 skipped，59.28 秒。跳过为本机符号链接权限和未配置真实 PostgreSQL；不得计为成功。静态检查与 diff --check 均通过。

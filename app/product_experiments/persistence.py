@@ -34,8 +34,29 @@ class NewProductExperiment:
     candidate: NewRun
     max_total_attempts: int = 20_000
     max_active_jobs: int = 4
+    max_observation_bytes: int | None = None
 
     def __post_init__(self) -> None:
+        if self.max_observation_bytes is not None:
+            if (
+                type(self.max_observation_bytes) is not int
+                or not 1 <= self.max_observation_bytes <= 256 * 1024 * 1024
+                or not self.baseline.cases
+                or not self.candidate.cases
+            ):
+                raise ValueError("experiment observation budget or case count is invalid")
+            per_job = self.observation_bytes_per_job
+            if per_job is None or per_job < 1:
+                raise ValueError("experiment observation budget cannot cover both arms")
+            for arm in (self.baseline, self.candidate):
+                configured = arm.evaluator_config.get("max_observation_bytes_per_case")
+                if (
+                    arm.evaluator_type not in {"product_qa_v2", "product_agent_v2"}
+                    or arm.evaluator_version != "product-v2"
+                    or type(configured) is not int
+                    or configured != per_job
+                ):
+                    raise ValueError("experiment observation budget is not enforced by evaluator")
         if type(self.max_active_jobs) is not int or not 1 <= self.max_active_jobs <= 64:
             raise ValueError("experiment active job window must be within [1, 64]")
         if type(self.max_total_attempts) is not int or not 1 <= self.max_total_attempts <= 200_000:
@@ -71,6 +92,12 @@ class NewProductExperiment:
             raise ValueError("experiment arms must share the absolute deadline")
 
     @property
+    def observation_bytes_per_job(self) -> int | None:
+        if self.max_observation_bytes is None:
+            return None
+        return self.max_observation_bytes // (len(self.baseline.cases) + len(self.candidate.cases))
+
+    @property
     def reserved_target_attempts(self) -> int:
         return sum(len(arm.cases) * arm.max_attempts for arm in (self.baseline, self.candidate))
 
@@ -91,6 +118,19 @@ class NewProductExperiment:
             "enforcement": "DATABASE_ACTIVE_CLAIMS",
             "physical_upstream_concurrency_guaranteed": False,
         }
+        snapshot.pop("observation_budget", None)
+        if self.max_observation_bytes is not None:
+            per_job = self.observation_bytes_per_job
+            assert per_job is not None
+            snapshot["observation_budget"] = {
+                "max_observation_bytes": self.max_observation_bytes,
+                "max_bytes_per_job": per_job,
+                "reserved_bytes": per_job * (len(self.baseline.cases) + len(self.candidate.cases)),
+                "scope": "ACCEPTED_NORMALIZED_OBSERVATIONS",
+                "enforcement": "STATIC_PER_JOB_EVALUATOR_LIMIT",
+                "unused_bytes_reallocated": False,
+                "database_storage_or_rss_limit": False,
+            }
         snapshot["content_sha256"] = canonical_request_hash(snapshot)
         return snapshot
 

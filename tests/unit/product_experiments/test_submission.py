@@ -1,5 +1,6 @@
 import hashlib
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -165,6 +166,32 @@ async def test_preparation_reserves_one_shared_active_claim_window(
         "enforcement": "DATABASE_ACTIVE_CLAIMS",
         "physical_upstream_concurrency_guaranteed": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_preparation_reserves_total_normalized_observation_bytes_once_per_job(
+    submission_inputs: dict[str, Any],
+) -> None:
+    from app.product_experiments.submission import (
+        DurableExperimentRequest,
+        prepare_durable_experiment,
+    )
+
+    raw = submission_inputs["request"].model_dump(mode="json")
+    raw["max_observation_bytes"] = 4097
+    submission_inputs["request"] = DurableExperimentRequest.model_validate_json(json.dumps(raw))
+    pending = await prepare_durable_experiment(**submission_inputs)
+    assert pending.baseline.evaluator_config["max_observation_bytes_per_case"] == 1024
+    assert pending.candidate.evaluator_config["max_observation_bytes_per_case"] == 1024
+    assert pending.snapshot["observation_budget"]["reserved_bytes"] == 4096
+    assert pending.snapshot["observation_budget"]["max_observation_bytes"] == 4097
+    assert pending.snapshot["observation_budget"]["scope"] == "ACCEPTED_NORMALIZED_OBSERVATIONS"
+    with pytest.raises(ValueError, match="observation budget"):
+        replace(
+            pending,
+            baseline=replace(pending.baseline, evaluator_config={"max_attempts": 2}),
+            candidate=replace(pending.candidate, evaluator_config={"max_attempts": 2}),
+        )
 
 
 @pytest.mark.asyncio

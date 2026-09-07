@@ -63,6 +63,7 @@ class DurableExperimentRequest(BaseModel):
     max_attempts: int = Field(default=3, ge=1, le=10)
     max_total_attempts: int = Field(default=20_000, ge=1, le=200_000)
     max_active_jobs: int = Field(default=4, ge=1, le=64)
+    max_observation_bytes: int = Field(default=64 * 1024 * 1024, ge=1, le=256 * 1024 * 1024)
     execution_timeout_seconds: float = Field(default=3600.0, gt=0, le=86_400)
 
     @model_validator(mode="after")
@@ -103,6 +104,9 @@ async def prepare_durable_experiment(
         raise InputLimitError("paired bootstrap computation limit exceeded")
     if 2 * count * request.max_attempts > request.max_total_attempts:
         raise InputLimitError("attempt budget cannot cover both arms and retries")
+    observation_bytes_per_case = request.max_observation_bytes // (2 * count)
+    if observation_bytes_per_case < 1:
+        raise InputLimitError("observation budget cannot reserve one byte per Job")
     prepared: list[NewRun] = []
     for label, arm in (("baseline", request.baseline), ("candidate", request.candidate)):
         pending = await run_service.prepare_run(
@@ -116,7 +120,10 @@ async def prepare_durable_experiment(
                 evaluator=ComponentSpec(
                     type="product_qa_v2" if request.task_type == "QA" else "product_agent_v2",
                     version="product-v2",
-                    config={"max_attempts": request.max_attempts},
+                    config={
+                        "max_attempts": request.max_attempts,
+                        "max_observation_bytes_per_case": observation_bytes_per_case,
+                    },
                 ),
                 source_commit=arm.source_sha,
             ),
@@ -167,5 +174,6 @@ async def prepare_durable_experiment(
         candidate=prepared[1],
         max_total_attempts=request.max_total_attempts,
         max_active_jobs=request.max_active_jobs,
+        max_observation_bytes=request.max_observation_bytes,
     )
     return replace(pending_experiment, snapshot=pending_experiment.snapshot_with_attempt_budget())

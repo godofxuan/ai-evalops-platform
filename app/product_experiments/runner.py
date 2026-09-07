@@ -122,6 +122,11 @@ class ProviderResult(BaseModel):
             raise TargetInvalidResponseError("target_agent_observation_invalid") from None
 
 
+def product_observation_bytes(result: ProviderResult) -> int:
+    """Versioned normalized observation UTF-8 bytes, not raw HTTP or database storage size."""
+    return len(result.model_dump_json().encode("utf-8"))
+
+
 class Provider(Protocol):
     async def execute(self, case: ExperimentCase) -> ProviderResult:
         """Execute one frozen case without changing evaluation semantics."""
@@ -548,7 +553,7 @@ async def run_experiment(
                         retryable=False,
                     )
                 result = await providers[arm.label].execute(case)
-                byte_size = len(result.model_dump_json().encode("utf-8"))
+                byte_size = product_observation_bytes(result)
                 if retained_observation_bytes + byte_size > spec.max_observation_bytes:
                     observation_budget_exhausted = True
                     raise TargetExecutionError(
