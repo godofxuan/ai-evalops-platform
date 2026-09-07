@@ -1,5 +1,21 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十三检查点：共享离线聚合与持久报告重算
+
+第十二检查点 `691ee9335e3ac413dae6e6f88a43fc58cc4ad951` 的 [CI 34102977779](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34102977779) 两项工作已 completed/success，包含真实 PostgreSQL 完整终态快照、重复读取摘要和租户隐藏。以下是其后的新代码，不借用上一个 CI 为本节背书。
+
+- 设计判断：持久导出不能再次调用目标，也不能复制一套 QA/Agent 质量公式。新增只接收观测与冻结上下文的纯 aggregate_product_observations；评分、统计、Agent 专项比较与逐条比较均复用现有函数。先用原 local runner 的 QA/Agent 结果逐字段比对，2 项通过后，再把 local runner 改为调用同一聚合器并移除重复评分暂存。
+- 行为变化边界：目标执行仍有原 deadline/窗口/字节限制；纯评分统一放在目标阶段之后，使用已有输入规模与计算量限制，不声称统计 CPU 被 HTTP deadline 硬抢占。无效或缺失观测不能用成功交集生成完整 PASS；缺成本与缺 Agent 轨迹保持 INSUFFICIENT_EVIDENCE。全局来源资格仍 false。
+- 新 build_durable_report 将结果快照、输入快照、请求指纹、原始 JSON SHA、规范化 JSONL SHA、dataset version、实际组件 hash/版本与全部病例绑定。原始材料先校验与重新映射；accepted worker 观测经严格 ProviderResult 校验后重算评分，要求保存的评分和缺失原因可以复现。调用链没有 target/client 参数，不重试模型以改善答案。
+- 使用独立 `evalops.durable-experiment-report/1.0` 外层合同保存结果快照及其摘要，内部展示结果复用现有模型；不伪造 local 输入 snapshot，也不声称旧 local verifier 已支持 durable 包。完整报告含私有病例/观测，尚未对外发布，后续公共导出必须走允许字段投影。
+- 实际身份：结果 execution_id 是父实验 UUID；events 记录真实 Run/Job/accepted attempt ID、序号和开始/完成时间，不伪造 local 的平衡执行顺序。两题 fixture 虽然执行正确，仍因不足 100 题显示 INSUFFICIENT_EVIDENCE。
+- TDD 发现四类漏洞：重新计算摘要后，重复 result ID、缺失完成时间、篡改静态观测预算、改变请求 target_version 最初仍能生成报告。分别加入全局结果身份唯一、带时区有效时间、请求推导预算/实际观测字节核验、请求版本与实际 Run 版本绑定后，反例全部拒绝。已有改分、错 dataset/version/config、缺题、旧 attempt 反例同时通过。
+- QA 与合法零工具 Agent 的 worker 实际 evaluator 产物均可重算；失败一题时保留另外三条观测，输出 EXECUTION_FAILED 和 target_timeout，不生成逐条成功交集报告。测试是受控进程内算法/合同验证，不冒充 HTTP→worker→数据库→导出的完整 E2E。
+- 遇到的问题：初版聚合器的 Literal arm 和 dict 不变性出现两项 mypy 错误，显式类型化修复；两次 Agent 测试补丁因格式器换行未完整应用，核对实际 diff 后重新应用。中间 30 passed 不包含 Agent 参数化，实际加入后为 31 passed；未把失败补丁计作能力完成。
+- 最后扩大回归：304 passed / 2 skipped，55.08 秒；跳过分别是 Windows symlink 权限与未配置 PostgreSQL。全仓 lint、618 文件格式、216 文件 mypy 和 diff --check 通过。集合与之前回归重叠，不相加。
+
+仍未完成：报告 artifact 原子发布/并发重放、鉴权公开导出、durable CLI、真实 API→worker→报告和进程故障矩阵、最终文档/双 SHA 与最终跨任务同步。下一步为报告发布接入既有 artifact 生命周期，避免把实验报告混成单 Run summary，也不能用保存 blob 就声称租户所有权已建立。
+
 ## 2026-09-07 第十二检查点：有效结果的完整只读快照
 
 第十一检查点 `95462c2b778f5950e40b477840db7481f3b39a32` 的 [CI 34101869013](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34101869013) 两项工作均 completed/success，包含 workflow 显式执行的真实 product persistence 测试。鉴权提交、8 路并发幂等和跨租户隐藏断言已获得该精确 CI 支持，不再仅为本地替身验证。

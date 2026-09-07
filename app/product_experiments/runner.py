@@ -27,17 +27,13 @@ from app.external_harness.formal_quality import (
 from app.external_harness.harness_envelope import canonical_sha256
 from app.jobs.retry_policy import classify_failure
 from app.product_experiments.agent_projection import project_agent_trace
-from app.product_experiments.assessment import assess_product_numeric
 from app.product_experiments.diagnostics import (
     CategoryDiagnostic,
     MetricDiagnostic,
-    build_category_diagnostics,
-    build_metric_diagnostics,
 )
 from app.product_experiments.evaluators import (
     CaseEvaluator,
     citation_evidence_scores,
-    registered_evaluators,
 )
 from app.product_experiments.measurements import ProductArmResult, ProductCaseMeasurement
 from app.product_experiments.spec import (
@@ -533,16 +529,13 @@ async def run_experiment(
         )
         for arm in spec.arms
     }
-    evaluators = registered_evaluators(spec.evaluators)
     semaphore = asyncio.Semaphore(spec.max_concurrency)
     execution_errors: list[CaseExecutionFailure] = []
     observed_results: dict[str, dict[str, ProviderResult]] = {arm.label: {} for arm in spec.arms}
     retained_observation_bytes = 0
     observation_budget_exhausted = False
 
-    async def measure(
-        arm: ExperimentArm, case: ExperimentCase
-    ) -> tuple[ProductCaseMeasurement, ProviderResult, dict[str, float]] | None:
+    async def measure(arm: ExperimentArm, case: ExperimentCase) -> None:
         nonlocal retained_observation_bytes, observation_budget_exhausted
         async with semaphore:
             try:
@@ -575,27 +568,6 @@ async def run_experiment(
                 )
                 return None
             observed_results[arm.label][case.case_id] = result
-            if result.cost_usd is None:
-                requirements.append(
-                    {"arm": arm.label, "case_id": case.case_id, "code": "MISSING_COST_MEASUREMENT"}
-                )
-                return None
-            if spec.task_type == "AGENT_TOOL_USE" and result.missing_fields:
-                requirements.append(
-                    {
-                        "arm": arm.label,
-                        "case_id": case.case_id,
-                        "code": "MISSING_AGENT_OBSERVATION",
-                        "fields": ",".join(result.missing_fields),
-                    }
-                )
-                return None
-            scores = score_product_case(case, result, evaluators=evaluators)
-            return (
-                _measurement(case, result, scores=scores, task_type=spec.task_type),
-                result,
-                scores,
-            )
 
     rng = random.Random(spec.order_seed)
     first_arms: list[int] = []
@@ -610,9 +582,6 @@ async def run_experiment(
         for index, case in enumerate(cases)
     ]
     events: list[dict[str, Any]] = []
-    paired_rows: dict[
-        str, list[tuple[ProductCaseMeasurement, ProviderResult, dict[str, float]] | None]
-    ] = {arm.label: [None] * len(cases) for arm in spec.arms}
     pending = iter(enumerate(cases))
 
     async def consume_pairs() -> None:
@@ -626,7 +595,7 @@ async def run_experiment(
                 }
                 events.append(event)
                 try:
-                    paired_rows[arm.label][index] = await measure(arm, case)
+                    await measure(arm, case)
                 finally:
                     event["finished_at_utc"] = datetime.now(UTC).isoformat()
                     event["observation_status"] = (
@@ -635,9 +604,6 @@ async def run_experiment(
                         else "NO_VALID_OBSERVATION"
                     )
 
-    measurements: dict[str, list[ProductCaseMeasurement]] = {}
-    provider_results: dict[str, dict[str, ProviderResult]] = {}
-    score_results: dict[str, dict[str, dict[str, float]]] = {}
     deadline = asyncio.get_running_loop().time() + spec.execution_timeout_seconds
     try:
         async with asyncio.timeout_at(deadline):
@@ -660,119 +626,32 @@ async def run_experiment(
                             retryable=False,
                         )
                     )
-    for arm in spec.arms:
-        rows = paired_rows[arm.label]
-        measurements[arm.label] = [row[0] for row in rows if row is not None]
-        provider_results[arm.label] = {
-            case.case_id: row[1] for case, row in zip(cases, rows, strict=True) if row is not None
-        }
-        score_results[arm.label] = {
-            case.case_id: row[2] for case, row in zip(cases, rows, strict=True) if row is not None
-        }
-    metric_diagnostics = build_metric_diagnostics(
-        cases, observed_results, evaluator_names=spec.evaluators
+    # Local execution and durable export share this pure, no-network aggregation path.
+    from app.product_experiments.aggregation import (
+        ProductAggregationContext,
+        aggregate_product_observations,
     )
-    category_diagnostics = build_category_diagnostics(
-        cases,
-        observed_results,
-        evaluator_names=spec.evaluators,
-        minimum_cases=policy.minimum_cases_per_category,
-        required_categories=policy.required_categories,
-    )
-    if execution_errors or requirements:
-        return ProductExperimentResult(
+
+    return aggregate_product_observations(
+        context=ProductAggregationContext(
             experiment_id=spec.experiment_id,
-            status="EXECUTION_FAILED" if execution_errors else "INSUFFICIENT_EVIDENCE",
-            execution_schedule=schedule,
-            execution_events=events,
-            input_snapshot=snapshot,
             execution_id=execution_id,
             scope=spec.scope,
             task_type=spec.task_type,
             dataset_sha256=spec.dataset.sha256,
             evalops_sha=evalops_sha,
-            case_count=len(cases),
             source_identities=source_identities,
-            arms={},
-            automated_assessment={"status": "NOT_RUN", "reason": "observations_incomplete"},
-            case_comparisons=[],
-            observations=observed_results,
-            metric_diagnostics=metric_diagnostics,
-            category_diagnostics=category_diagnostics,
-            input_requirements=sorted(
-                requirements, key=lambda item: (item["arm"], item["case_id"])
-            ),
-            execution_errors=sorted(execution_errors, key=lambda error: (error.arm, error.case_id)),
-        )
-    baseline_arm, candidate_arm = spec.arms
-    baseline = ProductArmResult(
-        arm="baseline",
-        source_sha=baseline_arm.source_sha,
-        dataset_sha256=spec.dataset.sha256,
-        cases=measurements["baseline"],
-    )
-    candidate = ProductArmResult(
-        arm="candidate",
-        source_sha=candidate_arm.source_sha,
-        dataset_sha256=spec.dataset.sha256,
-        cases=measurements["candidate"],
-    )
-    assessment = assess_product_numeric(
-        baseline,
-        candidate,
-        policy=policy,
-        task_type=spec.task_type,
-        citation_precision_min=spec.citation_precision_min,
-    )
-    agent_assessment = (
-        _agent_assessment(score_results, policy=spec.agent_comparison_policy)
-        if spec.task_type == "AGENT_TOOL_USE"
-        else None
-    )
-    automated_pass = assessment["status"] == "PASS" and (
-        agent_assessment is None or agent_assessment["status"] == "PASS"
-    )
-    status: Literal[
-        "DEMO_PASS",
-        "DEMO_FAIL",
-        "AUTOMATED_PASS_HUMAN_REVIEW_PENDING",
-        "AUTOMATED_FAIL",
-        "INSUFFICIENT_EVIDENCE",
-    ]
-    if assessment["status"] == "INSUFFICIENT_EVIDENCE":
-        status = "INSUFFICIENT_EVIDENCE"
-    elif spec.scope == "DEMO":
-        status = "DEMO_PASS" if automated_pass else "DEMO_FAIL"
-    elif automated_pass:
-        status = "AUTOMATED_PASS_HUMAN_REVIEW_PENDING"
-    else:
-        status = "AUTOMATED_FAIL"
-    return ProductExperimentResult(
-        experiment_id=spec.experiment_id,
-        status=status,
+            input_snapshot=snapshot,
+            policy=policy,
+            agent_comparison_policy=spec.agent_comparison_policy,
+            citation_precision_min=spec.citation_precision_min,
+            evaluator_names=spec.evaluators,
+        ),
+        cases=cases,
+        observations=observed_results,
+        execution_errors=execution_errors,
         execution_schedule=schedule,
         execution_events=events,
-        input_snapshot=snapshot,
-        execution_id=execution_id,
-        observations=observed_results,
-        metric_diagnostics=metric_diagnostics,
-        category_diagnostics=category_diagnostics,
-        scope=spec.scope,
-        task_type=spec.task_type,
-        dataset_sha256=spec.dataset.sha256,
-        evalops_sha=evalops_sha,
-        case_count=len(cases),
-        source_identities=source_identities,
-        arms={"baseline": baseline, "candidate": candidate},
-        automated_assessment=assessment,
-        agent_tool_use_assessment=agent_assessment,
-        case_comparisons=_comparisons(
-            baseline,
-            candidate,
-            provider_results=provider_results,
-            score_results=score_results,
-            task_type=spec.task_type,
-        ),
     )
 
 

@@ -24,6 +24,50 @@ CATEGORIES = (
 )
 
 
+@pytest.mark.parametrize("task", ["QA", "AGENT_TOOL_USE"])
+async def test_frozen_observation_aggregation_matches_execution_without_recalling_targets(
+    tmp_path: Path, task: str
+) -> None:
+    from app.external_harness.formal_quality import FormalQualityPolicy
+    from app.product_experiments.aggregation import (
+        ProductAggregationContext,
+        aggregate_product_observations,
+    )
+    from app.product_experiments.runner import parse_product_dataset
+    from app.product_experiments.spec import load_experiment_spec
+
+    path = _experiment(tmp_path) if task == "QA" else _agent_experiment(tmp_path)
+    executed = await run_experiment(path, evalops_sha="e" * 40)
+    loaded = load_experiment_spec(path)
+    spec = loaded.spec
+    cases = parse_product_dataset(
+        loaded.dataset_path.read_bytes(), expected_sha256=spec.dataset.sha256
+    )
+    context = ProductAggregationContext(
+        experiment_id=spec.experiment_id,
+        execution_id=executed.execution_id,
+        scope=spec.scope,
+        task_type=spec.task_type,
+        dataset_sha256=spec.dataset.sha256,
+        evalops_sha=executed.evalops_sha,
+        source_identities=executed.source_identities,
+        input_snapshot=executed.input_snapshot,
+        policy=FormalQualityPolicy.model_validate_json(loaded.policy_path.read_bytes()),
+        agent_comparison_policy=spec.agent_comparison_policy,
+        citation_precision_min=spec.citation_precision_min,
+        evaluator_names=spec.evaluators,
+    )
+    rebuilt = aggregate_product_observations(
+        context=context,
+        cases=cases,
+        observations=executed.observations,
+        execution_errors=executed.execution_errors,
+        execution_schedule=executed.execution_schedule,
+        execution_events=executed.execution_events,
+    )
+    assert rebuilt.model_dump(mode="json") == executed.model_dump(mode="json")
+
+
 @pytest.mark.parametrize("source", ["spec", "policy", "dataset"])
 def test_preflight_rejects_duplicate_json_fields_before_execution(
     tmp_path: Path, source: str

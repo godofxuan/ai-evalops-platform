@@ -67,9 +67,10 @@ class PairDatabaseBoundary:
 
 
 @pytest.fixture
-async def submission_inputs(tmp_path: Path) -> dict[str, Any]:
+async def submission_inputs(tmp_path: Path, request: pytest.FixtureRequest) -> dict[str, Any]:
     from app.product_experiments.submission import DurableExperimentRequest
 
+    task_type = getattr(request, "param", "QA")
     raw = json.dumps(
         [
             {
@@ -79,6 +80,11 @@ async def submission_inputs(tmp_path: Path) -> dict[str, Any]:
                 "reference_answer": "private answer",
                 "expected_citation_ids": ["gold"],
                 "metadata": {"public_context": {"locale": "zh-CN"}},
+                **(
+                    {"allowed_tools": [], "max_tool_calls": 0}
+                    if task_type == "AGENT_TOOL_USE"
+                    else {}
+                ),
             }
             for index in range(2)
         ]
@@ -109,7 +115,7 @@ async def submission_inputs(tmp_path: Path) -> dict[str, Any]:
             {
                 "schema_version": "evalops.durable-experiment-request/1.0",
                 "experiment_id": "paired-qa",
-                "task_type": "QA",
+                "task_type": task_type,
                 "scope": "DEMO",
                 "dataset_version_id": str(version),
                 "source_dataset_sha256": raw_sha,
