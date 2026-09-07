@@ -1,5 +1,14 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十九检查点：完整门禁发现并修复证据清单漂移
+
+- 第十八候选 `87778965024f47c0a9c0dcb5be5fa786f3ad8005` 的 CI 34116820987 completed/failure，不能作为最终成功 CODE_SHA。具体失败为 Verify final evidence file manifest；Compose 与 atomic product experiment pairs（含 QA/Agent 的新增路径）步骤实际 success，但不以部分成功替代整个门禁。
+- 完整本地单元回归：1120 passed、1 failed、1 skipped，318.06 秒。唯一失败是 PROJECT_STATUS.md 清单大小漂移；skip 是 Windows 无创建符号链接权限，不计作通过。
+- 使用 diagnose 流程比较三种假设：文档更新漏刷新、换行不一致、覆盖范围变化。实际范围完全一致；按校验器相同 LF 规范化后，PROJECT_STATUS.md 从 15000 变为 16458 字节，README.md 从 58874 变为 63474 字节，因此确认漏刷新，而非平台换行或范围问题。
+- 最小修复：运行已有清单生成器重新绑定当前文件，不删除校验、不改接受标准、不修改历史跨仓 Final Pair 内容。既有失败测试就是正确回归入口。以后修改入口文档后、提交前必须运行该校验器；最终 DOC 提交也要再次刷新。
+- 实现源码不再改动，但失败候选不能冒充成功代码冻结；修复提交将成为新的候选 CODE_SHA，并获取自己的完整 CI。上一候选产生的六个未提交公开演示文件移除，按新冻结 SHA 在干净源码上重新生成。它们无用户数据，仅为可重建 fixture 产物。
+- main 远端仍为 50af0603ff76615f3cf2c54fba3230e1cee7647f；没有修改 RAG、历史分支或简历附件。
+
 ## 2026-09-07 第十八检查点：实现冻结前的可用性与双任务类型验收
 
 第十七检查点 `799ba5acbacf5a529472caf8b27083542c5d23b2` 的 [CI 34114567320](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34114567320) 已 completed/success，提交确认丢失、父实验取消竞争、导出进程强杀和真实停滞流有了自己的精确回执。
