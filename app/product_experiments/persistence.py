@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -33,8 +33,11 @@ class NewProductExperiment:
     baseline: NewRun
     candidate: NewRun
     max_total_attempts: int = 20_000
+    max_active_jobs: int = 4
 
     def __post_init__(self) -> None:
+        if type(self.max_active_jobs) is not int or not 1 <= self.max_active_jobs <= 64:
+            raise ValueError("experiment active job window must be within [1, 64]")
         if type(self.max_total_attempts) is not int or not 1 <= self.max_total_attempts <= 200_000:
             raise ValueError("experiment attempt budget must be within [1, 200000]")
         if any(
@@ -81,6 +84,12 @@ class NewProductExperiment:
             "enforcement": "EXISTING_PER_JOB_ATTEMPT_LIMITS",
             "model_internal_calls_bounded": False,
             "hard_currency_budget": False,
+        }
+        snapshot["admission_budget"] = {
+            "max_active_jobs": self.max_active_jobs,
+            "scope": "BOTH_ARMS_AND_RETRIES",
+            "enforcement": "DATABASE_ACTIVE_CLAIMS",
+            "physical_upstream_concurrency_guaranteed": False,
         }
         snapshot["content_sha256"] = canonical_request_hash(snapshot)
         return snapshot
@@ -203,15 +212,26 @@ class SQLAlchemyProductExperimentRepository:
         ).hexdigest()
         try:
             async with self._session_factory.begin() as session:
+                experiment_id = uuid4()
                 baseline = await insert_run_and_jobs(
                     session,
-                    replace(pending.baseline, idempotency_key=f"product:{key_digest}:baseline"),
+                    replace(
+                        pending.baseline,
+                        idempotency_key=f"product:{key_digest}:baseline",
+                        product_experiment_id=experiment_id,
+                    ),
                 )
                 candidate = await insert_run_and_jobs(
                     session,
-                    replace(pending.candidate, idempotency_key=f"product:{key_digest}:candidate"),
+                    replace(
+                        pending.candidate,
+                        idempotency_key=f"product:{key_digest}:candidate",
+                        product_experiment_id=experiment_id,
+                    ),
                 )
                 row = ProductExperiment(
+                    id=experiment_id,
+                    max_active_jobs=pending.max_active_jobs,
                     tenant_id=pending.tenant_id,
                     created_by=pending.created_by,
                     idempotency_key=pending.idempotency_key,

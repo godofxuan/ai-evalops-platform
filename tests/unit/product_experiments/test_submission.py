@@ -146,6 +146,28 @@ async def test_preparation_binds_raw_mapping_registry_and_shared_deadline(
 
 
 @pytest.mark.asyncio
+async def test_preparation_reserves_one_shared_active_claim_window(
+    submission_inputs: dict[str, Any],
+) -> None:
+    from app.product_experiments.submission import (
+        DurableExperimentRequest,
+        prepare_durable_experiment,
+    )
+
+    raw = submission_inputs["request"].model_dump(mode="json")
+    raw["max_active_jobs"] = 2
+    submission_inputs["request"] = DurableExperimentRequest.model_validate_json(json.dumps(raw))
+    pending = await prepare_durable_experiment(**submission_inputs)
+    assert pending.max_active_jobs == 2
+    assert pending.snapshot["admission_budget"] == {
+        "max_active_jobs": 2,
+        "scope": "BOTH_ARMS_AND_RETRIES",
+        "enforcement": "DATABASE_ACTIVE_CLAIMS",
+        "physical_upstream_concurrency_guaranteed": False,
+    }
+
+
+@pytest.mark.asyncio
 async def test_preparation_rejects_rehashed_raw_data_not_matching_stored_version(
     submission_inputs: dict[str, Any],
 ) -> None:

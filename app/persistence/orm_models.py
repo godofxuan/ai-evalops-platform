@@ -101,6 +101,10 @@ class Base(DeclarativeBase):
 class ProductExperiment(Base):
     __tablename__ = "product_experiments"
     __table_args__ = (
+        UniqueConstraint("id", "tenant_id", name="uq_product_experiments_id_tenant"),
+        CheckConstraint(
+            "max_active_jobs IS NULL OR max_active_jobs BETWEEN 1 AND 64", name="active_jobs_range"
+        ),
         UniqueConstraint("tenant_id", "idempotency_key", name="uq_product_experiments_tenant_key"),
         ForeignKeyConstraint(
             ["baseline_run_id", "tenant_id"],
@@ -132,6 +136,7 @@ class ProductExperiment(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    max_active_jobs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     baseline_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     candidate_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     cancel_requested: Mapped[bool] = mapped_column(
@@ -533,6 +538,14 @@ class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["product_experiment_id", "tenant_id"],
+            ["product_experiments.id", "product_experiments.tenant_id"],
+            name="fk_evaluation_runs_product_experiment_tenant",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        Index("ix_evaluation_runs_product_experiment", "product_experiment_id"),
+        ForeignKeyConstraint(
             ["dataset_version_id", "tenant_id"],
             ["dataset_versions.id", "dataset_versions.tenant_id"],
             name="fk_evaluation_runs_dataset_version_tenant",
@@ -590,6 +603,7 @@ class EvaluationRun(Base):
     source_commit: Mapped[str | None] = mapped_column(String(128))
     origin_traceparent: Mapped[str | None] = mapped_column(String(55))
     execution_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    product_experiment_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[RunStatus] = mapped_column(
         run_status_enum,
         nullable=False,

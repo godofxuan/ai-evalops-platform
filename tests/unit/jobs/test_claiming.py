@@ -175,6 +175,14 @@ def test_claim_candidates_prune_tenant_ranks_that_cannot_enter_the_batch() -> No
     assert "ranked_claim_candidates.tenant_candidate_rank <= 10" in sql
 
 
+def test_claim_selection_excludes_pairs_at_capacity_but_keeps_unmanaged_runs() -> None:
+    sql = compile_postgresql(build_tenant_job_claim_statement(now=NOW, tenant_id=TENANT_ID))
+    assert "evaluation_runs.product_experiment_id IS NULL" in sql
+    assert "experiment_active_jobs.status IN ('running', 'cancelling')" in sql
+    assert "product_experiments.max_active_jobs" in sql
+    assert "product_experiments.cancel_requested IS false" in sql
+
+
 def test_claim_candidates_materialize_ranking_once_before_outer_filtering() -> None:
     sql = compile_postgresql(build_claim_candidates_statement(now=NOW, limit=10))
 

@@ -62,6 +62,7 @@ class DurableExperimentRequest(BaseModel):
     citation_precision_min: float = Field(default=0.95, ge=0, le=1)
     max_attempts: int = Field(default=3, ge=1, le=10)
     max_total_attempts: int = Field(default=20_000, ge=1, le=200_000)
+    max_active_jobs: int = Field(default=4, ge=1, le=64)
     execution_timeout_seconds: float = Field(default=3600.0, gt=0, le=86_400)
 
     @model_validator(mode="after")
@@ -165,5 +166,6 @@ async def prepare_durable_experiment(
         baseline=prepared[0],
         candidate=prepared[1],
         max_total_attempts=request.max_total_attempts,
+        max_active_jobs=request.max_active_jobs,
     )
     return replace(pending_experiment, snapshot=pending_experiment.snapshot_with_attempt_budget())

@@ -4,6 +4,8 @@
 
 ## 先检查输入
 
+新实验的共享领取窗口通过 0031 迁移接入既有调度器：max_active_jobs（默认 4，1–64）统计两组的 RUNNING/CANCELLING Jobs，重试不另领一份额度。旧 Run 不回填；满额时不生成 attempt。它是数据库 active-claim 上限，不是失联外部调用的物理并发保证。该改动须等待本检查点精确 CI，公开持久提交入口仍未开放。
+
 持久结果新增 0030 迁移：新成功结果直接关联 accepted_attempt_id，并通过复合外键绑定同一个 Job；旧结果保持 null，不猜测回填。提交同时检查 claim/Job/attempt 的尝试序号一致。它为后续只导出有效结果提供身份依据，但尚不代表完整 durable 导出已经开放。
 
 ```console

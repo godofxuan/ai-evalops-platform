@@ -49,6 +49,7 @@ class NewRun:
     cases: tuple[dict[str, Any], ...]
     origin_traceparent: str | None = None
     execution_deadline_at: datetime | None = None
+    product_experiment_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +165,7 @@ async def insert_run_and_jobs(session: AsyncSession, new_run: NewRun) -> Evaluat
         source_commit=new_run.source_commit,
         origin_traceparent=new_run.origin_traceparent,
         execution_deadline_at=new_run.execution_deadline_at,
+        product_experiment_id=new_run.product_experiment_id,
         status=RunStatus.QUEUED,
         total_jobs=len(new_run.cases),
         succeeded_jobs=0,

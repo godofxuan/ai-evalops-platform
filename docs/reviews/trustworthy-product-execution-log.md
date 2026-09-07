@@ -1,5 +1,21 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第八检查点：两组与重试共享的数据库领取窗口
+
+提交前扩大回归 306 passed / 2 skipped，59.28 秒。跳过为本机符号链接权限和未配置真实 PostgreSQL；不得计为成功。静态检查与 diff --check 均通过。
+
+第七检查点 `3bc97307ce50804d9dbc73c568d557ddc5b7a135` 的 [CI 34096255134](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34096255134) 已 completed/success，quality-and-integration 与 compose-smoke 都成功，包括有效 attempt 外键和真实重试断言。本节是后续改动，尚待自己的精确 CI。
+
+- 设计判断：仅在 worker 内放 semaphore 无法限制多个进程；只在领取前查询数量也会读到同一个空位。因此在现有领取事务里增加父实验锁与锁内容量复查，不新增后台调度或第二份可漂移 running 计数。
+- 0031 增量迁移：新 Run 保存 product_experiment_id，复合 tenant 外键延迟到事务结束检查；父记录保存 max_active_jobs（新请求默认 4、范围 1–64）。父 ID 在两组插入前生成，仍在一个事务内完整提交。旧 Run/实验不回填，null 的 unmanaged Run 保留原路径且不额外执行实验取锁查询。约束命名使用 op.f，防止约定重复添加前缀。
+- 容量是两组所有 RUNNING/CANCELLING Jobs 的合计，重试进入 RUNNING 时也占同一窗口。过期 lease 在原 reaper 改状态前仍占容量，取消中的外部操作也不提前释放名额。不把数据库有效领取上限说成物理外部调用上限，失联远端副作用无法靠数据库撤销。
+- 所有既有候选/优先级/公平轮成员查询使用一致的容量筛选，满额实验不会成为队首阻塞其他可执行实验。候选查询只是提示，最后仍必须在父记录锁内复查。满额不新增 JobAttempt、不递增 attempt_count、不分配成功领取序号。
+- 锁顺序检查：原路径已经持有 Job 时，新增父实验和 Run 锁都使用 SKIP LOCKED，禁止逆序等待取消路径；Run 使用 NO KEY UPDATE 保留 FK KEY SHARE 兼容。若忙则交还本次领取；父锁持有到原事务结束。未取得有效 Job 的 fair permit 按是否仍存在可执行任务决定保留或 EMPTY，不伪装为 CONSUMED。租约开始时刻移到容量准入通过之后。
+- 测试过程：未实现时 shared window 请求因未知字段拒绝、领取 SQL 缺容量条件，分别先失败再通过。准备/合同 6 passed；基础迁移/Run 86 passed；接入后的 jobs/worker/persistence/runs 153 passed。集合有重叠，不相加。mypy 212 文件、610 文件格式和 lint 通过。
+- 真实验收已加入原 CI：同租户两个实验，各一槽、每个含两组共 4 Jobs；8 worker 并发领取，每波只能各取一个，满额后返回空；真实成功提交释放后再取下一波，4 波共 8 Jobs 不重复且每个只有 attempt 1。这证明范围限定为数据库 claim/result 生命周期，不是完整公开 API→HTTP target→报告 E2E。本机跳过真实数据库用例，等待本检查点 CI；旧公平性回归也必须通过，未重跑真实模型性能或宣布性能晋级。
+
+下一项仍为持久观测总量限制、公开提交和 accepted-attempt 报告导出；本节不会提前宣布 S4/S5/S7 完成。
+
 ## 2026-09-07 第七检查点：有效结果的 attempt 直接关联
 
 第六检查点 `56163a62e96157e7d959c5bcabe5489b5b0ea3ec` 的 [CI 34095414644](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34095414644) 已 completed/success。第七检查点提交前扩大回归：303 passed / 2 skipped，56.19 秒；跳过分别为 Windows symlink 权限与未配置本地真实 PostgreSQL，均不算通过。

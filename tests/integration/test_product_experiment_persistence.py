@@ -1,7 +1,7 @@
 import asyncio
 import os
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
@@ -17,16 +17,22 @@ from app.auth.api_keys import generate_api_key
 from app.auth.principals import Principal
 from app.core.config import Settings
 from app.domain.enums import RunStatus
+from app.domain.evaluation import EvaluationResult, TargetResult
+from app.jobs.claiming import SQLAlchemyJobClaimer
+from app.jobs.lease import LeasePolicy
+from app.jobs.results import SQLAlchemyResultCommitter
 from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     APIKey,
     ArtifactReference,
     AuditEvent,
+    CaseResult,
     Dataset,
     DatasetVersion,
     EvaluationJob,
     EvaluationRun,
+    JobAttempt,
     ProductExperiment,
     Tenant,
 )
@@ -37,6 +43,7 @@ from app.product_experiments.persistence import (
 from app.runs.idempotency import canonical_request_hash
 from app.runs.schemas import RunCreate
 from app.runs.service import IdempotencyConflictError, SQLAlchemyRunService
+from tests.postgres_test_support import wait_for_lock_sensitive
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -232,8 +239,24 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             assert (
                 await service.get_run(principal=principal, run_id=run_id)
             ).status == RunStatus.CANCELLED
+        await exercise_shared_admission(factory, repository, pending)
         async with factory.begin() as session:
+            runs = list(
+                (
+                    await session.scalars(
+                        select(EvaluationRun.id).where(EvaluationRun.tenant_id == tenant_id)
+                    )
+                ).all()
+            )
             await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id))
+            await session.execute(delete(CaseResult).where(CaseResult.run_id.in_(runs)))
+            await session.execute(
+                delete(JobAttempt).where(
+                    JobAttempt.job_id.in_(
+                        select(EvaluationJob.id).where(EvaluationJob.run_id.in_(runs))
+                    )
+                )
+            )
             await session.execute(
                 delete(ProductExperiment).where(ProductExperiment.tenant_id == tenant_id)
             )
@@ -250,3 +273,62 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
             await session.execute(delete(APIKey).where(APIKey.id == other_key_id))
             await session.execute(delete(Tenant).where(Tenant.id == other_tenant_id))
+
+
+async def exercise_shared_admission(
+    factory: AsyncSessionFactory,
+    repository: SQLAlchemyProductExperimentRepository,
+    pending: NewProductExperiment,
+) -> None:
+    """Real eight-worker waves: each pair shares one slot; neither blocks the other."""
+    pairs = [
+        await repository.create_or_replay(
+            replace(pending, idempotency_key=f"window-{index}", max_active_jobs=1)
+        )
+        for index in range(2)
+    ]
+    by_run = {
+        run_id: pair.id
+        for pair in pairs
+        for run_id in (pair.baseline_run_id, pair.candidate_run_id)
+    }
+    claimer = SQLAlchemyJobClaimer(factory, lease_policy=LeasePolicy(timedelta(seconds=60)))
+    committer = SQLAlchemyResultCommitter(factory)
+    accepted_jobs: set[UUID] = set()
+    for wave in range(4):
+        batches = await wait_for_lock_sensitive(
+            asyncio.gather(
+                *(claimer.claim(worker_id=f"window-{wave}-{index}", limit=1) for index in range(8))
+            ),
+            operation="experiment shared admission wave",
+        )
+        claims = [claim for batch in batches for claim in batch]
+        assert len(claims) == 2
+        assert {by_run[claim.run_id] for claim in claims} == {pair.id for pair in pairs}
+        assert all(claim.attempt_number == 1 for claim in claims)
+        assert not accepted_jobs.intersection(claim.job_id for claim in claims)
+        assert await claimer.claim(worker_id="capacity-full", limit=1) == ()
+        await wait_for_lock_sensitive(
+            asyncio.gather(
+                *(
+                    committer.commit_success(
+                        claim=claim,
+                        lease_version=claim.version,
+                        target_result=TargetResult(
+                            answer="a",
+                            citations=(),
+                            sources=(),
+                            trace={},
+                            token_usage=None,
+                            latency_ms=1,
+                        ),
+                        evaluation_result=EvaluationResult(metrics={"execution_success": True}),
+                    )
+                    for claim in claims
+                )
+            ),
+            operation="release experiment admission slots via accepted results",
+        )
+        accepted_jobs.update(claim.job_id for claim in claims)
+    assert len(accepted_jobs) == 8
+    assert await claimer.claim(worker_id="all-pairs-done", limit=1) == ()
