@@ -13,6 +13,9 @@ from sqlalchemy import delete, event, select
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Mapper
 
+from app.artifacts.repository import SQLAlchemyArtifactReferenceGateway
+from app.artifacts.service import ArtifactAccessService, ArtifactReferenceNotFoundError
+from app.artifacts.storage import DeletableArtifactStore
 from app.auth.api_keys import generate_api_key
 from app.auth.principals import Principal
 from app.core.config import Settings
@@ -129,19 +132,40 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         deadline = datetime(2030, 1, 1, tzinfo=UTC)
         baseline = replace(baseline, execution_deadline_at=deadline)
         candidate = replace(baseline, idempotency_key="c", target_version="v2")
+        raw_source = b'{"fixture":"original input bytes, not normalized JSONL"}'
+        artifact_store = cast(DeletableArtifactStore, application.state.artifact_store)
+        source_artifact = await artifact_store.put_bytes(raw_source)
         pending = NewProductExperiment(
             tenant_id=tenant_id,
             created_by=key_id,
             idempotency_key="same-pair",
             request_hash="a" * 64,
-            snapshot={"schema_version": "integration-only"},
+            snapshot={
+                "schema_version": "integration-only",
+                "source_dataset_sha256": source_artifact.sha256,
+            },
             baseline=baseline,
             candidate=candidate,
+            source_artifact=source_artifact,
         )
         repository = SQLAlchemyProductExperimentRepository(factory)
         results = await asyncio.gather(*(repository.create_or_replay(pending) for _ in range(8)))
         assert len({result.id for result in results}) == 1
         pair = results[0]
+        assert pair.source_artifact_reference_id is not None
+        source_access = ArtifactAccessService(
+            gateway=SQLAlchemyArtifactReferenceGateway(factory), store=artifact_store
+        )
+        assert (
+            await source_access.read_bytes(
+                tenant_id=tenant_id, reference_id=pair.source_artifact_reference_id
+            )
+            == raw_source
+        )
+        with pytest.raises(ArtifactReferenceNotFoundError):
+            await source_access.read_bytes(
+                tenant_id=other_tenant_id, reference_id=pair.source_artifact_reference_id
+            )
         assert pair.snapshot["attempt_budget"] == {
             "schema_version": "evalops.static-attempt-budget/1.0",
             "max_total_attempts": 20_000,
@@ -212,6 +236,19 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
                 .all()
             )
         assert len(runs) == 2 and len(jobs) == 4
+        async with factory() as session:
+            source_refs = list(
+                (
+                    await session.scalars(
+                        select(ArtifactReference.id).where(
+                            ArtifactReference.tenant_id == tenant_id,
+                            ArtifactReference.blob_sha256 == source_artifact.sha256,
+                        )
+                    )
+                ).all()
+            )
+        # Replays and second-arm rollback must not leave extra source ownership records.
+        assert source_refs == [pair.source_artifact_reference_id]
         other_headers = {"Authorization": f"Bearer {other_credential.plaintext.get_secret_value()}"}
         async with AsyncClient(
             transport=ASGITransport(app=application), base_url="http://test"

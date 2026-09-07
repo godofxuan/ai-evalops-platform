@@ -10,8 +10,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.artifacts.repository import ensure_artifact_reference
+from app.artifacts.storage import StoredArtifact
 from app.auth.principals import Principal
 from app.core.clock import SystemClock
+from app.domain.enums import ArtifactType
 from app.jobs.cancellation import (
     build_tenant_key_share_for_cancellation_statement,
     cancel_run_in_session,
@@ -35,8 +38,14 @@ class NewProductExperiment:
     max_total_attempts: int = 20_000
     max_active_jobs: int = 4
     max_observation_bytes: int | None = None
+    source_artifact: StoredArtifact | None = None
 
     def __post_init__(self) -> None:
+        if self.source_artifact is not None and (
+            self.source_artifact.sha256 != self.snapshot.get("source_dataset_sha256")
+            or not 1 <= self.source_artifact.size_bytes <= 10 * 1024 * 1024
+        ):
+            raise ValueError("experiment source artifact does not match frozen raw input")
         if self.max_observation_bytes is not None:
             if (
                 type(self.max_observation_bytes) is not int
@@ -145,6 +154,7 @@ class ProductExperimentSnapshot:
     snapshot: dict[str, Any]
     cancel_requested: bool
     created_at: datetime
+    source_artifact_reference_id: UUID | None = None
 
 
 def _snapshot(row: ProductExperiment) -> ProductExperimentSnapshot:
@@ -157,6 +167,7 @@ def _snapshot(row: ProductExperiment) -> ProductExperimentSnapshot:
         snapshot=dict(row.snapshot_json),
         cancel_requested=row.cancel_requested,
         created_at=row.created_at,
+        source_artifact_reference_id=row.source_artifact_reference_id,
     )
 
 
@@ -252,6 +263,15 @@ class SQLAlchemyProductExperimentRepository:
         ).hexdigest()
         try:
             async with self._session_factory.begin() as session:
+                source_reference = None
+                if pending.source_artifact is not None:
+                    source_reference = await ensure_artifact_reference(
+                        session,
+                        tenant_id=pending.tenant_id,
+                        artifact_type=ArtifactType.DATASET_SOURCE,
+                        media_type="application/json",
+                        stored=pending.source_artifact,
+                    )
                 experiment_id = uuid4()
                 baseline = await insert_run_and_jobs(
                     session,
@@ -272,6 +292,9 @@ class SQLAlchemyProductExperimentRepository:
                 row = ProductExperiment(
                     id=experiment_id,
                     max_active_jobs=pending.max_active_jobs,
+                    source_artifact_reference_id=(
+                        None if source_reference is None else source_reference.id
+                    ),
                     tenant_id=pending.tenant_id,
                     created_by=pending.created_by,
                     idempotency_key=pending.idempotency_key,

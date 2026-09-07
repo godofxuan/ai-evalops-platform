@@ -4,6 +4,8 @@
 
 ## 先检查输入
 
+原始 product JSON 现在可以由 retain_durable_source 保存到既有内容寻址存储；0032 将来源引用与父实验按 tenant 绑定，并随双 Run 原子登记。原始/规范化摘要保持独立，准备后字节变化拒绝发布。数据库失败可能留下未引用 blob，由既有清理机制处理；这不是自动公开原始数据，也不为历史实验回填来源。
+
 持久准备现在将 max_observation_bytes（默认 64 MiB，上限 256 MiB）静态平均预留到两组全部 Jobs，固定在 evaluator 配置中；最终归一化观测超过单 Job 上限时永久失败，不写成功结果。此处只限制 accepted normalized observation 的 UTF-8 字节总额，余量不重分配，不代表总磁盘/RSS/失败历史大小；与 local 共享累计池的分配策略不同。
 
 新实验的共享领取窗口通过 0031 迁移接入既有调度器：max_active_jobs（默认 4，1–64）统计两组的 RUNNING/CANCELLING Jobs，重试不另领一份额度。旧 Run 不回填；满额时不生成 attempt。它是数据库 active-claim 上限，不是失联外部调用的物理并发保证。该改动须等待本检查点精确 CI，公开持久提交入口仍未开放。

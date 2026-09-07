@@ -195,6 +195,47 @@ async def test_preparation_reserves_total_normalized_observation_bytes_once_per_
 
 
 @pytest.mark.asyncio
+async def test_prepared_source_retains_original_bytes_not_normalized_jsonl(
+    submission_inputs: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    from app.product_experiments.submission import prepare_durable_experiment, retain_durable_source
+
+    pending = await prepare_durable_experiment(**submission_inputs)
+    store = LocalArtifactStore(tmp_path / "raw-evidence")
+    retained = await retain_durable_source(
+        pending=pending, dataset_payload=submission_inputs["dataset_payload"], artifact_store=store
+    )
+    assert pending.source_artifact is None
+    assert retained.source_artifact is not None
+    assert retained.source_artifact.sha256 == submission_inputs["request"].source_dataset_sha256
+    assert retained.source_artifact.sha256 != retained.baseline.dataset_hash
+    assert (
+        await store.get_bytes(retained.source_artifact.sha256)
+        == submission_inputs["dataset_payload"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_source_changed_after_preparation_is_not_published(
+    submission_inputs: dict[str, Any],
+    tmp_path: Path,
+) -> None:
+    from app.product_experiments.submission import prepare_durable_experiment, retain_durable_source
+    from app.runs.service import RunInputIntegrityError
+
+    pending = await prepare_durable_experiment(**submission_inputs)
+    root = tmp_path / "must-not-be-published"
+    with pytest.raises(RunInputIntegrityError):
+        await retain_durable_source(
+            pending=pending,
+            dataset_payload=submission_inputs["dataset_payload"] + b" ",
+            artifact_store=LocalArtifactStore(root),
+        )
+    assert not root.exists()
+
+
+@pytest.mark.asyncio
 async def test_preparation_rejects_rehashed_raw_data_not_matching_stored_version(
     submission_inputs: dict[str, Any],
 ) -> None:

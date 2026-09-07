@@ -1,5 +1,6 @@
 """Prepare a frozen durable pair outside its atomic database write transaction."""
 
+import hashlib
 import json
 import re
 from dataclasses import replace
@@ -10,6 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.artifacts.storage import ArtifactStore
 from app.auth.principals import Principal
 from app.core.clock import Clock, SystemClock
 from app.domain.evaluation import EvaluationCase
@@ -177,3 +179,19 @@ async def prepare_durable_experiment(
         max_observation_bytes=request.max_observation_bytes,
     )
     return replace(pending_experiment, snapshot=pending_experiment.snapshot_with_attempt_budget())
+
+
+async def retain_durable_source(
+    *, pending: NewProductExperiment, dataset_payload: bytes, artifact_store: ArtifactStore
+) -> NewProductExperiment:
+    """Publish outside the DB transaction; register ownership atomically with the pair."""
+    expected = pending.snapshot.get("source_dataset_sha256")
+    if (
+        len(dataset_payload) > 10 * 1024 * 1024
+        or hashlib.sha256(dataset_payload).hexdigest() != expected
+    ):
+        raise RunInputIntegrityError("raw experiment source changed after preparation")
+    stored = await artifact_store.put_bytes(dataset_payload)
+    if stored.sha256 != expected or stored.size_bytes != len(dataset_payload):
+        raise RunInputIntegrityError("stored raw experiment source identity mismatch")
+    return replace(pending, source_artifact=stored)

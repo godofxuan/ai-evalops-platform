@@ -101,6 +101,12 @@ class Base(DeclarativeBase):
 class ProductExperiment(Base):
     __tablename__ = "product_experiments"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_artifact_reference_id", "tenant_id"],
+            ["artifact_references.id", "artifact_references.tenant_id"],
+            name="fk_product_experiments_source_reference_tenant",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint("id", "tenant_id", name="uq_product_experiments_id_tenant"),
         CheckConstraint(
             "max_active_jobs IS NULL OR max_active_jobs BETWEEN 1 AND 64", name="active_jobs_range"
@@ -137,6 +143,7 @@ class ProductExperiment(Base):
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     max_active_jobs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_artifact_reference_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     baseline_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     candidate_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     cancel_requested: Mapped[bool] = mapped_column(

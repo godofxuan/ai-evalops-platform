@@ -1,5 +1,19 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十检查点：原始输入保留与租户所有权
+
+第九检查点 `dcf943b8aefbe93c46d8c3145fa1efd630d57b3d` 的 [CI 34098226540](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34098226540) 已 completed/success。本节新修改的本地回归为 215 passed / 1 real PostgreSQL skipped，7.58 秒；全仓 lint、612 文件格式、212 文件 mypy 与 diff --check 通过。
+
+- 问题：只有原始 SHA 而没有保留原始字节，后续不能独立还原转换前的数据。新增 retain_durable_source，在准备/租户授权之后、数据库写事务之外使用既有内容寻址 ArtifactStore 保存原始 JSON；逐字节 SHA 和大小必须匹配，不用规范化 JSONL 冒充原始文件。准备函数本身仍不写 Run/Job 或调用目标。
+- TDD：原始保存入口不存在时先失败；实现后真实 LocalArtifactStore 读取的字节与原始输入完全一致且不同于 normalized SHA。准备后追加一个空格会改变原始 SHA，发布前拒绝，测试确认没有创建目标存储目录。
+- 原子所有权：复用 ensure_artifact_reference 的 blob 校验、生命周期及引用机制，以 DATASET_SOURCE/tenant 范围登记原始 JSON，不误标为报告。引用与两组 Run/Jobs、父实验在同一事务提交。0032 nullable source_artifact_reference_id 复合 tenant 外键阻止跨租户关联，不回填旧实验，引用被实验使用期间不得删除。
+- 失败边界：文件上传和数据库提交不是同一个事务。第二组插入失败或并发幂等冲突可能留下未引用的内容对象，由既有 orphan/reconciliation 流程处理；不盲删可能被其他请求共用的 blob。元数据事务不能留下额外来源引用或半组任务。
+- 真实数据库验收已扩展：8 个并发相同请求复用同一父实验/来源引用；经既有 ArtifactAccessService 读取原始字节，其他租户隐藏为 not found；第二组插入故障回滚后来源引用仍只有原来一份。这些新断言须等本检查点精确 CI，不以本地 skipped 代替。
+- 检查中修正：一次命令引用了不存在的 test_service.py，实际没有运行测试；随后按文件清单重新执行正确集合。没有将那次命令计为通过。
+- 跨任务同步：之前发送被安全审核拒绝。本轮先通过任务列表及简历任务历史核实三个接收任务的归属和既有协作关系，再发送已公开的固定 SHA/CI/日志链接，三个发送均成功。简历当前已因 RAG 更新到 R12，因此要求保留当前 R12 和历史附件，不再误用旧 R11 作为当前版。已要求接收任务思考如何改善叙述/教学/投递口径；发送成功不等同它们已完成更新。
+
+未完成：公开持久提交、有效结果冻结导出、CLI 恢复、完整故障 E2E 和最终双 SHA。原始材料默认受租户权限保护，不因保存成功而自动公开或获得正式质量资格。
+
 ## 2026-09-07 第九检查点：静态总观测额度与 worker 永久失败
 
 提交前产品/evaluator/worker/Run/CLI 扩大回归：204 passed / 1 Windows symlink skipped，58.10 秒。第八检查点 `4db8878ac6d7c629943ac0ff8ba7f01ffc20116d` 的 [CI 34097285147](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34097285147) 已 completed/success，包含八 worker 双实验各一槽的真实验收与旧调度回归；不是第九检查点预算的 CI 证明。
