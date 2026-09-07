@@ -36,6 +36,7 @@ def render_experiment_html(result: Mapping[str, Any]) -> str:
     # Public v1 is a byte-verifiable projection; additions require another public version.
     if result.get("schema_version") != "evalops.public-experiment-summary/1.0":
         metrics["descriptive_coverage"] = result.get("metric_diagnostics", {})
+        metrics["category_slices"] = result.get("category_diagnostics", {})
     metrics_json = json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True)
     requirements = result.get("input_requirements", [])
     requirements_json = json.dumps(requirements, ensure_ascii=False, indent=2, sort_keys=True)

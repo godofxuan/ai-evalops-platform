@@ -53,6 +53,8 @@ class NewProductExperiment:
             != canonical_request_hash(self.candidate.evaluator_config)
         ):
             raise ValueError("experiment arms must share the evaluator and scoring policy")
+        if self.baseline.execution_deadline_at != self.candidate.execution_deadline_at:
+            raise ValueError("experiment arms must share the absolute deadline")
 
 
 @dataclass(frozen=True, slots=True)

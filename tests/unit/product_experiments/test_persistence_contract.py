@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -52,3 +53,8 @@ def test_paired_experiment_rejects_cross_tenant_or_mismatched_dataset_before_wri
         replace(pair, candidate=replace(candidate, evaluator_version="different"))
     with pytest.raises(ValueError, match="evaluator"):
         replace(pair, candidate=replace(candidate, evaluator_config={"override": True}))
+    with pytest.raises(ValueError, match="deadline"):
+        replace(
+            pair,
+            candidate=replace(candidate, execution_deadline_at=datetime(2030, 1, 1, tzinfo=UTC)),
+        )

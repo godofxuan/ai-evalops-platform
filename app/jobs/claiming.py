@@ -58,6 +58,7 @@ class ClaimedJob:
     run_started: bool = False
     origin_traceparent: str | None = None
     scheduler_claim_sequence: int | None = None
+    execution_deadline_at: datetime | None = None
 
 
 def validate_claim_request(*, worker_id: str, limit: int) -> None:
@@ -732,6 +733,7 @@ class SQLAlchemyJobClaimer:
                     evaluator_version=run.evaluator_version,
                     run_started=run_started_now,
                     origin_traceparent=run.origin_traceparent,
+                    execution_deadline_at=run.execution_deadline_at,
                 )
             )
         return tuple(claims), tuple(attempts)

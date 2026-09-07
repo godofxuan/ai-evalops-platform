@@ -1,5 +1,20 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第五检查点：类别诊断与持久截止时间
+
+提交前受影响集合：281 passed / 1 Windows symlink skipped（51.67 秒），210 文件类型检查、603 文件格式与 lint 通过。测试覆盖产品/CLI、Run、worker、Job 与迁移。真实 PostgreSQL 新断言仍等待本检查点精确 CI，不能用定向单元测试替代。
+
+第四检查点 `f5af8cfa88a3a44e5ecc6824d112ba98337435cb` 已推送，精确 [CI 34090774472](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34090774472) completed/success。以下是后续新改动，不由第四检查点 CI 代替验证。
+
+- 类别诊断：按同一固定 category 分组，复用 build_metric_diagnostics，不复制评分公式。保留 policy 要求但没有题目的类别；样本不足标 SMALL_SAMPLE，无题标 MISSING_CATEGORY，逐指标有效配对不足列 undersampled_metrics。构造两类一升一降与缺费用反例，证明局部退化不会因总体混合而不可见。实际超时运行也保存全部类别分母和缺测提示。私有报告增加该区，公开 v1 golden 字节回归保持通过。该区 DESCRIPTIVE_ONLY，不增加新的显著性检验或 PASS。
+- 持久时间预算决策：为原 Run 增加 nullable execution_deadline_at，用 0029 增量迁移，不回填旧 Run，不在 retry/claim 时重新计算期限。NewRun → ORM → ClaimedJob → 原 worker 传递同一时刻，双组 DTO 拒绝不同截止时间。不新增调度循环，尚未开放提交 API。
+- 反例与效果：首次/第二次 attempt 在期限已过时原无此合同；加入检查后，在创建目标前产生不可重试 experiment_deadline_exceeded。慢调用跨越总期限原最终记录可重试 HTTP500；改为将单次 timeout 与总剩余时间取最小值，明确区分总预算耗尽与目标自身超时。调用返回后再检查期限，不接受已过期的返回值。采用 UTC 墙钟/合作式异步取消，不承诺撤销远端副作用、CPU 抢占或无时钟漂移。
+- 兼容性：旧 Run 截止时间为 null，保持原 per-case timeout 与重试路径。未给全部既有任务强行添加截止时间。过期的排队任务仍需原 worker 领取后结束，不宣称在 worker 停机时自动即时终止。
+- 验证：类别/runner/report 55 passed；worker/jobs/迁移/双组合同 72 passed；此前相关 runs/ORM 47 passed。集合重叠不相加。mypy 210 文件通过。新增真实 PostgreSQL 双组 deadline roundtrip 断言须等待第五检查点 CI；离线迁移 SQL 只证明生成的升级/回退语句，不是本机数据库演练。
+- 外部只读核验：RAG 精确公开交付已完成摘要、775 服务行/87 CSV 聚合/2 组配对/800 检索行重算，详见 rag-runtime-delivery-readonly-verification-20260907.md。CSV 核验采用表格技能的只读源数据/分母/缺失值原则，不创建或改写表格。该结果不升级 EvalOps 的正式质量资格，也不冒充私有重放。
+
+剩余共享预算：并发窗口、跨两组及重试的总调用额度和观测体积仍须实施/验收；只有共享截止时间基础不代表 R10/S4 已完成。继续推进持久提交、accepted-attempt 导出、真实 worker 故障 E2E 与最终双 SHA。
+
 ## 2026-09-07 第四检查点：固定输入与聚合解析边界
 
 提交前验证：product_experiments 与产品 CLI/证据集合 132 passed、1 Windows symlink skipped（51.65 秒）；mypy 210 个文件、ruff check 和 600 文件格式检查通过。已把第三检查点精确 CI 和本节待推送内容、未完成项发给简历/教学/投递三个任务，请其思考资料改进，不改已投简历及链接；发送成功不等于对方已完成材料调整。

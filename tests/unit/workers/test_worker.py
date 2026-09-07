@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
+import pytest
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
@@ -14,6 +15,7 @@ from app.domain.evaluation import (
     TokenUsage,
 )
 from app.jobs.claiming import ClaimedJob
+from app.jobs.retry_policy import classify_failure
 from app.observability.metrics import PlatformMetrics
 from app.targets.base import TargetHTTPError
 from app.workers.worker import EvaluationWorker
@@ -109,6 +111,47 @@ class RenewingLeaseRunner(PassThroughLeaseRunner):
     ) -> tuple[TargetResult, int]:
         del context
         return await cast(Any, operation), claim.version + 3
+
+
+@pytest.mark.parametrize("attempt", [1, 2])
+@pytest.mark.parametrize("in_flight", [False, True])
+async def test_expired_experiment_deadline_is_not_reset_by_retry(
+    attempt: int, in_flight: bool
+) -> None:
+    claim = ClaimedJob(
+        job_id=JOB_ID,
+        run_id=RUN_ID,
+        tenant_id=TENANT_ID,
+        case_id="case-1",
+        case_payload={"case_id": "case-1", "question": "q", "metadata": {}},
+        attempt_id=ATTEMPT_ID,
+        attempt_number=attempt,
+        worker_id="worker-1",
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=30),
+        version=2,
+        target_type="mock",
+        target_config={"outcome": "http_500", "fixed_delay_ms": 500 if in_flight else 0},
+        target_version="v1",
+        evaluator_type="basic_answer",
+        evaluator_config={},
+        evaluator_version="builtin-v1",
+        execution_deadline_at=datetime.now(UTC) + timedelta(seconds=0.1)
+        if in_flight
+        else datetime(2000, 1, 1, tzinfo=UTC),
+    )
+    success = RecordingCommitter()
+    failure = RecordingFailureCommitter()
+    worker = EvaluationWorker(
+        claimer=SingleClaimer(claim),
+        result_committer=success,
+        failure_committer=failure,
+        lease_runner=PassThroughLeaseRunner(),
+    )
+    assert await worker.process_one(worker_id="worker-1")
+    assert not success.committed and failure.failure is not None
+    classified = classify_failure(failure.failure)
+    assert classified.error_code == "experiment_deadline_exceeded"
+    assert classified.retryable is False
 
 
 async def test_worker_executes_target_evaluator_and_result_commit_pipeline() -> None:

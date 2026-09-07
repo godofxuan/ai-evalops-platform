@@ -1,11 +1,13 @@
 import asyncio
 from collections.abc import Callable, Coroutine, Mapping
 from contextlib import AbstractContextManager, nullcontext
+from datetime import datetime
 from time import perf_counter
 from typing import Any, Protocol, TypeVar, cast
 
 import structlog
 
+from app.core.clock import Clock, SystemClock
 from app.core.telemetry import Telemetry
 from app.domain.evaluation import (
     EvaluationCase,
@@ -18,7 +20,12 @@ from app.jobs.claiming import ClaimedJob
 from app.jobs.failures import FailureCommitReceipt
 from app.jobs.results import ResultCommitReceipt
 from app.observability.metrics import PlatformMetrics
-from app.targets.base import EvaluationTarget, TargetTimeoutError, build_target
+from app.targets.base import (
+    EvaluationTarget,
+    TargetExecutionError,
+    TargetTimeoutError,
+    build_target,
+)
 from app.workers.lease_runner import LeaseOperationError
 
 type TargetFactory = Callable[[str, Mapping[str, Any]], EvaluationTarget]
@@ -69,6 +76,26 @@ class InvalidCaseTimeout(ValueError):
     """The evaluator configuration has an unsafe per-case timeout."""
 
 
+class ExperimentDeadlineExceeded(TargetExecutionError):
+    def __init__(self) -> None:
+        super().__init__(
+            "experiment_deadline_exceeded",
+            "experiment execution deadline exceeded",
+            retryable=False,
+        )
+
+
+def _remaining_experiment_seconds(deadline: datetime | None, clock: Clock) -> float | None:
+    if deadline is None:
+        return None
+    if deadline.tzinfo is None or deadline.utcoffset() is None:
+        raise ValueError("experiment deadline must be timezone-aware")
+    remaining = (deadline - clock.now()).total_seconds()
+    if remaining <= 0:
+        raise ExperimentDeadlineExceeded
+    return remaining
+
+
 class EvaluationWorker:
     def __init__(
         self,
@@ -81,6 +108,7 @@ class EvaluationWorker:
         evaluator_factory: EvaluatorFactory = build_evaluator,
         metrics: PlatformMetrics | None = None,
         telemetry: Telemetry | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._claimer = claimer
         self._result_committer = result_committer
@@ -90,6 +118,7 @@ class EvaluationWorker:
         self._evaluator_factory = evaluator_factory
         self._metrics = metrics
         self._telemetry = telemetry
+        self._clock = clock or SystemClock()
 
     async def process_one(self, *, worker_id: str) -> bool:
         claim_started_at = perf_counter()
@@ -143,6 +172,7 @@ class EvaluationWorker:
         lease_version = claim.version
         case_started_at = perf_counter()
         try:
+            _remaining_experiment_seconds(claim.execution_deadline_at, self._clock)
             target = self._target_factory(claim.target_type, claim.target_config)
             evaluator = self._evaluator_factory(
                 claim.evaluator_type,
@@ -158,6 +188,8 @@ class EvaluationWorker:
                         case=case,
                         context=context,
                         timeout_seconds=timeout_seconds,
+                        execution_deadline_at=claim.execution_deadline_at,
+                        clock=self._clock,
                     ),
                 )
             with self._span("evaluator.evaluate"):
@@ -259,11 +291,23 @@ async def _execute_with_timeout(
     case: EvaluationCase,
     context: ExecutionContext,
     timeout_seconds: float,
+    execution_deadline_at: datetime | None = None,
+    clock: Clock | None = None,
 ) -> TargetResult:
+    clock = clock or SystemClock()
+    remaining = _remaining_experiment_seconds(execution_deadline_at, clock)
+    experiment_limited = remaining is not None and remaining <= timeout_seconds
+    timeout = asyncio.timeout(
+        min(timeout_seconds, remaining) if remaining is not None else timeout_seconds
+    )
     try:
-        async with asyncio.timeout(timeout_seconds):
-            return await target.execute_case(case, context)
+        async with timeout:
+            result = await target.execute_case(case, context)
+        _remaining_experiment_seconds(execution_deadline_at, clock)
+        return result
     except TimeoutError:
+        if experiment_limited and timeout.expired():
+            raise ExperimentDeadlineExceeded from None
         raise TargetTimeoutError from None
 
 

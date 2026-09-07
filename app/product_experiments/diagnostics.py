@@ -97,3 +97,47 @@ def build_metric_diagnostics(
             else None,
         )
     return result
+
+
+class CategoryDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    decision_scope: Literal["DESCRIPTIVE_ONLY"] = "DESCRIPTIVE_ONLY"
+    sample_status: Literal["MISSING_CATEGORY", "SMALL_SAMPLE", "DESCRIPTIVE_ONLY"]
+    case_count: int = Field(ge=0)
+    minimum_cases: int = Field(ge=1)
+    required_category: bool
+    metrics: dict[str, MetricDiagnostic]
+    undersampled_metrics: tuple[str, ...]
+
+
+def build_category_diagnostics(
+    cases: list[ExperimentCase],
+    observations: dict[str, dict[str, ProviderResult]],
+    *,
+    evaluator_names: tuple[str, ...],
+    minimum_cases: int,
+    required_categories: tuple[str, ...] = (),
+) -> dict[str, CategoryDiagnostic]:
+    if type(minimum_cases) is not int or minimum_cases < 1:
+        raise ValueError("category minimum must be a positive integer")
+    groups: dict[str, list[ExperimentCase]] = {name: [] for name in required_categories}
+    for case in cases:
+        groups.setdefault(case.category, []).append(case)
+    result: dict[str, CategoryDiagnostic] = {}
+    for name, group in sorted(groups.items()):
+        metrics = build_metric_diagnostics(group, observations, evaluator_names=evaluator_names)
+        result[name] = CategoryDiagnostic(
+            sample_status="MISSING_CATEGORY"
+            if not group
+            else "SMALL_SAMPLE"
+            if len(group) < minimum_cases
+            else "DESCRIPTIVE_ONLY",
+            case_count=len(group),
+            minimum_cases=minimum_cases,
+            required_category=name in required_categories,
+            metrics=metrics,
+            undersampled_metrics=tuple(
+                key for key, value in metrics.items() if value.valid_pair_count < minimum_cases
+            ),
+        )
+    return result

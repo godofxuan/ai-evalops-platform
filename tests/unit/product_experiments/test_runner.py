@@ -65,6 +65,9 @@ async def test_experiment_deadline_preserves_partial_observations(tmp_path: Path
         "experiment_deadline_exceeded"
     }
     assert result.case_comparisons == []
+    assert set(result.category_diagnostics) == set(CATEGORIES)
+    assert sum(item.case_count for item in result.category_diagnostics.values()) == 120
+    assert all(item.undersampled_metrics for item in result.category_diagnostics.values())
 
 
 @pytest.mark.parametrize("oversized", ["policy", "spec", "bootstrap"])

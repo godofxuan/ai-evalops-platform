@@ -1,6 +1,7 @@
 import asyncio
 import os
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
@@ -117,6 +118,8 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         baseline = await service.prepare_run(
             principal=principal, idempotency_key="b", request=request
         )
+        deadline = datetime(2030, 1, 1, tzinfo=UTC)
+        baseline = replace(baseline, execution_deadline_at=deadline)
         candidate = replace(baseline, idempotency_key="c", target_version="v2")
         pending = NewProductExperiment(
             tenant_id=tenant_id,
@@ -132,6 +135,20 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
         assert len({result.id for result in results}) == 1
         pair = results[0]
         assert pair.baseline_run_id != pair.candidate_run_id
+        async with factory() as session:
+            deadlines = (
+                (
+                    await session.execute(
+                        select(EvaluationRun.execution_deadline_at).where(
+                            EvaluationRun.tenant_id == tenant_id,
+                            EvaluationRun.id.in_((pair.baseline_run_id, pair.candidate_run_id)),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        assert deadlines == [deadline, deadline]
         assert await repository.get(tenant_id=uuid4(), experiment_id=pair.id) is None
         assert (await repository.get(tenant_id=tenant_id, experiment_id=pair.id)) == pair
         with pytest.raises(IdempotencyConflictError):

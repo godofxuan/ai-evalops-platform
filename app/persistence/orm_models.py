@@ -589,6 +589,7 @@ class EvaluationRun(Base):
     evaluator_version: Mapped[str] = mapped_column(String(128), nullable=False)
     source_commit: Mapped[str | None] = mapped_column(String(128))
     origin_traceparent: Mapped[str | None] = mapped_column(String(55))
+    execution_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[RunStatus] = mapped_column(
         run_status_enum,
         nullable=False,

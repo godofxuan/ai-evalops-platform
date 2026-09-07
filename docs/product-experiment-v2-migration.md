@@ -77,6 +77,10 @@ worker 新插件 product_qa_v2 / product_agent_v2 要求 evaluator_version=produ
 
 私有报告新增 metric_diagnostics：按指标展示有效配对与缺失数量、胜负/持平、平均 candidate-minus-baseline 差；该区只有 DESCRIPTIVE_ONLY 保证。缺失费用时其他已测指标仍可查看，但完整门禁不会获得 PASS。公开 v1 HTML 渲染冻结维持历史复核兼容，暂不包含新诊断区。
 
+category_diagnostics 按类别给出同样的诊断，显式列出必需但缺失的类别、小样本类别和逐指标有效配对不足。描述性最低题数来自固定 policy，不等于统计显著性；类别文字只进受控私有报告。
+
+0029 迁移为 Run 增加可选绝对 execution_deadline_at，原 worker 从 claim 读取它，两组必须相同，重试不延长期限。null 保留旧行为。总期限耗尽为不可重试执行失败，和可重试的目标单次超时区分。仍没有完成持久入口的共享并发/调用量/观测量预算，不应把本阶段字段当成完整预算产品 API。
+
 严格快照绑定、持久 Run/Job 接入、真实故障恢复验收、最终精确 SHA/CI 和教学/简历任务同步仍未完成。公开/私有导出的基本分离已实现，真实进程中断恢复等验收仍待完成。
 
 快照校验已推进：完成的 v2 私有包须有已知版本输入快照，规范化配置与 policy 的内容摘要必须匹配，并与主结果的 dataset、两组来源、scope 和 task_type 交叉一致。它不证明原 spec/policy 字节已公开，也不证明服务端运行代码已独立认证。旧 v1 不自动升级保证。

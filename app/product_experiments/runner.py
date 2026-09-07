@@ -27,7 +27,12 @@ from app.external_harness.harness_envelope import canonical_sha256
 from app.jobs.retry_policy import classify_failure
 from app.product_experiments.agent_projection import project_agent_trace
 from app.product_experiments.assessment import assess_product_numeric
-from app.product_experiments.diagnostics import MetricDiagnostic, build_metric_diagnostics
+from app.product_experiments.diagnostics import (
+    CategoryDiagnostic,
+    MetricDiagnostic,
+    build_category_diagnostics,
+    build_metric_diagnostics,
+)
 from app.product_experiments.evaluators import (
     CaseEvaluator,
     citation_evidence_scores,
@@ -200,6 +205,7 @@ class ProductExperimentResult(BaseModel):
     execution_errors: list[CaseExecutionFailure] = Field(default_factory=list)
     observations: dict[str, dict[str, ProviderResult]] = Field(default_factory=dict)
     metric_diagnostics: dict[str, MetricDiagnostic] = Field(default_factory=dict)
+    category_diagnostics: dict[str, CategoryDiagnostic] = Field(default_factory=dict)
 
 
 class _FixtureProvider:
@@ -658,6 +664,13 @@ async def run_experiment(
     metric_diagnostics = build_metric_diagnostics(
         cases, observed_results, evaluator_names=spec.evaluators
     )
+    category_diagnostics = build_category_diagnostics(
+        cases,
+        observed_results,
+        evaluator_names=spec.evaluators,
+        minimum_cases=policy.minimum_cases_per_category,
+        required_categories=policy.required_categories,
+    )
     if execution_errors or requirements:
         return ProductExperimentResult(
             experiment_id=spec.experiment_id,
@@ -677,6 +690,7 @@ async def run_experiment(
             case_comparisons=[],
             observations=observed_results,
             metric_diagnostics=metric_diagnostics,
+            category_diagnostics=category_diagnostics,
             input_requirements=sorted(
                 requirements, key=lambda item: (item["arm"], item["case_id"])
             ),
@@ -734,6 +748,7 @@ async def run_experiment(
         execution_id=execution_id,
         observations=observed_results,
         metric_diagnostics=metric_diagnostics,
+        category_diagnostics=category_diagnostics,
         scope=spec.scope,
         task_type=spec.task_type,
         dataset_sha256=spec.dataset.sha256,
