@@ -12,6 +12,33 @@ from app.product_experiments.runner import (
 )
 
 
+def restore_product_case(case: EvaluationCase) -> ExperimentCase:
+    original = case.metadata.get("evalops_product_case")
+    restored = ExperimentCase.model_validate_json(json.dumps(original))
+    if (
+        restored.case_id != case.case_id
+        or restored.prompt != case.question
+        or restored.reference_answer != case.expected_answer
+    ):
+        raise ValueError("product/core case identity mismatch")
+    return restored
+
+
+def product_input_requirements(
+    case: ExperimentCase, *, task_type: Literal["QA", "AGENT_TOOL_USE"]
+) -> list[str]:
+    if task_type == "QA":
+        return [] if case.expected_citation_ids else ["MISSING_CITATION_LABELS"]
+    if "allowed_tools" not in case.model_fields_set or case.max_tool_calls is None:
+        return ["MISSING_AGENT_EXPECTATIONS"]
+    if (
+        any(call.name not in case.allowed_tools for call in case.expected_tool_calls)
+        or len(case.expected_tool_calls) > case.max_tool_calls
+    ):
+        return ["INCONSISTENT_AGENT_EXPECTATIONS"]
+    return []
+
+
 class ProductQAEvaluator:
     task_type: ClassVar[Literal["QA", "AGENT_TOOL_USE"]] = "QA"
     evaluator_names: ClassVar[tuple[str, ...]] = (
@@ -24,30 +51,15 @@ class ProductQAEvaluator:
         self, case: EvaluationCase, target_result: TargetResult, *, attempt_number: int
     ) -> EvaluationResult:
         del attempt_number  # Identity and fencing remain owned by the existing worker.
-        original = case.metadata.get("evalops_product_case")
-        product_case = ExperimentCase.model_validate_json(json.dumps(original))
-        if (
-            product_case.case_id != case.case_id
-            or product_case.prompt != case.question
-            or product_case.reference_answer != case.expected_answer
-        ):
-            raise ValueError("product/core case identity mismatch")
+        product_case = restore_product_case(case)
         observation = normalize_product_observation(
             product_case, target_result, task_type=self.task_type
         )
-        missing = []
+        missing = product_input_requirements(product_case, task_type=self.task_type)
         if observation.cost_usd is None:
             missing.append("MISSING_COST_MEASUREMENT")
-        if self.task_type == "QA" and not product_case.expected_citation_ids:
-            missing.append("MISSING_CITATION_LABELS")
-        if self.task_type == "AGENT_TOOL_USE":
-            if observation.missing_fields:
-                missing.append("MISSING_AGENT_OBSERVATION")
-            if (
-                "allowed_tools" not in product_case.model_fields_set
-                or product_case.max_tool_calls is None
-            ):
-                missing.append("MISSING_AGENT_EXPECTATIONS")
+        if self.task_type == "AGENT_TOOL_USE" and observation.missing_fields:
+            missing.append("MISSING_AGENT_OBSERVATION")
         scores = (
             {}
             if missing

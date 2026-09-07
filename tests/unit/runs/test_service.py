@@ -198,6 +198,41 @@ async def test_prepare_run_validates_inputs_without_persisting_jobs() -> None:
     assert repository.new_run is None
 
 
+async def test_product_run_rejects_unmapped_dataset_before_creating_jobs() -> None:
+    content = (
+        b'{"case_id":"case-1","question":"q1","expected_answer":"a1","metadata":{}}\n'
+        b'{"case_id":"case-2","question":"q2","expected_answer":"a2","metadata":{}}\n'
+    )
+    repository = RecordingRunRepository(hashlib.sha256(content).hexdigest())
+    service = SQLAlchemyRunService(
+        repository=repository, artifact_store=StaticArtifactStore(content)
+    )
+    request = make_run_request()
+    request.evaluator = request.evaluator.model_copy(
+        update={"type": "product_qa_v2", "version": "product-v2"}
+    )
+    with pytest.raises(InvalidEvaluatorConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL, idempotency_key="create-rag-v1", request=request
+        )
+    assert repository.new_run is None
+
+
+async def test_product_evaluator_version_is_checked_before_dataset_io() -> None:
+    service = SQLAlchemyRunService(
+        repository=NewRequestRepositoryThatMustNotLoadSource(),
+        artifact_store=ArtifactStoreThatMustNotRead(),
+    )
+    request = make_run_request()
+    request.evaluator = request.evaluator.model_copy(
+        update={"type": "product_qa_v2", "version": "unimplemented-v999"}
+    )
+    with pytest.raises(InvalidEvaluatorConfigurationError):
+        await service.create_run(
+            principal=PRINCIPAL, idempotency_key="create-rag-v1", request=request
+        )
+
+
 async def test_create_run_snapshots_validated_cases_and_reproducibility_hashes() -> None:
     content = b"\n".join(
         json.dumps(

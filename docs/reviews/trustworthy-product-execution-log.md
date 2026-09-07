@@ -1,5 +1,20 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第三检查点：控制接口、缺测诊断与兼容性
+
+第二检查点 `90ff44a9562191e9f55024d73e395c278eb8be10` 已推送，其精确 [CI 34086968459](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34086968459) completed/success，包含真实 PostgreSQL 原子双 Run 幂等/回滚集成及 Compose smoke。这不能作为本节新修改的 CI 证明。
+
+- 取消：在 GREEN 状态提取现有 cancel_run_in_session，不复制取消状态机；父实验取消按 Tenant → Experiment → 排序后的 Runs → Jobs 加锁，在同一事务取消两组，重复取消不增加父版本。它不会撤销已经发生的外部服务副作用。
+- 控制入口：增加鉴权 GET /api/v1/experiments/{id} 与 POST /{id}/cancel。状态从两组 Run 派生，全部执行成功也只叫 READY_FOR_ASSESSMENT，不叫质量 PASS。未认证请求从原来的 404 复现到正确的 401；授权查询、跨租户 404 和双组取消验收已追加到真实数据库集成，待本检查点 CI。
+- 早期拒绝：产品 evaluator 要求 product-v2 版本、规范化映射题目和显式评分标签。原本会创建 Jobs 的不合法数据集，以及会先访问数据的错误 evaluator 版本，均先写失败测试再修复。拒绝信息不回显私有题目。
+- 证据配对：拒绝 arm 角色错误或两组同 case_id 却 prompt/category 不同的包，不能仅凭 hash 自洽认定配对有效。
+- 缺测诊断：即使费用缺失阻止完整门禁，仍展示可用质量/延迟的配对覆盖、胜负/持平和平均差。全部标记 DESCRIPTIVE_ONLY，无显著性或正式结论。极大但有限费用的求和溢出先复现，再使用缩放后求和；未知费用仍不是零。
+- 兼容性问题：给 HTML 增加诊断区会改变公开 v1 的确定性字节。提取已推送检查点的固定合成样本摘要并编写 golden 回归，先失败，再仅为私有报告增加诊断区。公开 v1 原渲染保留，不重写历史证据。
+- 定向结果：产品/runs/evaluators/CLI 160 passed、1 Windows symlink skipped；随后公开渲染兼容性集合 10 passed；mypy 208 个文件通过。集合重叠，不相加。真实取消/隔离尚待精确 CI，Windows 无权限创建真实符号链接不记为通过。
+- 资源协调：RAG 任务正在做真实服务配对性能测试，本轮不操作其仓库、不启动 GPU/Ollama 负载，完整数据库和并发验证使用远端 CI，本地只做定向回归。
+
+尚未打通：鉴权实验提交与 CLI、共享实验预算、固定快照、从已接纳 attempt 导出结果、真实 worker/故障 E2E、最终双 SHA 收口。上述控制接口是中间能力，不是 S4/S5 完成声明。
+
 ## 2026-09-07 后续切片：精确 CI 与持久实验基础
 
 第二检查点提交前：受影响集合 **252 passed, 1 symlink skipped in 33.81s**；随后补“产品 worker 不静默忽略评分覆盖参数”，反例先失败，限制配置为现有 max_attempts 后 evaluator/runs **37 passed**。全仓 lint、格式与 205 文件类型检查通过；0027→0028 的离线 SQL 成功生成并人工核对复合外键/幂等/RLS，未在本机执行 DDL。上述集合重叠，不相加。新数据库集成仍须等第二检查点精确 CI。

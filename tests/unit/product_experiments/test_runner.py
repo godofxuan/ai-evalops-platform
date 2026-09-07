@@ -124,6 +124,11 @@ async def test_missing_cost_stays_unknown_and_blocks_cost_gate(tmp_path: Path) -
     assert result.automated_assessment["status"] == "NOT_RUN"
     assert {item["code"] for item in result.input_requirements} == {"MISSING_COST_MEASUREMENT"}
     assert result.case_comparisons == []
+    assert result.metric_diagnostics["reference_answer"].valid_pair_count == 120
+    assert result.metric_diagnostics["reference_answer"].missing_pair_count == 0
+    assert result.metric_diagnostics["cost_usd"].valid_pair_count == 0
+    assert result.metric_diagnostics["cost_usd"].missing_pair_count == 120
+    assert result.metric_diagnostics["reference_answer"].decision_scope == "DESCRIPTIVE_ONLY"
 
 
 @pytest.mark.asyncio

@@ -32,6 +32,7 @@ from app.api.routes_datasets import router as datasets_router
 from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
 from app.api.routes_observability import router as observability_router
+from app.api.routes_product_experiments import router as product_experiments_router
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
@@ -66,6 +67,8 @@ from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.observability.metrics import PlatformMetrics
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
+from app.product_experiments.persistence import SQLAlchemyProductExperimentRepository
+from app.product_experiments.service import ProductExperimentService
 from app.results.service import SQLAlchemyResultService
 from app.reviews.service import (
     ReviewConflictError,
@@ -138,6 +141,9 @@ def create_app(
             http_target_registry=runtime_settings.http_target_registry,
             metrics=metrics,
             telemetry=telemetry,
+        )
+        application.state.product_experiment_service = ProductExperimentService(
+            SQLAlchemyProductExperimentRepository(session_factory), application.state.run_service
         )
         event_publisher = RedisEventPublisher(
             redis_client,
@@ -244,6 +250,7 @@ def create_app(
     application.state.session_factory = None
     application.state.dataset_service = None
     application.state.run_service = None
+    application.state.product_experiment_service = None
     application.state.result_service = None
     application.state.review_service = None
     application.state.agent_artifact_service = None
@@ -262,6 +269,7 @@ def create_app(
     application.include_router(results_router)
     application.include_router(reviews_router)
     application.include_router(runs_router)
+    application.include_router(product_experiments_router)
     application.include_router(events_router)
     application.add_exception_handler(APIError, handle_api_error)
     application.add_exception_handler(DatasetNotFoundError, handle_dataset_not_found)

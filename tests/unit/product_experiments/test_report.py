@@ -1,8 +1,44 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from app.product_experiments.report import render_experiment_html
+
+
+def test_public_v1_renderer_preserves_published_checkpoint_bytes() -> None:
+    # Golden digest measured from 8cbad06f32f9a0e010c35da7aa97e68b08007e2f.
+    payload = {
+        "schema_version": "evalops.public-experiment-summary/1.0",
+        "experiment_id": "public-" + "a" * 64,
+        "status": "DEMO_PASS",
+        "scope": "DEMO",
+        "task_type": "QA",
+        "case_count": 120,
+        "dataset_sha256": "d" * 64,
+        "evalops_sha": "e" * 40,
+    }
+    digest = hashlib.sha256(render_experiment_html(payload).encode("utf-8")).hexdigest()
+    assert digest == "7eccb73f817d249b793452fecee1ab7a52b51d6d5e7b2ebf37b0bce402bde130"
+
+
+def test_report_shows_descriptive_coverage_without_relabeling_the_gate() -> None:
+    rendered = render_experiment_html(
+        {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "scope": "DEMO",
+            "metric_diagnostics": {
+                "cost_usd": {
+                    "decision_scope": "DESCRIPTIVE_ONLY",
+                    "valid_pair_count": 0,
+                    "missing_pair_count": 120,
+                }
+            },
+        }
+    )
+    assert "DESCRIPTIVE_ONLY" in rendered and "missing_pair_count" in rendered
+    assert "INSUFFICIENT_EVIDENCE" in rendered
 
 
 @pytest.mark.parametrize(

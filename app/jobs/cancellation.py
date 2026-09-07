@@ -1,7 +1,9 @@
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import Select, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.principals import Principal
 from app.core.clock import Clock, SystemClock
@@ -80,145 +82,152 @@ class SQLAlchemyCancellationService:
     ) -> RunRead:
         now = self._clock.now()
         async with self._session_factory.begin() as session:
-            state_changed = False
-            run = (
-                await session.execute(
-                    select(EvaluationRun).where(
-                        EvaluationRun.id == run_id,
-                        EvaluationRun.tenant_id == principal.tenant_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if run is None:
-                raise RunNotFoundError
-            if run.status in _TERMINAL_RUN_STATUSES:
-                return _run_read(run)
+            return await cancel_run_in_session(session, principal=principal, run_id=run_id, now=now)
 
-            locked_tenant_id = await session.scalar(
-                build_tenant_key_share_for_cancellation_statement(tenant_id=principal.tenant_id)
+
+async def cancel_run_in_session(
+    session: AsyncSession, *, principal: Principal, run_id: UUID, now: datetime
+) -> RunRead:
+    """Cancel within the caller-owned transaction, preserving Tenant → Run → Job locks."""
+    state_changed = False
+    run = (
+        await session.execute(
+            select(EvaluationRun).where(
+                EvaluationRun.id == run_id,
+                EvaluationRun.tenant_id == principal.tenant_id,
             )
-            if locked_tenant_id is None:
-                raise RunNotFoundError
-            run = (
-                await session.execute(
-                    select(EvaluationRun)
-                    .where(
-                        EvaluationRun.id == run_id,
-                        EvaluationRun.tenant_id == principal.tenant_id,
-                    )
-                    .with_for_update(of=EvaluationRun)
-                )
-            ).scalar_one()
-            if run.status in _TERMINAL_RUN_STATUSES:
-                return _run_read(run)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise RunNotFoundError
+    if run.status in _TERMINAL_RUN_STATUSES:
+        return _run_read(run)
 
-            jobs = (
-                (
-                    await session.execute(
-                        select(EvaluationJob)
-                        .where(
-                            EvaluationJob.run_id == run_id,
-                            EvaluationJob.status.in_(_NONTERMINAL_JOB_STATUSES),
-                        )
-                        .order_by(EvaluationJob.id)
-                        .with_for_update(of=EvaluationJob)
-                    )
-                )
-                .scalars()
-                .all()
+    locked_tenant_id = await session.scalar(
+        build_tenant_key_share_for_cancellation_statement(tenant_id=principal.tenant_id)
+    )
+    if locked_tenant_id is None:
+        raise RunNotFoundError
+    run = (
+        await session.execute(
+            select(EvaluationRun)
+            .where(
+                EvaluationRun.id == run_id,
+                EvaluationRun.tenant_id == principal.tenant_id,
             )
+            .with_for_update(of=EvaluationRun)
+        )
+    ).scalar_one()
+    if run.status in _TERMINAL_RUN_STATUSES:
+        return _run_read(run)
 
-            if run.status in {RunStatus.QUEUED, RunStatus.RUNNING}:
-                run_transition = transition_run(
-                    run.status,
-                    RunStatus.CANCELLING,
-                    reason="user_requested_cancel",
-                    actor=str(principal.api_key_id),
+    jobs = (
+        (
+            await session.execute(
+                select(EvaluationJob)
+                .where(
+                    EvaluationJob.run_id == run_id,
+                    EvaluationJob.status.in_(_NONTERMINAL_JOB_STATUSES),
                 )
-                session.add(
-                    _audit(
-                        tenant_id=principal.tenant_id,
-                        actor=str(principal.api_key_id),
-                        action="run.status_changed",
-                        resource_type="evaluation_run",
-                        resource_id=run.id,
-                        metadata={
-                            "previous": run_transition.previous.value,
-                            "current": run_transition.current.value,
-                            "reason": run_transition.reason,
-                        },
-                    )
-                )
-                run.status = run_transition.current
-                state_changed = True
-            if run.cancel_requested_at is None:
-                run.cancel_requested_at = now
-                state_changed = True
-            run.version += 1
+                .order_by(EvaluationJob.id)
+                .with_for_update(of=EvaluationJob)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
-            for job in jobs:
-                target = planned_cancellation_target(job.status)
-                if target is None:
-                    continue
-                transition = transition_job(
-                    job.status,
-                    target,
-                    reason="run_cancel_requested",
-                    actor=str(principal.api_key_id),
-                )
-                session.add(
-                    _audit(
-                        tenant_id=principal.tenant_id,
-                        actor=str(principal.api_key_id),
-                        action="job.status_changed",
-                        resource_type="evaluation_job",
-                        resource_id=job.id,
-                        metadata={
-                            "previous": transition.previous.value,
-                            "current": transition.current.value,
-                            "reason": transition.reason,
-                        },
-                    )
-                )
-                job.status = target
-                job.cancel_requested_at = now
-                job.next_attempt_at = None
-                state_changed = True
-                if target is JobStatus.CANCELLED:
-                    job.finished_at = now
-                    job.lease_owner = None
-                    job.lease_expires_at = None
-                    job.heartbeat_at = None
-                    job.version += 1
-            await session.flush()
-            aggregation = await aggregate_run_in_session(
-                session,
-                run_id=run.id,
-                now=now,
+    if run.status in {RunStatus.QUEUED, RunStatus.RUNNING}:
+        run_transition = transition_run(
+            run.status,
+            RunStatus.CANCELLING,
+            reason="user_requested_cancel",
+            actor=str(principal.api_key_id),
+        )
+        session.add(
+            _audit(
+                tenant_id=principal.tenant_id,
                 actor=str(principal.api_key_id),
+                action="run.status_changed",
+                resource_type="evaluation_run",
+                resource_id=run.id,
+                metadata={
+                    "previous": run_transition.previous.value,
+                    "current": run_transition.current.value,
+                    "reason": run_transition.reason,
+                },
             )
-            if aggregation.status_changed and aggregation.status in _TERMINAL_RUN_STATUSES:
-                enqueue_progress_event(
-                    session,
-                    event_type=EventType.RUN_COMPLETED,
-                    tenant_id=principal.tenant_id,
-                    run_id=run.id,
-                    timestamp=now,
-                    payload={"status": aggregation.status.value},
-                )
-            elif state_changed:
-                enqueue_progress_event(
-                    session,
-                    event_type=EventType.JOB_PROGRESS,
-                    tenant_id=principal.tenant_id,
-                    run_id=run.id,
-                    timestamp=now,
-                    payload={
-                        "status": aggregation.status.value,
-                        "source": "cancel_request",
-                    },
-                )
-            return _run_read(run)
+        )
+        run.status = run_transition.current
+        state_changed = True
+    if run.cancel_requested_at is None:
+        run.cancel_requested_at = now
+        state_changed = True
+    run.version += 1
+
+    for job in jobs:
+        target = planned_cancellation_target(job.status)
+        if target is None:
+            continue
+        transition = transition_job(
+            job.status,
+            target,
+            reason="run_cancel_requested",
+            actor=str(principal.api_key_id),
+        )
+        session.add(
+            _audit(
+                tenant_id=principal.tenant_id,
+                actor=str(principal.api_key_id),
+                action="job.status_changed",
+                resource_type="evaluation_job",
+                resource_id=job.id,
+                metadata={
+                    "previous": transition.previous.value,
+                    "current": transition.current.value,
+                    "reason": transition.reason,
+                },
+            )
+        )
+        job.status = target
+        job.cancel_requested_at = now
+        job.next_attempt_at = None
+        state_changed = True
+        if target is JobStatus.CANCELLED:
+            job.finished_at = now
+            job.lease_owner = None
+            job.lease_expires_at = None
+            job.heartbeat_at = None
+            job.version += 1
+    await session.flush()
+    aggregation = await aggregate_run_in_session(
+        session,
+        run_id=run.id,
+        now=now,
+        actor=str(principal.api_key_id),
+    )
+    if aggregation.status_changed and aggregation.status in _TERMINAL_RUN_STATUSES:
+        enqueue_progress_event(
+            session,
+            event_type=EventType.RUN_COMPLETED,
+            tenant_id=principal.tenant_id,
+            run_id=run.id,
+            timestamp=now,
+            payload={"status": aggregation.status.value},
+        )
+    elif state_changed:
+        enqueue_progress_event(
+            session,
+            event_type=EventType.JOB_PROGRESS,
+            tenant_id=principal.tenant_id,
+            run_id=run.id,
+            timestamp=now,
+            payload={
+                "status": aggregation.status.value,
+                "source": "cancel_request",
+            },
+        )
+    return _run_read(run)
 
 
 def _audit(

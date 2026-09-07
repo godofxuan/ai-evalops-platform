@@ -6,6 +6,7 @@ from app.artifacts.storage import ArtifactStore
 from app.auth.principals import Principal
 from app.core.telemetry import Telemetry
 from app.datasets.validation import validate_jsonl
+from app.domain.evaluation import EvaluationCase
 from app.evaluators.base import UnsupportedEvaluatorError, build_evaluator
 from app.observability.metrics import PlatformMetrics
 from app.runs.idempotency import canonical_request_hash
@@ -140,6 +141,23 @@ class SQLAlchemyRunService:
         if validated.sha256 != source.sha256 or validated.case_count != source.case_count:
             raise RunInputIntegrityError
 
+        if request.evaluator.type in {"product_qa_v2", "product_agent_v2"}:
+            from app.evaluators.product import product_input_requirements, restore_product_case
+
+            for case in validated.cases:
+                try:
+                    restored = restore_product_case(EvaluationCase.from_payload(case.model_dump()))
+                    missing = product_input_requirements(
+                        restored,
+                        task_type="QA"
+                        if request.evaluator.type == "product_qa_v2"
+                        else "AGENT_TOOL_USE",
+                    )
+                except (ValueError, TypeError):
+                    raise InvalidEvaluatorConfigurationError from None
+                if missing:
+                    raise InvalidEvaluatorConfigurationError
+
         evaluator_config = dict(request.evaluator.config)
         origin_traceparent = (
             None if self._telemetry is None else self._telemetry.capture_traceparent()
@@ -227,6 +245,11 @@ def _resolve_target(
 
 
 def _validate_evaluator(request: RunCreate) -> None:
+    if (
+        request.evaluator.type in {"product_qa_v2", "product_agent_v2"}
+        and request.evaluator.version != "product-v2"
+    ):
+        raise InvalidEvaluatorConfigurationError
     try:
         build_evaluator(request.evaluator.type, request.evaluator.config)
     except UnsupportedEvaluatorError as error:

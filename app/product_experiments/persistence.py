@@ -9,8 +9,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.principals import Principal
+from app.core.clock import SystemClock
+from app.jobs.cancellation import (
+    build_tenant_key_share_for_cancellation_statement,
+    cancel_run_in_session,
+)
 from app.persistence.database import AsyncSessionFactory
-from app.persistence.orm_models import ProductExperiment
+from app.persistence.orm_models import EvaluationRun, ProductExperiment
 from app.runs.repository import NewRun, insert_run_and_jobs
 from app.runs.service import IdempotencyConflictError
 
@@ -63,6 +69,46 @@ def _snapshot(row: ProductExperiment) -> ProductExperimentSnapshot:
 class SQLAlchemyProductExperimentRepository:
     def __init__(self, session_factory: AsyncSessionFactory) -> None:
         self._session_factory = session_factory
+
+    async def cancel(
+        self, *, principal: Principal, experiment_id: UUID
+    ) -> ProductExperimentSnapshot | None:
+        now = SystemClock().now()
+        async with self._session_factory.begin() as session:
+            statement = select(ProductExperiment).where(
+                ProductExperiment.tenant_id == principal.tenant_id,
+                ProductExperiment.id == experiment_id,
+            )
+            if (await session.execute(statement)).scalar_one_or_none() is None:
+                return None
+            await session.scalar(
+                build_tenant_key_share_for_cancellation_statement(tenant_id=principal.tenant_id)
+            )
+            row = (
+                await session.execute(
+                    statement.with_for_update(of=ProductExperiment).execution_options(
+                        populate_existing=True
+                    )
+                )
+            ).scalar_one()
+            run_ids = sorted((row.baseline_run_id, row.candidate_run_id))
+            # Global order: Tenant → Experiment → Runs ordered by ID → Jobs.
+            await session.execute(
+                select(EvaluationRun)
+                .where(
+                    EvaluationRun.tenant_id == principal.tenant_id,
+                    EvaluationRun.id.in_(run_ids),
+                )
+                .order_by(EvaluationRun.id)
+                .with_for_update(of=EvaluationRun)
+            )
+            for run_id in run_ids:
+                await cancel_run_in_session(session, principal=principal, run_id=run_id, now=now)
+            if not row.cancel_requested:
+                row.cancel_requested = True
+                row.version += 1
+            await session.flush()
+            return _snapshot(row)
 
     async def get(
         self, *, tenant_id: UUID, experiment_id: UUID

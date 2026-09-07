@@ -133,7 +133,10 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         if type(count) is not int or count < 2:
             raise ProductManifestError("invalid completed case count")
         paired_ids: set[str] | None = None
+        paired_inputs: dict[str, tuple[str, str]] | None = None
         for label, arm in arms.items():
+            if arm.get("arm") != label:
+                raise ProductManifestError("arm role does not match its label")
             if arm.get("dataset_sha256") != result.get("dataset_sha256"):
                 raise ProductManifestError("arm/result dataset identity mismatch")
             source = result.get("source_identities", {}).get(label, {})
@@ -145,6 +148,10 @@ def verify_manifest(path: Path) -> dict[str, Any]:
                 raise ProductManifestError("arm case count or uniqueness mismatch")
             if paired_ids is not None and paired_ids != identities:
                 raise ProductManifestError("arm case set mismatch")
+            inputs = {case["case_id"]: (case["prompt"], case["category"]) for case in cases}
+            if paired_inputs is not None and paired_inputs != inputs:
+                raise ProductManifestError("paired input content or category mismatch")
+            paired_inputs = inputs
             paired_ids = identities
         rows = result.get("case_comparisons", [])
         if len(rows) != count or {row["case_id"] for row in rows} != paired_ids:

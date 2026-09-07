@@ -71,6 +71,12 @@ HTTP 错误、超时、无效响应进入 execution_errors，不转换成差答�
 
 ## 尚未完成的内容
 
+持久化基础已增加 product_experiments 表及 0028 迁移，两组现有 Run/Job 与父记录原子创建。阶段性控制接口为鉴权 GET /api/v1/experiments/{id} 和 POST /api/v1/experiments/{id}/cancel；跨租户对象按不存在处理。取消共用旧 Run 状态机，不保证撤销目标服务副作用。两组执行成功仅为 READY_FOR_ASSESSMENT，不能解释为质量通过。目前还没有公开实验提交/结果导出入口，不建议绕过服务手工组装数据库对象。
+
+worker 新插件 product_qa_v2 / product_agent_v2 要求 evaluator_version=product-v2；数据须由 map_product_dataset 映射并保留私有 evalops_product_case。原始 JSON SHA 与规范化 JSONL SHA 含义不同，不能互换。缺少评分标签或映射不一致时在创建任务前拒绝。旧插件版本语义不变。
+
+私有报告新增 metric_diagnostics：按指标展示有效配对与缺失数量、胜负/持平、平均 candidate-minus-baseline 差；该区只有 DESCRIPTIVE_ONLY 保证。缺失费用时其他已测指标仍可查看，但完整门禁不会获得 PASS。公开 v1 HTML 渲染冻结维持历史复核兼容，暂不包含新诊断区。
+
 严格快照绑定、持久 Run/Job 接入、真实故障恢复验收、最终精确 SHA/CI 和教学/简历任务同步仍未完成。公开/私有导出的基本分离已实现，真实进程中断恢复等验收仍待完成。
 
 ## 新增的比较与证据行为

@@ -18,6 +18,23 @@ write_product_artifacts = partial(export_product_artifacts, export_mode="private
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["arm", "prompt", "category"])
+async def test_export_rejects_semantically_mismatched_pair(tmp_path: Path, field: str) -> None:
+    from app.product_experiments.runner import run_experiment
+
+    result = await run_experiment(
+        REPOSITORY_ROOT / "benchmarks/product_demo_v1/experiment.json", evalops_sha="e" * 40
+    )
+    candidate = result.arms["candidate"]
+    if field == "arm":
+        candidate.arm = "baseline"
+    else:
+        setattr(candidate.cases[0], field, "different-input")
+    with pytest.raises(ProductManifestError, match="arm role|paired input"):
+        write_product_artifacts(result, output_dir=tmp_path / "invalid", command="test")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "field,value,reason",
     [

@@ -15,11 +15,13 @@ from sqlalchemy.orm import Mapper
 from app.auth.api_keys import generate_api_key
 from app.auth.principals import Principal
 from app.core.config import Settings
+from app.domain.enums import RunStatus
 from app.main import create_app
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     APIKey,
     ArtifactReference,
+    AuditEvent,
     Dataset,
     DatasetVersion,
     EvaluationJob,
@@ -53,9 +55,18 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
     application = create_app(settings=settings)
     tenant_id, key_id = uuid4(), uuid4()
     credential = generate_api_key()
+    other_tenant_id, other_key_id = uuid4(), uuid4()
+    other_credential = generate_api_key()
     async with application.router.lifespan_context(application):
         factory = cast(AsyncSessionFactory, application.state.session_factory)
         async with factory.begin() as session:
+            session.add(
+                Tenant(
+                    id=other_tenant_id,
+                    slug=f"pair-other-{other_tenant_id.hex}",
+                    name="Other pair tenant",
+                )
+            )
             session.add(Tenant(id=tenant_id, slug=f"pair-{tenant_id.hex}", name="Pair test"))
             await session.flush()
             session.add(
@@ -65,6 +76,15 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
                     name="pair-test",
                     key_prefix=credential.prefix,
                     key_hash=credential.key_hash,
+                )
+            )
+            session.add(
+                APIKey(
+                    id=other_key_id,
+                    tenant_id=other_tenant_id,
+                    name="other-pair-test",
+                    key_prefix=other_credential.prefix,
+                    key_hash=other_credential.key_hash,
                 )
             )
         headers = {"Authorization": f"Bearer {credential.plaintext.get_secret_value()}"}
@@ -156,7 +176,35 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
                 .all()
             )
         assert len(runs) == 2 and len(jobs) == 4
+        other_headers = {"Authorization": f"Bearer {other_credential.plaintext.get_secret_value()}"}
+        async with AsyncClient(
+            transport=ASGITransport(app=application), base_url="http://test"
+        ) as client:
+            own = await client.get(f"/api/v1/experiments/{pair.id}", headers=headers)
+            assert own.status_code == 200 and own.json()["state"] == "QUEUED"
+            cross = await client.get(f"/api/v1/experiments/{pair.id}", headers=other_headers)
+            assert cross.status_code == 404
+            cross_cancel = await client.post(
+                f"/api/v1/experiments/{pair.id}/cancel", headers=other_headers
+            )
+            assert cross_cancel.status_code == 404
+            cancelled_response = await client.post(
+                f"/api/v1/experiments/{pair.id}/cancel", headers=headers
+            )
+            assert cancelled_response.status_code == 202
+            assert cancelled_response.json()["state"] == "CANCELLED"
+            assert cancelled_response.json()["formal_quality_claim_allowed"] is False
+        outsider = replace(principal, tenant_id=uuid4())
+        assert await repository.cancel(principal=outsider, experiment_id=pair.id) is None
+        cancelled = await repository.cancel(principal=principal, experiment_id=pair.id)
+        assert cancelled is not None and cancelled.cancel_requested
+        assert await repository.cancel(principal=principal, experiment_id=pair.id) == cancelled
+        for run_id in (pair.baseline_run_id, pair.candidate_run_id):
+            assert (
+                await service.get_run(principal=principal, run_id=run_id)
+            ).status == RunStatus.CANCELLED
         async with factory.begin() as session:
+            await session.execute(delete(AuditEvent).where(AuditEvent.tenant_id == tenant_id))
             await session.execute(
                 delete(ProductExperiment).where(ProductExperiment.tenant_id == tenant_id)
             )
@@ -171,3 +219,5 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
             )
             await session.execute(delete(APIKey).where(APIKey.id == key_id))
             await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
+            await session.execute(delete(APIKey).where(APIKey.id == other_key_id))
+            await session.execute(delete(Tenant).where(Tenant.id == other_tenant_id))

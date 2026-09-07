@@ -27,6 +27,7 @@ from app.external_harness.harness_envelope import canonical_sha256
 from app.jobs.retry_policy import classify_failure
 from app.product_experiments.agent_projection import project_agent_trace
 from app.product_experiments.assessment import assess_product_numeric
+from app.product_experiments.diagnostics import MetricDiagnostic, build_metric_diagnostics
 from app.product_experiments.evaluators import (
     CaseEvaluator,
     citation_evidence_scores,
@@ -198,6 +199,7 @@ class ProductExperimentResult(BaseModel):
     input_requirements: list[dict[str, str]] = Field(default_factory=list)
     execution_errors: list[CaseExecutionFailure] = Field(default_factory=list)
     observations: dict[str, dict[str, ProviderResult]] = Field(default_factory=dict)
+    metric_diagnostics: dict[str, MetricDiagnostic] = Field(default_factory=dict)
 
 
 class _FixtureProvider:
@@ -653,6 +655,9 @@ async def run_experiment(
         score_results[arm.label] = {
             case.case_id: row[2] for case, row in zip(cases, rows, strict=True) if row is not None
         }
+    metric_diagnostics = build_metric_diagnostics(
+        cases, observed_results, evaluator_names=spec.evaluators
+    )
     if execution_errors or requirements:
         return ProductExperimentResult(
             experiment_id=spec.experiment_id,
@@ -671,6 +676,7 @@ async def run_experiment(
             automated_assessment={"status": "NOT_RUN", "reason": "observations_incomplete"},
             case_comparisons=[],
             observations=observed_results,
+            metric_diagnostics=metric_diagnostics,
             input_requirements=sorted(
                 requirements, key=lambda item: (item["arm"], item["case_id"])
             ),
@@ -727,6 +733,7 @@ async def run_experiment(
         input_snapshot=snapshot,
         execution_id=execution_id,
         observations=observed_results,
+        metric_diagnostics=metric_diagnostics,
         scope=spec.scope,
         task_type=spec.task_type,
         dataset_sha256=spec.dataset.sha256,
