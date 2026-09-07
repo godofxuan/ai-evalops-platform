@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import UUID
 
 from app.core.strict_json import decode_evidence_json
-from app.product_experiments.client import ProductAPIClient, ProductAPIError
+from app.product_experiments.client import ProductAPIClient, ProductAPIError, ProductWaitTimeout
 from app.product_experiments.durable_bundle import verify_durable_bundle, write_durable_bundle
 from app.product_experiments.submission import DurableExperimentRequest
 from scripts.run_product_experiment import experiment_exit_code
@@ -114,8 +114,14 @@ def main() -> int:
         return asyncio.run(_run(args, api_key))
     except ProductAPIError as error:
         print(str(error), file=sys.stderr)
-        if str(error) == "api_wait_timeout":
+        if isinstance(error, ProductWaitTimeout):
             print(f"resume_experiment_id={args.experiment_id}", file=sys.stderr)
+            print(f"last_observed_state={error.last_observed_state or 'UNKNOWN'}", file=sys.stderr)
+            print(
+                "resume_command_template=python -m scripts.product_experiment_client "
+                f"--api-url <same-api-url> --api-key-env <same-env-name> wait {args.experiment_id}",
+                file=sys.stderr,
+            )
             return 4
         return 2
     except ValueError:

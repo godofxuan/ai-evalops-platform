@@ -46,7 +46,10 @@ async def exercise_product_process_recovery(
         submitted = await api.post(
             "/api/v1/experiments",
             json=payload,
-            headers={**headers, "Idempotency-Key": f"crash-pair-{phase}"},
+            headers={
+                **headers,
+                "Idempotency-Key": f"crash-pair-{payload['request']['task_type']}-{phase}",
+            },
         )
         assert submitted.status_code == 202
         experiment_id = UUID(submitted.json()["id"])

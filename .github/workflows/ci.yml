@@ -308,6 +308,17 @@ jobs:
       - name: Build the complete current topology
         run: docker compose -f deploy/compose.yaml build
 
+      - name: Verify explicit product submission Compose opt-in
+        env:
+          EVALOPS_PRODUCT_EXECUTION_CODE_SHA: ${{ github.sha }}
+        run: >-
+          docker compose -f deploy/compose.yaml -f deploy/compose.product-experiments.yaml
+          run --rm --no-deps api python -c
+          "import os; from app.core.config import Settings;
+          s=Settings(); assert s.product_experiment_submission_enabled;
+          assert s.product_execution_code_sha == os.environ['EVALOPS_PRODUCT_EXECUTION_CODE_SHA'];
+          print('Explicit product submission configuration verified')"
+
       - name: Start and wait for PostgreSQL, Redis, MinIO, and Collector
         run: >-
           docker compose -f deploy/compose.yaml up --detach --wait

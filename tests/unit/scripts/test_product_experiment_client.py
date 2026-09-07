@@ -69,7 +69,7 @@ def test_submit_rejects_oversized_request_before_network(tmp_path: Path) -> None
     assert not result.stdout
 
 
-@pytest.mark.parametrize("operation", ["get", "cancel", "wait"])
+@pytest.mark.parametrize("operation", ["get", "cancel", "wait", "wait_timeout"])
 def test_cli_controls_experiment_over_real_loopback_http(operation: str) -> None:
     experiment_id = uuid4()
     requests: list[tuple[str, str, str | None]] = []
@@ -88,7 +88,7 @@ def test_cli_controls_experiment_over_real_loopback_http(operation: str) -> None
     payload = json.dumps(
         {
             "id": str(experiment_id),
-            "state": "READY_FOR_ASSESSMENT",
+            "state": "QUEUED" if operation == "wait_timeout" else "READY_FOR_ASSESSMENT",
             "cancel_requested": False,
             "baseline": run,
             "candidate": {**run, "id": str(uuid4())},
@@ -123,8 +123,13 @@ def test_cli_controls_experiment_over_real_loopback_http(operation: str) -> None
                     f"http://127.0.0.1:{server.server_port}",
                     "--api-key-env",
                     "EVALOPS_TEST_KEY",
-                    operation,
+                    "wait" if operation == "wait_timeout" else operation,
                     str(experiment_id),
+                    *(
+                        ["--wait-seconds", "1", "--poll-seconds", "2"]
+                        if operation == "wait_timeout"
+                        else []
+                    ),
                 ],
                 env={**os.environ, "EVALOPS_TEST_KEY": "test-private-key"},
                 capture_output=True,
@@ -135,8 +140,16 @@ def test_cli_controls_experiment_over_real_loopback_http(operation: str) -> None
         finally:
             server.shutdown()
             thread.join(timeout=5)
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["id"] == str(experiment_id)
+    if operation == "wait_timeout":
+        assert result.returncode == 4
+        assert "last_observed_state=QUEUED" in result.stderr
+        assert f"resume_experiment_id={experiment_id}" in result.stderr
+        assert "resume_command_template=" in result.stderr
+        assert "http://127.0.0.1" not in result.stderr
+        assert not result.stdout
+    else:
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["id"] == str(experiment_id)
     assert "test-private-key" not in result.stdout + result.stderr
     suffix = "/cancel" if operation == "cancel" else ""
     assert requests == [

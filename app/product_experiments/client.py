@@ -14,12 +14,23 @@ import httpx
 
 from app.core.strict_json import decode_evidence_json
 from app.product_experiments.durable_verification import verify_durable_report
-from app.product_experiments.service import ExperimentSubmissionAccepted, ProductExperimentRead
+from app.product_experiments.service import (
+    ExperimentSubmissionAccepted,
+    ProductExperimentRead,
+    ProductState,
+)
 from app.product_experiments.submission import DurableExperimentRequest
 
 
 class ProductAPIError(RuntimeError):
     """Safe code only: upstream bodies and credentials are never error messages."""
+
+
+class ProductWaitTimeout(ProductAPIError):
+    def __init__(self, experiment_id: UUID, last_observed_state: ProductState | None) -> None:
+        super().__init__("api_wait_timeout")
+        self.experiment_id = experiment_id
+        self.last_observed_state = last_observed_state
 
 
 class ProductAPIClient:
@@ -144,15 +155,17 @@ class ProductAPIClient:
             raise ValueError("invalid_wait_timeout")
         if not math.isfinite(poll_seconds) or not 0 < poll_seconds <= 60:
             raise ValueError("invalid_poll_interval")
+        last_observed_state: ProductState | None = None
         try:
             async with asyncio.timeout(wait_seconds):
                 while True:
                     result = await self.get(experiment_id)
+                    last_observed_state = result.state
                     if result.state in {"READY_FOR_ASSESSMENT", "EXECUTION_FAILED", "CANCELLED"}:
                         return result
                     await asyncio.sleep(poll_seconds)
         except TimeoutError:
-            raise ProductAPIError("api_wait_timeout") from None
+            raise ProductWaitTimeout(experiment_id, last_observed_state) from None
 
     async def _control(
         self, experiment_id: UUID, method: str, suffix: str, expected_status: int

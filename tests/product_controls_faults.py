@@ -50,30 +50,40 @@ async def exercise_product_control_faults(
     key = headers["Authorization"].removeprefix("Bearer ")
     raw = base64.b64decode(payload["dataset_base64"], validate=True)
     request = DurableExperimentRequest.model_validate_json(json.dumps(payload["request"]))
+    lost_key = f"lost-submit-response-{request.task_type}"
     async with (
         httpx.AsyncClient(transport=transport) as http,
         ProductAPIClient("https://evalops.example", key, http=http) as sdk,
     ):
         with pytest.raises(ProductAPIError, match="^api_transport_error$"):
-            await sdk.submit(
-                request=request, dataset_payload=raw, idempotency_key="lost-submit-response"
-            )
-        accepted = await sdk.submit(
-            request=request, dataset_payload=raw, idempotency_key="lost-submit-response"
-        )
+            await sdk.submit(request=request, dataset_payload=raw, idempotency_key=lost_key)
+        accepted = await sdk.submit(request=request, dataset_payload=raw, idempotency_key=lost_key)
         assert accepted.id == transport.lost_id
         assert (await sdk.cancel(accepted.id)).state == "CANCELLED"
 
     async with ProductAPIClient("https://evalops.example", key, http=api) as sdk:
         accepted = await sdk.submit(
-            request=request, dataset_payload=raw, idempotency_key="parent-cancel-race"
+            request=request,
+            dataset_payload=raw,
+            idempotency_key=f"parent-cancel-race-{request.task_type}",
         )
         factory = cast(AsyncSessionFactory, application.state.session_factory)
         claimer = SQLAlchemyJobClaimer(factory, lease_policy=LeasePolicy(timedelta(seconds=60)))
         claim = (await claimer.claim(worker_id="product-cancel-race", limit=1))[0]
         assert claim.run_id in {accepted.baseline_run_id, accepted.candidate_run_id}
         target_result = TargetResult(
-            "private answer", ({"source_id": "gold"},), (), {"cost_usd": 0.01}, None, 10
+            "private answer",
+            ({"source_id": "gold"},),
+            (),
+            {
+                "cost_usd": 0.01,
+                "tool_calls": [],
+                "tool_error": False,
+                "terminal_state": "completed",
+                "budget_exhausted": False,
+            },
+            None,
+            10,
         )
         evaluator = build_evaluator(claim.evaluator_type, claim.evaluator_config)
         evaluation = evaluator.evaluate(

@@ -1,5 +1,16 @@
 # AI EvalOps Platform — Current Portfolio and Release Status
 
+## Trustworthy evaluation product v2 — 2026-09-07
+
+Current work branch: `codex/trustworthy-evaluation-product-v2`. This round has not changed default `main`, RAG, prior resume attachments or historical links. S4/S5 implementation has reached the client, immutable export, independent recomputation and real process recovery; S6/S7 final closeout is still in progress.
+
+- [Checkpoint 17 CI 34114567320](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34114567320) succeeded for exact SHA `799ba5acbacf5a529472caf8b27083542c5d23b2`, covering earlier client/recovery work plus lost acknowledgements, cancellation races, atomic export death and bounded real HTTP streams.
+- New changes after that SHA include explicit Compose submission opt-in, safer wait recovery hints, clearer README navigation and full Agent parameterization of the durable fault path. They still require their own CI, not the checkpoint above.
+- Start with [current client instructions](docs/durable-experiment-client.md), [behavior-to-evidence map](docs/reviews/trustworthy-product-validation-map.md) and [execution/learning log](docs/reviews/trustworthy-product-execution-log.md).
+- Local fixed demos are not formal A/B. Formal quality, independent human approval and production readiness remain unverified. Frozen negative-scaling evidence is unchanged.
+
+Everything below is a dated historical snapshot with its original evidence boundaries, not the final status of v2.
+
 ## Usable evaluation product candidate — 2026-09-02
 
 - Branch: `codex/usable-eval-product-v1`.

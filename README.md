@@ -1,12 +1,69 @@
 # AI EvalOps Platform
 
-> 多租户异步 AI 评测与任务编排平台 · Agent Evaluation Infrastructure
->
-> Final closeout status: `IMPLEMENTATION_COMPLETE` · `FINAL_PAIR_CONTRACT_VERIFIED` · `PORTFOLIO_READY` · `MERGED_TO_DEFAULT_MAIN` · `NOT_RELEASED`
->
-> Status vocabulary: `IMPLEMENTATION_COMPLETE` · `EXACT_SHA_CI_REQUIRED` · `FINAL_PAIR_CONTRACT_REQUIRED` · `MERGED_TO_DEFAULT_MAIN` · `EXACT_MAIN_SHA_CI_VERIFIED` · `NOT_RELEASED` · `PORTFOLIO_READY` · `FORMAL_AB_NOT_RUN` · `HUMAN_REVIEW_PENDING` · `SHADOW_RELEASE_NOT_PASSED` · `PRODUCTION_NOT_VERIFIED`.
+> 对 QA / RAG / Agent 的两个版本运行同题评测，可靠执行任务，并输出可追溯、可复核的质量门禁。
+
+当前可信评测产品 v2 位于 `codex/trustworthy-evaluation-product-v2`。本轮没有修改默认 `main`、RAG 仓库或已投递简历的历史链接；最终发布收口尚在进行，不把历史版本的完成标签套到新一轮工作上。
 
 本项目把 Agent/RAG 评测从一次性脚本提升为可提交、可恢复、可审计、可复现的后台系统：PostgreSQL 管理多租户 Run/Job/Attempt 状态，Worker 使用 lease、heartbeat 与 fencing 抵御迟到写入，Reaper 恢复失联任务；Agent 轨迹通过版本化 Artifact、内外两层 SHA-256 和 Projection 校验进入 EvalOps；审计事件由持久 Outbox 和独立 Dispatcher 异步投递。
+
+## 你可以用它做什么
+
+| 场景 | 平台负责什么 | 不能据此得出什么 |
+| --- | --- | --- |
+| 比较两个 QA / RAG 版本 | 固定同一题集、输入版本与 policy，比较任务成功、引用来源 ID、延迟和费用 | 引用 ID 命中不等于答案语义忠实；未知费用不是零 |
+| 比较两个工具调用 Agent | 检查工具选择、参数类型、权限、预算、错误和终态；区分绝对达标与配对退化 | 确定性工具用例不等于真实危险工具安全审计 |
+| 把实验交给后台执行 | 鉴权提交、幂等重放、跨两组的活动任务限制、重试/取消、worker 失联恢复 | 外部服务不保证 exactly-once；内部模型调用和账单不由平台硬控 |
+| 将报告交给别人审核 | 默认公共摘要；显式私有包可离线重算；报告与 accepted attempt、原始输入和精确字节绑定 | 哈希自洽不等于来源认证、正式 A/B、人评或生产验收 |
+
+RAG 是一个被测对象，不是本平台的依赖项目。平台不会替你实现检索器或 Agent，也不会为了得到 PASS 填补缺失测量。
+
+## 两条使用路径
+
+**先体验本地评测，不需要 API key 或付费模型：**
+
+```powershell
+uv python install 3.12
+uv sync --locked --all-groups
+uv run --no-sync python -m scripts.run_product_experiment --spec benchmarks/product_demo_v1/experiment.json --output-dir artifacts/qa-demo-v2
+uv run --no-sync python -m scripts.run_product_experiment --spec benchmarks/agent_tool_demo_v1/experiment.json --output-dir artifacts/agent-demo-v2
+```
+
+两套固定演示各包含 120 题；以实际输出状态和退出码为准，不代表真实模型质量提升。默认导出受限公共摘要和 HTML。需要看逐题诊断时，在**新的受控目录**显式加 `--export-mode private`；不要把真实私有数据包提交到公开仓库。已存在的输出目录不会被静默覆盖。
+
+**需要持久任务时，使用真实 API / PostgreSQL / worker：**
+
+```text
+鉴权提交 → 父实验 + baseline/candidate Runs → Jobs / Attempts
+         → worker 执行与租约恢复 → accepted results → 不可变报告
+         → 按实验 ID 下载 → 离线验证与共享聚合器重算
+```
+
+命令行提供 `submit / get / wait / cancel / export / verify`。关闭客户端或等待超时不会取消服务器实验；只有显式 `cancel` 才发出取消请求。完整配置、数据集映射、幂等重放和使用步骤见 [持久实验客户端](docs/durable-experiment-client.md)。
+
+## 三种“成功”必须分开
+
+| 结果 | 含义 |
+| --- | --- |
+| READY_FOR_ASSESSMENT | 两组执行结束，可以评估；不是质量通过 |
+| DEMO_PASS / DEMO_FAIL / INSUFFICIENT_EVIDENCE | 固定门禁的演示质量结果；失败或证据不足产生非零 export 退出码 |
+| PRIVATE_RECOMPUTED / PUBLIC_PROJECTION_ONLY | 完整私有材料重算一致，或仅验证公共摘要；不是正式质量结论 |
+
+正式 A/B 未完成，人评仍待完成，Shadow/生产资格未验证。已有调度性能证据仍保留 `NEGATIVE_SCALING` 限制；本轮恢复与证据改进不能冲抵性能问题。
+
+## 当前工程证据从哪里看
+
+- [第十五检查点 CI](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34112208092)：精确提交 `a10c785f5e88d9c53c3348d037b3e78cf88c2c47`，持久 SDK/CLI、租户隔离、不可变导出与离线重算通过。
+- [第十六检查点 CI](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34113351106)：精确提交 `6d8e68dcc466fba181be96df0f7bfe5cb7d0a052`，真实 worker 强杀、实际租约回收、陈旧写入拒绝、已完成题不重复执行通过。目标走真实本机 TCP；公共 DNS/peer 元数据为明确的测试夹具，不冒称公网 TLS 认证。
+- [完整执行与学习记录](docs/reviews/trustworthy-product-execution-log.md)：每一步为什么改、失败尝试、验证效果和仍未覆盖的边界。
+- [验收证据地图](docs/reviews/trustworthy-product-validation-map.md)：R1–R13 与故障矩阵对应哪些实际测试、属于哪一层证据。
+- [本轮执行方案](docs/plans/trustworthy-evaluation-product-execution-plan.md)、[领域模型](docs/02_domain_model.md)、[历史指标记分卡](docs/review/PROJECT_SCORECARD.md)与[既有 GPT 审核入口](docs/review/GPT_REVIEW_ENTRY.md)。旧材料保留原 SHA/保证范围，不自动升级。
+
+后续检查点及最终双 SHA 回执以执行记录为准，不能用上面的绿色 CI 代替尚未执行的检查。
+
+<details>
+<summary><strong>历史产品演示、固定指标、旧版证据和原有导航（保留链接与锚点）</strong></summary>
+
+以下是此前版本的展示与复核材料。固定数值只属于各自列明的历史 SHA；当前 v2 用法和限制以上文及客户端指南为准。
 
 ## Run the product workflow
 
@@ -61,11 +118,10 @@ synthetic workflow evidence only. Rehash them from
 The exact implementation passed [GitHub Actions 33589528112](https://github.com/godofxuan/ai-evalops-platform/actions/runs/33589528112)
 before a non-force fast-forward promoted it to the default `main` branch.
 
-To evaluate two real RAG/Agent versions, change the spec to `scope: FORMAL`, pin both exact Git
-SHAs, and use two HTTPS providers whose credentials are named by `auth_env_var`. Literal secrets
-and unknown configuration fields are rejected. Missing credentials produce `INPUT_REQUIRED`
-before any request is sent. Formal automated success remains
-`AUTOMATED_PASS_HUMAN_REVIEW_PENDING` until two real independent blinded reviews are completed.
+The current FORMAL path additionally requires qualified, version-bound execution and protocol
+evidence; changing scope, pinning two SHAs and configuring credentials alone is insufficient.
+Missing qualifications or credentials produce `INPUT_REQUIRED` before target requests. Formal
+automated success does not complete the independent blinded human-review requirement.
 
 | Product surface | Entry |
 | --- | --- |
@@ -309,6 +365,8 @@ fixture adapter-contract evidence with
 
 For a fuller walkthrough, start with the [project evidence map](docs/handoffs/PROJECT_EVIDENCE_MAP.md). The complete
 engineering and release record remains available in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
+</details>
 
 <details>
 <summary><strong>Engineering deep dive and full project history</strong></summary>

@@ -314,7 +314,10 @@ async def test_real_postgres_pair_idempotency_and_hidden_tenant_boundary(tmp_pat
                 await service.get_run(principal=principal, run_id=run_id)
             ).status == RunStatus.CANCELLED
         await exercise_shared_admission(factory, repository, pending, artifact_store)
-        await exercise_authenticated_submission(application, dataset_id, headers, other_headers)
+        for task_type in ("QA", "AGENT_TOOL_USE"):
+            await exercise_authenticated_submission(
+                application, dataset_id, headers, other_headers, task_type=task_type
+            )
         async with factory.begin() as session:
             runs = list(
                 (
@@ -355,16 +358,24 @@ async def exercise_authenticated_submission(
     dataset_id: str,
     headers: dict[str, str],
     other_headers: dict[str, str],
+    *,
+    task_type: str = "QA",
 ) -> None:
     """Use real lifespan services, authentication, storage and PostgreSQL through HTTP."""
+    category = "qa" if task_type == "QA" else "tool-use"
     raw = json.dumps(
         [
             {
                 "case_id": str(index),
-                "category": "qa",
+                "category": category,
                 "prompt": "q",
                 "reference_answer": "private answer",
                 "expected_citation_ids": ["gold"],
+                **(
+                    {"allowed_tools": [], "max_tool_calls": 0}
+                    if task_type == "AGENT_TOOL_USE"
+                    else {}
+                ),
             }
             for index in range(2)
         ]
@@ -383,7 +394,7 @@ async def exercise_authenticated_submission(
         request = {
             "schema_version": "evalops.durable-experiment-request/1.0",
             "experiment_id": "http-pair",
-            "task_type": "QA",
+            "task_type": task_type,
             "scope": "DEMO",
             "dataset_version_id": version.json()["id"],
             "source_dataset_sha256": digest,
@@ -403,7 +414,7 @@ async def exercise_authenticated_submission(
                 "schema_version": "formal-agent-quality-policy/1.0",
                 "minimum_common_cases": 100,
                 "minimum_cases_per_category": 10,
-                "required_categories": ["qa"],
+                "required_categories": [category],
                 "bootstrap_resamples": 100,
                 "bootstrap_seed": 1,
                 "task_success_ci_lower_min": 0.0,
@@ -414,7 +425,7 @@ async def exercise_authenticated_submission(
             },
         }
         payload = {"request": request, "dataset_base64": base64.b64encode(raw).decode()}
-        submit_headers = {**headers, "Idempotency-Key": "real-http-pair"}
+        submit_headers = {**headers, "Idempotency-Key": f"real-http-pair-{task_type}"}
         outsider = await client.post(
             "/api/v1/experiments",
             json=payload,
@@ -472,7 +483,10 @@ async def exercise_worker_to_export(
     submitted = await client.post(
         "/api/v1/experiments",
         json=payload,
-        headers={**headers, "Idempotency-Key": "worker-export-pair"},
+        headers={
+            **headers,
+            "Idempotency-Key": f"worker-export-pair-{payload['request']['task_type']}",
+        },
     )
     assert submitted.status_code == 202
     accepted = submitted.json()
@@ -498,7 +512,13 @@ async def exercise_worker_to_export(
             json={
                 "answer": "private answer",
                 "citations": [{"source_id": "gold"}],
-                "trace": {"cost_usd": 0.01},
+                "trace": {
+                    "cost_usd": 0.01,
+                    "tool_calls": [],
+                    "tool_error": False,
+                    "terminal_state": "completed",
+                    "budget_exhausted": False,
+                },
             },
             extensions={"network_stream": Peer()},
         )

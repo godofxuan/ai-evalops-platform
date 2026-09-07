@@ -19,6 +19,14 @@ def test_durable_submission_is_opt_in_and_requires_server_code_identity() -> Non
     assert enabled.product_execution_code_sha == "a" * 40
 
 
+def test_durable_submission_operator_environment_uses_the_documented_names(monkeypatch) -> None:
+    monkeypatch.setenv("EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED", "true")
+    monkeypatch.setenv("EVALOPS_PRODUCT_EXECUTION_CODE_SHA", "b" * 40)
+    settings = Settings(_env_file=None)
+    assert settings.product_experiment_submission_enabled
+    assert settings.product_execution_code_sha == "b" * 40
+
+
 def test_settings_load_prefixed_environment_without_exposing_secret_urls(
     monkeypatch,
     tmp_path: Path,

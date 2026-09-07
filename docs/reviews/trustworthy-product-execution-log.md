@@ -1,5 +1,21 @@
 # 可信评测产品执行记录
 
+## 2026-09-07 第十八检查点：实现冻结前的可用性与双任务类型验收
+
+第十七检查点 `799ba5acbacf5a529472caf8b27083542c5d23b2` 的 [CI 34114567320](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34114567320) 已 completed/success，提交确认丢失、父实验取消竞争、导出进程强杀和真实停滞流有了自己的精确回执。
+
+- 部署可用性判断：默认 Compose 环境表不会自动传递宿主机的新提交开关。没有修改默认拓扑或给可选 SHA 填空字符串；新增明确选择的 compose.product-experiments.yaml，仅为 API 启用提交，并用 Compose 必填插值要求实际 40 位代码 SHA。默认仍关闭，保留原安全/资源配置。CI 新增真实镜像内 Settings 检查，验证合并后的环境实际生效，不只搜索 YAML 文本。当前主机没有 Docker，该新 Compose 验证待本检查点 CI。
+- 环境变量回归：Settings 通过实际 EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED/EVALOPS_PRODUCT_EXECUTION_CODE_SHA 环境值启用并读取 SHA，配置集合 24 passed（0.20s）。.env.example 只增加关闭默认与注释模板，无真实令牌。
+- 等待可操作性：计划要求超时后能了解进度并恢复。先写反例确认旧 ProductAPIError 没有最后状态；新增兼容子类 ProductWaitTimeout，保留 UUID 与最后实际观测的状态。首次请求未返回时明确 UNKNOWN，不声称知道服务器此刻状态。CLI 提供安全恢复模板，不回显 API 地址、变量名或密钥；实际 HTTP+子进程测试验证退出码 4、最后状态和模板。
+- 双任务类型审计：既有真实数据库主链主要是 QA，Agent 的原始字段和独立重算已有单元覆盖，但不应混同为完整 Agent 后台链路。将同一真实提交/worker/强杀/回收/不可变报告/响应丢失/取消竞争主路径扩展为 QA 与 AGENT_TOOL_USE 两轮，原始 case 合法设置空工具集合与零调用预算，所有幂等键按 task_type 隔离，确定性观测保留 Agent 所需终态/错误/预算字段。该新完整 Agent 路径待自己的 CI。
+- 参数化补丁遇到格式化行不匹配：前两个文件已更新，控制故障文件未应用。读取实际键和值后补齐，没有把末尾 mypy 成功误当成整个多文件补丁成功。
+- README 改为当前用途→两条路径→三种成功→当前证据，历史演示数值与导航放进可展开区域，原有标题锚点和链接保留。PROJECT_STATUS 增加当前段落并标明后文是历史快照。新增验收证据地图逐项映射 R1–R13/S5，不用测试总数代替结论；特别指出 local 的固定 seed 平衡顺序不等于 durable 调度保证，不发布未控制条件的正式延迟结论。
+- 文档 smoke：使用当前 .venv 的 Python 在两个专有临时目录运行 QA/Agent 各 120 题，均 DEMO_PASS、240 case-arm 观测、0 execution error；两个公共 manifest 再由独立 verify 脚本通过。该次显式传入 799ba5a...，但工作区已有未提交的 CI/Compose/文档改动，因此仅记非正式 dirty 文档 smoke，不作为最终冻结证据；冻结 CODE_SHA 后须在干净状态重新生成。没有把临时目录内容提交或冒充真实模型质量提升。
+- 四个当前入口（README、PROJECT_STATUS、客户端指南、验收地图）所有相对链接存在；未删除历史路径。中间扩大回归 207 passed、1 PostgreSQL skip（25.20s）；包含新 CLI 超时实际 HTTP 与配置回归，真实 Agent/PostgreSQL 新断言明确 skip。本次改动已通过全仓 lint、639 文件格式检查与 223 源文件 mypy。最终冻结前定向验证另记。
+- 回退方式：不选择新的 Compose 覆盖文件、关闭新提交开关即可停止新实验入口；保留现有 Run/Job 与报告，不降级删除迁移表、不重写历史。后续只完成本轮证据/使用说明收口；除实际验收发现问题外，不再追加功能。
+- 冻结前最终定向检查：65 passed、1 PostgreSQL skip（14.39s）；全仓 lint、639 文件 format check、223 源文件 mypy、git diff --check 通过。新 QA/Agent 全路径和真实 Compose opt-in 仍须实现提交自己的完整 CI；该实现提交将作为候选 CODE_SHA，只有精确 CI 成功后才进入最终证据提交。
+
+
 ## 2026-09-07 第十七检查点：故障矩阵剩余控制边界（CI 待验证）
 
 第十六检查点 `6d8e68dcc466fba181be96df0f7bfe5cb7d0a052` 的 [CI 34113351106](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34113351106) 已 completed/success。两处真实 worker 强杀、真实 HTTP、实际租约回收、旧 attempt 拒绝与最终独立重算已通过自己的 PostgreSQL CI，不再只是待执行测试。

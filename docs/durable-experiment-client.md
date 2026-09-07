@@ -12,6 +12,19 @@
 
 ## 提交、恢复与取消
 
+### 显式启用 Compose API
+
+普通 `deploy/compose.yaml` 继续保持新提交关闭；不要以为只在宿主机设置开关就会自动传入容器。需要启用时，先把 `$env:EVALOPS_PRODUCT_EXECUTION_CODE_SHA` 设为实际构建代码的精确 40 位 Git SHA，再使用额外覆盖文件：
+
+```powershell
+docker compose -f deploy/compose.yaml -f deploy/compose.product-experiments.yaml up --build --wait
+docker compose -f deploy/compose.yaml -f deploy/compose.product-experiments.yaml exec api python -m scripts.create_dev_api_key --tenant-slug product-demo
+```
+
+第二条在你自己的开发实例中创建租户 key，明文只显示一次，须受控保存到客户端环境变量，不复制到公开日志。已有 key 不需要重复创建。HTTP target registry 仍由操作者事先配置；覆盖文件只启用 API，不放宽 SSRF、不自动开放任意目标、不改默认部署。SHA 是操作者提供的版本声明，不等同于运行时独立认证。
+
+### 操作命令
+
 下面的 `$apiUrl`、`$experimentId` 应替换为你的实际服务地址和提交响应中的 UUID。所有全局参数放在子命令前。
 
 ```powershell
@@ -23,7 +36,7 @@ python -m scripts.product_experiment_client --api-url $apiUrl cancel $experiment
 
 提交返回父实验 UUID、两组 Run UUID 和 status_url。发生网络中断且不确定提交是否成功时，用**完全相同的 request、原始数据和幂等键**重新提交；不要换键假装是恢复。不自动重试非幂等的数据集创建。
 
-关闭客户端或 wait 超时不会取消服务器任务。需要取消时明确运行 cancel；取消不保证撤销目标服务已经产生的外部副作用。wait 返回 READY_FOR_ASSESSMENT 只表示执行完毕，可以生成评估报告。
+关闭客户端或 wait 超时不会取消服务器任务。超时提示包含原实验 ID、最后一次实际观测的状态（尚未取得响应时为 UNKNOWN）和恢复命令模板；最后观测不是当前服务端状态保证。模板使用占位符而不回显内部 API 地址或凭据变量名，请沿用原配置。需要取消时明确运行 cancel；取消不保证撤销目标服务已经产生的外部副作用。wait 返回 READY_FOR_ASSESSMENT 只表示执行完毕，可以生成评估报告。
 
 ## 默认公共导出与私有完整证据
 

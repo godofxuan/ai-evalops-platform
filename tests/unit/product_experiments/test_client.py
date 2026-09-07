@@ -49,7 +49,12 @@ def test_unsafe_api_base_is_rejected(url: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "operation,method,suffix",
-    [("get", "GET", ""), ("cancel", "POST", "/cancel"), ("wait", "GET", "")],
+    [
+        ("get", "GET", ""),
+        ("cancel", "POST", "/cancel"),
+        ("wait", "GET", ""),
+        ("wait_timeout", "GET", ""),
+    ],
 )
 async def test_recover_and_cancel_use_the_original_experiment_id(
     operation: str, method: str, suffix: str
@@ -90,6 +95,12 @@ async def test_recover_and_cancel_use_the_original_experiment_id(
             result = await client.get(experiment_id)
         elif operation == "cancel":
             result = await client.cancel(experiment_id)
+        elif operation == "wait_timeout":
+            with pytest.raises(ProductAPIError, match="^api_wait_timeout$") as caught:
+                await client.wait(experiment_id, wait_seconds=0.05, poll_seconds=1)
+            assert caught.value.last_observed_state == "QUEUED"
+            assert caught.value.experiment_id == experiment_id
+            return
         else:
             result = await client.wait(experiment_id, wait_seconds=1)
     assert result.id == experiment_id
