@@ -23,6 +23,7 @@ from app.product_experiments.reliability_client import (
     verify_reliability_ledger,
 )
 from app.runs.idempotency import canonical_request_hash
+from tests.product_learning_support import exercise_learning_bundle
 from tests.unit.product_experiments.test_durable_report import durable_evidence as durable_evidence
 from tests.unit.product_experiments.test_submission import submission_inputs as submission_inputs
 
@@ -179,6 +180,39 @@ async def test_collect_report_verify_missing_then_complete_private_recompute(
     (tmp_path / "complete" / "report.html").write_text("tampered", encoding="utf-8")
     with pytest.raises(ValueError, match="panel_html_mismatch"):
         verify_reliability_ledger(ledger, tmp_path / "complete")
+
+
+async def test_learning_diagnostics_leave_collected_ledger_immutable(panel_evidence, tmp_path):
+    plan, raw, _, _ = panel_evidence
+    ledger = tmp_path / "ledger"
+    create_reliability_ledger(ledger, plan, raw)
+    harness = TransportHarness(panel_evidence)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(harness)) as http:
+        client = ProductAPIClient("http://127.0.0.1", "synthetic-key", http=http)
+        await submit_reliability_ledger(ledger, client)
+        assert (await collect_reliability_ledger(ledger, client))["collected_trials"] == 2
+    before = {
+        path.relative_to(ledger): path.read_bytes() for path in ledger.rglob("*") if path.is_file()
+    }
+    request_count = len(harness.requests)
+    for trial in (1, 2):
+        exercise_learning_bundle(
+            ledger / f"trial-{trial:02d}", task="QA", scenario="complete", trial=trial
+        )
+    output = tmp_path / "report-after-diagnostics"
+    report_reliability_ledger(ledger, output)
+    assert verify_reliability_ledger(ledger, output)["status"] == "COMPLETE_DESCRIPTIVE_PANEL"
+    after = {
+        path.relative_to(ledger): path.read_bytes() for path in ledger.rglob("*") if path.is_file()
+    }
+    assert before == after
+    assert len(harness.requests) == request_count
+    for trial in (1, 2):
+        assert (tmp_path / f"ledger-learning-{trial:02d}" / "analysis.json").is_file()
+    # Unknown additions must still be rejected, not silently ignored by the verifier.
+    (ledger / "unexpected.txt").write_text("must reject", encoding="utf-8")
+    with pytest.raises(ValueError, match="ledger_file_set_mismatch"):
+        verify_reliability_ledger(ledger, output)
 
 
 async def test_wrong_export_identity_never_publishes_bundle(panel_evidence, tmp_path):

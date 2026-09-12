@@ -32,3 +32,17 @@
 ## 版本与证据解释
 
 后续镜像修复提交会成为新的远端 HEAD；不要把首次 `24b78e3` 的失败 CI 当作后续 HEAD 的结果。最终精确 HEAD、run URL、成功/失败和脱敏证据以 GitHub Actions 与本地追加收据为准。旧交付 ZIP 保留其原身份和“推送前”状态，不原地改写。
+
+## 独立于镜像故障的集成组合问题
+
+进一步读取首轮完整数据库日志，不能把所有失败都归因于 MinIO。`exercise_reliability_panels -> report_reliability_ledger -> _load` 抛出 `ledger_file_set_mismatch`：新增 `exercise_learning_bundle` 将 `ledger/trial-01` 的诊断输出放进 `ledger/learning-01`，污染了严格账本。QA complete 的两个诊断标记已经出现，但整个 product persistence 仍失败，不能只选这两个标记宣称通过。
+
+最小复现复用合成 durable fixture 与 HTTP 边界替代，实际执行 create/submit/collect、私有写盘与重算、学习诊断，再调用真实 ledger report/verify；旧 helper 下同样抛出 `ledger_file_set_mismatch`。这是文件系统组合故障的正确验证边界，但不能代替真实 PostgreSQL 集成。
+
+修复仅改变集成 helper 的输出位置，使用 ledger 兄弟目录并带 ledger 名和 trial 编号，避免 QA/Agent、完整/不完整场景互相重名。业务账本白名单不改。新增回归比较诊断前后全部账本文件字节，确认不增加目标请求；额外未知文件仍触发拒绝。
+
+组合回归修复后 25 passed / 64.90 秒；Ruff 通过，严格 mypy 检查 237 源文件无问题，历史证据 manifest 通过。红灯和绿灯 JUnit 分别为 `ledger-isolation-red.xml`、`ledger-isolation-green.xml`。本轮只补一项组合回归，不把此前 1401 通过数与这些重叠集合相加。
+
+迁移失败发生在 downgrade 0033 恢复旧 artifact_type 约束时。该迁移正确拒绝已有报告时的有损回滚；product 测试被上述异常中断，跳过正常路径中的测试租户清理，留下报告导致两个后续 smoke 失败。未修改迁移约束、未删除真实证据；需新 CI 确认 product 整体通过并完成清理后，两个迁移 smoke 都通过。测试失败时清理未在 finally 中的现有设计仍是诊断边界，本轮没有声称任意失败后的共享测试数据库都保持干净。
+
+镜像修复提交 `056df4b8e5584bcb7537a9a15f4135bc1111d4dd` 的 [CI 34694490347](https://github.com/godofxuan/ai-evalops-platform/actions/runs/34694490347) 已确认 Compose success，但尚未包含这个 helper 修复。后续提交再次运行全量 CI 是验证实际修复，不是对相同代码反复重跑挑最好结果。

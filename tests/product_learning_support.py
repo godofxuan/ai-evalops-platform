@@ -10,7 +10,9 @@ from app.product_experiments.learning_workflow import load_evidence
 def exercise_learning_bundle(source: Path, *, task: str, scenario: str, trial: int) -> None:
     evidence = load_evidence(source)
     assert evidence.verification_scope == "PRIVATE_RECOMPUTED"
-    output = source.parent / f"learning-{trial:02d}"
+    # The source is ledger/trial-N. Diagnostics must not mutate the strict ledger.
+    ledger = source.parent
+    output = ledger.parent / f"{ledger.name}-learning-{trial:02d}"
     verified = write_learning_bundle(evidence, output_dir=output)
     assert verify_learning_bundle(output) == verified
     report = json.loads((output / "analysis.json").read_bytes())
