@@ -58,3 +58,29 @@
 没有真人标签，没有付费模型 A/B，没有语义 judge 校准，没有 Phoenix/Langfuse 服务端联调，没有本轮真实数据库通过结果，没有新增远端 CI。SDK 兼容不是整个平台集成；本地重算不是服务器来源认证；大测试数量不是业务价值证明。
 
 本轮实现的价值是提供可以真实操作的评测使用流程，以及防止重复花费、误判和证据丢失的工程约束。是否改变实际应用的上线决定，仍需要真实使用案例。交付后冻结功能，不默认继续扩展平台。
+
+## 冻结代码后的实际操作验收
+
+代码本地提交：`d0ced60cc64c19876fac10608b1c4cf54676e18c`，分支 `codex/evaluation-workflow-v1`。本轮全量回归的运行源码与该提交一致；随后只补交付说明，不修改运行代码或测试。历史 reliability 阶段的“12 文件待提交”是当时状态，现已随本次提交一并收口，并不代表仍有另一组未提交文件。
+
+使用明确的该 CODE SHA 运行实际 CLI，所有以下命令退出 0：
+
+| 操作 | 实际结果 | 不能据此声称 |
+|---|---|---|
+| Agent private demo + verify | 120 题 / 240 观察 / 0 缺失；原状态 DEMO_PASS；诊断重建通过 | 真实模型质量或生产 PASS |
+| 导出 regressions | 全部 120 题保留，100 题有两臂诊断重点；candidate 新发现 0；题集 SHA256 `d6c10ec43c4f9194c3fc02ffaee2f7457adac0bf8510513761ac9134180d139b`，gold 未改 | 100 题都是 candidate 错误，或失败子集可代表总体 |
+| 运行导出的完整配置 | 使用新 experiment ID，完整原题集执行，公开投影 DEMO_PASS | 通过反复跑选成绩；本轮没有做该选择 |
+| 空白模板 calibrate + verify | 240 null / 0 paired；一致率与 kappa 为 null；HUMAN NOT_VERIFIED | 已完成人工标注或评分校准 |
+| QA public demo | 只保存 manifest/result/report；PUBLIC_PROJECTION_ONLY | 公开摘要可重算私有原始观察 |
+
+本轮新增讲解文件 `docs/evaluation-workflow-project-brief.md`，供用户理解架构、阅读演示和准备答辩。简历表述只引用可核验反例及测试，不补造生产吞吐、用户数或模型提升。
+
+远端只读检查：`refs/heads/codex/evaluation-workflow-v1` 尚不存在。没有执行 push，没有新代码对应的远端 CI；本地绿色结果不替代远端 CI。交付状态为 **LOCAL_IMPLEMENTED_AND_DEMONSTRATED / EXTERNAL_VALIDATION_PENDING**。
+
+## 标准轨迹端到端演示
+
+补查发现原 Agent fixture 使用 `agent-baseline-000` 等非标准 trace ID，不能直接与 32 hex 的 OTLP 关联。没有修改历史 fixture 或原证据包。在交付演示目录生成派生副本，只替换 fixture `trace_id`、更新副本题集哈希与 experiment ID；逐值验证其他内容完全相同，包括 prompt/reference、预期工具与参数、预算、fixture 答案和门槛。policy 原始、复制、执行冻结哈希均为 `e2feb10ed831644f48b381bba044bfa1c4323c88492b1123519aaa55e244e60c`。
+
+可复现 driver 使用锁定 SDK 产生 span，经标准 OTLP JSON 编码后，通过未修改的实际 `run --traces` 和 `verify` 命令。结果为 120 题、240/240 观察关联、480 个白名单投影 span、20 个合成 error span；两个 CLI 均退出 0。输入/输出、请求头、工具参数与错误消息中的隐私哨兵没有进入 projection/analysis。`REPORTED_TRACE_ONLY`、`UNPROVEN`、formal=false 保留。
+
+这些 span 是合成 instrumentation，不是观察真实 Agent 内部行为；固定时间戳也不是性能测量。该演示证明开放协议序列化、实际观察关联、导出及离线重建路径，不能宣称 Phoenix/Langfuse 服务端已联调。driver、原始 OTLP、派生输入、完整 CLI stdout/stderr 与 summary 均随交付包 `demo/traced-fixture/` 保留；未将演示脚本混入已冻结运行代码。
