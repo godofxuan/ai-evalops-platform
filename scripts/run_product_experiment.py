@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,16 @@ from app.product_experiments.runner import (
 from app.product_experiments.spec import InputLimitError
 from app.targets.base import InvalidTargetConfiguration
 from scripts.verify_product_experiment import verify_manifest
+
+
+class _InvalidEvalOpsSHA(ValueError):
+    """The CLI execution identity must match the existing result SHA contract."""
+
+
+def _validated_sha(value: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise _InvalidEvalOpsSHA("evalops_sha must be 40 lowercase hexadecimal characters")
+    return value
 
 
 def _git_sha() -> str:
@@ -59,6 +70,34 @@ def _write(path: Path, payload: bytes) -> dict[str, object]:
     }
 
 
+def _check_plain_path(path: Path) -> None:
+    if any(part.is_symlink() or part.is_junction() for part in (path, *path.parents)):
+        raise FileExistsError("experiment output paths cannot contain symlinks or junctions")
+
+
+def _check_output_directory(output_dir: Path) -> None:
+    _check_plain_path(output_dir)
+    if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())):
+        raise FileExistsError("experiment output must be a new or empty non-symlink directory")
+
+
+def _preflight_output(output_dir: Path) -> None:
+    """Probe current output availability; export still rechecks after execution."""
+    _check_output_directory(output_dir)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = output_dir.parent / f".{output_dir.name}.export.lock"
+    _check_plain_path(lock_path)
+    lock = lock_path.open("x", encoding="utf-8")
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix=".evalops-preflight-", dir=output_dir.parent
+        ) as root:
+            (Path(root) / "write-probe").write_bytes(b"output preflight\n")
+    finally:
+        lock.close()
+        lock_path.unlink()
+
+
 def write_product_artifacts(
     result: ProductExperimentResult,
     *,
@@ -68,12 +107,10 @@ def write_product_artifacts(
 ) -> dict[str, Any]:
     if export_mode not in {"public", "private"}:
         raise ValueError("unsupported export mode")
-    if output_dir.is_symlink() or (
-        output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir()))
-    ):
-        raise FileExistsError("experiment output must be a new or empty non-symlink directory")
+    _check_output_directory(output_dir)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     lock_path = output_dir.parent / f".{output_dir.name}.export.lock"
+    _check_plain_path(lock_path)
     lock = lock_path.open("x", encoding="utf-8")
     try:
         with tempfile.TemporaryDirectory(prefix=".evalops-export-", dir=output_dir.parent) as root:
@@ -102,8 +139,7 @@ def write_product_artifacts(
                 entry = _write(staging / "manifest.json", _json_bytes(manifest))
                 verify_manifest(staging / "manifest.json")
                 manifest = {**manifest, "manifest_file": entry}
-            if output_dir.is_symlink():
-                raise FileExistsError("output changed during export")
+            _check_output_directory(output_dir)
             if output_dir.exists():
                 output_dir.rmdir()  # Only an empty directory can be removed.
             staging.rename(output_dir)
@@ -155,11 +191,13 @@ def _write_product_artifacts(
 
 
 async def _run(args: argparse.Namespace) -> int:
+    evalops_sha = _validated_sha(args.evalops_sha) if args.evalops_sha is not None else None
     if args.validate_only:
         preflight = preflight_experiment(args.spec)
         print(json.dumps(preflight, ensure_ascii=False, sort_keys=True))
         return 0 if preflight["status"] == "READY" and args.gate == "automated" else 2
-    evalops_sha = args.evalops_sha or _git_sha()
+    evalops_sha = evalops_sha if evalops_sha is not None else _validated_sha(_git_sha())
+    _preflight_output(args.output_dir)
     result = await run_experiment(args.spec, evalops_sha=evalops_sha)
     command = f"python -m scripts.run_product_experiment --spec {args.spec}"
     write_product_artifacts(
@@ -217,6 +255,7 @@ def main() -> int:
         DatasetIntegrityError,
         InvalidTargetConfiguration,
         InputLimitError,
+        _InvalidEvalOpsSHA,
         FileNotFoundError,
     ):
         print(json.dumps({"error_code": "experiment_input_invalid"}), file=sys.stderr)

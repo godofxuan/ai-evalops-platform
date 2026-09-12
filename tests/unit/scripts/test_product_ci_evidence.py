@@ -40,3 +40,19 @@ def test_empty_or_absent_junit_is_never_pass(tmp_path):
     (tmp_path / "junit-unit.xml").write_text("<testsuites/>")
     result = capture(tmp_path / "out", tmp_path)
     assert result.get("junit", {}).get("junit-unit.xml", {}).get("state") == "EMPTY_NOT_VERIFIED"
+
+
+def test_capture_reliability_phase_keeps_only_allowlisted_synthetic_fields(tmp_path):
+    phase = (
+        "SYNTHETIC_RELIABILITY_PANEL_VERIFIED task=QA "
+        "scenario=complete trials=2 private_recomputed=true"
+    )
+    (tmp_path / "junit-product-experiment-persistence.xml").write_text(
+        '<testsuites><testsuite><testcase name="repeat"><system-out>'
+        + phase
+        + " PRIVATE_CANARY</system-out></testcase></testsuite></testsuites>"
+    )
+    result = capture(tmp_path / "out", tmp_path)
+    entry = result["junit"]["junit-product-experiment-persistence.xml"]
+    assert entry["verified_reliability_phases"] == [phase]
+    assert "PRIVATE_CANARY" not in json.dumps(result)

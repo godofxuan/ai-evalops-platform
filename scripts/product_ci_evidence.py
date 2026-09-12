@@ -44,6 +44,21 @@ def capture(output: Path, junit_dir: Path) -> dict[str, Any]:
         entry["verified_synthetic_phases"] = sorted(
             set(re.findall(phase_pattern, raw.decode("utf-8", errors="replace")))
         )
+        reliability_pattern = (
+            r"SYNTHETIC_RELIABILITY_PANEL_VERIFIED task=(?:QA|AGENT_TOOL_USE) "
+            r"scenario=(?:complete|incomplete) trials=2 private_recomputed=true"
+        )
+        entry["verified_reliability_phases"] = sorted(
+            set(re.findall(reliability_pattern, raw.decode("utf-8", errors="replace")))
+        )
+        learning_pattern = (
+            r"SYNTHETIC_LEARNING_WORKFLOW_VERIFIED task=(?:QA|AGENT_TOOL_USE) "
+            r"scenario=(?:complete|incomplete) trial=[12] "
+            r"private_recomputed=true diagnostics_recomputed=true"
+        )
+        entry["verified_learning_phases"] = sorted(
+            set(re.findall(learning_pattern, raw.decode("utf-8", errors="replace")))
+        )
         counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
         for test in root.iter("testcase"):
             counts["tests"] += 1

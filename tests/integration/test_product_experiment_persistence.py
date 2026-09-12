@@ -73,6 +73,7 @@ from tests.postgres_test_support import wait_for_lock_sensitive
 from tests.product_controls_faults import exercise_product_control_faults
 from tests.product_observation_faults import exercise_product_observation_faults
 from tests.product_process_recovery import exercise_product_process_recovery
+from tests.product_reliability_support import exercise_reliability_panels
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -485,6 +486,7 @@ async def exercise_authenticated_submission(
         await exercise_product_process_recovery(application, client, headers, payload)
         await exercise_product_control_faults(application, client, headers, payload)
         await exercise_product_observation_faults(application, client, headers, payload)
+        await exercise_reliability_panels(application, client, headers, other_headers, payload)
 
 
 async def exercise_worker_to_export(
