@@ -108,3 +108,11 @@
 - release-isolated：37 passed、0 skipped，cache key含上游完整SHA和SOURCE_HASHES清单摘要。本机跑过真实checker不等于真实模型推理。
 - MinIO官方Windowsarchive返回410；本机无Docker/podman/可用Go运行时。未临时换不可信镜像，3项MinIO用例明确skip；Linux Compose、MinIO及新分支GitHub CI待外部条件/授权，不借用903ed的历史CI。
 - 用户的学习掌握不能自动判定通过；完整简历、答辩和亲自复现练习已写入RESUME_AND_DEFENSE.md。历史NEGATIVE_SCALING、正式A/B、人评及生产限制保留。
+
+## 精确提交与文档收口
+
+- README更新后旧清单报evidence size drift。没有改旧清单hash：复制旧c5dbeec README原件并依其source_sha校验，当前README交给新CODE/交付身份。2项真实完整清单与缺失/篡改反向测试通过；CLI明确不把旧manifest说成覆盖当前README。
+- 由于便携数据库、缓存和.venv造成目录扫描很重，并在旧清单问题修正前开始采样，full-unit-isolated被明确中止；不是完整通过。将代码候选提交为bd10966fdc3a7abc094f8cf2b805cec84799f070，再创建完整干净detached源树验收。
+- CODE完整集成code-integration-final：71 passed、3 MinIO skipped、273.73秒。matrix-code绑定实际CODE_SHA，40/24/12/4/39的冻结计数与private/public离线范围均确认。
+- CODE完整单测code-unit-final：1512 passed、1 failed、3权限skipped、74 deselected，428.26秒。唯一失败是README所指CLOSEOUT_RESULTS.md尚未落盘。本次DOC补齐实际收口与同步材料，随后再执行DOC全套，最终结果由doc-unit-final与交付回执记录；不删除CODE红日志。
+- 原工作树与903ed基线工作树再次git status均为空；新远端分支只读ls-remote结果为空，没有推送、合并或触碰main。
