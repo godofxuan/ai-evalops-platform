@@ -141,7 +141,12 @@ class SQLAlchemyRunService:
         if validated.sha256 != source.sha256 or validated.case_count != source.case_count:
             raise RunInputIntegrityError
 
-        if request.evaluator.type in {"product_qa_v2", "product_agent_v2"}:
+        if request.evaluator.type in {
+            "product_qa_v2",
+            "product_agent_v2",
+            "product_qa_v3",
+            "product_agent_v3",
+        }:
             from app.evaluators.product import product_input_requirements, restore_product_case
 
             for case in validated.cases:
@@ -150,7 +155,7 @@ class SQLAlchemyRunService:
                     missing = product_input_requirements(
                         restored,
                         task_type="QA"
-                        if request.evaluator.type == "product_qa_v2"
+                        if request.evaluator.type in {"product_qa_v2", "product_qa_v3"}
                         else "AGENT_TOOL_USE",
                     )
                 except (ValueError, TypeError):
@@ -246,8 +251,9 @@ def _resolve_target(
 
 def _validate_evaluator(request: RunCreate) -> None:
     if (
-        request.evaluator.type in {"product_qa_v2", "product_agent_v2"}
-        and request.evaluator.version != "product-v2"
+        request.evaluator.type
+        in {"product_qa_v2", "product_agent_v2", "product_qa_v3", "product_agent_v3"}
+        and request.evaluator.version != "product-" + request.evaluator.type.rsplit("_", 1)[1]
     ):
         raise InvalidEvaluatorConfigurationError
     try:

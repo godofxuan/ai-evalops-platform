@@ -53,10 +53,19 @@ class ReaperSession:
         run: EvaluationRun,
         attempt: JobAttempt,
     ) -> None:
-        self._results: list[object] = [RowsResult(job, run), AttemptResult(attempt)]
+        self._results: list[object] = [
+            CollectionResult([(job.id, run.id, run.tenant_id)]),
+            CollectionResult([run.tenant_id]),
+            CollectionResult([run.id]),
+            RowsResult(job, run),
+            AttemptResult(attempt),
+        ]
         self.added: list[object] = []
 
     async def execute(self, _statement: object) -> object:
+        return self._results.pop(0)
+
+    async def scalars(self, _statement: object) -> object:
         return self._results.pop(0)
 
     def add(self, value: object) -> None:
@@ -64,6 +73,14 @@ class ReaperSession:
 
     async def flush(self) -> None:
         return None
+
+
+class CollectionResult:
+    def __init__(self, values: list[object]) -> None:
+        self._values = values
+
+    def all(self) -> list[object]:
+        return self._values
 
 
 class ReaperSessionFactory:
@@ -83,7 +100,7 @@ def test_reaper_locks_expired_running_jobs_with_skip_locked() -> None:
         )
     )
 
-    assert "evaluation_jobs.lease_expires_at <" in sql
+    assert "evaluation_jobs.lease_expires_at <=" in sql
     assert "evaluation_jobs.status IN ('running', 'cancelling')" in sql
     assert "FOR UPDATE OF evaluation_jobs SKIP LOCKED" in sql
     assert "ORDER BY evaluation_jobs.lease_expires_at ASC" in sql

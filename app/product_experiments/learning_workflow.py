@@ -13,6 +13,7 @@ from app.product_experiments.aggregation import (
     ProductAggregationContext,
     aggregate_product_observations,
 )
+from app.product_experiments.citations import scorer_for_result
 from app.product_experiments.durable_bundle import verify_durable_bundle
 from app.product_experiments.input_snapshot import ExperimentInputSnapshot
 from app.product_experiments.report import render_experiment_html
@@ -80,6 +81,7 @@ def load_evidence(directory: Path, *, dataset_path: Path | None = None) -> Workf
         verify_manifest(directory / "manifest.json")
         if manifest.get("schema_version") not in {
             "evalops.product-experiment-manifest/2.0",
+            "evalops.product-experiment-manifest/3.0",
         }:
             raise ValueError("private_source_required")
         source_files = {
@@ -125,6 +127,7 @@ def _recompute_local(result: ProductExperimentResult, cases: list[ExperimentCase
         agent_comparison_policy=spec.agent_comparison_policy,
         citation_precision_min=spec.citation_precision_min,
         evaluator_names=spec.evaluators,
+        scorer_version=scorer_for_result(result.schema_version),
     )
     rebuilt = aggregate_product_observations(
         context=context,

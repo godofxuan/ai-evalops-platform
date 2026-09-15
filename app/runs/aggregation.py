@@ -64,7 +64,9 @@ async def aggregate_run_in_session(
         await session.execute(
             select(EvaluationRun)
             .where(EvaluationRun.id == run_id)
-            .with_for_update(of=EvaluationRun)
+            # Counters/status do not change FK keys. Avoid upgrading the parent
+            # guard to FOR UPDATE after Jobs are locked (claim FK KEY SHARE).
+            .with_for_update(of=EvaluationRun, key_share=True)
         )
     ).scalar_one()
     rows = (

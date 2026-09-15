@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.core.event_loop import run_with_psycopg_compatible_event_loop
 from app.domain.evaluation import EvaluationCase, ExecutionContext, TargetResult
 from app.jobs.claiming import ClaimedJob, SQLAlchemyJobClaimer
 from app.jobs.failures import SQLAlchemyFailureCommitter
@@ -28,7 +29,7 @@ def run_crash_worker(database_url: str, port: int, phase: str, barrier: Connecti
     if os.environ.get("EVALOPS_RUN_INTEGRATION") != "1" or phase not in {"claimed", "after_http"}:
         raise RuntimeError("isolated integration environment required")
     try:
-        asyncio.run(_run(database_url, port, phase, barrier))
+        run_with_psycopg_compatible_event_loop(_run(database_url, port, phase, barrier))
     except Exception as error:
         barrier.send(("worker_error", type(error).__name__))
     finally:

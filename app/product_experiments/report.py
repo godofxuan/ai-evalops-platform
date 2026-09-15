@@ -46,6 +46,11 @@ def render_experiment_html(result: Mapping[str, Any]) -> str:
         agent_section = f"""<h2>Agent tool-use trace</h2>
 <section class="table-wrap"><table><thead><tr><th>Case</th><th>Baseline calls</th><th>Candidate calls</th><th>Baseline metrics</th><th>Candidate metrics</th></tr></thead>
 <tbody>{agent_rows}</tbody></table></section>"""
+    decision_panel = (
+        _decision_panel(result)
+        if result.get("schema_version") == "evalops.experiment-result/3.0"
+        else ""
+    )
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -68,7 +73,7 @@ th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Cod
 <p class="sub">AI EvalOps Platform · paired experiment report</p>
 <h1>{_escape(result.get("experiment_id", "experiment"))}</h1>
 <p class="status {tone}"><strong>{_escape(status)}</strong></p>
-<div class="cards">
+{decision_panel}<div class="cards">
   <div class="card"><div class="sub">Scope</div><div class="value">{_escape(scope)}</div></div>
   <div class="card"><div class="sub">Paired cases</div><div class="value">{_escape(result.get("case_count", 0))}</div></div>
   <div class="card"><div class="sub">Human review</div><div class="value">{_escape(result.get("human_review_status", "PENDING"))}</div></div>
@@ -85,6 +90,58 @@ th{{position:sticky;top:0;background:#f8fafc}}code,pre{{font-family:Cascadia Cod
 {agent_section}
 <h2>机器评估</h2><pre>{_escape(metrics_json)}</pre>
 </main></body></html>"""
+
+
+def _decision_panel(result: Mapping[str, Any]) -> str:
+    planned = 2 * int(result.get("case_count", 0))
+    observations = result.get("observations", {})
+    captured = (
+        [row for arm in observations.values() for row in arm.values() if isinstance(row, Mapping)]
+        if isinstance(observations, Mapping)
+        else []
+    )
+    failures = result.get("execution_errors", [])
+    requirements = result.get("input_requirements", [])
+    cost_count = sum(row.get("cost_usd") is not None for row in captured)
+    trace_count = sum(bool(row.get("trace_id")) for row in captured)
+    status = result.get("status")
+    execution = (
+        "有执行失败或取消"
+        if failures
+        else ("全部计划项已有观察" if planned and len(captured) == planned else "未完成或输入不足")
+    )
+    assessment = result.get("automated_assessment", {})
+    quality = assessment.get("status", "NOT_RUN") if isinstance(assessment, Mapping) else "NOT_RUN"
+    comparable = (
+        "仅已接纳观察的同配置描述统计；非端到端或重试总成本"
+        if planned and len(captured) == cost_count == planned and not failures
+        else "未建立完整可比性；缺失、失败和重试不可按零成本计入"
+    )
+    cards = (
+        ("任务执行", execution),
+        ("质量判定", f"{quality} / {status}；不是正式人评验收"),
+        (
+            "证据覆盖",
+            f"观察 {len(captured)} / {planned}；费用 {cost_count} / {planned}；trace {trace_count} / {planned}",
+        ),
+        ("延迟与成本", comparable),
+    )
+    body = "".join(
+        f'<div class="card"><div class="sub">{_escape(title)}</div><div>{_escape(value)}</div></div>'
+        for title, value in cards
+    )
+    details = json.dumps(
+        {"execution_errors": failures, "input_requirements": requirements},
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+    return (
+        f'<section aria-label="决策摘要"><div class="cards">{body}</div>'
+        "<p>Scorer: evalops.citation-scorer/2.0；source_id_recall / source_id_precision 为来源标识匹配；"
+        "semantic_support = NOT_IMPLEMENTED。citation_correctness 是历史 recall 别名。</p>"
+        f"<details><summary>失败与缺失原因（保留计划分母）</summary><pre>{_escape(details)}</pre></details></section>\n"
+    )
 
 
 def _display(value: object) -> object:

@@ -63,10 +63,14 @@ class EmptyRowResult:
 class OneRowSession:
     def __init__(self, job: EvaluationJob, run: EvaluationRun, tenant: Tenant) -> None:
         self._result = OneRowResult(job, run, tenant)
+        self._run = run
         self.added: list[object] = []
 
     async def execute(self, _statement: object) -> OneRowResult:
         return self._result
+
+    async def scalar(self, _statement: object) -> EvaluationRun:
+        return self._run
 
     def add(self, value: object) -> None:
         self.added.append(value)

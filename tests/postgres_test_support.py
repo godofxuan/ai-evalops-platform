@@ -147,6 +147,9 @@ async def wait_for_postgres_lock_snapshot(
     )
     async with connection, connection.cursor() as cursor:
         while True:
+            # Repeated reads in this observer transaction must see newly connected
+            # or newly blocked sessions, not a cached pg_stat_activity snapshot.
+            await cursor.execute("SELECT pg_stat_clear_snapshot()")
             await cursor.execute(TARGET_ACTIVITY_SQL, (target_application_name,))
             last_target_activity = list(await cursor.fetchall())
             blocked_rows = [

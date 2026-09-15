@@ -86,6 +86,35 @@ jobs:
           uv run --no-sync pytest -m "not integration"
           --junitxml=/tmp/junit-unit.xml
 
+      - name: Identify pinned BFCL release cache
+        id: bfcl-cache
+        run: echo "key=$(uv run --no-sync python -m scripts.release_evidence_gate --cache-key)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache exact BFCL sources and license
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: artifacts/release-bfcl
+          key: ${{ steps.bfcl-cache.outputs.key }}
+
+      - name: Prepare pinned BFCL release materials
+        run: uv run --no-sync python -m scripts.prepare_bfcl_pilot --root artifacts/release-bfcl --download
+
+      - name: Release evidence - mandatory actual upstream checker
+        run: >-
+          uv run --no-sync python -m scripts.release_evidence_gate
+          --root artifacts/release-bfcl --junit /tmp/junit-release-bfcl.xml
+
+      - name: Retain mandatory checker evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-checker-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/junit-release-bfcl.xml
+            artifacts/release-bfcl/manifest.json
+            artifacts/release-bfcl/upstream/LICENSE
+          if-no-files-found: error
+
       - name: Verify usable paired-evaluation product workflow
         run: |
           uv run --no-sync python -m scripts.build_product_demo_dataset --verify
@@ -129,6 +158,12 @@ jobs:
         run: >-
           uv run --no-sync pytest tests/concurrency/test_job_claiming.py
           --junitxml=/tmp/junit-job-claiming.xml
+
+      - name: Integration - authoritative lease time and lock order
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --no-sync pytest tests/concurrency/test_lease_authorization.py
+          --junitxml=/tmp/junit-lease-authorization.xml
 
       - name: Integration - multi-tenant fair job claiming
         if: ${{ !cancelled() }}
@@ -249,6 +284,25 @@ jobs:
           uv run --no-sync pytest tests/integration/test_product_experiment_persistence.py
           -o junit_logging=system-out
           --junitxml=/tmp/junit-product-experiment-persistence.xml
+
+      - name: Integration - frozen 20 by 2 synthetic fault matrix
+        if: ${{ !cancelled() }}
+        env:
+          EVALOPS_AUDIT_EVIDENCE_DIR: /tmp/evalops-synthetic-matrix
+        run: >-
+          uv run --no-sync pytest tests/integration/test_audit_fault_matrix.py
+          -o junit_logging=system-out --junitxml=/tmp/junit-synthetic-matrix.xml
+
+      - name: Retain synthetic matrix and lease regressions
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: synthetic-platform-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/evalops-synthetic-matrix
+            /tmp/junit-synthetic-matrix.xml
+            /tmp/junit-lease-authorization.xml
+          if-no-files-found: error
 
       - name: Retain product and regression CI evidence
         if: ${{ always() }}

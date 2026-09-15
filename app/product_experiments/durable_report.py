@@ -18,6 +18,7 @@ from app.product_experiments.aggregation import (
     ProductAggregationContext,
     aggregate_product_observations,
 )
+from app.product_experiments.citations import CURRENT_SCORER, LEGACY_SCORER, validate_citations
 from app.product_experiments.dataset_mapping import map_product_dataset
 from app.product_experiments.evaluators import registered_evaluators
 from app.product_experiments.result_snapshot import ResultSnapshotIntegrityError
@@ -82,7 +83,12 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
         if request.task_type == "QA"
         else ProductAgentEvaluator.evaluator_names
     )
-    evaluators = registered_evaluators(names)
+    component_versions = {inputs["components"][label]["evaluator_version"] for label in ARM_LABELS}
+    if len(component_versions) != 1 or not component_versions <= {"product-v2", "product-v3"}:
+        raise ResultSnapshotIntegrityError("unsupported or mixed scorer version")
+    evaluator_version = next(iter(component_versions))
+    scorer_version = LEGACY_SCORER if evaluator_version == "product-v2" else CURRENT_SCORER
+    evaluators = registered_evaluators(names, scorer_version=scorer_version)
     observations: dict[str, dict[str, ProviderResult]] = {label: {} for label in ARM_LABELS}
     failures: list[CaseExecutionFailure] = []
     events: list[dict[str, Any]] = []
@@ -107,7 +113,7 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
                     "evaluator_version",
                 )
             )
-            or arm["evaluator_version"] != "product-v2"
+            or arm["evaluator_version"] != evaluator_version
             or arm["target_version"] != getattr(request, label).target_version
         ):
             raise ResultSnapshotIntegrityError("run components do not match frozen input")
@@ -168,7 +174,12 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
                 raise ResultSnapshotIntegrityError("accepted attempt timestamps are invalid")
             metrics = row["metrics"]
             if (
-                metrics["product_schema_version"] != "evalops.worker-product-observation/2.0"
+                metrics["product_schema_version"]
+                != (
+                    "evalops.worker-product-observation/2.0"
+                    if scorer_version == LEGACY_SCORER
+                    else "evalops.worker-product-observation/3.0"
+                )
                 or metrics["product_task_type"] != request.task_type
             ):
                 raise ResultSnapshotIntegrityError("worker observation schema or task mismatch")
@@ -178,6 +189,7 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
                 )
             except ValidationError:
                 raise ResultSnapshotIntegrityError("evidence_invalid_for_current_code") from None
+            validate_citations(observation.citations, scorer_version=scorer_version)
             if product_observation_bytes(observation) > per_job_bytes:
                 raise ResultSnapshotIntegrityError("accepted observation exceeds frozen budget")
             missing = product_input_requirements(by_case[identity], task_type=request.task_type)
@@ -188,7 +200,12 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
             expected_scores = (
                 {}
                 if missing
-                else score_product_case(by_case[identity], observation, evaluators=evaluators)
+                else score_product_case(
+                    by_case[identity],
+                    observation,
+                    evaluators=evaluators,
+                    scorer_version=scorer_version,
+                )
             )
             if (
                 metrics["product_missing"] != missing
@@ -232,6 +249,7 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
             agent_comparison_policy=request.agent_comparison_policy,
             citation_precision_min=request.citation_precision_min,
             evaluator_names=names,
+            scorer_version=scorer_version,
         ),
         cases=cases,
         observations=observations,
@@ -240,7 +258,9 @@ def build_durable_report(*, snapshot: dict[str, Any], raw_dataset: bytes) -> dic
     )
     report: dict[str, Any] = {
         "schema_version": "evalops.durable-experiment-report/1.0",
-        "aggregation_version": "evalops.product-aggregation/2.0",
+        "aggregation_version": "evalops.product-aggregation/2.0"
+        if scorer_version == LEGACY_SCORER
+        else "evalops.product-aggregation/3.0",
         "result_snapshot_sha256": snapshot["content_sha256"],
         "result_snapshot": snapshot,
         "raw_dataset_sha256": request.source_dataset_sha256,

@@ -9,6 +9,23 @@ from scripts.experiment_support import ExperimentError
 from scripts.gate1_image_evidence import build_gate1_image_binding, evaluate_running_image_binding
 
 
+def test_runtime_evidence_is_not_a_docker_build_input(clean_gate1_repository: Path) -> None:
+    repository = clean_gate1_repository
+
+    def binding() -> dict[str, object]:
+        return gate1_image_evidence.compute_docker_build_context_binding(
+            repository=repository, dockerignore_path=repository / ".dockerignore"
+        )
+
+    before = binding()
+    evidence = repository / "artifacts" / "private-fixture" / "raw.json"
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text('{"synthetic_private_answer":"never-build-input"}', encoding="utf-8")
+    assert binding() == before
+    (repository / "app" / "__init__.py").write_text("# real code change\n", encoding="utf-8")
+    assert binding()["sha256"] != before["sha256"]
+
+
 def _git_head(repository: Path) -> str:
     return subprocess.run(
         [

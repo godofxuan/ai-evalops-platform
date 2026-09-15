@@ -273,6 +273,8 @@ async def test_failure_commits_retry_or_failure_event_in_state_transaction(
     run = _run()
     session = RecordingSession(
         [
+            ScalarResult(TENANT_ID),
+            ScalarResult(RUN_ID),
             RowResult(
                 (
                     _job(attempt_count=attempt_count, max_attempts=max_attempts),

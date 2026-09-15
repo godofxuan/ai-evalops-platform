@@ -94,7 +94,7 @@ async def exercise_product_process_recovery(
                 )
                 claim = receiving.recv()
                 assert isinstance(claim, ClaimedJob), (
-                    "worker failed before controlled death barrier"
+                    f"worker failed before controlled death barrier: {claim!r}"
                 )
                 assert str(claim.run_id) in {
                     submitted.json()["baseline_run_id"],

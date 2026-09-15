@@ -4,6 +4,7 @@ from enum import StrEnum
 from typing import Any, Protocol
 
 from app.domain.evaluation import EvaluationCase, EvaluationResult, TargetResult
+from app.product_experiments.citations import LEGACY_SCORER
 
 
 class Evaluator(Protocol):
@@ -49,13 +50,36 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
     registrations = (
         _EvaluatorRegistration(
             descriptor=EvaluatorDescriptor(
+                kind="product_agent_v3",
+                implementation_version="product-v3",
+                category=EvaluatorCategory.DETERMINISTIC,
+                llm_judge=False,
+            ),
+            factory=lambda config: ProductAgentEvaluator(
+                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case")
+            ),
+        ),
+        _EvaluatorRegistration(
+            descriptor=EvaluatorDescriptor(
+                kind="product_qa_v3",
+                implementation_version="product-v3",
+                category=EvaluatorCategory.DETERMINISTIC,
+                llm_judge=False,
+            ),
+            factory=lambda config: ProductQAEvaluator(
+                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case")
+            ),
+        ),
+        _EvaluatorRegistration(
+            descriptor=EvaluatorDescriptor(
                 kind="product_agent_v2",
                 implementation_version="product-v2",
                 category=EvaluatorCategory.DETERMINISTIC,
                 llm_judge=False,
             ),
             factory=lambda config: ProductAgentEvaluator(
-                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case")
+                scorer_version=LEGACY_SCORER,
+                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case"),
             ),
         ),
         _EvaluatorRegistration(
@@ -66,7 +90,8 @@ def _registry() -> dict[str, _EvaluatorRegistration]:
                 llm_judge=False,
             ),
             factory=lambda config: ProductQAEvaluator(
-                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case")
+                scorer_version=LEGACY_SCORER,
+                max_observation_bytes_per_case=config.get("max_observation_bytes_per_case"),
             ),
         ),
         _EvaluatorRegistration(
@@ -105,7 +130,7 @@ def registered_evaluators() -> tuple[EvaluatorDescriptor, ...]:
 
 
 def build_evaluator(kind: str, config: Mapping[str, Any]) -> Evaluator:
-    if kind in {"product_qa_v2", "product_agent_v2"}:
+    if kind in {"product_qa_v2", "product_agent_v2", "product_qa_v3", "product_agent_v3"}:
         if set(config) - {"max_attempts", "max_observation_bytes_per_case"}:
             raise UnsupportedEvaluatorError("product evaluator config contains unsupported fields")
         if "max_observation_bytes_per_case" in config:

@@ -25,7 +25,9 @@ class PublicDurableReport(BaseModel):
 class PrivateDurableReport(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     schema_version: Literal["evalops.durable-experiment-report/1.0"]
-    aggregation_version: Literal["evalops.product-aggregation/2.0"]
+    aggregation_version: Literal[
+        "evalops.product-aggregation/2.0", "evalops.product-aggregation/3.0"
+    ]
     result_snapshot_sha256: Digest
     result_snapshot: dict[str, Any]
     raw_dataset_sha256: Digest

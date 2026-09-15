@@ -6,6 +6,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.product_experiments.citations import (
+    CURRENT_SCORER,
+    canonical_citation_id,
+    validate_citations,
+    validate_scorer_version,
+)
 from app.product_experiments.observation_contract import terminal_matches_expected
 
 
@@ -68,8 +74,13 @@ class ReferenceAnswerEvaluator:
 @dataclass(frozen=True, slots=True)
 class CitationCorrectnessEvaluator:
     name: str = "citation_correctness"
+    scorer_version: str = CURRENT_SCORER
 
     def evaluate(self, case: CaseView, result: ResultView) -> float:
+        validate_citations(result.citations, scorer_version=self.scorer_version)
+        if self.scorer_version == CURRENT_SCORER:
+            recall, _ = citation_evidence_scores(case, result, scorer_version=self.scorer_version)
+            return 1.0 if recall is None else recall
         expected = set(case.expected_citation_ids)
         if not expected:
             return 1.0
@@ -181,11 +192,18 @@ _REGISTRY: Mapping[str, CaseEvaluator] = {
 }
 
 
-def registered_evaluators(names: Sequence[str] | Iterable[str]) -> tuple[CaseEvaluator, ...]:
+def registered_evaluators(
+    names: Sequence[str] | Iterable[str], *, scorer_version: str = CURRENT_SCORER
+) -> tuple[CaseEvaluator, ...]:
+    validate_scorer_version(scorer_version)
     selected: list[CaseEvaluator] = []
     for name in names:
         try:
-            selected.append(_REGISTRY[name])
+            selected.append(
+                CitationCorrectnessEvaluator(scorer_version=scorer_version)
+                if name == "citation_correctness"
+                else _REGISTRY[name]
+            )
         except KeyError:
             raise ValueError(f"unknown evaluator: {name}") from None
     return tuple(selected)
@@ -196,17 +214,18 @@ def _normalize(value: str) -> str:
 
 
 def citation_evidence_scores(
-    case: CaseView, result: ResultView
+    case: CaseView, result: ResultView, *, scorer_version: str = CURRENT_SCORER
 ) -> tuple[float | None, float | None]:
     """Unique source-ID recall/precision, not semantic support of answer claims."""
+    validate_citations(result.citations, scorer_version=scorer_version)
     expected = set(case.expected_citation_ids)
     if not expected:
         return None, None
     actual: set[str] = set()
     unresolved = 0
     for citation in result.citations:
-        value = citation.get("source_id", citation.get("id"))
-        if isinstance(value, str) and value:
+        value = canonical_citation_id(citation, schema_version=scorer_version)
+        if value is not None:
             actual.add(value)
         else:
             unresolved += 1

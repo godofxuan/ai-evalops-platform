@@ -60,8 +60,14 @@ class NewProductExperiment:
             for arm in (self.baseline, self.candidate):
                 configured = arm.evaluator_config.get("max_observation_bytes_per_case")
                 if (
-                    arm.evaluator_type not in {"product_qa_v2", "product_agent_v2"}
-                    or arm.evaluator_version != "product-v2"
+                    arm.evaluator_type
+                    not in {
+                        "product_qa_v2",
+                        "product_agent_v2",
+                        "product_qa_v3",
+                        "product_agent_v3",
+                    }
+                    or arm.evaluator_version != "product-" + arm.evaluator_type.rsplit("_", 1)[1]
                     or type(configured) is not int
                     or configured != per_job
                 ):

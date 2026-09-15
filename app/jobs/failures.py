@@ -2,15 +2,20 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, true
 
-from app.core.clock import Clock, SystemClock
+from app.core.clock import Clock
 from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.job_state_machine import JobTransition, transition_job
 from app.events.models import EventType
 from app.events.outbox import enqueue_progress_event
+from app.jobs.authorization import lease_authorization_time, owns_live_lease
 from app.jobs.claiming import ClaimedJob
 from app.jobs.heartbeat import LeaseLostError
+from app.jobs.results import (
+    build_run_lock_for_completion_statement,
+    build_tenant_key_share_for_completion_statement,
+)
 from app.jobs.retry_policy import RetryDecision, RetryPolicy, classify_failure
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
@@ -40,7 +45,7 @@ def build_owned_job_for_failure_statement(
     run_id: UUID,
     worker_id: str,
     expected_version: int,
-    now: datetime,
+    now: datetime | None = None,
 ) -> Select[tuple[EvaluationJob, EvaluationRun]]:
     return (
         select(EvaluationJob, EvaluationRun)
@@ -52,7 +57,7 @@ def build_owned_job_for_failure_statement(
             EvaluationJob.lease_owner == worker_id,
             EvaluationJob.version == expected_version,
             EvaluationJob.lease_expires_at.is_not(None),
-            EvaluationJob.lease_expires_at > now,
+            EvaluationJob.lease_expires_at > now if now is not None else true(),
         )
         .with_for_update(of=EvaluationJob)
     )
@@ -68,7 +73,7 @@ class SQLAlchemyFailureCommitter:
     ) -> None:
         self._session_factory = session_factory
         self._retry_policy = retry_policy
-        self._clock = clock or SystemClock()
+        self._clock = clock
 
     async def commit_failure(
         self,
@@ -77,8 +82,20 @@ class SQLAlchemyFailureCommitter:
         lease_version: int,
         error: BaseException,
     ) -> FailureCommitReceipt:
-        now = self._clock.now()
         async with self._session_factory.begin() as session:
+            # Failure writers must use the same blocking order as successful ones.
+            if (
+                await session.scalar(
+                    build_tenant_key_share_for_completion_statement(tenant_id=claim.tenant_id)
+                )
+                is None
+            ):
+                raise LeaseLostError("failure rejected because its Tenant no longer exists")
+            if (
+                await session.scalar(build_run_lock_for_completion_statement(run_id=claim.run_id))
+                is None
+            ):
+                raise LeaseLostError("failure rejected because its Run no longer exists")
             row = (
                 await session.execute(
                     build_owned_job_for_failure_statement(
@@ -86,7 +103,6 @@ class SQLAlchemyFailureCommitter:
                         run_id=claim.run_id,
                         worker_id=claim.worker_id,
                         expected_version=lease_version,
-                        now=now,
                     )
                 )
             ).one_or_none()
@@ -109,6 +125,12 @@ class SQLAlchemyFailureCommitter:
             ).scalar_one_or_none()
             if attempt is None:
                 raise LeaseLostError("failure rejected because the attempt is no longer active")
+
+            now = await lease_authorization_time(session, self._clock)
+            if not owns_live_lease(
+                job, worker_id=claim.worker_id, expected_version=lease_version, now=now
+            ):
+                raise LeaseLostError("failure rejected because its locked lease expired")
 
             failure = classify_failure(error)
             cancellation_requested = (

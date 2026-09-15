@@ -35,6 +35,7 @@ from app.external_harness.formal_quality import (
 from app.external_harness.harness_envelope import canonical_sha256
 from app.jobs.retry_policy import classify_failure
 from app.product_experiments.agent_projection import project_agent_trace
+from app.product_experiments.citations import CURRENT_SCORER, validate_citations
 from app.product_experiments.diagnostics import (
     CategoryDiagnostic,
     MetricDiagnostic,
@@ -129,7 +130,9 @@ class ProviderResult(BaseModel):
         return self
 
     @classmethod
-    def from_target(cls, values: Mapping[str, Any]) -> ProviderResult:
+    def from_target(
+        cls, values: Mapping[str, Any], *, scorer_version: str = CURRENT_SCORER
+    ) -> ProviderResult:
         answer = values.get("answer")
         if isinstance(answer, str) and len(answer) > MAX_PRODUCT_ANSWER_CHARS:
             raise TargetInvalidResponseError("target_answer_too_long")
@@ -142,9 +145,11 @@ class ProviderResult(BaseModel):
         except ValueError:
             raise TargetInvalidResponseError("target_agent_terminal_invalid") from None
         try:
-            return cls.model_validate(dict(values))
+            result = cls.model_validate(dict(values))
         except ValidationError:
             raise TargetInvalidResponseError("target_agent_observation_invalid") from None
+        validate_citations(result.citations, scorer_version=scorer_version)
+        return result
 
 
 def product_observation_bytes(result: ProviderResult) -> int:
@@ -202,9 +207,11 @@ class CaseExecutionFailure(BaseModel):
 class ProductExperimentResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    schema_version: Literal["evalops.experiment-result/1.0", "evalops.experiment-result/2.0"] = (
-        "evalops.experiment-result/2.0"
-    )
+    schema_version: Literal[
+        "evalops.experiment-result/1.0",
+        "evalops.experiment-result/2.0",
+        "evalops.experiment-result/3.0",
+    ] = "evalops.experiment-result/3.0"
     experiment_id: str
     execution_id: UUID | None = None
     input_snapshot: dict[str, Any] | None = None
@@ -309,6 +316,7 @@ def normalize_product_observation(
     target_result: TargetResult,
     *,
     task_type: Literal["QA", "AGENT_TOOL_USE"],
+    scorer_version: str = CURRENT_SCORER,
 ) -> ProviderResult:
     """Use one response normalization contract in local and durable evaluation."""
     usage = target_result.token_usage
@@ -343,7 +351,8 @@ def normalize_product_observation(
                 )
                 if name in trace
             },
-        }
+        },
+        scorer_version=scorer_version,
     )
 
 
@@ -484,7 +493,7 @@ def _prepare_experiment(
     configuration["dataset"] = {"sha256": spec.dataset.sha256}
     frozen_policy = policy.model_dump(mode="json")
     snapshot = {
-        "schema_version": "evalops.experiment-input-snapshot/1.0",
+        "schema_version": "evalops.experiment-input-snapshot/2.0",
         "spec_sha256": loaded.spec_sha256,
         "dataset_sha256": spec.dataset.sha256,
         "policy_sha256": hashlib.sha256(policy_payload).hexdigest(),
@@ -583,6 +592,7 @@ async def run_experiment(
                         retryable=False,
                     )
                 result = await providers[arm.label].execute(case)
+                validate_citations(result.citations)
                 byte_size = product_observation_bytes(result)
                 if retained_observation_bytes + byte_size > spec.max_observation_bytes:
                     observation_budget_exhausted = True
@@ -748,10 +758,12 @@ def score_product_case(
     result: ProviderResult,
     *,
     evaluators: tuple[CaseEvaluator, ...],
+    scorer_version: str = CURRENT_SCORER,
 ) -> dict[str, float]:
+    validate_citations(result.citations, scorer_version=scorer_version)
     scores = {evaluator.name: evaluator.evaluate(case, result) for evaluator in evaluators}
     if "citation_correctness" in scores:
-        recall, precision = citation_evidence_scores(case, result)
+        recall, precision = citation_evidence_scores(case, result, scorer_version=scorer_version)
         if recall is not None and precision is not None:
             scores.update(
                 citation_correctness=recall, citation_recall=recall, citation_precision=precision

@@ -12,6 +12,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "docs/review/FINAL_EVIDENCE_MANIFEST.json"
 CROSS_MANIFEST_PATH = PROJECT_ROOT / "docs/review/FINAL_CROSS_REPO_EVIDENCE_MANIFEST.json"
+HISTORICAL_README_SHA = "c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997"
+HISTORICAL_README_PATH = (
+    PROJECT_ROOT / "docs/reviews/audit-remediation-20260915/history/README.c5dbeec.md"
+)
 SCHEMA_VERSION = "ai-evalops-evidence-file/v1"
 PRODUCING_COMMAND = (
     "python -m scripts.verify_final_evidence_manifest --write --source-sha <evidence-source-sha>"
@@ -100,7 +104,14 @@ def verify_manifest() -> None:
     for entry in entries:
         if not isinstance(entry, dict):
             raise SystemExit("evidence manifest contains a non-object entry")
-        path = PROJECT_ROOT / str(entry["path"])
+        # A historical manifest must continue to verify its original README,
+        # not require every future product README to keep the old exact bytes.
+        # The current README is bound by the new source/delivery identity.
+        path = (
+            HISTORICAL_README_PATH
+            if entry["path"] == "README.md" and entry.get("source_sha") == HISTORICAL_README_SHA
+            else PROJECT_ROOT / str(entry["path"])
+        )
         content = _canonical_repository_bytes(path)
         if len(content) != entry.get("byte_size"):
             raise SystemExit(f"evidence size drift: {entry['path']}")
@@ -198,6 +209,16 @@ def main() -> None:
         write_manifest(source_sha=args.source_sha, generated_at=generated_at)
     verify_manifest()
     verify_cross_repository_manifest()
+    print(
+        json.dumps(
+            {
+                "status": "HISTORICAL_EVIDENCE_VERIFIED",
+                "readme_snapshot_sha": HISTORICAL_README_SHA,
+                "current_readme_covered_by_this_historical_manifest": False,
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

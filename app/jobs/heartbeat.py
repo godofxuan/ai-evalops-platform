@@ -2,10 +2,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import Update, update
+from sqlalchemy import Update, select, update
 
-from app.core.clock import Clock, SystemClock
+from app.core.clock import Clock
 from app.domain.enums import JobStatus
+from app.jobs.authorization import lease_authorization_time
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import EvaluationJob
 
@@ -82,7 +83,7 @@ class SQLAlchemyHeartbeatService:
     ) -> None:
         self._session_factory = session_factory
         self._lease_duration = lease_duration
-        self._clock = clock or SystemClock()
+        self._clock = clock
 
     async def heartbeat(
         self,
@@ -96,8 +97,14 @@ class SQLAlchemyHeartbeatService:
             expected_version=expected_version,
             lease_duration=self._lease_duration,
         )
-        now = self._clock.now()
         async with self._session_factory.begin() as session:
+            # Lock before reading time; UPDATE predicates alone may precede a wait.
+            await session.execute(
+                select(EvaluationJob.id)
+                .where(EvaluationJob.id == job_id)
+                .with_for_update(of=EvaluationJob, key_share=True)
+            )
+            now = await lease_authorization_time(session, self._clock)
             row = (
                 await session.execute(
                     build_heartbeat_statement(

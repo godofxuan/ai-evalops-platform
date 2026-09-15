@@ -28,7 +28,7 @@ async def durable_evidence(submission_inputs):
             case = EvaluationCase.from_payload(payload)
             evaluator = (
                 ProductQAEvaluator()
-                if arm.evaluator_type == "product_qa_v2"
+                if arm.evaluator_type in {"product_qa_v2", "product_qa_v3"}
                 else ProductAgentEvaluator()
             )
             metrics = evaluator.evaluate(
@@ -125,6 +125,57 @@ async def test_durable_report_rebuilds_worker_metrics_without_target_calls(
     unsigned = dict(report)
     digest = unsigned.pop("content_sha256")
     assert canonical_request_hash(unsigned) == digest
+
+
+async def test_explicit_legacy_durable_scores_remain_verifiable(durable_evidence):
+    import copy
+    import json
+
+    from app.product_experiments.citations import LEGACY_SCORER
+    from app.product_experiments.durable_report import build_durable_report
+    from app.product_experiments.durable_verification import verify_durable_report
+    from app.product_experiments.evaluators import registered_evaluators
+    from app.product_experiments.runner import (
+        ProviderResult,
+        parse_product_dataset,
+        score_product_case,
+    )
+
+    snapshot, raw = durable_evidence
+    by_id = {
+        case.case_id: case
+        for case in parse_product_dataset(
+            raw, expected_sha256=snapshot["input_snapshot"]["source_dataset_sha256"]
+        )
+    }
+    for label, arm in snapshot["arms"].items():
+        arm["evaluator_version"] = "product-v2"
+        snapshot["input_snapshot"]["components"][label]["evaluator_version"] = "product-v2"
+        for row in arm["jobs"]:
+            metrics = row["metrics"]
+            metrics["product_schema_version"] = "evalops.worker-product-observation/2.0"
+            metrics["product_observation"]["citations"] = [{"source_id": "wrong", "id": "gold"}]
+            metrics["product_scores"] = score_product_case(
+                by_id[row["case_id"]],
+                ProviderResult.model_validate_json(json.dumps(metrics["product_observation"])),
+                evaluators=registered_evaluators(
+                    ProductQAEvaluator.evaluator_names, scorer_version=LEGACY_SCORER
+                ),
+                scorer_version=LEGACY_SCORER,
+            )
+    for value in (snapshot["input_snapshot"], snapshot):
+        value.pop("content_sha256")
+        value["content_sha256"] = canonical_request_hash(value)
+    original = copy.deepcopy(snapshot)
+    report = build_durable_report(snapshot=snapshot, raw_dataset=raw)
+    assert report["aggregation_version"] == "evalops.product-aggregation/2.0"
+    assert report["result"]["schema_version"] == "evalops.experiment-result/2.0"
+    assert report["result"]["case_comparisons"][0]["candidate_citation_correctness"] == 0.0
+    assert (
+        verify_durable_report(json.dumps(report).encode(), raw_dataset=raw).verification_scope
+        == "PRIVATE_RECOMPUTED"
+    )
+    assert snapshot == original
 
 
 @pytest.mark.parametrize("latencies", [(0, 0), (0, 1), (1, 0)])

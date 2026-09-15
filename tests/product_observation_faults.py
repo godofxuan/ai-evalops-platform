@@ -36,7 +36,10 @@ async def exercise_product_observation_faults(
 ) -> None:
     task = payload["request"]["task_type"]
     factory = cast(AsyncSessionFactory, application.state.session_factory)
-    for fault in ["answer", "terminal"] if task == "AGENT_TOOL_USE" else ["answer"]:
+    faults = ["answer", "citation_conflict", "citation_numeric", "citation_blank"]
+    if task == "AGENT_TOOL_USE":
+        faults.append("terminal")
+    for fault in faults:
         submitted = await api.post(
             "/api/v1/experiments",
             json=payload,
@@ -61,8 +64,14 @@ async def exercise_product_observation_faults(
             if index == 1:
                 if fault == "answer":
                     response["answer"] = "x" * 100001
-                else:
+                elif fault == "terminal":
                     response["trace"]["terminal_state"] = "failed"
+                elif fault == "citation_conflict":
+                    response["citations"] = [{"source_id": "wrong", "id": "gold"}]
+                elif fault == "citation_numeric":
+                    response["citations"] = [{"id": 123}]
+                else:
+                    response["citations"] = [{"id": "   "}]
             return response
 
         async with (
@@ -109,7 +118,11 @@ async def exercise_product_observation_faults(
         assert report["result"]["case_count"] == 2
         assert len(report["result"]["execution_errors"]) == 1
         expected_error = (
-            "target_answer_too_long" if fault == "answer" else "target_agent_terminal_invalid"
+            "target_answer_too_long"
+            if fault == "answer"
+            else "target_agent_terminal_invalid"
+            if fault == "terminal"
+            else "target_citation_invalid"
         )
         assert report["result"]["execution_errors"][0]["error_code"] == expected_error
         jobs = [row for arm in report["result_snapshot"]["arms"].values() for row in arm["jobs"]]

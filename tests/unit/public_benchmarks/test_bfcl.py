@@ -19,6 +19,7 @@ from app.public_benchmarks.bfcl import (
     prepare_pilot,
     validate_sources,
 )
+from tests.public_benchmark_support import required_bfcl_root
 
 
 @pytest.mark.parametrize(
@@ -67,9 +68,7 @@ def test_unsupported_category_is_not_silently_scored(tmp_path: Path) -> None:
 
 @pytest.fixture(scope="module")
 def actual_upstream() -> tuple[Path, list[dict[str, Any]], dict[str, Any]]:
-    root = Path(__file__).resolve().parents[3] / "artifacts/public-benchmark-20260912/bfcl"
-    if not (root / "manifest.json").exists():
-        pytest.skip("Public BFCL not downloaded; run scripts.prepare_bfcl_pilot --download")
+    root = required_bfcl_root()
     source_dir = root / "upstream"
     checker = load_official_checker(source_dir)
     cases = json.loads((root / "cases.json").read_text(encoding="utf-8"))

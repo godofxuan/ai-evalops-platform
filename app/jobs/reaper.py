@@ -4,11 +4,12 @@ from uuid import UUID
 
 from sqlalchemy import Select, select
 
-from app.core.clock import Clock, SystemClock
+from app.core.clock import Clock
 from app.domain.enums import AttemptOutcome, JobStatus, RunStatus
 from app.domain.job_state_machine import JobTransition, transition_job
 from app.events.models import EventType
 from app.events.outbox import enqueue_progress_event
+from app.jobs.authorization import lease_authorization_time
 from app.jobs.retry_policy import FailureClassification, RetryPolicy
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
@@ -16,6 +17,7 @@ from app.persistence.orm_models import (
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
+    Tenant,
 )
 from app.runs.aggregation import aggregate_run_in_session
 
@@ -33,7 +35,7 @@ def build_expired_job_statement(
         .where(
             EvaluationJob.status.in_((JobStatus.RUNNING, JobStatus.CANCELLING)),
             EvaluationJob.lease_expires_at.is_not(None),
-            EvaluationJob.lease_expires_at < now,
+            EvaluationJob.lease_expires_at <= now,
         )
         .order_by(EvaluationJob.lease_expires_at.asc(), EvaluationJob.id.asc())
         .limit(limit)
@@ -67,16 +69,74 @@ class SQLAlchemyJobReaper:
     ) -> None:
         self._session_factory = session_factory
         self._retry_policy = retry_policy
-        self._clock = clock or SystemClock()
+        self._clock = clock
         self._reaper_id = reaper_id
 
     async def reap(self, *, limit: int = 100) -> tuple[ReapedJob, ...]:
-        now = self._clock.now()
+        if not 1 <= limit <= 1_000:
+            raise ValueError("reaper limit must be between 1 and 1000")
         reaped: list[ReapedJob] = []
         touched_runs: dict[UUID, UUID] = {}
         async with self._session_factory.begin() as session:
-            rows = (await session.execute(build_expired_job_statement(now=now, limit=limit))).all()
+            # Discovery is a bounded identity hint, not reclamation authorization.
+            discovery_time = await lease_authorization_time(session, self._clock)
+            candidates = (
+                await session.execute(
+                    select(EvaluationJob.id, EvaluationRun.id, EvaluationRun.tenant_id)
+                    .join(EvaluationRun, EvaluationRun.id == EvaluationJob.run_id)
+                    .where(
+                        EvaluationJob.status.in_((JobStatus.RUNNING, JobStatus.CANCELLING)),
+                        EvaluationJob.lease_expires_at <= discovery_time,
+                    )
+                    .order_by(EvaluationJob.lease_expires_at, EvaluationJob.id)
+                    .limit(limit)
+                )
+            ).all()
+            if not candidates:
+                return ()
+            # Take every parent lock before any Job lock. Busy Runs are deferred;
+            # no Job may be held while waiting for its Run or implicit Tenant FK.
+            await session.execute(
+                select(Tenant.id)
+                .where(Tenant.id.in_({row[2] for row in candidates}))
+                .order_by(Tenant.id)
+                .with_for_update(of=Tenant, read=True, key_share=True)
+            )
+            run_ids = (
+                await session.scalars(
+                    select(EvaluationRun.id)
+                    .where(EvaluationRun.id.in_({row[1] for row in candidates}))
+                    .order_by(EvaluationRun.id)
+                    .with_for_update(of=EvaluationRun, key_share=True, skip_locked=True)
+                )
+            ).all()
+            if not run_ids:
+                return ()
+            selection_time = await lease_authorization_time(session, self._clock)
+            rows = (
+                await session.execute(
+                    build_expired_job_statement(now=selection_time, limit=limit)
+                    .where(
+                        EvaluationJob.id.in_({row[0] for row in candidates}),
+                        EvaluationJob.run_id.in_(run_ids),
+                    )
+                    .order_by(None)
+                    .order_by(EvaluationJob.id)
+                )
+            ).all()
             for job, run in rows:
+                attempt = (
+                    await session.execute(
+                        select(JobAttempt)
+                        .where(JobAttempt.job_id == job.id, JobAttempt.finished_at.is_(None))
+                        .order_by(JobAttempt.attempt_number.desc())
+                        .limit(1)
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                now = await lease_authorization_time(session, self._clock)
+                if job.lease_expires_at is None or job.lease_expires_at > now:
+                    continue
                 previous_worker = job.lease_owner
                 cancellation_requested = (
                     job.status is JobStatus.CANCELLING
@@ -135,18 +195,6 @@ class SQLAlchemyJobReaper:
                             },
                         )
                     )
-                attempt = (
-                    await session.execute(
-                        select(JobAttempt)
-                        .where(
-                            JobAttempt.job_id == job.id,
-                            JobAttempt.finished_at.is_(None),
-                        )
-                        .order_by(JobAttempt.attempt_number.desc())
-                        .limit(1)
-                        .with_for_update()
-                    )
-                ).scalar_one_or_none()
                 if attempt is not None:
                     attempt.finished_at = now
                     attempt.outcome = AttemptOutcome.LEASE_EXPIRED
@@ -181,6 +229,7 @@ class SQLAlchemyJobReaper:
                     )
                 )
             await session.flush()
+            now = await lease_authorization_time(session, self._clock)
             run_statuses: dict[UUID, RunStatus] = {}
             completed_runs: list[tuple[UUID, UUID, RunStatus]] = []
             for run_id in sorted(touched_runs, key=str):

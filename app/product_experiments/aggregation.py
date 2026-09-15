@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.external_harness.formal_quality import FormalQualityPolicy
 from app.product_experiments.assessment import assess_product_numeric
+from app.product_experiments.citations import CURRENT_SCORER, LEGACY_SCORER
 from app.product_experiments.diagnostics import build_category_diagnostics, build_metric_diagnostics
 from app.product_experiments.evaluators import registered_evaluators
 from app.product_experiments.measurements import ProductArmResult, ProductCaseMeasurement
@@ -38,6 +39,7 @@ class ProductAggregationContext:
     agent_comparison_policy: AgentComparisonPolicy
     citation_precision_min: float
     evaluator_names: tuple[str, ...]
+    scorer_version: str = CURRENT_SCORER
 
 
 def aggregate_product_observations(
@@ -62,7 +64,9 @@ def aggregate_product_observations(
         identity not in identities or identity in observations[arm] for arm, identity in failed
     ):
         raise ValueError("execution failures conflict with accepted observations")
-    evaluators = registered_evaluators(context.evaluator_names)
+    evaluators = registered_evaluators(
+        context.evaluator_names, scorer_version=context.scorer_version
+    )
     requirements: list[dict[str, str]] = []
     measurements: dict[str, list[ProductCaseMeasurement]] = {"baseline": [], "candidate": []}
     scores: dict[str, dict[str, dict[str, float]]] = {"baseline": {}, "candidate": {}}
@@ -95,12 +99,17 @@ def aggregate_product_observations(
                     }
                 )
                 continue
-            case_scores = score_product_case(case, observation, evaluators=evaluators)
+            case_scores = score_product_case(
+                case, observation, evaluators=evaluators, scorer_version=context.scorer_version
+            )
             scores[arm][case.case_id] = case_scores
             measurements[arm].append(
                 _measurement(case, observation, scores=case_scores, task_type=context.task_type)
             )
     common: dict[str, Any] = {
+        "schema_version": "evalops.experiment-result/2.0"
+        if context.scorer_version == LEGACY_SCORER
+        else "evalops.experiment-result/3.0",
         "experiment_id": context.experiment_id,
         "execution_id": context.execution_id,
         "scope": context.scope,
@@ -114,7 +123,10 @@ def aggregate_product_observations(
         "execution_schedule": execution_schedule or [],
         "execution_events": execution_events or [],
         "metric_diagnostics": build_metric_diagnostics(
-            cases, observations, evaluator_names=context.evaluator_names
+            cases,
+            observations,
+            evaluator_names=context.evaluator_names,
+            scorer_version=context.scorer_version,
         ),
         "category_diagnostics": build_category_diagnostics(
             cases,
@@ -122,6 +134,7 @@ def aggregate_product_observations(
             evaluator_names=context.evaluator_names,
             minimum_cases=context.policy.minimum_cases_per_category,
             required_categories=context.policy.required_categories,
+            scorer_version=context.scorer_version,
         ),
     }
     if failures or requirements:

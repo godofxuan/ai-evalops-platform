@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.product_experiments.citations import CURRENT_SCORER
 from app.product_experiments.evaluators import registered_evaluators
 
 if TYPE_CHECKING:
@@ -44,10 +45,11 @@ def build_metric_diagnostics(
     observations: dict[str, dict[str, ProviderResult]],
     *,
     evaluator_names: tuple[str, ...],
+    scorer_version: str = CURRENT_SCORER,
 ) -> dict[str, MetricDiagnostic]:
     from app.product_experiments.runner import score_product_case
 
-    evaluators = registered_evaluators(evaluator_names)
+    evaluators = registered_evaluators(evaluator_names, scorer_version=scorer_version)
     names = (*evaluator_names, "latency_ms", "cost_usd")
     if "citation_correctness" in evaluator_names:
         names += ("citation_recall", "citation_precision")
@@ -64,7 +66,11 @@ def build_metric_diagnostics(
                 "cost_usd": observation.cost_usd,
             }
             if "agent_task_completion" not in evaluator_names or not observation.missing_fields:
-                measured.update(score_product_case(case, observation, evaluators=evaluators))
+                measured.update(
+                    score_product_case(
+                        case, observation, evaluators=evaluators, scorer_version=scorer_version
+                    )
+                )
             for name in names:
                 value = measured.get(name)
                 if value is not None and math.isfinite(value):
@@ -117,6 +123,7 @@ def build_category_diagnostics(
     evaluator_names: tuple[str, ...],
     minimum_cases: int,
     required_categories: tuple[str, ...] = (),
+    scorer_version: str = CURRENT_SCORER,
 ) -> dict[str, CategoryDiagnostic]:
     if type(minimum_cases) is not int or minimum_cases < 1:
         raise ValueError("category minimum must be a positive integer")
@@ -125,7 +132,9 @@ def build_category_diagnostics(
         groups.setdefault(case.category, []).append(case)
     result: dict[str, CategoryDiagnostic] = {}
     for name, group in sorted(groups.items()):
-        metrics = build_metric_diagnostics(group, observations, evaluator_names=evaluator_names)
+        metrics = build_metric_diagnostics(
+            group, observations, evaluator_names=evaluator_names, scorer_version=scorer_version
+        )
         result[name] = CategoryDiagnostic(
             sample_status="MISSING_CATEGORY"
             if not group

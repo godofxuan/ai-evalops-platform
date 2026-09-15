@@ -59,7 +59,7 @@ class LoopbackTargetService:
         self,
         *,
         stall_body: bool = False,
-        response_for: Callable[[int], dict[str, Any]] | None = None,
+        response_for: Callable[[int], dict[str, Any] | bytes] | None = None,
     ) -> None:
         self.requests: list[dict[str, Any]] = []
         self.body_started = Event()
@@ -80,7 +80,7 @@ class LoopbackTargetService:
                         "attempt": self.headers.get("X-EvalOps-Attempt"),
                     }
                 )
-                response = {
+                response: dict[str, Any] | bytes = {
                     "answer": "private answer",
                     "citations": [{"source_id": "gold"}],
                     "trace": {
@@ -93,12 +93,12 @@ class LoopbackTargetService:
                 }
                 if response_for is not None:
                     response = response_for(len(owner.requests))
-                payload = json.dumps(response).encode()
+                payload = response if isinstance(response, bytes) else json.dumps(response).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
-                with suppress(BrokenPipeError, ConnectionResetError):
+                with suppress(BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     if stall_body:
                         self.wfile.write(payload[:1])
                         self.wfile.flush()

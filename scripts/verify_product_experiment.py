@@ -52,6 +52,7 @@ def verify_manifest(path: Path) -> dict[str, Any]:
     if manifest.get("schema_version") not in {
         "evalops.product-experiment-manifest/1.0",
         "evalops.product-experiment-manifest/2.0",
+        "evalops.product-experiment-manifest/3.0",
     }:
         raise ProductManifestError("unsupported manifest schema")
     if manifest.get("formal_quality_claim_allowed") is not False:
@@ -108,7 +109,11 @@ def verify_manifest(path: Path) -> dict[str, Any]:
         "AUTOMATED_PASS_HUMAN_REVIEW_PENDING",
         "AUTOMATED_FAIL",
     }:
-        if result["schema_version"] == "evalops.experiment-result/2.0" and snapshot is None:
+        if (
+            result["schema_version"]
+            in {"evalops.experiment-result/2.0", "evalops.experiment-result/3.0"}
+            and snapshot is None
+        ):
             raise ProductManifestError("completed v2 experiment requires an input snapshot")
         if not {"baseline.json", "candidate.json"}.issubset(seen):
             raise ProductManifestError("completed experiment omits required arm artifacts")

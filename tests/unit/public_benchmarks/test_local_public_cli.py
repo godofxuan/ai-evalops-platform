@@ -53,10 +53,9 @@ def test_gemma_plan_uses_real_pinned_cases_and_keeps_existing_default_models(
     import httpx
 
     from scripts.run_local_public_benchmarks import MODELS
+    from tests.public_benchmark_support import required_bfcl_root
 
-    source = Path(__file__).resolve().parents[3] / "artifacts/public-benchmark-20260912/bfcl"
-    if not (source / "cases.json").is_file():
-        pytest.skip("Requires the pinned public BFCL source, not a mocked source checker")
+    source = required_bfcl_root()
     original_client = httpx.Client
 
     def handler(request: httpx.Request) -> httpx.Response:

@@ -109,9 +109,9 @@ def test_actual_execution_ledger_reporting_keeps_failed_and_context_blocked_deno
 
 
 def test_bfcl_report_separates_official_irrelevance_pass_from_parse_failure(tmp_path: Path) -> None:
-    source_root = Path(__file__).resolve().parents[3] / "artifacts/public-benchmark-20260912/bfcl"
-    if not (source_root / "cases.json").exists():
-        pytest.skip("Requires the pinned public BFCL source, not a mocked checker")
+    from tests.public_benchmark_support import required_bfcl_root
+
+    source_root = required_bfcl_root()
     case = next(
         item
         for item in json.loads((source_root / "cases.json").read_bytes())

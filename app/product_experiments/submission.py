@@ -124,8 +124,8 @@ async def prepare_durable_experiment(
                     type="http_rag", config={"target_id": arm.target_id}, version=arm.target_version
                 ),
                 evaluator=ComponentSpec(
-                    type="product_qa_v2" if request.task_type == "QA" else "product_agent_v2",
-                    version="product-v2",
+                    type="product_qa_v3" if request.task_type == "QA" else "product_agent_v3",
+                    version="product-v3",
                     config={
                         "max_attempts": request.max_attempts,
                         "max_observation_bytes_per_case": observation_bytes_per_case,

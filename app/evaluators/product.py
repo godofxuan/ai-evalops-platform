@@ -4,6 +4,7 @@ import json
 from typing import ClassVar, Literal
 
 from app.domain.evaluation import EvaluationCase, EvaluationResult, TargetResult
+from app.product_experiments.citations import CURRENT_SCORER, LEGACY_SCORER, validate_scorer_version
 from app.product_experiments.evaluators import registered_evaluators
 from app.product_experiments.runner import (
     ExperimentCase,
@@ -42,7 +43,14 @@ def product_input_requirements(
 
 
 class ProductQAEvaluator:
-    def __init__(self, *, max_observation_bytes_per_case: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        max_observation_bytes_per_case: int | None = None,
+        scorer_version: str = CURRENT_SCORER,
+    ) -> None:
+        validate_scorer_version(scorer_version)
+        self._scorer_version = scorer_version
         self._max_observation_bytes_per_case = max_observation_bytes_per_case
 
     task_type: ClassVar[Literal["QA", "AGENT_TOOL_USE"]] = "QA"
@@ -58,7 +66,10 @@ class ProductQAEvaluator:
         del attempt_number  # Identity and fencing remain owned by the existing worker.
         product_case = restore_product_case(case)
         observation = normalize_product_observation(
-            product_case, target_result, task_type=self.task_type
+            product_case,
+            target_result,
+            task_type=self.task_type,
+            scorer_version=self._scorer_version,
         )
         byte_size = product_observation_bytes(observation)
         if (
@@ -81,12 +92,17 @@ class ProductQAEvaluator:
             else score_product_case(
                 product_case,
                 observation,
-                evaluators=registered_evaluators(self.evaluator_names),
+                evaluators=registered_evaluators(
+                    self.evaluator_names, scorer_version=self._scorer_version
+                ),
+                scorer_version=self._scorer_version,
             )
         )
         return EvaluationResult(
             metrics={
-                "product_schema_version": "evalops.worker-product-observation/2.0",
+                "product_schema_version": "evalops.worker-product-observation/2.0"
+                if self._scorer_version == LEGACY_SCORER
+                else "evalops.worker-product-observation/3.0",
                 "product_task_type": self.task_type,
                 "product_status": "INSUFFICIENT_EVIDENCE" if missing else "OBSERVED",
                 "product_missing": missing,

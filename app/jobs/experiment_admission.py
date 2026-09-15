@@ -51,7 +51,21 @@ async def admit_experiment_claim(session: AsyncSession, run: EvaluationRun) -> b
     releases them. This is not a physical upstream-call concurrency guarantee.
     """
     if run.product_experiment_id is None:
-        return True
+        # Ordinary Runs need a nonblocking parent guard too: the first claim
+        # updates Run, and even later claims acquire implicit FK KEY SHARE locks
+        # while inserting the transactional outbox. Never wait on cancel here.
+        refreshed = await session.scalar(
+            select(EvaluationRun)
+            .where(EvaluationRun.id == run.id, EvaluationRun.tenant_id == run.tenant_id)
+            .with_for_update(
+                of=EvaluationRun,
+                key_share=True,
+                read=run.status is RunStatus.RUNNING,
+                skip_locked=True,
+            )
+            .execution_options(populate_existing=True)
+        )
+        return refreshed is not None and refreshed.status in (RunStatus.QUEUED, RunStatus.RUNNING)
     parent = await session.scalar(
         select(ProductExperiment)
         .where(

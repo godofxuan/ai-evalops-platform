@@ -17,6 +17,7 @@ from time import perf_counter
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
+from app.core.event_loop import run_with_psycopg_compatible_event_loop
 from scripts.gate1_database import psycopg_dsn
 
 POSTGRES_TELEMETRY_QUERY = """
@@ -75,7 +76,7 @@ StopRequested = Callable[[], bool]
 
 @dataclass(frozen=True, slots=True)
 class PassiveTelemetryProcess:
-    process: asyncio.subprocess.Process
+    process: subprocess.Popen[bytes]
     directory: Path
     start_path: Path
     stop_path: Path
@@ -302,30 +303,35 @@ async def start_passive_telemetry_process(
     ready_path = directory / "ready.json"
     start_path = directory / "start.signal"
     stop_path = directory / "stop.signal"
-    process = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-m",
-        "scripts.postgres_wait_telemetry",
-        "--database-url-env",
-        database_url_env,
-        "--output",
-        str(output_path),
-        "--summary",
-        str(summary_path),
-        "--ready-file",
-        str(ready_path),
-        "--start-file",
-        str(start_path),
-        "--stop-file",
-        str(stop_path),
-        "--sampling-hz",
-        str(sampling_hz),
+    # Psycopg needs SelectorEventLoop on Windows, which has no asyncio subprocess
+    # transport. Keep process lifecycle off the DB event loop on every platform.
+    process = await asyncio.to_thread(
+        subprocess.Popen,
+        [
+            sys.executable,
+            "-m",
+            "scripts.postgres_wait_telemetry",
+            "--database-url-env",
+            database_url_env,
+            "--output",
+            str(output_path),
+            "--summary",
+            str(summary_path),
+            "--ready-file",
+            str(ready_path),
+            "--start-file",
+            str(start_path),
+            "--stop-file",
+            str(stop_path),
+            "--sampling-hz",
+            str(sampling_hz),
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     deadline = perf_counter() + ready_timeout_seconds
     while perf_counter() < deadline:
-        if await asyncio.to_thread(ready_path.exists) or process.returncode is not None:
+        if await asyncio.to_thread(ready_path.exists) or process.poll() is not None:
             break
         await asyncio.sleep(0.01)
     return PassiveTelemetryProcess(
@@ -338,7 +344,7 @@ async def start_passive_telemetry_process(
 
 
 async def begin_passive_telemetry_process(handle: PassiveTelemetryProcess) -> None:
-    if handle.process.returncode is None:
+    if handle.process.poll() is None:
         await asyncio.to_thread(
             handle.start_path.write_text,
             "start\n",
@@ -352,7 +358,7 @@ async def stop_passive_telemetry_process(
     *,
     timeout_seconds: float = 15.0,
 ) -> dict[str, object]:
-    if handle.process.returncode is None:
+    if handle.process.poll() is None:
         await asyncio.to_thread(
             handle.stop_path.write_text,
             "stop\n",
@@ -360,10 +366,10 @@ async def stop_passive_telemetry_process(
             newline="\n",
         )
         try:
-            await asyncio.wait_for(handle.process.wait(), timeout=timeout_seconds)
-        except TimeoutError:
+            await asyncio.to_thread(handle.process.wait, timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
             handle.process.kill()
-            await handle.process.wait()
+            await asyncio.to_thread(handle.process.wait)
     try:
         summary_text = await asyncio.to_thread(handle.summary_path.read_text, encoding="utf-8")
         summary = json.loads(summary_text)
@@ -401,7 +407,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        return asyncio.run(_run_collector(args))
+        return run_with_psycopg_compatible_event_loop(_run_collector(args))
     except Exception as error:
         print(f"passive telemetry failed: error_type={type(error).__name__}", file=sys.stderr)
         return 1

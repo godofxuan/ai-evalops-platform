@@ -346,7 +346,7 @@ async def test_preparation_binds_raw_mapping_registry_and_shared_deadline(
     assert pending.reserved_target_attempts == 8
     assert pending.baseline.execution_deadline_at == pending.candidate.execution_deadline_at
     assert pending.baseline.execution_deadline_at == FixedClock().now() + timedelta(seconds=60)
-    assert pending.baseline.evaluator_type == "product_qa_v2"
+    assert pending.baseline.evaluator_type == "product_qa_v3"
     assert pending.snapshot["source_dataset_sha256"] == raw_sha
     assert pending.snapshot["normalized_dataset_sha256"] == mapped.dataset.sha256
     assert pending.snapshot["source_sha_attestation"] == "CLIENT_DECLARED"

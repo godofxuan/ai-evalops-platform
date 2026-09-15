@@ -2,15 +2,7 @@
 
 > 对 QA / RAG / Agent 的两个版本运行同题评测，可靠执行任务，并输出可追溯、可复核的质量门禁。
 
-本分支从固定 `903ed7c` 做独立审核修复：租约在锁后按数据库时间授权、引用评分按版本贯通、固定 checker 缺料即失败，并完成 20×2 持久故障演练。[本轮结果与限制](docs/reviews/audit-remediation-20260915/CLOSEOUT_RESULTS.md)、[锁序与版本合同](docs/reviews/audit-remediation-20260915/CONTRACTS.md)、[完整操作记录](docs/reviews/audit-remediation-20260915/EXECUTION_LOG.md)、[简历与答辩](docs/reviews/audit-remediation-20260915/RESUME_AND_DEFENSE.md)。这是可靠性和证据质量改进，不是模型质量提升、正式 A/B 或生产晋级。新提交和 CI 状态以交付回执为准，不能借用旧绿色 CI。
-
-| 从哪里开始 | 你会看到什么 | 证据边界 |
-| --- | --- | --- |
-| [本地演示](docs/reviews/audit-remediation-20260915/DEMO_GUIDE.md#a-不需要服务本地固定演示) | 无 API key 的 QA / Agent 固定样例、四问报告 | synthetic，不代表真实模型提升 |
-| [持久任务与故障演练](docs/reviews/audit-remediation-20260915/DEMO_GUIDE.md#b-真实持久任务固定-202-故障演练) | 提交、重试、取消、强杀恢复、导出离线重算 | 真 PG/Redis/本地 HTTP；公网 TLS、Linux 部署另验 |
-| [公开四模型实验](GEMMA_CROSS_FAMILY.md) | 固定 BFCL/RAGBench 子集的原始结果、负例和分母 | 历史640计划/632调用/8阻塞，不是本轮新增推理或完整榜单 |
-
-旧入口原样保留：[9月7日收口](docs/reviews/resume-closeout-20260907/CLOSEOUT_RESULTS.md)、[旧演示](docs/reviews/resume-closeout-20260907/DEMO_GUIDE.md)、[旧简历稿](docs/reviews/resume-closeout-20260907/RESUME_AND_DEFENSE.md)、[更早 v2 证据](docs/reviews/trustworthy-product-closeout.md)。本轮未修改 main、RAG 或已投递历史链接。
+本分支是固定 v2 基线上的独立审核修复与简历收口；[本轮修复、验收与限制](docs/reviews/resume-closeout-20260907/CLOSEOUT_RESULTS.md)、[完整演示](docs/reviews/resume-closeout-20260907/DEMO_GUIDE.md)、[简历与答辩稿](docs/reviews/resume-closeout-20260907/RESUME_AND_DEFENSE.md)集中说明当前状态。[上一轮 v2 证据](docs/reviews/trustworthy-product-closeout.md)只背书其固定历史 SHA，不替代新提交 CI。默认 main、RAG 与历史简历链接未修改；本轮不是正式 A/B 或生产资格晋级。
 
 本项目把 Agent/RAG 评测从一次性脚本提升为可提交、可恢复、可审计、可复现的后台系统：PostgreSQL 管理多租户 Run/Job/Attempt 状态，Worker 使用 lease、heartbeat 与 fencing 抵御迟到写入，Reaper 恢复失联任务；Agent 轨迹通过版本化 Artifact、内外两层 SHA-256 和 Projection 校验进入 EvalOps；审计事件由持久 Outbox 和独立 Dispatcher 异步投递。
 
@@ -21,7 +13,7 @@
 | 比较两个 QA / RAG 版本 | 固定同一题集、输入版本与 policy，比较任务成功、引用来源 ID、延迟和费用 | 引用 ID 命中不等于答案语义忠实；未知费用不是零 |
 | 比较两个工具调用 Agent | 检查工具选择、参数类型、权限、预算、错误和终态；区分绝对达标与配对退化 | 确定性工具用例不等于真实危险工具安全审计 |
 | 把实验交给后台执行 | 鉴权提交、幂等重放、跨两组的活动任务限制、重试/取消、worker 失联恢复 | 外部服务不保证 exactly-once；内部模型调用和账单不由平台硬控 |
-| 将报告交给别人审核 | 默认公共摘要；durable 私有完整包可离线重算；local 私有包须用原始 dataset 加 analyze 才完整重算 | 结构校验不能冒充重评分；哈希自洽不等于来源认证或验收 |
+| 将报告交给别人审核 | 默认公共摘要；durable 私有完整包带原始输入可离线重算；local 私有包仅结构验证 | 哈希自洽不等于来源认证、正式 A/B、人评或生产验收 |
 
 RAG 是一个被测对象，不是本平台的依赖项目。平台不会替你实现检索器或 Agent，也不会为了得到 PASS 填补缺失测量。
 
@@ -54,7 +46,7 @@ uv run --no-sync python -m scripts.run_product_experiment --spec benchmarks/agen
 | --- | --- |
 | READY_FOR_ASSESSMENT | 两组执行结束，可以评估；不是质量通过 |
 | DEMO_PASS / DEMO_FAIL / INSUFFICIENT_EVIDENCE | 固定门禁的演示质量结果；失败或证据不足产生非零 export 退出码 |
-| PRIVATE_RECOMPUTED / PUBLIC_PROJECTION_ONLY / LOCAL_PRIVATE_STRUCTURE_ONLY / LOCAL_RECOMPUTED_NOT_PROVENANCE | durable 私有重算、公共投影、local 结构或提供原输入后的 local 重算；这些范围不能互换 |
+| PRIVATE_RECOMPUTED / PUBLIC_PROJECTION_ONLY / LOCAL_PRIVATE_STRUCTURE_ONLY | durable 私有材料重算一致、公共投影校验或 local 私有结构校验；三者不能互换 |
 
 正式 A/B 未完成，人评仍待完成，Shadow/生产资格未验证。已有调度性能证据仍保留 `NEGATIVE_SCALING` 限制；本轮恢复与证据改进不能冲抵性能问题。
 

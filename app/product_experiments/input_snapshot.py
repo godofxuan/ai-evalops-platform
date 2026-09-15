@@ -19,7 +19,9 @@ Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 class ExperimentInputSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    schema_version: Literal["evalops.experiment-input-snapshot/1.0"]
+    schema_version: Literal[
+        "evalops.experiment-input-snapshot/1.0", "evalops.experiment-input-snapshot/2.0"
+    ]
     spec_sha256: Digest
     dataset_sha256: Digest
     policy_sha256: Digest
@@ -28,6 +30,10 @@ class ExperimentInputSnapshot(BaseModel):
     content_sha256: Digest
 
     def validate_result_binding(self, result: dict[str, Any]) -> None:
+        if (self.schema_version.endswith("/2.0")) != (
+            result["schema_version"] == "evalops.experiment-result/3.0"
+        ):
+            raise ValueError("snapshot/result scorer version mismatch")
         configuration = self.configuration
         expected_keys = set(ExperimentSpec.model_fields) - {"experiment_id", "policy_path"}
         if set(configuration) != expected_keys:

@@ -13,6 +13,8 @@ def test_registry_describes_deterministic_and_operational_plugins() -> None:
     descriptors = {item.kind: item for item in registered_evaluators()}
 
     assert set(descriptors) == {
+        "product_qa_v3",
+        "product_agent_v3",
         "basic_answer",
         "execution",
         "retrieval_citation",

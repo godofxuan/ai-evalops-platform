@@ -8,6 +8,7 @@ import re
 from collections import Counter
 from typing import Any
 
+from app.product_experiments.citations import scorer_for_result
 from app.product_experiments.evaluators import registered_evaluators
 from app.product_experiments.learning_grading import grade_answer, make_review_packet
 from app.product_experiments.learning_workflow import WorkflowEvidence, source_digest
@@ -23,6 +24,7 @@ def build_analysis(
 ) -> dict[str, Any]:
     grade_answer("profile validation", "profile validation", profile=profile)
     result = evidence.result
+    scorer_version = scorer_for_result(result.schema_version)
     names = (
         ("reference_answer", "citation_correctness", "tool_error_rate")
         if result.task_type == "QA"
@@ -72,7 +74,12 @@ def build_analysis(
             metrics = (
                 {}
                 if result.task_type == "AGENT_TOOL_USE" and observation.missing_fields
-                else score_product_case(case, observation, evaluators=registered_evaluators(names))
+                else score_product_case(
+                    case,
+                    observation,
+                    evaluators=registered_evaluators(names, scorer_version=scorer_version),
+                    scorer_version=scorer_version,
+                )
             )
             findings = _findings(case, observation, metrics)
             if result.task_type == "AGENT_TOOL_USE" and observation.missing_fields:
