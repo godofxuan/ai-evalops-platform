@@ -32,3 +32,11 @@
 - 原始日志中的SHA、长度与路径和数据库已有行完全相同，排除了内容路径不一致。另建独立PG数据库；新增50组×8路冷内容登记回归在第2组复现IntegrityError；不同SHA抢占同一路径的负控也未得到预期领域错误。两项red保留在cold-blob-red-2。第一次red尝试使用前一个失败后残留任务的DB，夹具领取到错误任务，只算环境隔离失败，不算产品反例。
 - 最小修复：INSERT的DO NOTHING不再仅指定SHA唯一键，覆盖该表所有唯一冲突；然后仍锁定SHA对应行，严格核对生命周期、长度、路径。不同SHA碰撞同一路径时明确抛ArtifactMetadataIntegrityError，不吞掉损坏数据。不增加迁移、不删除唯一约束、不增加业务重试。[PostgreSQL INSERT文档](https://www.postgresql.org/docs/current/sql-insert.html)说明省略DO NOTHING conflict target覆盖所有可用唯一约束；实际并发回归另行验证行为。
 - 首次green组合中artifact三项通过，但完整pair测试因本次命令遗漏Redis环境变量失败，保留cold-blob-green。补环境后完整pair实际通过（包含执行、导出、私有重算），旧artifact清理测试却暴露跨次运行残留DELETED tombstone；修正测试数据按本次tenant唯一化，并清理其所有自有且无人引用的blob，生产生命周期拒绝行为不变。cold-blob-green-2保留该失败，最终CODE要在全新DB完整重跑。
+
+## 跨平台随机回归发现的第二处缺陷
+
+- ce7c088本地完整单元1520 passed/3权限skip、集成178 passed/3 MinIO skip，100seed均通过；但其GitHub CI 34945618819失败。Windows/Compose通过，Linux随机seed 2/14/26/30/38/46/54/66/78/86失败，其余90通过。原始CI日志和ZIP已下载并与GitHub摘要核对，不重新运行同一提交来挑绿。
+- 十个失败均为live_cancel场景出现两条run_completed。trace显示success-b完成在cancel完成之前；取消路径先做无锁预读，随后SELECT FOR UPDATE虽然读取了新行，SQLAlchemy identity map仍返回已缓存的旧RUNNING状态。它把已成功Run写回CANCELLING，再聚合回SUCCEEDED，从而重复发终态事件。
+- 将该时序固化为真实PG屏障：取消的预读已执行后用事务advisory lock暂停，另一真实ResultCommitter提交成功，再释放取消。未修改产品前本机稳定复现两条完成事件（cancel-stale-red），不是只在模型对象上构造。
+- 最小修复只为取消路径的锁定查询加入populate_existing=True，强制以拿锁后读到的数据库状态替换本Session缓存。不新增查询、不改变锁序、不删除事件或降低断言。相同屏障测试通过（cancel-stale-green）：只剩一条完成事件、成功结果仍绑定原accepted attempt、没有虚假cancel_requested_at。
+- 因代码有新修复，ce7c088及其本地结果不再充当最终版本。下一代码提交必须重新执行完整本地和精确远端CI，全部结果保留到新目录；本轮未以本机通过替代跨平台验收。

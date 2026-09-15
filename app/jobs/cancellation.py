@@ -116,6 +116,9 @@ async def cancel_run_in_session(
                 EvaluationRun.tenant_id == principal.tenant_id,
             )
             .with_for_update(of=EvaluationRun)
+            # The unlocked preflight populated this Session's identity map.
+            # A SELECT after waiting for the lock must replace that stale state.
+            .execution_options(populate_existing=True)
         )
     ).scalar_one()
     if run.status in _TERMINAL_RUN_STATUSES:

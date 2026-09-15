@@ -13,8 +13,10 @@ from sqlalchemy import delete, event, func, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.auth.principals import Principal
 from app.domain.enums import ArtifactType, JobStatus, RunStatus
 from app.domain.evaluation import EvaluationResult, TargetResult
+from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.jobs.claiming import ClaimedJob, SQLAlchemyJobClaimer
 from app.jobs.failures import SQLAlchemyFailureCommitter
 from app.jobs.heartbeat import LeaseLostError, SQLAlchemyHeartbeatService
@@ -34,6 +36,7 @@ from app.persistence.orm_models import (
     EvaluationJob,
     EvaluationRun,
     JobAttempt,
+    ProgressEventOutbox,
     Tenant,
 )
 from app.targets.base import TargetTimeoutError
@@ -47,6 +50,106 @@ class LeaseDatabase:
     claim: ClaimedJob
     database_url: str
     application_name: str
+
+
+@pytest.mark.integration
+async def test_cancel_refreshes_preflight_state_after_concurrent_completion(
+    lease_database: LeaseDatabase,
+) -> None:
+    db = lease_database
+    engine = create_async_engine(
+        db.database_url,
+        connect_args={
+            "application_name": db.application_name + "-stale-cancel",
+            "options": "-c lock_timeout=5000 -c statement_timeout=10000",
+        },
+    )
+    gate = int(uuid4().hex[:12], 16)
+    paused = False
+
+    def pause_preflight(
+        connection: Any,
+        cursor: Any,
+        statement: str,
+        parameters: Any,
+        context: Any,
+        executemany: bool,
+    ) -> None:
+        nonlocal paused
+        if (
+            not paused
+            and statement.startswith("SELECT evaluation_runs.")
+            and "FOR UPDATE" not in statement
+        ):
+            paused = True
+            # The real SELECT has already read RUNNING. Hold it before ORM
+            # materialization while another transaction commits success.
+            connection.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (gate,))
+
+    event.listen(engine.sync_engine, "after_cursor_execute", pause_preflight)
+    task: asyncio.Task[Any] | None = None
+    try:
+        async with db.factory() as session:
+            run = await session.get(EvaluationRun, db.claim.run_id)
+            assert run is not None
+            principal = Principal(run.tenant_id, run.created_by, "synthetic")
+        async with db.blocker_factory.begin() as blocker:
+            await blocker.execute(text("SELECT pg_advisory_xact_lock(:gate)"), {"gate": gate})
+            task = asyncio.create_task(
+                SQLAlchemyCancellationService(create_session_factory(engine)).cancel_run(
+                    principal=principal,
+                    run_id=db.claim.run_id,
+                )
+            )
+            snapshot = await wait_for_postgres_lock_snapshot(
+                db.database_url,
+                target_application_name=db.application_name + "-stale-cancel",
+                timeout_seconds=2,
+            )
+            write_lock_diagnostic({"scenario": "cancel_preflight_before_success", **snapshot})
+            await SQLAlchemyResultCommitter(db.factory).commit_success(
+                claim=db.claim,
+                lease_version=db.claim.version,
+                target_result=TargetResult(
+                    answer="accepted-before-cancel-lock",
+                    citations=(),
+                    sources=(),
+                    trace={},
+                    token_usage=None,
+                    latency_ms=1,
+                ),
+                evaluation_result=EvaluationResult(metrics={}),
+            )
+        response = await asyncio.wait_for(task, 8)
+        assert response.status is RunStatus.SUCCEEDED
+        async with db.factory() as session:
+            run = await session.get(EvaluationRun, db.claim.run_id)
+            assert run is not None and run.status is RunStatus.SUCCEEDED
+            events = list(
+                (
+                    await session.scalars(
+                        select(ProgressEventOutbox).where(
+                            ProgressEventOutbox.run_id == run.id,
+                            ProgressEventOutbox.event_type == "run_completed",
+                        )
+                    )
+                ).all()
+            )
+            assert len(events) == 1, "late cancellation emitted a duplicate terminal event"
+            assert run.cancel_requested_at is None
+            result = (
+                await session.scalars(
+                    select(CaseResult).where(CaseResult.job_id == db.claim.job_id)
+                )
+            ).one()
+            assert result.accepted_attempt_id == db.claim.attempt_id
+    finally:
+        if task is not None:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        event.remove(engine.sync_engine, "after_cursor_execute", pause_preflight)
+        await engine.dispose()
 
 
 @pytest.fixture
