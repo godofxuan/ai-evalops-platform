@@ -6,6 +6,7 @@ from app.artifacts.storage import ArtifactStore
 from app.auth.principals import Principal
 from app.core.telemetry import Telemetry
 from app.datasets.validation import validate_jsonl
+from app.domain.evaluation import EvaluationCase
 from app.evaluators.base import UnsupportedEvaluatorError, build_evaluator
 from app.observability.metrics import PlatformMetrics
 from app.runs.idempotency import canonical_request_hash
@@ -94,6 +95,35 @@ class SQLAlchemyRunService:
                 raise IdempotencyConflictError
             return _to_run_read(existing)
 
+        new_run = await self.prepare_run(
+            principal=principal, idempotency_key=idempotency_key, request=request
+        )
+        if self._telemetry is None:
+            snapshot = await self._repository.create_or_replay(new_run)
+        else:
+            with self._telemetry.start_as_current_span(
+                "run.create.database_transaction",
+                attributes={"tenant.id": str(principal.tenant_id)},
+            ):
+                snapshot = await self._repository.create_or_replay(new_run)
+        if snapshot.request_hash != request_hash:
+            raise IdempotencyConflictError
+        if snapshot.created_now and self._metrics is not None:
+            self._metrics.record_run_created()
+        return _to_run_read(snapshot)
+
+    async def prepare_run(
+        self,
+        *,
+        principal: Principal,
+        idempotency_key: str,
+        request: RunCreate,
+    ) -> NewRun:
+        """Authorize and load inputs without creating a Run or opening its write transaction.
+
+        The caller owns persistence and idempotency. This is not an HTTP submission API.
+        """
+        request_hash = canonical_request_hash(request.model_dump(mode="json", exclude_none=False))
         target_config, target_version = _resolve_target(
             request,
             http_target_registry=self._http_target_registry,
@@ -111,11 +141,33 @@ class SQLAlchemyRunService:
         if validated.sha256 != source.sha256 or validated.case_count != source.case_count:
             raise RunInputIntegrityError
 
+        if request.evaluator.type in {
+            "product_qa_v2",
+            "product_agent_v2",
+            "product_qa_v3",
+            "product_agent_v3",
+        }:
+            from app.evaluators.product import product_input_requirements, restore_product_case
+
+            for case in validated.cases:
+                try:
+                    restored = restore_product_case(EvaluationCase.from_payload(case.model_dump()))
+                    missing = product_input_requirements(
+                        restored,
+                        task_type="QA"
+                        if request.evaluator.type in {"product_qa_v2", "product_qa_v3"}
+                        else "AGENT_TOOL_USE",
+                    )
+                except (ValueError, TypeError):
+                    raise InvalidEvaluatorConfigurationError from None
+                if missing:
+                    raise InvalidEvaluatorConfigurationError
+
         evaluator_config = dict(request.evaluator.config)
         origin_traceparent = (
             None if self._telemetry is None else self._telemetry.capture_traceparent()
         )
-        new_run = NewRun(
+        return NewRun(
             tenant_id=principal.tenant_id,
             created_by=principal.api_key_id,
             dataset_version_id=request.dataset_version_id,
@@ -135,19 +187,6 @@ class SQLAlchemyRunService:
             cases=tuple(case.model_dump(mode="json") for case in validated.cases),
             origin_traceparent=origin_traceparent,
         )
-        if self._telemetry is None:
-            snapshot = await self._repository.create_or_replay(new_run)
-        else:
-            with self._telemetry.start_as_current_span(
-                "run.create.database_transaction",
-                attributes={"tenant.id": str(principal.tenant_id)},
-            ):
-                snapshot = await self._repository.create_or_replay(new_run)
-        if snapshot.request_hash != request_hash:
-            raise IdempotencyConflictError
-        if snapshot.created_now and self._metrics is not None:
-            self._metrics.record_run_created()
-        return _to_run_read(snapshot)
 
     async def get_run(
         self,
@@ -211,6 +250,12 @@ def _resolve_target(
 
 
 def _validate_evaluator(request: RunCreate) -> None:
+    if (
+        request.evaluator.type
+        in {"product_qa_v2", "product_agent_v2", "product_qa_v3", "product_agent_v3"}
+        and request.evaluator.version != "product-" + request.evaluator.type.rsplit("_", 1)[1]
+    ):
+        raise InvalidEvaluatorConfigurationError
     try:
         build_evaluator(request.evaluator.type, request.evaluator.config)
     except UnsupportedEvaluatorError as error:

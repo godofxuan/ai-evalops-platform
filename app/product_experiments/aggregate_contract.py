@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.strict_json import decode_evidence_json
 from app.product_experiments.external_evidence import ExternalEvidenceError, SourceCIReference
 
 
@@ -24,7 +24,9 @@ def _safe_path(value: str) -> str:
 
 
 class AggregateContractPin(_StrictModel):
-    schema_version: Literal["evalops.aggregate-contract-pin/1.0"]
+    schema_version: Literal[
+        "evalops.aggregate-contract-pin/1.0", "evalops.aggregate-contract-pin/2.0"
+    ]
     publisher_repository: str = Field(min_length=1, max_length=500)
     publisher_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     publisher_ci: SourceCIReference
@@ -65,6 +67,38 @@ class ProducerAggregateReference(_StrictModel):
         return self
 
 
+class AggregateMetricsV2(_StrictModel):
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    recall: float | None = Field(default=None, ge=0, le=1)
+    precision: float | None = Field(default=None, ge=0, le=1)
+    mrr: float | None = Field(default=None, ge=0, le=1)
+    hit_rate: float | None = Field(default=None, ge=0, le=1)
+    latency_p95_ms: float | None = Field(default=None, ge=0)
+    cost_usd: float | None = Field(default=None, ge=0)
+
+
+class AggregateClaimBoundaryV2(_StrictModel):
+    allowed: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
+        min_length=1, max_length=20
+    )
+    forbidden: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
+        min_length=1, max_length=20
+    )
+
+
+class AggregateSummaryV2(_StrictModel):
+    schema_version: Literal["evalops.aggregate-summary/2.0"]
+    source_repository: str = Field(min_length=1, max_length=500)
+    source_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    producing_code_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    protocol_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_scope: str = Field(min_length=1, max_length=500)
+    case_count: int = Field(gt=0, le=10_000_000)
+    decision: Literal["ACCEPTED", "REJECTED", "INCONCLUSIVE"]
+    claim_boundary: AggregateClaimBoundaryV2
+    metrics: AggregateMetricsV2
+
+
 _PRIVATE_KEYS = {
     "answer",
     "answers",
@@ -82,7 +116,7 @@ _PRIVATE_KEYS = {
 }
 
 
-def _read_inside(root: Path, relative: str) -> bytes:
+def _read_inside(root: Path, relative: str, *, byte_limit: int) -> bytes:
     resolved_root = root.resolve()
     path = (resolved_root / Path(*PurePosixPath(relative).parts)).resolve()
     try:
@@ -90,9 +124,13 @@ def _read_inside(root: Path, relative: str) -> bytes:
     except ValueError as error:
         raise ExternalEvidenceError("aggregate contract path escapes producer root") from error
     try:
-        return path.read_bytes()
+        with path.open("rb") as stream:
+            payload = stream.read(byte_limit + 1)
     except OSError as error:
         raise ExternalEvidenceError("aggregate contract file is unreadable") from error
+    if len(payload) > byte_limit:
+        raise ExternalEvidenceError("aggregate contract file exceeds size limit")
+    return payload
 
 
 def _private_keys(value: object) -> set[str]:
@@ -156,26 +194,44 @@ def verify_aggregate_contract(
 ) -> dict[str, Any]:
     if observed_publisher_sha != pin.publisher_sha:
         raise ExternalEvidenceError("producer checkout SHA does not match pinned publisher SHA")
-    reference_bytes = _read_inside(producer_root, pin.reference_path)
+    reference_bytes = _read_inside(producer_root, pin.reference_path, byte_limit=1024 * 1024)
     reference_digest = hashlib.sha256(reference_bytes).hexdigest()
     if reference_digest != pin.reference_sha256:
         raise ExternalEvidenceError("producer aggregate reference SHA-256 mismatch")
     try:
+        decode_evidence_json(reference_bytes)
         reference = ProducerAggregateReference.model_validate_json(reference_bytes)
     except ValueError as error:
-        raise ExternalEvidenceError("producer aggregate reference is invalid") from error
+        raise ExternalEvidenceError("producer aggregate reference JSON is invalid") from error
     if reference.source_repository != pin.publisher_repository:
         raise ExternalEvidenceError("producer repository identity mismatch")
-    artifact_bytes = _read_inside(producer_root, reference.artifact_path)
+    artifact_bytes = _read_inside(
+        producer_root, reference.artifact_path, byte_limit=16 * 1024 * 1024
+    )
     artifact_digest = hashlib.sha256(artifact_bytes).hexdigest()
     if artifact_digest != reference.artifact_sha256:
         raise ExternalEvidenceError("producer aggregate artifact SHA-256 mismatch")
     try:
-        payload = json.loads(artifact_bytes)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        payload = decode_evidence_json(artifact_bytes)
+    except ValueError as error:
         raise ExternalEvidenceError("producer aggregate artifact is invalid JSON") from error
     if not isinstance(payload, dict):
         raise ExternalEvidenceError("producer aggregate artifact must be an object")
+    if payload.get("schema_version") != reference.artifact_schema:
+        raise ExternalEvidenceError("aggregate schema does not match producer reference")
+    if "case_count" in payload and (
+        type(payload["case_count"]) is not int or payload["case_count"] != reference.case_count
+    ):
+        raise ExternalEvidenceError("aggregate case-count does not match producer reference")
+    strict_v2 = pin.schema_version == "evalops.aggregate-contract-pin/2.0"
+    if strict_v2:
+        try:
+            summary = AggregateSummaryV2.model_validate_json(artifact_bytes)
+        except ValueError:
+            raise ExternalEvidenceError("aggregate v2 restricted schema is invalid") from None
+        for field in ("source_repository", "source_sha", "producing_code_sha", "evidence_scope"):
+            if getattr(summary, field) != getattr(reference, field):
+                raise ExternalEvidenceError(f"aggregate source identity mismatch: {field}")
     private = _private_keys(payload)
     if private:
         raise ExternalEvidenceError("aggregate artifact contains private/per-case payload")
@@ -184,8 +240,10 @@ def verify_aggregate_contract(
     if reference.protocol_sha256 not in _protocol_digests(payload):
         raise ExternalEvidenceError("aggregate protocol does not match producer reference")
     boundary = _validated_claim_boundary(payload, reference)
-    return {
-        "schema_version": "evalops.aggregate-contract-verification/1.0",
+    result = {
+        "schema_version": "evalops.aggregate-contract-verification/2.0"
+        if strict_v2
+        else "evalops.aggregate-contract-verification/1.0",
         "status": "AGGREGATE_EVIDENCE_VERIFIED",
         "evidence_id": reference.evidence_id,
         "publisher": {
@@ -213,6 +271,16 @@ def verify_aggregate_contract(
         "formal_quality_claim_allowed": False,
         "production_ready": False,
     }
+    result["verification_level"] = (
+        "STRICT_AGGREGATE_SCHEMA" if strict_v2 else "LEGACY_HASH_AND_PARTIAL_FIELDS"
+    )
+    result["online_verification_status"] = "NOT_RUN"
+    result["privacy_assurance"] = (
+        "STRUCTURE_ONLY_NOT_CONTENT_AUDIT" if strict_v2 else "KEY_SCREENING_ONLY"
+    )
+    if strict_v2:
+        result.pop("private_or_per_case_payload_present")
+    return result
 
 
 __all__ = ["AggregateContractPin", "ProducerAggregateReference", "verify_aggregate_contract"]

@@ -32,9 +32,12 @@ from app.api.routes_datasets import router as datasets_router
 from app.api.routes_events import router as events_router
 from app.api.routes_health import router as health_router
 from app.api.routes_observability import router as observability_router
+from app.api.routes_product_experiments import router as product_experiments_router
 from app.api.routes_results import router as results_router
 from app.api.routes_reviews import router as reviews_router
 from app.api.routes_runs import router as runs_router
+from app.artifacts.repository import SQLAlchemyArtifactReferenceGateway
+from app.artifacts.service import ArtifactAccessService
 from app.artifacts.storage import build_artifact_store
 from app.auth.repository import SQLAlchemyAPIKeyLookup
 from app.core.config import Settings
@@ -66,6 +69,12 @@ from app.jobs.cancellation import SQLAlchemyCancellationService
 from app.observability.metrics import PlatformMetrics
 from app.persistence.database import create_database_engine, create_session_factory
 from app.persistence.redis import create_redis_client
+from app.product_experiments.export_service import ProductReportExporter
+from app.product_experiments.persistence import SQLAlchemyProductExperimentRepository
+from app.product_experiments.report_persistence import SQLAlchemyProductReportRepository
+from app.product_experiments.result_snapshot import SQLAlchemyProductResultReader
+from app.product_experiments.service import ProductExperimentService
+from app.product_experiments.submission import DurableExperimentSubmitter
 from app.results.service import SQLAlchemyResultService
 from app.reviews.service import (
     ReviewConflictError,
@@ -139,6 +148,29 @@ def create_app(
             metrics=metrics,
             telemetry=telemetry,
         )
+        product_repository = SQLAlchemyProductExperimentRepository(session_factory)
+        application.state.product_experiment_exporter = ProductReportExporter(
+            reader=SQLAlchemyProductResultReader(session_factory),
+            repository=SQLAlchemyProductReportRepository(session_factory),
+            artifact_store=artifact_store,
+            artifact_access=ArtifactAccessService(
+                gateway=SQLAlchemyArtifactReferenceGateway(session_factory),
+                store=artifact_store,
+            ),
+        )
+        application.state.product_experiment_service = ProductExperimentService(
+            product_repository, application.state.run_service
+        )
+        if runtime_settings.product_experiment_submission_enabled:
+            code_sha = runtime_settings.product_execution_code_sha
+            if code_sha is None:
+                raise RuntimeError("experiment submission code identity is not configured")
+            application.state.product_experiment_submitter = DurableExperimentSubmitter(
+                repository=product_repository,
+                run_service=application.state.run_service,
+                artifact_store=artifact_store,
+                evalops_sha=code_sha,
+            )
         event_publisher = RedisEventPublisher(
             redis_client,
             metrics=metrics,
@@ -244,6 +276,9 @@ def create_app(
     application.state.session_factory = None
     application.state.dataset_service = None
     application.state.run_service = None
+    application.state.product_experiment_service = None
+    application.state.product_experiment_submitter = None
+    application.state.product_experiment_exporter = None
     application.state.result_service = None
     application.state.review_service = None
     application.state.agent_artifact_service = None
@@ -262,6 +297,7 @@ def create_app(
     application.include_router(results_router)
     application.include_router(reviews_router)
     application.include_router(runs_router)
+    application.include_router(product_experiments_router)
     application.include_router(events_router)
     application.add_exception_handler(APIError, handle_api_error)
     application.add_exception_handler(DatasetNotFoundError, handle_dataset_not_found)

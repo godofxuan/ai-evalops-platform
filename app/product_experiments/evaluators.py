@@ -6,6 +6,14 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.product_experiments.citations import (
+    CURRENT_SCORER,
+    canonical_citation_id,
+    validate_citations,
+    validate_scorer_version,
+)
+from app.product_experiments.observation_contract import terminal_matches_expected
+
 
 class CaseView(Protocol):
     @property
@@ -66,8 +74,13 @@ class ReferenceAnswerEvaluator:
 @dataclass(frozen=True, slots=True)
 class CitationCorrectnessEvaluator:
     name: str = "citation_correctness"
+    scorer_version: str = CURRENT_SCORER
 
     def evaluate(self, case: CaseView, result: ResultView) -> float:
+        validate_citations(result.citations, scorer_version=self.scorer_version)
+        if self.scorer_version == CURRENT_SCORER:
+            recall, _ = citation_evidence_scores(case, result, scorer_version=self.scorer_version)
+            return 1.0 if recall is None else recall
         expected = set(case.expected_citation_ids)
         if not expected:
             return 1.0
@@ -97,8 +110,11 @@ class AgentTaskCompletionEvaluator:
     name: str = "agent_task_completion"
 
     def evaluate(self, case: CaseView, result: ResultView) -> float:
+        expected = getattr(case, "expected_terminal_state", "completed")
         return float(
-            result.terminal_state == "completed"
+            terminal_matches_expected(
+                result.terminal_state, getattr(result, "source_terminal_state", None), expected
+            )
             and _normalize(result.answer) == _normalize(case.reference_answer)
         )
 
@@ -126,7 +142,22 @@ class ToolArgumentValidityEvaluator:
             (getattr(call, "name", None), getattr(call, "arguments", None))
             for call in result.tool_calls
         ]
-        return float(actual == expected)
+        return float(_json_equal(actual, expected))
+
+
+def _json_equal(left: object, right: object) -> bool:
+    """JSON structural equality: booleans are not numbers; numeric 1 equals 1.0."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(
+            _json_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)):
+        return len(left) == len(right) and all(
+            _json_equal(a, b) for a, b in zip(left, right, strict=True)
+        )
+    return bool(left == right)
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +176,8 @@ class ToolBudgetViolationRateEvaluator:
     def evaluate(self, case: CaseView, result: ResultView) -> float:
         maximum = case.max_tool_calls
         over_limit = maximum is not None and len(result.tool_calls) > maximum
-        return float(result.budget_exhausted or over_limit)
+        # Exhaustion is an observed stop condition, not proof of exceeding the limit.
+        return float(over_limit)
 
 
 _REGISTRY: Mapping[str, CaseEvaluator] = {
@@ -160,11 +192,18 @@ _REGISTRY: Mapping[str, CaseEvaluator] = {
 }
 
 
-def registered_evaluators(names: Sequence[str] | Iterable[str]) -> tuple[CaseEvaluator, ...]:
+def registered_evaluators(
+    names: Sequence[str] | Iterable[str], *, scorer_version: str = CURRENT_SCORER
+) -> tuple[CaseEvaluator, ...]:
+    validate_scorer_version(scorer_version)
     selected: list[CaseEvaluator] = []
     for name in names:
         try:
-            selected.append(_REGISTRY[name])
+            selected.append(
+                CitationCorrectnessEvaluator(scorer_version=scorer_version)
+                if name == "citation_correctness"
+                else _REGISTRY[name]
+            )
         except KeyError:
             raise ValueError(f"unknown evaluator: {name}") from None
     return tuple(selected)
@@ -172,6 +211,27 @@ def registered_evaluators(names: Sequence[str] | Iterable[str]) -> tuple[CaseEva
 
 def _normalize(value: str) -> str:
     return " ".join(value.casefold().split())
+
+
+def citation_evidence_scores(
+    case: CaseView, result: ResultView, *, scorer_version: str = CURRENT_SCORER
+) -> tuple[float | None, float | None]:
+    """Unique source-ID recall/precision, not semantic support of answer claims."""
+    validate_citations(result.citations, scorer_version=scorer_version)
+    expected = set(case.expected_citation_ids)
+    if not expected:
+        return None, None
+    actual: set[str] = set()
+    unresolved = 0
+    for citation in result.citations:
+        value = canonical_citation_id(citation, schema_version=scorer_version)
+        if value is not None:
+            actual.add(value)
+        else:
+            unresolved += 1
+    matched = len(expected & actual)
+    denominator = len(actual) + unresolved
+    return matched / len(expected), matched / denominator if denominator else 0.0
 
 
 __all__ = ["CaseEvaluator", "registered_evaluators"]

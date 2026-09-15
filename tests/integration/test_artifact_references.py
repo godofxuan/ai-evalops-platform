@@ -11,6 +11,7 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.artifacts.repository import (
+    ArtifactMetadataIntegrityError,
     SQLAlchemyArtifactReferenceGateway,
     ensure_artifact_reference,
 )
@@ -32,6 +33,121 @@ from app.persistence.orm_models import (
     EvaluationRun,
     Tenant,
 )
+from tests.concurrency.test_lease_authorization import (
+    LeaseDatabase,
+)
+from tests.concurrency.test_lease_authorization import (
+    lease_database as lease_database,
+)
+from tests.postgres_test_support import write_lock_diagnostic
+
+
+@pytest.mark.integration
+async def test_concurrent_cold_content_registration_handles_both_unique_indexes(
+    lease_database: LeaseDatabase, tmp_path: Path
+) -> None:
+    db = lease_database
+    store = LocalArtifactStore(tmp_path / "cold-blobs")
+    for wave in range(50):
+        stored = await store.put_bytes(f"cold-{db.claim.job_id}-{wave}".encode())
+        barrier = asyncio.Barrier(8)
+
+        async def register(stored: StoredArtifact, barrier: asyncio.Barrier) -> UUID:
+            async with db.factory.begin() as session:
+                await barrier.wait()
+                reference = await ensure_artifact_reference(
+                    session,
+                    tenant_id=db.claim.tenant_id,
+                    artifact_type=ArtifactType.DATASET_SOURCE,
+                    media_type="application/octet-stream",
+                    stored=stored,
+                )
+                return reference.id
+
+        try:
+            async with asyncio.timeout(10):
+                outcomes = await asyncio.gather(
+                    *(register(stored, barrier) for _ in range(8)), return_exceptions=True
+                )
+            errors = [
+                type(value).__name__ for value in outcomes if isinstance(value, BaseException)
+            ]
+            write_lock_diagnostic(
+                {
+                    "schema_version": "evalops.cold-blob-registration/1.0",
+                    "wave": wave,
+                    "requests": 8,
+                    "errors": errors,
+                }
+            )
+            assert not errors, f"cold blob wave {wave}: {errors}"
+            assert len(set(outcomes)) == 8
+            async with db.factory() as session:
+                blob = await session.get(ArtifactBlob, stored.sha256)
+                assert blob is not None and blob.storage_path == stored.relative_path.as_posix()
+                references = list(
+                    (
+                        await session.scalars(
+                            select(ArtifactReference).where(
+                                ArtifactReference.blob_sha256 == stored.sha256
+                            )
+                        )
+                    ).all()
+                )
+                assert len(references) == 8
+            assert await store.get_bytes(stored.sha256) == f"cold-{db.claim.job_id}-{wave}".encode()
+        finally:
+            async with db.factory.begin() as session:
+                await session.execute(
+                    delete(ArtifactReference).where(ArtifactReference.blob_sha256 == stored.sha256)
+                )
+                await session.execute(
+                    delete(ArtifactBlob).where(ArtifactBlob.sha256 == stored.sha256)
+                )
+
+
+@pytest.mark.integration
+async def test_conflicting_content_path_is_not_silently_deduplicated(
+    lease_database: LeaseDatabase, tmp_path: Path
+) -> None:
+    db = lease_database
+    store = LocalArtifactStore(tmp_path / "path-collision")
+    stored = await store.put_bytes(str(db.claim.job_id).encode())
+    forged_digest = hashlib.sha256(f"different-{db.claim.job_id}".encode()).hexdigest()
+    try:
+        async with db.factory.begin() as session:
+            await ensure_artifact_reference(
+                session,
+                tenant_id=db.claim.tenant_id,
+                artifact_type=ArtifactType.DATASET_SOURCE,
+                media_type="application/octet-stream",
+                stored=stored,
+            )
+        conflicting = StoredArtifact(
+            sha256=forged_digest,
+            size_bytes=stored.size_bytes,
+            relative_path=stored.relative_path,
+            created=False,
+        )
+        with pytest.raises(ArtifactMetadataIntegrityError):
+            async with db.factory.begin() as session:
+                await ensure_artifact_reference(
+                    session,
+                    tenant_id=db.claim.tenant_id,
+                    artifact_type=ArtifactType.DATASET_SOURCE,
+                    media_type="application/octet-stream",
+                    stored=conflicting,
+                )
+        async with db.factory() as session:
+            assert await session.get(ArtifactBlob, forged_digest) is None
+            original = await session.get(ArtifactBlob, stored.sha256)
+            assert original is not None and original.storage_path == stored.relative_path.as_posix()
+    finally:
+        async with db.factory.begin() as session:
+            await session.execute(
+                delete(ArtifactReference).where(ArtifactReference.blob_sha256 == stored.sha256)
+            )
+            await session.execute(delete(ArtifactBlob).where(ArtifactBlob.sha256 == stored.sha256))
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +312,7 @@ async def test_real_artifact_references_separate_dedup_ownership_and_cleanup(
     run_a2_id = uuid4()
     run_b1_id = uuid4()
     owners: tuple[SeededOwner, ...] = ()
+    created_blob_sha256s: set[str] = set()
 
     try:
         async with session_factory.begin() as session:
@@ -211,8 +328,10 @@ async def test_real_artifact_references_separate_dedup_ownership_and_cleanup(
             )
             owners = (owner_a, owner_b)
 
-        content = b'{"schema_version":"1","shared":true}\n'
+        # Repeated test runs must not reuse lifecycle tombstones from an old run.
+        content = f'{{"schema_version":"1","shared":true,"test":"{tenant_a_id}"}}\n'.encode()
         stored = await store.put_bytes(content)
+        created_blob_sha256s.add(stored.sha256)
         reference_a1, reference_a2, reference_b1, reference_a1_retry = await asyncio.gather(
             _register_run_reference(
                 session_factory,
@@ -313,7 +432,8 @@ async def test_real_artifact_references_separate_dedup_ownership_and_cleanup(
         )
         assert not (tmp_path / stored.relative_path).exists()
 
-        missing_stored = await store.put_bytes(b"database reference, missing file")
+        missing_stored = await store.put_bytes(f"missing-file:{tenant_a_id}".encode())
+        created_blob_sha256s.add(missing_stored.sha256)
         missing_reference = await _register_run_reference(
             session_factory,
             tenant_id=tenant_a_id,
@@ -333,7 +453,8 @@ async def test_real_artifact_references_separate_dedup_ownership_and_cleanup(
             run_id=run_a1_id,
         )
 
-        orphan_stored = await store.put_bytes(b"file created before database rollback")
+        orphan_stored = await store.put_bytes(f"rollback-orphan:{tenant_a_id}".encode())
+        created_blob_sha256s.add(orphan_stored.sha256)
         rolled_back_reference_id: UUID | None = None
         with pytest.raises(ExpectedReferenceRollback):
             async with session_factory.begin() as session:
@@ -374,6 +495,9 @@ async def test_real_artifact_references_separate_dedup_ownership_and_cleanup(
                     ).scalars()
                 )
                 blob_sha256s.update(owner.dataset_blob_sha256 for owner in owners)
+                # Deleted references no longer reveal their blob; include every
+                # fixture-created blob, still guarding against live owners below.
+                blob_sha256s.update(created_blob_sha256s)
                 await session.execute(delete(EvaluationRun).where(EvaluationRun.id.in_(run_ids)))
                 await session.execute(
                     delete(DatasetVersion).where(

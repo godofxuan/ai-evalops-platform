@@ -13,5 +13,7 @@
 .coverage
 **/.env*
 data/artifacts/*
+# Runtime evidence may contain private responses; never send it as build input.
+artifacts
 docs
 tests

@@ -14,6 +14,22 @@ from prometheus_client import (
 )
 
 DB_OPERATIONS = frozenset({"claim", "result", "failure", "reaper"})
+LEASE_OPERATIONS = frozenset({"heartbeat", "result", "failure", "reaper"})
+LEASE_OUTCOMES = frozenset(
+    {
+        "authorized",
+        "not_found",
+        "state",
+        "owner",
+        "version",
+        "missing_expiry",
+        "expired",
+        "guard_changed",
+        "parent_missing",
+        "identity_or_state",
+        "attempt_inactive",
+    }
+)
 
 
 class PlatformMetrics:
@@ -28,6 +44,26 @@ class PlatformMetrics:
 
     def __init__(self, *, registry: CollectorRegistry | None = None) -> None:
         self.registry = registry or CollectorRegistry()
+        self._lease_authorization = Counter(
+            "job_lease_authorization_total",
+            "Observed fenced lease decisions; not an exactly-once or durable global counter.",
+            ("operation", "outcome"),
+            registry=self.registry,
+        )
+        self._lease_lock_query = Histogram(
+            "job_lease_lock_query_seconds",
+            "Row-lock query wall time including SQL, network, scheduling and lock waits.",
+            ("operation",),
+            buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10),
+            registry=self.registry,
+        )
+        self._reaper_expiry_lag = Histogram(
+            "job_reaper_expiry_lag_seconds",
+            "Expiry-to-authorization lag for successfully committed recoveries; "
+            "not current backlog age.",
+            buckets=(0.01, 0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 900),
+            registry=self.registry,
+        )
         self._api_request_total = Counter(
             "api_request_total",
             "Completed HTTP requests.",
@@ -207,6 +243,19 @@ class PlatformMetrics:
 
     def record_run_created(self) -> None:
         self._run_created_total.inc()
+
+    def record_lease_authorization(self, *, operation: str, outcome: str) -> None:
+        if operation not in LEASE_OPERATIONS or outcome not in LEASE_OUTCOMES:
+            raise ValueError("unsupported lease metric label")
+        self._lease_authorization.labels(operation=operation, outcome=outcome).inc()
+
+    def observe_lease_lock_query(self, *, operation: str, seconds: float) -> None:
+        if operation not in LEASE_OPERATIONS:
+            raise ValueError("unsupported lease lock operation")
+        self._lease_lock_query.labels(operation=operation).observe(max(seconds, 0.0))
+
+    def observe_reaper_expiry_lag(self, seconds: float) -> None:
+        self._reaper_expiry_lag.observe(max(seconds, 0.0))
 
     def set_job_queue_depth(self, value: int) -> None:
         self._job_queue_depth.set(value)

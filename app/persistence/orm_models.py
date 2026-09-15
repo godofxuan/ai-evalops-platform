@@ -98,6 +98,84 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
+class ProductExperiment(Base):
+    __tablename__ = "product_experiments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["report_artifact_reference_id", "tenant_id", "baseline_run_id", "report_sha256"],
+            [
+                "artifact_references.id",
+                "artifact_references.tenant_id",
+                "artifact_references.run_id",
+                "artifact_references.blob_sha256",
+            ],
+            name="fk_product_experiments_report_identity",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(report_artifact_reference_id IS NULL AND report_sha256 IS NULL "
+            "AND report_snapshot_sha256 IS NULL) OR "
+            "(report_artifact_reference_id IS NOT NULL AND report_sha256 IS NOT NULL "
+            "AND report_snapshot_sha256 IS NOT NULL)",
+            name="report_publication_complete",
+        ),
+        ForeignKeyConstraint(
+            ["source_artifact_reference_id", "tenant_id"],
+            ["artifact_references.id", "artifact_references.tenant_id"],
+            name="fk_product_experiments_source_reference_tenant",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("id", "tenant_id", name="uq_product_experiments_id_tenant"),
+        CheckConstraint(
+            "max_active_jobs IS NULL OR max_active_jobs BETWEEN 1 AND 64", name="active_jobs_range"
+        ),
+        UniqueConstraint("tenant_id", "idempotency_key", name="uq_product_experiments_tenant_key"),
+        ForeignKeyConstraint(
+            ["baseline_run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_product_experiments_baseline_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["candidate_run_id", "tenant_id"],
+            ["evaluation_runs.id", "evaluation_runs.tenant_id"],
+            name="fk_product_experiments_candidate_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["created_by", "tenant_id"],
+            ["api_keys.id", "api_keys.tenant_id"],
+            name="fk_product_experiments_actor_tenant",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("baseline_run_id <> candidate_run_id", name="distinct_arms"),
+        CheckConstraint("version > 0", name="version_positive"),
+        Index("ix_product_experiments_tenant_created", "tenant_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    max_active_jobs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_artifact_reference_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    report_artifact_reference_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    report_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    report_snapshot_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    baseline_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    candidate_run_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    cancel_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
     __table_args__ = (
@@ -488,6 +566,14 @@ class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["product_experiment_id", "tenant_id"],
+            ["product_experiments.id", "product_experiments.tenant_id"],
+            name="fk_evaluation_runs_product_experiment_tenant",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        Index("ix_evaluation_runs_product_experiment", "product_experiment_id"),
+        ForeignKeyConstraint(
             ["dataset_version_id", "tenant_id"],
             ["dataset_versions.id", "dataset_versions.tenant_id"],
             name="fk_evaluation_runs_dataset_version_tenant",
@@ -544,6 +630,8 @@ class EvaluationRun(Base):
     evaluator_version: Mapped[str] = mapped_column(String(128), nullable=False)
     source_commit: Mapped[str | None] = mapped_column(String(128))
     origin_traceparent: Mapped[str | None] = mapped_column(String(55))
+    execution_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    product_experiment_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[RunStatus] = mapped_column(
         run_status_enum,
         nullable=False,
@@ -630,6 +718,7 @@ class EvaluationJob(Base):
 class JobAttempt(Base):
     __tablename__ = "job_attempts"
     __table_args__ = (
+        UniqueConstraint("id", "job_id", name="uq_job_attempts_id_job_id"),
         UniqueConstraint(
             "job_id",
             "attempt_number",
@@ -672,6 +761,13 @@ class CaseResult(Base):
     __tablename__ = "case_results"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["accepted_attempt_id", "job_id"],
+            ["job_attempts.id", "job_attempts.job_id"],
+            name="fk_case_results_accepted_attempt_job",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
             ["job_id", "run_id"],
             ["evaluation_jobs.id", "evaluation_jobs.run_id"],
             name="fk_case_results_job_id_run_id_evaluation_jobs",
@@ -712,6 +808,7 @@ class CaseResult(Base):
     )
     case_id: Mapped[str] = mapped_column(String(200), nullable=False)
     answer_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    accepted_attempt_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     input_tokens: Mapped[int | None] = mapped_column()

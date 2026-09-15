@@ -142,7 +142,11 @@ def test_s3_backend_and_minio_are_documented_and_exercised_in_ci() -> None:
         "dockerfile": "deploy/minio/Dockerfile",
     }
     minio_dockerfile = Path("deploy/minio/Dockerfile").read_text(encoding="utf-8")
-    assert "FROM minio/minio:RELEASE.2025-09-07T16-13-09Z" in minio_dockerfile
+    assert (
+        "FROM quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
+        "@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+        in minio_dockerfile
+    )
     assert "chown 1000:1000 /var/lib/evalops-minio" in minio_dockerfile
     assert "USER 1000:1000" in minio_dockerfile
     assert services["minio"]["healthcheck"]

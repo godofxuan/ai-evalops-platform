@@ -14,6 +14,7 @@ from app.domain.job_state_machine import JobTransition, transition_job
 from app.domain.run_state_machine import transition_run
 from app.events.models import EventType
 from app.events.outbox import enqueue_progress_event
+from app.jobs.experiment_admission import admit_experiment_claim, experiment_capacity_available
 from app.jobs.lease import LeasePolicy
 from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
@@ -58,6 +59,7 @@ class ClaimedJob:
     run_started: bool = False
     origin_traceparent: str | None = None
     scheduler_claim_sequence: int | None = None
+    execution_deadline_at: datetime | None = None
 
 
 def validate_claim_request(*, worker_id: str, limit: int) -> None:
@@ -246,7 +248,10 @@ def _eligible_job(now: datetime) -> Any:
 
 
 def _eligible_run() -> Any:
-    return EvaluationRun.status.in_((RunStatus.QUEUED, RunStatus.RUNNING))
+    return and_(
+        EvaluationRun.status.in_((RunStatus.QUEUED, RunStatus.RUNNING)),
+        experiment_capacity_available(),
+    )
 
 
 class SQLAlchemyJobClaimer:
@@ -500,6 +505,22 @@ class SQLAlchemyJobClaimer:
                     rows=rows,
                     worker_id=worker_id,
                 )
+                if not claims:
+                    has_eligible = await session.scalar(
+                        build_tenant_eligible_job_exists_statement(
+                            now=eligible_at,
+                            tenant_id=state.tenant_id,
+                            priority=state.round_priority,
+                        )
+                    )
+                    if not has_eligible:
+                        state.status = SCHEDULER_PERMIT_EMPTY
+                        state.version += 1
+                    if self._metrics is not None:
+                        self._metrics.record_tenant_turn_without_job()
+                    self._observe_claim_phase("experiment_admission_deferred")
+                    self._observe_claim_phase("transaction_work_complete")
+                    return ()
                 self._observe_claim_phase("job_attempt_mutation_complete")
                 state.status = SCHEDULER_PERMIT_CONSUMED
                 state.version += 1
@@ -597,9 +618,11 @@ class SQLAlchemyJobClaimer:
     ) -> tuple[tuple[ClaimedJob, ...], tuple[JobAttempt, ...]]:
         claims: list[ClaimedJob] = []
         attempts: list[JobAttempt] = []
-        claimed_at = self._clock.now()
-        lease_expires_at = claimed_at + self._lease_policy.duration
         for job, run in rows:
+            if not await admit_experiment_claim(session, run):
+                continue
+            claimed_at = self._clock.now()
+            lease_expires_at = claimed_at + self._lease_policy.duration
             run_started_now = False
             if job.status is JobStatus.RETRY_WAIT:
                 retry_due = transition_job(
@@ -732,6 +755,7 @@ class SQLAlchemyJobClaimer:
                     evaluator_version=run.evaluator_version,
                     run_started=run_started_now,
                     origin_traceparent=run.origin_traceparent,
+                    execution_deadline_at=run.execution_deadline_at,
                 )
             )
         return tuple(claims), tuple(attempts)

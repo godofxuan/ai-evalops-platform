@@ -1,0 +1,7 @@
+# Explicit opt-in: combine with compose.yaml; default topology stays unchanged.
+# The SHA is operator-declared input identity, not runtime attestation.
+services:
+  api:
+    environment:
+      EVALOPS_PRODUCT_EXPERIMENT_SUBMISSION_ENABLED: "true"
+      EVALOPS_PRODUCT_EXECUTION_CODE_SHA: "${EVALOPS_PRODUCT_EXECUTION_CODE_SHA:?Set the exact 40-character execution code SHA}"

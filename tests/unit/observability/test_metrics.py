@@ -1,6 +1,34 @@
 from datetime import UTC, datetime
 
-from app.observability.metrics import PlatformMetrics
+import httpx
+import pytest
+
+from app.observability.metrics import PlatformMetrics, start_metrics_server
+
+
+def test_lease_metrics_are_scrapable_and_reject_unbounded_labels() -> None:
+    metrics = PlatformMetrics()
+    metrics.record_lease_authorization(operation="heartbeat", outcome="owner")
+    metrics.observe_lease_lock_query(operation="result", seconds=0.25)
+    metrics.observe_reaper_expiry_lag(3.0)
+    for operation, outcome in (("private-job-id", "owner"), ("heartbeat", "private-answer")):
+        with pytest.raises(ValueError):
+            metrics.record_lease_authorization(operation=operation, outcome=outcome)
+    server = start_metrics_server(metrics=metrics, host="127.0.0.1", port=0)
+    try:
+        port = server.server.server_address[1]
+        with httpx.Client(trust_env=False, timeout=3) as client:
+            response = client.get(f"http://127.0.0.1:{port}/metrics")
+        assert response.status_code == 200
+        assert (
+            'job_lease_authorization_total{operation="heartbeat",outcome="owner"} 1.0'
+            in response.text
+        )
+        assert 'job_lease_lock_query_seconds_sum{operation="result"} 0.25' in response.text
+        assert "job_reaper_expiry_lag_seconds_sum 3.0" in response.text
+        assert "private-job-id" not in response.text and "private-answer" not in response.text
+    finally:
+        server.close()
 
 
 def test_database_operation_histograms_exist_before_the_first_observation() -> None:

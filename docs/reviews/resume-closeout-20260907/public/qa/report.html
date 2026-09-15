@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI EvalOps · public-d5c7a47ad92e638cb30374a42c341de63a1b77803fd2d64b90f5bc06a6fff9a0</title>
+<style>
+:root{--ink:#172033;--muted:#667085;--paper:#fff;--wash:#f2f5f9;--accent:#3157d5;--ok:#147d64;--line:#d9e0ea}
+*{box-sizing:border-box}body{margin:0;background:var(--wash);color:var(--ink);font:15px/1.55 Inter,Segoe UI,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:36px 22px}h1{font-size:32px;margin:0 0 6px}h2{margin-top:30px}
+.sub{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:22px 0}
+.card,section{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 7px 22px #23395d0b}
+.value{font-size:21px;font-weight:700}.boundary{border-left:5px solid var(--accent);background:#eef3ff}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:900px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{position:sticky;top:0;background:#f8fafc}code,pre{font-family:Cascadia Code,Consolas,monospace}pre{overflow:auto;background:#101828;color:#e6edf7;padding:16px;border-radius:10px}
+.status.success{color:var(--ok)}.status.failure{color:#b42318}.status.pending{color:#946200}
+</style>
+</head>
+<body><main>
+<p class="sub">AI EvalOps Platform · paired experiment report</p>
+<h1>public-d5c7a47ad92e638cb30374a42c341de63a1b77803fd2d64b90f5bc06a6fff9a0</h1>
+<p class="status success"><strong>DEMO_PASS</strong></p>
+<div class="cards">
+  <div class="card"><div class="sub">Scope</div><div class="value">DEMO</div></div>
+  <div class="card"><div class="sub">Paired cases</div><div class="value">120</div></div>
+  <div class="card"><div class="sub">Human review</div><div class="value">PENDING</div></div>
+  <div class="card"><div class="sub">Production ready</div><div class="value">False</div></div>
+</div>
+<section class="boundary"><strong>证据边界</strong><br>演示通过不等于正式质量提升；它只证明配置、执行、统计和报告链路可重复。</section>
+<h2>Required inputs</h2><pre>[]</pre>
+<h2>身份绑定</h2>
+<section><div>Dataset SHA-256: <code>563a5063ae06efcd8b4a49729bf3621887b9876ffe34bc66bf41c0b6b2bb916c</code></div>
+<div>EvalOps SHA: <code>c5dbeecaf5d06ba2bbae7f7bcb4b7a7678911997</code></div></section>
+<h2>逐条对比</h2>
+<section class="table-wrap"><table><thead><tr><th>Case</th><th>Category</th><th>Baseline answer</th><th>Candidate answer</th><th>Success B→C</th><th>Citation recall B→C</th><th>Citation precision B→C</th><th>Tool error B→C</th><th>Latency B→C</th><th>Cost B→C</th><th>Trace B / C</th></tr></thead>
+<tbody></tbody></table></section>
+
+<h2>机器评估</h2><pre>{
+  &quot;agent_tool_use&quot;: null,
+  &quot;automated_metrics&quot;: {}
+}</pre>
+</main></body></html>

@@ -7,6 +7,34 @@ import pytest
 from app.product_experiments.evaluators import registered_evaluators
 
 
+@pytest.mark.parametrize(
+    "left,right,score",
+    [
+        ({"enabled": True}, {"enabled": 1}, 0.0),
+        ({"items": [{"x": False}]}, {"items": [{"x": 0}]}, 0.0),
+        ({"x": 1}, {"x": 1.0}, 1.0),
+        ({"a": 1, "b": 2}, {"b": 2, "a": 1}, 1.0),
+        ({"items": [1, 2]}, {"items": [2, 1]}, 0.0),
+    ],
+)
+def test_tool_arguments_use_json_types_not_python_boolean_equality(
+    left: dict[str, object], right: dict[str, object], score: float
+) -> None:
+    case = SimpleNamespace(expected_tool_calls=[SimpleNamespace(name="tool", arguments=left)])
+    result = SimpleNamespace(tool_calls=[SimpleNamespace(name="tool", arguments=right)])
+    (evaluator,) = registered_evaluators(("tool_argument_validity",))
+    assert evaluator.evaluate(case, result) == score
+
+
+def test_using_exactly_the_budget_is_not_a_budget_violation() -> None:
+    case = SimpleNamespace(max_tool_calls=1)
+    result = SimpleNamespace(tool_calls=[SimpleNamespace(name="search")], budget_exhausted=True)
+    (evaluator,) = registered_evaluators(("tool_budget_violation_rate",))
+    assert evaluator.evaluate(case, result) == 0.0
+    result.tool_calls.append(SimpleNamespace(name="search"))
+    assert evaluator.evaluate(case, result) == 1.0
+
+
 def test_registered_evaluators_score_the_same_case_envelope() -> None:
     case = SimpleNamespace(
         case_id="case-1",

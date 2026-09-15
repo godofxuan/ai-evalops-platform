@@ -60,6 +60,7 @@ class HTTPRAGTargetConfig(BaseModel):
         pattern=r"^[A-Z][A-Z0-9_]{0,127}$",
     )
     timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    max_response_bytes: int = Field(default=2 * 1024 * 1024, gt=0, le=16 * 1024 * 1024, strict=True)
     request_question_field: str = Field(default="question", min_length=1, max_length=100)
     answer_path: str = Field(default="answer", min_length=1, max_length=200)
     citations_path: str = Field(default="citations", min_length=1, max_length=200)
@@ -107,8 +108,24 @@ class HTTPRAGTarget:
         case: EvaluationCase,
         context: ExecutionContext,
     ) -> TargetResult:
+        try:
+            async with asyncio.timeout(self._config.timeout_seconds):
+                return await self._execute_case(case, context)
+        except TimeoutError:
+            raise TargetTimeoutError from None
+
+    async def _execute_case(
+        self,
+        case: EvaluationCase,
+        context: ExecutionContext,
+    ) -> TargetResult:
         if context.cancellation.is_set():
             raise TargetCancelledError
+        payload = project_request_input(
+            case,
+            question_field=self._config.request_question_field,
+            include_metadata=self._config.include_metadata,
+        )
         hostname = self._url.host
         if hostname is None:
             raise InvalidTargetConfiguration("target URL has no hostname")
@@ -128,6 +145,7 @@ class HTTPRAGTarget:
         validated_addresses = _require_public_addresses(addresses)
         headers = {
             "Accept": "application/json",
+            "Accept-Encoding": "identity",
             "Content-Type": "application/json",
             "Host": hostname,
             "X-EvalOps-Job-ID": str(context.job_id),
@@ -138,12 +156,6 @@ class HTTPRAGTarget:
             if token is None or not token:
                 raise InvalidTargetConfiguration("configured target credential is unavailable")
             headers["Authorization"] = f"Bearer {token}"
-        payload: dict[str, Any] = {
-            self._config.request_question_field: case.question,
-        }
-        if self._config.include_metadata:
-            payload["metadata"] = case.metadata
-
         started = time.perf_counter()
         try:
             response = await self._post(
@@ -207,6 +219,7 @@ class HTTPRAGTarget:
                 self._client,
                 request,
                 expected_address=address,
+                max_response_bytes=self._config.max_response_bytes,
             )
         async with httpx.AsyncClient(follow_redirects=False, trust_env=False) as client:
             request = client.build_request(
@@ -221,7 +234,26 @@ class HTTPRAGTarget:
                 client,
                 request,
                 expected_address=address,
+                max_response_bytes=self._config.max_response_bytes,
             )
+
+
+def project_request_input(
+    case: EvaluationCase,
+    *,
+    question_field: str,
+    include_metadata: bool,
+) -> dict[str, Any]:
+    """Project only explicitly public task context; evaluation labels stay local."""
+    payload: dict[str, Any] = {question_field: case.question}
+    if include_metadata:
+        public_context = case.metadata.get("public_context")
+        if question_field == "metadata" or not isinstance(public_context, dict):
+            raise InvalidTargetConfiguration(
+                "include_metadata requires metadata.public_context and a distinct question field"
+            )
+        payload["metadata"] = deepcopy(public_context)
+    return payload
 
 
 def build_registered_http_target_config(
@@ -333,6 +365,7 @@ async def _send_checked_response(
     request: httpx.Request,
     *,
     expected_address: str,
+    max_response_bytes: int = 2 * 1024 * 1024,
 ) -> httpx.Response:
     response = await client.send(
         request,
@@ -341,10 +374,30 @@ async def _send_checked_response(
     )
     try:
         _require_expected_peer(response, expected_address=expected_address)
-        await response.aread()
+        # Request identity encoding and reject compression before any decompression.
+        # This bounds expansion as well as retained JSON; compressed targets must migrate.
+        if response.headers.get("content-encoding", "identity").strip().casefold() not in {
+            "",
+            "identity",
+        }:
+            raise TargetInvalidResponseError("target_unsupported_content_encoding")
+        declared = response.headers.get("content-length")
+        if declared is not None and declared.isdecimal() and int(declared) > max_response_bytes:
+            raise TargetInvalidResponseError("target_response_too_large")
+        content = bytearray()
+        async for chunk in response.aiter_bytes(chunk_size=min(65536, max_response_bytes + 1)):
+            if len(content) + len(chunk) > max_response_bytes:
+                raise TargetInvalidResponseError("target_response_too_large")
+            content.extend(chunk)
+        return httpx.Response(
+            response.status_code,
+            headers=response.headers,
+            content=bytes(content),
+            request=response.request,
+            extensions=response.extensions,
+        )
     finally:
         await response.aclose()
-    return response
 
 
 def _peer_mismatch() -> TargetExecutionError:

@@ -15,6 +15,79 @@ from app.targets.base import (
 )
 from app.targets.http_rag import HTTPRAGTarget
 
+
+@pytest.mark.parametrize("over_limit", [False, True])
+async def test_response_byte_limit_exact_boundary(over_limit: bool) -> None:
+    payload = b'{"answer":"ok"}'
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                content=payload,
+                extensions={"network_stream": StaticPeerStream("93.184.216.34")},
+            )
+        )
+    ) as client:
+        target = HTTPRAGTarget(
+            {**registered_config(), "max_response_bytes": len(payload) - int(over_limit)},
+            client=client,
+            resolver=StaticResolver("93.184.216.34"),
+        )
+        case = EvaluationCase("limit", "q", None, {})
+        if over_limit:
+            with pytest.raises(TargetExecutionError) as error:
+                await target.execute_case(case, context())
+            assert error.value.code == "target_response_too_large"
+        else:
+            assert (await target.execute_case(case, context())).answer == "ok"
+
+
+async def test_compression_is_rejected_before_read_and_stream_is_closed() -> None:
+    class UnreadCompressedStream(httpx.AsyncByteStream):
+        closed = False
+        read = False
+
+        async def __aiter__(self):
+            self.read = True
+            yield b"not decoded"
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    stream = UnreadCompressedStream()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                stream=stream,
+                headers={"Content-Encoding": "gzip"},
+                extensions={"network_stream": StaticPeerStream("93.184.216.34")},
+            )
+        )
+    ) as client:
+        target = HTTPRAGTarget(
+            registered_config(), client=client, resolver=StaticResolver("93.184.216.34")
+        )
+        with pytest.raises(TargetExecutionError) as error:
+            await target.execute_case(EvaluationCase("compressed", "q", None, {}), context())
+    assert error.value.code == "target_unsupported_content_encoding"
+    assert stream.closed and not stream.read
+
+
+async def test_legacy_metadata_without_public_context_blocks_before_dns() -> None:
+    target = HTTPRAGTarget(
+        {**registered_config(), "include_metadata": True}, resolver=NeverResolvingResolver()
+    )
+    with pytest.raises(InvalidTargetConfiguration, match="public_context"):
+        await asyncio.wait_for(
+            target.execute_case(
+                EvaluationCase("labels", "q", "PRIVATE-GOLD", {"reference_answer": "PRIVATE-GOLD"}),
+                context(),
+            ),
+            timeout=0.5,
+        )
+
+
 RUN_ID = UUID("00000000-0000-0000-0000-000000000601")
 JOB_ID = UUID("00000000-0000-0000-0000-000000000701")
 ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000801")
@@ -116,6 +189,105 @@ def registered_config(**overrides: object) -> dict[str, object]:
     }
     config.update(overrides)
     return config
+
+
+@pytest.mark.asyncio
+async def test_http_target_sends_only_public_context_not_evaluation_labels() -> None:
+    sent: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={"answer": "ok"},
+            extensions={"network_stream": StaticPeerStream("93.184.216.34")},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        target = HTTPRAGTarget(
+            registered_config(include_metadata=True),
+            client=client,
+            resolver=StaticResolver("93.184.216.34"),
+        )
+        await target.execute_case(
+            EvaluationCase(
+                case_id="labels",
+                question="question",
+                expected_answer="gold",
+                metadata={
+                    "fixture_profiles": {"baseline": {"answer": "secret-label"}},
+                    "reference_answer": "gold",
+                    "public_context": {"locale": "zh"},
+                },
+            ),
+            context(),
+        )
+
+    assert sent == [{"question": "question", "metadata": {"locale": "zh"}}]
+
+
+@pytest.mark.asyncio
+async def test_http_target_limits_streamed_response_and_closes_it() -> None:
+    class Body(httpx.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self):
+            for _ in range(3):
+                yield b"x" * 17
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    body = Body()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, stream=body, extensions={"network_stream": StaticPeerStream("93.184.216.34")}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        target = HTTPRAGTarget(
+            registered_config(max_response_bytes=32),
+            client=client,
+            resolver=StaticResolver("93.184.216.34"),
+        )
+        with pytest.raises(TargetExecutionError) as caught:
+            await target.execute_case(EvaluationCase("bounded", "q", "a", {}), context())
+        assert caught.value.code == "target_response_too_large"
+    assert body.closed
+
+
+@pytest.mark.asyncio
+async def test_http_target_enforces_total_deadline_during_body_read() -> None:
+    class StalledBody(httpx.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self):
+            yield b"{"
+            await asyncio.Event().wait()
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    body = StalledBody()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, stream=body, extensions={"network_stream": StaticPeerStream("93.184.216.34")}
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        target = HTTPRAGTarget(
+            registered_config(timeout_seconds=0.02),
+            client=client,
+            resolver=StaticResolver("93.184.216.34"),
+        )
+        with pytest.raises(TargetTimeoutError):
+            await asyncio.wait_for(
+                target.execute_case(EvaluationCase("deadline", "q", "a", {}), context()),
+                timeout=0.5,
+            )
+    assert body.closed
 
 
 def test_http_target_rejects_legacy_snapshot_without_target_id() -> None:

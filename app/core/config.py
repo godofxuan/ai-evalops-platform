@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     otel_exporter_otlp_headers: SecretStr | None = None
     mcp_api_key: SecretStr | None = None
     http_target_registry: dict[str, dict[str, JsonValue]] = Field(default_factory=dict)
+    product_experiment_submission_enabled: bool = False
+    product_execution_code_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
     @field_validator("http_target_registry")
     @classmethod
@@ -114,6 +116,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_worker_timing(self) -> "Settings":
+        if self.product_experiment_submission_enabled and self.product_execution_code_sha is None:
+            raise ValueError("enabled experiment submission requires server execution code SHA")
         if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
             raise ValueError("worker heartbeat interval must be shorter than lease")
         if self.database_reconnect_base_seconds > self.database_reconnect_max_seconds:
