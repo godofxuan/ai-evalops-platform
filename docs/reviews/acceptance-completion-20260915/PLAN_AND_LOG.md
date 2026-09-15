@@ -25,3 +25,10 @@
 - 随机协议首次完整执行100/100通过（50.48秒），诊断在random-first目录保留；尚未有最终提交时明确标UNBOUND_LOCAL_WORKTREE，不冒充绑定代码身份。最终CODE确定后须重跑并绑定该SHA。
 - Windows本机严格门禁实际2 passed/3 skipped并以非零退出，证明缺权限不能变成验收成功。专门Windows CI已接线，尚未运行前不得标通过。
 - 新测试复用真实PG fixture时，mypy发现同一文件的短模块名/完整包名重复；为tests及concurrency增加包标识，修复后mypy259文件通过。ruff/format通过；不修改类型检查门槛。
+
+## 全套回归发现并修复的新问题
+
+- 初始补齐提交6a9360c8d745066bed09b301344b80667ae8c223：完整单元1520 passed/3 Windows权限skip；集成175 passed/1 failed/3本机MinIO skip。100随机种子全部通过，但真实双版本实验的8路幂等创建触发了artifact_blobs.storage_path唯一约束异常，不能据此宣布全绿。
+- 原始日志中的SHA、长度与路径和数据库已有行完全相同，排除了内容路径不一致。另建独立PG数据库；新增50组×8路冷内容登记回归在第2组复现IntegrityError；不同SHA抢占同一路径的负控也未得到预期领域错误。两项red保留在cold-blob-red-2。第一次red尝试使用前一个失败后残留任务的DB，夹具领取到错误任务，只算环境隔离失败，不算产品反例。
+- 最小修复：INSERT的DO NOTHING不再仅指定SHA唯一键，覆盖该表所有唯一冲突；然后仍锁定SHA对应行，严格核对生命周期、长度、路径。不同SHA碰撞同一路径时明确抛ArtifactMetadataIntegrityError，不吞掉损坏数据。不增加迁移、不删除唯一约束、不增加业务重试。[PostgreSQL INSERT文档](https://www.postgresql.org/docs/current/sql-insert.html)说明省略DO NOTHING conflict target覆盖所有可用唯一约束；实际并发回归另行验证行为。
+- 首次green组合中artifact三项通过，但完整pair测试因本次命令遗漏Redis环境变量失败，保留cold-blob-green。补环境后完整pair实际通过（包含执行、导出、私有重算），旧artifact清理测试却暴露跨次运行残留DELETED tombstone；修正测试数据按本次tenant唯一化，并清理其所有自有且无人引用的blob，生产生命周期拒绝行为不变。cold-blob-green-2保留该失败，最终CODE要在全新DB完整重跑。

@@ -247,13 +247,19 @@ async def _ensure_artifact_blob(
             byte_size=stored.size_bytes,
             storage_path=stored.relative_path.as_posix(),
         )
-        .on_conflict_do_nothing(index_elements=[ArtifactBlob.sha256])
+        # Both the digest and storage path are unique. Concurrent cold inserts
+        # can conflict on either index; validate the winning row below.
+        .on_conflict_do_nothing()
     )
     blob = (
         await session.execute(
             select(ArtifactBlob).where(ArtifactBlob.sha256 == stored.sha256).with_for_update()
         )
-    ).scalar_one()
+    ).scalar_one_or_none()
+    if blob is None:
+        raise ArtifactMetadataIntegrityError(
+            "artifact storage path conflicts with another content address"
+        )
     if blob.lifecycle_status != ArtifactBlobStatus.ACTIVE:
         raise ArtifactLifecycleConflictError(
             f"artifact blob is not referenceable: {blob.lifecycle_status}"
