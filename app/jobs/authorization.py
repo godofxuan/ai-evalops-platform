@@ -36,3 +36,22 @@ def owns_live_lease(
         and job.lease_expires_at is not None
         and job.lease_expires_at > now
     )
+
+
+def lease_rejection_reason(
+    job: EvaluationJob | None, *, worker_id: str, expected_version: int, now: datetime
+) -> str | None:
+    """Classify the locked observation using bounded, non-sensitive reasons."""
+    if job is None:
+        return "not_found"
+    if job.status not in (JobStatus.RUNNING, JobStatus.CANCELLING):
+        return "state"
+    if job.lease_owner != worker_id:
+        return "owner"
+    if job.version != expected_version:
+        return "version"
+    if job.lease_expires_at is None:
+        return "missing_expiry"
+    if job.lease_expires_at <= now:
+        return "expired"
+    return None

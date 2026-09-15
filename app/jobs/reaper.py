@@ -11,6 +11,8 @@ from app.events.models import EventType
 from app.events.outbox import enqueue_progress_event
 from app.jobs.authorization import lease_authorization_time
 from app.jobs.retry_policy import FailureClassification, RetryPolicy
+from app.observability.lease import observe_lease_lock_query
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     AuditEvent,
@@ -66,16 +68,19 @@ class SQLAlchemyJobReaper:
         retry_policy: RetryPolicy,
         clock: Clock | None = None,
         reaper_id: str = "reaper",
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._retry_policy = retry_policy
         self._clock = clock
         self._reaper_id = reaper_id
+        self._metrics = metrics
 
     async def reap(self, *, limit: int = 100) -> tuple[ReapedJob, ...]:
         if not 1 <= limit <= 1_000:
             raise ValueError("reaper limit must be between 1 and 1000")
         reaped: list[ReapedJob] = []
+        committed_lags: list[float] = []
         touched_runs: dict[UUID, UUID] = {}
         async with self._session_factory.begin() as session:
             # Discovery is a bounded identity hint, not reclamation authorization.
@@ -96,47 +101,64 @@ class SQLAlchemyJobReaper:
                 return ()
             # Take every parent lock before any Job lock. Busy Runs are deferred;
             # no Job may be held while waiting for its Run or implicit Tenant FK.
-            await session.execute(
-                select(Tenant.id)
-                .where(Tenant.id.in_({row[2] for row in candidates}))
-                .order_by(Tenant.id)
-                .with_for_update(of=Tenant, read=True, key_share=True)
+            await observe_lease_lock_query(
+                session.execute(
+                    select(Tenant.id)
+                    .where(Tenant.id.in_({row[2] for row in candidates}))
+                    .order_by(Tenant.id)
+                    .with_for_update(of=Tenant, read=True, key_share=True)
+                ),
+                metrics=self._metrics,
+                operation="reaper",
             )
             run_ids = (
-                await session.scalars(
-                    select(EvaluationRun.id)
-                    .where(EvaluationRun.id.in_({row[1] for row in candidates}))
-                    .order_by(EvaluationRun.id)
-                    .with_for_update(of=EvaluationRun, key_share=True, skip_locked=True)
+                await observe_lease_lock_query(
+                    session.scalars(
+                        select(EvaluationRun.id)
+                        .where(EvaluationRun.id.in_({row[1] for row in candidates}))
+                        .order_by(EvaluationRun.id)
+                        .with_for_update(of=EvaluationRun, key_share=True, skip_locked=True)
+                    ),
+                    metrics=self._metrics,
+                    operation="reaper",
                 )
             ).all()
             if not run_ids:
                 return ()
             selection_time = await lease_authorization_time(session, self._clock)
             rows = (
-                await session.execute(
-                    build_expired_job_statement(now=selection_time, limit=limit)
-                    .where(
-                        EvaluationJob.id.in_({row[0] for row in candidates}),
-                        EvaluationJob.run_id.in_(run_ids),
-                    )
-                    .order_by(None)
-                    .order_by(EvaluationJob.id)
+                await observe_lease_lock_query(
+                    session.execute(
+                        build_expired_job_statement(now=selection_time, limit=limit)
+                        .where(
+                            EvaluationJob.id.in_({row[0] for row in candidates}),
+                            EvaluationJob.run_id.in_(run_ids),
+                        )
+                        .order_by(None)
+                        .order_by(EvaluationJob.id)
+                    ),
+                    metrics=self._metrics,
+                    operation="reaper",
                 )
             ).all()
             for job, run in rows:
                 attempt = (
-                    await session.execute(
-                        select(JobAttempt)
-                        .where(JobAttempt.job_id == job.id, JobAttempt.finished_at.is_(None))
-                        .order_by(JobAttempt.attempt_number.desc())
-                        .limit(1)
-                        .with_for_update()
+                    await observe_lease_lock_query(
+                        session.execute(
+                            select(JobAttempt)
+                            .where(JobAttempt.job_id == job.id, JobAttempt.finished_at.is_(None))
+                            .order_by(JobAttempt.attempt_number.desc())
+                            .limit(1)
+                            .with_for_update()
+                        ),
+                        metrics=self._metrics,
+                        operation="reaper",
                     )
                 ).scalar_one_or_none()
                 now = await lease_authorization_time(session, self._clock)
                 if job.lease_expires_at is None or job.lease_expires_at > now:
                     continue
+                committed_lags.append((now - job.lease_expires_at).total_seconds())
                 previous_worker = job.lease_owner
                 cancellation_requested = (
                     job.status is JobStatus.CANCELLING
@@ -271,6 +293,9 @@ class SQLAlchemyJobReaper:
                     timestamp=now,
                     payload={"status": run_status.value},
                 )
+        if self._metrics is not None:
+            for lag in committed_lags:
+                self._metrics.observe_reaper_expiry_lag(lag)
         return tuple(replace(item, run_status=run_statuses[item.run_id]) for item in reaped)
 
 

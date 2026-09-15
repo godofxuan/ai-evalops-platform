@@ -3,10 +3,13 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import Update, select, update
+from sqlalchemy.orm import load_only
 
 from app.core.clock import Clock
 from app.domain.enums import JobStatus
-from app.jobs.authorization import lease_authorization_time
+from app.jobs.authorization import lease_authorization_time, lease_rejection_reason
+from app.observability.lease import observe_lease_lock_query
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import EvaluationJob
 
@@ -80,10 +83,12 @@ class SQLAlchemyHeartbeatService:
         *,
         lease_duration: timedelta,
         clock: Clock | None = None,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._lease_duration = lease_duration
         self._clock = clock
+        self._metrics = metrics
 
     async def heartbeat(
         self,
@@ -99,12 +104,31 @@ class SQLAlchemyHeartbeatService:
         )
         async with self._session_factory.begin() as session:
             # Lock before reading time; UPDATE predicates alone may precede a wait.
-            await session.execute(
-                select(EvaluationJob.id)
-                .where(EvaluationJob.id == job_id)
-                .with_for_update(of=EvaluationJob, key_share=True)
+            job = await observe_lease_lock_query(
+                session.scalar(
+                    select(EvaluationJob)
+                    .options(
+                        load_only(
+                            EvaluationJob.status,
+                            EvaluationJob.lease_owner,
+                            EvaluationJob.version,
+                            EvaluationJob.lease_expires_at,
+                        )
+                    )
+                    .where(EvaluationJob.id == job_id)
+                    .with_for_update(of=EvaluationJob, key_share=True)
+                ),
+                metrics=self._metrics,
+                operation="heartbeat",
             )
             now = await lease_authorization_time(session, self._clock)
+            reason = lease_rejection_reason(
+                job, worker_id=worker_id, expected_version=expected_version, now=now
+            )
+            if reason is not None:
+                if self._metrics is not None:
+                    self._metrics.record_lease_authorization(operation="heartbeat", outcome=reason)
+                raise LeaseLostError("heartbeat rejected by locked lease authorization")
             row = (
                 await session.execute(
                     build_heartbeat_statement(
@@ -117,9 +141,15 @@ class SQLAlchemyHeartbeatService:
                 )
             ).one_or_none()
         if row is None:
+            if self._metrics is not None:
+                self._metrics.record_lease_authorization(
+                    operation="heartbeat", outcome="guard_changed"
+                )
             raise LeaseLostError(
                 "heartbeat rejected because lease owner, version, state, or expiry changed"
             )
+        if self._metrics is not None:
+            self._metrics.record_lease_authorization(operation="heartbeat", outcome="authorized")
         return HeartbeatReceipt(
             job_id=job_id,
             worker_id=worker_id,

@@ -86,15 +86,17 @@ async def run_worker_process(
             lease_policy=LeasePolicy(timedelta(seconds=settings.worker_lease_seconds)),
             metrics=metrics,
         ),
-        result_committer=SQLAlchemyResultCommitter(session_factory),
+        result_committer=SQLAlchemyResultCommitter(session_factory, metrics=metrics),
         failure_committer=SQLAlchemyFailureCommitter(
             session_factory,
             retry_policy=retry_policy,
+            metrics=metrics,
         ),
         lease_runner=LeaseHeartbeatRunner(
             heartbeat_service=SQLAlchemyHeartbeatService(
                 session_factory,
                 lease_duration=timedelta(seconds=settings.worker_lease_seconds),
+                metrics=metrics,
             ),
             heartbeat_interval_seconds=settings.worker_heartbeat_seconds,
         ),
@@ -162,6 +164,7 @@ async def run_reaper_process(
         session_factory,
         retry_policy=_retry_policy(settings),
         reaper_id=reaper_id,
+        metrics=metrics,
     )
     logger = get_logger(__name__, role="reaper", reaper_id=reaper_id)
     reconnect_backoff = _database_reconnect_backoff(settings)

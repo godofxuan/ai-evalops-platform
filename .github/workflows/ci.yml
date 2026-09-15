@@ -171,6 +171,27 @@ jobs:
           uv run --no-sync pytest tests/concurrency/test_tenant_fair_claiming.py
           --junitxml=/tmp/junit-tenant-fair-claiming.xml
 
+      - name: Integration - 100 seeded lease interleavings
+        # Fixed seeds retain all outcomes; this is not a throughput benchmark.
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        env:
+          EVALOPS_TEST_CODE_SHA: ${{ github.sha }}
+          EVALOPS_SCHEDULER_DIAGNOSTIC_DIR: /tmp/evalops-randomized-leases
+        run: >-
+          uv run --no-sync pytest tests/concurrency/test_randomized_lease_lifecycle.py
+          -q --junitxml=/tmp/junit-randomized-leases.xml
+
+      - name: Retain all randomized lease outcomes
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: randomized-leases-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/evalops-randomized-leases
+            /tmp/junit-randomized-leases.xml
+          if-no-files-found: error
+
       - name: Integration - same-tenant claim parallelism
         if: ${{ !cancelled() }}
         timeout-minutes: 10
@@ -289,6 +310,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           EVALOPS_AUDIT_EVIDENCE_DIR: /tmp/evalops-synthetic-matrix
+          EVALOPS_TEST_CODE_SHA: ${{ github.sha }}
         run: >-
           uv run --no-sync pytest tests/integration/test_audit_fault_matrix.py
           -o junit_logging=system-out --junitxml=/tmp/junit-synthetic-matrix.xml
@@ -364,6 +386,31 @@ jobs:
       - name: Build application image
         if: ${{ !cancelled() }}
         run: docker build --tag ai-evalops-platform:ci .
+
+  windows-link-safety:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.32"
+      - name: Install Python and locked dependencies
+        run: |
+          uv python install 3.12
+          uv sync --locked --all-groups
+      - name: Require real Windows symlink and junction safety
+        run: uv run --no-sync python -m scripts.windows_link_gate --junit artifacts/windows-link-junit.xml
+      - name: Preserve Windows link evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: windows-link-safety-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/windows-link-junit.xml
+          if-no-files-found: error
 
   compose-smoke:
     runs-on: ubuntu-latest

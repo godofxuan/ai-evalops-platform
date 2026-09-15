@@ -14,6 +14,8 @@ from app.events.outbox import enqueue_progress_event
 from app.jobs.authorization import lease_authorization_time, owns_live_lease
 from app.jobs.claiming import ClaimedJob
 from app.jobs.heartbeat import LeaseLostError
+from app.observability.lease import observe_lease_lock_query, record_lease_decision
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     AuditEvent,
@@ -98,9 +100,11 @@ class SQLAlchemyResultCommitter:
         session_factory: AsyncSessionFactory,
         *,
         clock: Clock | None = None,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._clock = clock
+        self._metrics = metrics
 
     async def commit_success(
         self,
@@ -114,27 +118,40 @@ class SQLAlchemyResultCommitter:
         next_version = lease_version + 1
         try:
             async with self._session_factory.begin() as session:
-                locked_tenant_id = await session.scalar(
-                    build_tenant_key_share_for_completion_statement(tenant_id=claim.tenant_id)
+                locked_tenant_id = await observe_lease_lock_query(
+                    session.scalar(
+                        build_tenant_key_share_for_completion_statement(tenant_id=claim.tenant_id)
+                    ),
+                    metrics=self._metrics,
+                    operation="result",
                 )
                 if locked_tenant_id is None:
+                    record_lease_decision(self._metrics, "result", "parent_missing")
                     raise LeaseLostError("result rejected because its Tenant no longer exists")
-                locked_run_id = await session.scalar(
-                    build_run_lock_for_completion_statement(run_id=claim.run_id)
+                locked_run_id = await observe_lease_lock_query(
+                    session.scalar(build_run_lock_for_completion_statement(run_id=claim.run_id)),
+                    metrics=self._metrics,
+                    operation="result",
                 )
                 if locked_run_id is None:
+                    record_lease_decision(self._metrics, "result", "parent_missing")
                     raise LeaseLostError("result rejected because its Run no longer exists")
                 row = (
-                    await session.execute(
-                        build_owned_job_for_completion_statement(
-                            job_id=claim.job_id,
-                            run_id=claim.run_id,
-                            worker_id=claim.worker_id,
-                            expected_version=lease_version,
-                        )
+                    await observe_lease_lock_query(
+                        session.execute(
+                            build_owned_job_for_completion_statement(
+                                job_id=claim.job_id,
+                                run_id=claim.run_id,
+                                worker_id=claim.worker_id,
+                                expected_version=lease_version,
+                            )
+                        ),
+                        metrics=self._metrics,
+                        operation="result",
                     )
                 ).one_or_none()
                 if row is None:
+                    record_lease_decision(self._metrics, "result", "identity_or_state")
                     raise LeaseLostError(
                         "result rejected because the worker no longer owns a live lease"
                     )
@@ -146,15 +163,19 @@ class SQLAlchemyResultCommitter:
                     actor=claim.worker_id,
                 )
                 attempt = (
-                    await session.execute(
-                        select(JobAttempt)
-                        .where(
-                            JobAttempt.id == claim.attempt_id,
-                            JobAttempt.job_id == claim.job_id,
-                            JobAttempt.worker_id == claim.worker_id,
-                            JobAttempt.finished_at.is_(None),
-                        )
-                        .with_for_update()
+                    await observe_lease_lock_query(
+                        session.execute(
+                            select(JobAttempt)
+                            .where(
+                                JobAttempt.id == claim.attempt_id,
+                                JobAttempt.job_id == claim.job_id,
+                                JobAttempt.worker_id == claim.worker_id,
+                                JobAttempt.finished_at.is_(None),
+                            )
+                            .with_for_update()
+                        ),
+                        metrics=self._metrics,
+                        operation="result",
                     )
                 ).scalar_one_or_none()
                 if (
@@ -162,6 +183,7 @@ class SQLAlchemyResultCommitter:
                     or attempt.attempt_number != claim.attempt_number
                     or job.attempt_count != claim.attempt_number
                 ):
+                    record_lease_decision(self._metrics, "result", "attempt_inactive")
                     raise AttemptNotActiveError("claim does not reference an active attempt")
 
                 # Attempt can wait too: read authority time after the final lock.
@@ -169,6 +191,7 @@ class SQLAlchemyResultCommitter:
                 if not owns_live_lease(
                     job, worker_id=claim.worker_id, expected_version=lease_version, now=now
                 ):
+                    record_lease_decision(self._metrics, "result", "expired")
                     raise LeaseLostError("result rejected because its locked lease expired")
 
                 job.status = transition.current
@@ -262,6 +285,7 @@ class SQLAlchemyResultCommitter:
             }:
                 raise ResultAlreadyCommittedError from error
             raise
+        record_lease_decision(self._metrics, "result", "authorized")
         return ResultCommitReceipt(
             result_id=result_id,
             job_id=claim.job_id,

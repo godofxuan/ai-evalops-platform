@@ -17,6 +17,8 @@ from app.jobs.results import (
     build_tenant_key_share_for_completion_statement,
 )
 from app.jobs.retry_policy import RetryDecision, RetryPolicy, classify_failure
+from app.observability.lease import observe_lease_lock_query, record_lease_decision
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory
 from app.persistence.orm_models import (
     AuditEvent,
@@ -70,10 +72,12 @@ class SQLAlchemyFailureCommitter:
         *,
         retry_policy: RetryPolicy,
         clock: Clock | None = None,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._retry_policy = retry_policy
         self._clock = clock
+        self._metrics = metrics
 
     async def commit_failure(
         self,
@@ -85,51 +89,72 @@ class SQLAlchemyFailureCommitter:
         async with self._session_factory.begin() as session:
             # Failure writers must use the same blocking order as successful ones.
             if (
-                await session.scalar(
-                    build_tenant_key_share_for_completion_statement(tenant_id=claim.tenant_id)
+                await observe_lease_lock_query(
+                    session.scalar(
+                        build_tenant_key_share_for_completion_statement(tenant_id=claim.tenant_id)
+                    ),
+                    metrics=self._metrics,
+                    operation="failure",
                 )
                 is None
             ):
+                record_lease_decision(self._metrics, "failure", "parent_missing")
                 raise LeaseLostError("failure rejected because its Tenant no longer exists")
             if (
-                await session.scalar(build_run_lock_for_completion_statement(run_id=claim.run_id))
+                await observe_lease_lock_query(
+                    session.scalar(build_run_lock_for_completion_statement(run_id=claim.run_id)),
+                    metrics=self._metrics,
+                    operation="failure",
+                )
                 is None
             ):
+                record_lease_decision(self._metrics, "failure", "parent_missing")
                 raise LeaseLostError("failure rejected because its Run no longer exists")
             row = (
-                await session.execute(
-                    build_owned_job_for_failure_statement(
-                        job_id=claim.job_id,
-                        run_id=claim.run_id,
-                        worker_id=claim.worker_id,
-                        expected_version=lease_version,
-                    )
+                await observe_lease_lock_query(
+                    session.execute(
+                        build_owned_job_for_failure_statement(
+                            job_id=claim.job_id,
+                            run_id=claim.run_id,
+                            worker_id=claim.worker_id,
+                            expected_version=lease_version,
+                        )
+                    ),
+                    metrics=self._metrics,
+                    operation="failure",
                 )
             ).one_or_none()
             if row is None:
+                record_lease_decision(self._metrics, "failure", "identity_or_state")
                 raise LeaseLostError(
                     "failure rejected because the worker no longer owns a live lease"
                 )
             job, run = row
             attempt = (
-                await session.execute(
-                    select(JobAttempt)
-                    .where(
-                        JobAttempt.id == claim.attempt_id,
-                        JobAttempt.job_id == claim.job_id,
-                        JobAttempt.worker_id == claim.worker_id,
-                        JobAttempt.finished_at.is_(None),
-                    )
-                    .with_for_update()
+                await observe_lease_lock_query(
+                    session.execute(
+                        select(JobAttempt)
+                        .where(
+                            JobAttempt.id == claim.attempt_id,
+                            JobAttempt.job_id == claim.job_id,
+                            JobAttempt.worker_id == claim.worker_id,
+                            JobAttempt.finished_at.is_(None),
+                        )
+                        .with_for_update()
+                    ),
+                    metrics=self._metrics,
+                    operation="failure",
                 )
             ).scalar_one_or_none()
             if attempt is None:
+                record_lease_decision(self._metrics, "failure", "attempt_inactive")
                 raise LeaseLostError("failure rejected because the attempt is no longer active")
 
             now = await lease_authorization_time(session, self._clock)
             if not owns_live_lease(
                 job, worker_id=claim.worker_id, expected_version=lease_version, now=now
             ):
+                record_lease_decision(self._metrics, "failure", "expired")
                 raise LeaseLostError("failure rejected because its locked lease expired")
 
             failure = classify_failure(error)
@@ -223,6 +248,7 @@ class SQLAlchemyFailureCommitter:
                     timestamp=now,
                     payload={"status": aggregation.status.value},
                 )
+        record_lease_decision(self._metrics, "failure", "authorized")
         return FailureCommitReceipt(
             job_id=claim.job_id,
             status=target_status,

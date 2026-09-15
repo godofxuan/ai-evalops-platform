@@ -22,6 +22,7 @@ from app.jobs.lease import LeasePolicy
 from app.jobs.reaper import SQLAlchemyJobReaper
 from app.jobs.results import SQLAlchemyResultCommitter
 from app.jobs.retry_policy import RetryPolicy
+from app.observability.metrics import PlatformMetrics
 from app.persistence.database import AsyncSessionFactory, create_session_factory
 from app.persistence.orm_models import (
     APIKey,
@@ -194,9 +195,140 @@ async def _expire_while_blocked(db: LeaseDatabase, operation: Any, *, lock: str)
             assert not task.done(), "operation must still be waiting on the held row lock"
         return await asyncio.wait_for(task, timeout=5)
     finally:
-        if task is not None and not task.done():
-            task.cancel()
+        if task is not None:
+            if not task.done():
+                task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("operation", ["result", "failure"])
+async def test_commit_metrics_retain_expiry_rejection_after_real_lock_wait(
+    lease_database: LeaseDatabase, operation: str
+) -> None:
+    db = lease_database
+    metrics = PlatformMetrics()
+
+    async def commit() -> None:
+        if operation == "result":
+            await SQLAlchemyResultCommitter(db.factory, metrics=metrics).commit_success(
+                claim=db.claim,
+                lease_version=db.claim.version,
+                target_result=TargetResult(
+                    answer="a", citations=(), sources=(), trace={}, token_usage=None, latency_ms=1
+                ),
+                evaluation_result=EvaluationResult(metrics={}),
+            )
+        else:
+            await SQLAlchemyFailureCommitter(
+                db.factory, retry_policy=RetryPolicy(), metrics=metrics
+            ).commit_failure(
+                claim=db.claim,
+                lease_version=db.claim.version,
+                error=TargetTimeoutError(),
+            )
+
+    with pytest.raises(LeaseLostError):
+        await _expire_while_blocked(db, commit, lock="run")
+    assert (
+        metrics.registry.get_sample_value(
+            "job_lease_authorization_total", {"operation": operation, "outcome": "expired"}
+        )
+        == 1
+    )
+    seconds = metrics.registry.get_sample_value(
+        "job_lease_lock_query_seconds_sum", {"operation": operation}
+    )
+    assert seconds is not None and seconds >= 0.5
+
+
+@pytest.mark.integration
+async def test_reaper_metrics_count_only_committed_expiry_lag(
+    lease_database: LeaseDatabase,
+) -> None:
+    db = lease_database
+    metrics = PlatformMetrics()
+    async with db.factory.begin() as session:
+        await session.execute(
+            update(EvaluationJob)
+            .where(EvaluationJob.id == db.claim.job_id)
+            .values(lease_expires_at=func.clock_timestamp() - timedelta(seconds=5))
+        )
+    recovered = await SQLAlchemyJobReaper(
+        db.factory, retry_policy=RetryPolicy(), metrics=metrics
+    ).reap()
+    assert len(recovered) == 1
+    assert metrics.registry.get_sample_value("job_reaper_expiry_lag_seconds_count") == 1
+    lag = metrics.registry.get_sample_value("job_reaper_expiry_lag_seconds_sum")
+    assert lag is not None and lag >= 5
+    await SQLAlchemyJobReaper(db.factory, retry_policy=RetryPolicy(), metrics=metrics).reap()
+    assert metrics.registry.get_sample_value("job_reaper_expiry_lag_seconds_count") == 1
+
+
+@pytest.mark.integration
+async def test_rolled_back_recovery_does_not_publish_reaper_lag(
+    lease_database: LeaseDatabase,
+) -> None:
+    from sqlalchemy.orm import Session
+
+    db = lease_database
+    metrics = PlatformMetrics()
+    async with db.factory.begin() as session:
+        await session.execute(
+            update(EvaluationJob)
+            .where(EvaluationJob.id == db.claim.job_id)
+            .values(lease_expires_at=func.clock_timestamp() - timedelta(seconds=5))
+        )
+
+    def reject_commit(session: Session) -> None:
+        raise RuntimeError("injected transaction commit failure")
+
+    event.listen(Session, "before_commit", reject_commit)
+    try:
+        with pytest.raises(RuntimeError, match="injected transaction"):
+            await SQLAlchemyJobReaper(
+                db.factory, retry_policy=RetryPolicy(), metrics=metrics
+            ).reap()
+    finally:
+        event.remove(Session, "before_commit", reject_commit)
+    assert metrics.registry.get_sample_value("job_reaper_expiry_lag_seconds_count") == 0
+    async with db.factory() as session:
+        job = await session.get(EvaluationJob, db.claim.job_id)
+        assert job is not None and job.status is JobStatus.RUNNING
+
+
+@pytest.mark.integration
+async def test_heartbeat_metrics_report_real_lock_wait_and_expiry_rejection(
+    lease_database: LeaseDatabase,
+) -> None:
+    db = lease_database
+    metrics = PlatformMetrics()
+    service = SQLAlchemyHeartbeatService(
+        db.factory, lease_duration=timedelta(seconds=30), metrics=metrics
+    )
+    with pytest.raises(LeaseLostError):
+        await _expire_while_blocked(
+            db,
+            lambda: service.heartbeat(
+                job_id=db.claim.job_id,
+                worker_id=db.claim.worker_id,
+                expected_version=db.claim.version,
+            ),
+            lock="job",
+        )
+    assert (
+        metrics.registry.get_sample_value(
+            "job_lease_authorization_total", {"operation": "heartbeat", "outcome": "expired"}
+        )
+        == 1
+    )
+    seconds = metrics.registry.get_sample_value(
+        "job_lease_lock_query_seconds_sum", {"operation": "heartbeat"}
+    )
+    assert seconds is not None and seconds >= 0.5
+    exposed = metrics.render().decode()
+    assert str(db.claim.job_id) not in exposed
+    assert db.claim.worker_id not in exposed
 
 
 @pytest.mark.integration
@@ -286,10 +418,12 @@ async def test_real_database_lease_identity_and_equality_controls(
             return boundary
 
     # Only the exact-equality control injects time; other cases use real DB time.
+    metrics = PlatformMetrics()
     service = SQLAlchemyHeartbeatService(
         db.factory,
         lease_duration=timedelta(seconds=30),
         clock=BoundaryClock() if condition == "equal_expiry" else None,
+        metrics=metrics,
     )
     with pytest.raises(LeaseLostError):
         await service.heartbeat(
@@ -297,6 +431,16 @@ async def test_real_database_lease_identity_and_equality_controls(
             worker_id="wrong-owner" if condition == "owner" else db.claim.worker_id,
             expected_version=db.claim.version + (1 if condition == "version" else 0),
         )
+    assert (
+        metrics.registry.get_sample_value(
+            "job_lease_authorization_total",
+            {
+                "operation": "heartbeat",
+                "outcome": "expired" if condition == "equal_expiry" else condition,
+            },
+        )
+        == 1
+    )
     async with db.factory() as session:
         job = await session.get(EvaluationJob, db.claim.job_id)
         assert job is not None and job.version == db.claim.version

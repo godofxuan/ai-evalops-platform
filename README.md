@@ -2,6 +2,8 @@
 
 > 对 QA / RAG / Agent 的两个版本运行同题评测，可靠执行任务，并输出可追溯、可复核的质量门禁。
 
+本次继续补齐验收：100 个固定种子的真实数据库并发交错、租约与回收监控指标、Windows 符号链接/junction 严格门禁，以及 CI 报告的真实提交绑定。见[指标语义与亲手练习](docs/reviews/acceptance-completion-20260915/METRICS_AND_HANDS_ON.md)、[补齐计划与记录](docs/reviews/acceptance-completion-20260915/PLAN_AND_LOG.md)。具体通过状态以该提交的 CI 和最终回执为准，不由旧版本的绿色状态推导。
+
 本分支从固定 `903ed7c` 做独立审核修复：租约在锁后按数据库时间授权、引用评分按版本贯通、固定 checker 缺料即失败，并完成 20×2 持久故障演练。[本轮结果与限制](docs/reviews/audit-remediation-20260915/CLOSEOUT_RESULTS.md)、[锁序与版本合同](docs/reviews/audit-remediation-20260915/CONTRACTS.md)、[完整操作记录](docs/reviews/audit-remediation-20260915/EXECUTION_LOG.md)、[简历与答辩](docs/reviews/audit-remediation-20260915/RESUME_AND_DEFENSE.md)。这是可靠性和证据质量改进，不是模型质量提升、正式 A/B 或生产晋级。新提交和 CI 状态以交付回执为准，不能借用旧绿色 CI。
 
 | 从哪里开始 | 你会看到什么 | 证据边界 |
